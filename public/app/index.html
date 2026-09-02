@@ -955,10 +955,24 @@ function dayLabel(dstr){
   return {full:DOWFULL[d.getDay()], date:MON[d.getMonth()]+' '+d.getDate(),
           rel: diff===0?'Today':diff===1?'Tomorrow':'', diff:diff};
 }
-function staleBanner(){
-  if(!anyStale()) return '';
-  return '<div class="banner"><span>This plan is from an earlier week.</span>'
-    + '<button class="btn sm primary" data-act="plan-all">Plan this week</button></div>';
+/* A lunchbox needs planning if it has food to draw from and either no week at
+   all (a profile added mid-week) or a week that has already gone by. Both cases
+   would otherwise just be missing from the pack list with no explanation. */
+function needsPlan(k){ return !!foodsOf(k).length && (!k.week || weekIsStale(k)); }
+function planBanner(){
+  var need = kids().filter(needsPlan);
+  if(!need.length) return '';
+  var stale = need.some(function(k){ return !!k.week; });
+  var msg;
+  if(kids().length > 1){
+    msg = esc(need.map(function(k){ return k.name; }).join(' and '))
+      + (need.length > 1 ? ' have ' : ' has ')
+      + (stale ? 'a plan from an earlier week.' : 'no plan for this week yet.');
+  } else {
+    msg = stale ? 'This plan is from an earlier week.' : 'No plan for this week yet.';
+  }
+  return '<div class="banner"><span>'+msg+'</span>'
+    + '<button class="btn sm primary" data-act="plan-all">Plan the week</button></div>';
 }
 function noFoodsEmpty(){
   return '<div class="empty"><p>Add a few things they&#8217;ll actually eat and the week plans itself.</p>'
@@ -1013,7 +1027,7 @@ function viewPack(){
     CATS.forEach(function(c){ if(e.day.slots[c.k]){ total++; if(row[c.k]) done++; } });
   });
 
-  var h = '<div class="stack">' + staleBanner()
+  var h = '<div class="stack">' + planBanner()
     + '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
     + ' · '+esc(lab.date)+'</p><h2 class="view-title">'
     + (lab.rel==='Today' ? 'Today&#8217;s box' : lab.rel==='Tomorrow' ? 'Tomorrow&#8217;s box' : esc(lab.full)+'&#8217;s box')
@@ -1057,7 +1071,7 @@ function viewWeek(){
     + '<p class="view-sub">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+(multi ? ' · '+esc(kid.name) : '')+'</p>'
     + '<h2 class="view-title">'+(NUMWORD[n]||n)+' box'+(n===1?'':'es')+'</h2></div>'
     + '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+'Shuffle</button></div>'
-    + staleBanner();
+    + planBanner();
   if(!kid.week)
     return h + '<div class="empty"><p>Shuffle draws a main, side, fruit and sweet for every pack day, '
       + 'then arranges them so each box goes together.</p></div></div>';
