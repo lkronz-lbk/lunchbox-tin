@@ -59,6 +59,43 @@ forward).
 - [ ] Bump `VERSION` in `public/app/sw.js` on any release that changes the app shell,
       or installed home-screen copies will keep serving the old build.
 
+## Environments
+
+| Context | Branch | Where it lands |
+| --- | --- | --- |
+| Production | `main` | the live site |
+| Staging | `dev` | `dev--<site>.netlify.app` |
+| Preview | any pull request | a throwaway URL per PR |
+
+Work on `dev`, look at the staging URL on a real phone, then open a PR into `main`.
+Netlify marks staging and preview deploys `noindex`, so they never compete with the
+live marketing page in search results.
+
+`netlify.toml` carries a per-context environment block. It does nothing today —
+there is no build step — but it is the seam that matters later: when the backend and
+Stripe arrive, the test keys and staging database URL go there, and production
+credentials never reach a pull request preview.
+
+**Netlify setup, once:** Site configuration → Build & deploy → Branches and deploy
+contexts → add `dev` as a branch deploy, and leave Deploy Previews on.
+
+## Tests
+
+```
+npm install
+npx playwright install chromium
+npm test
+```
+
+`tests/smoke.mjs` starts its own static server and drives a real browser: first-run
+onboarding, the week draw, packing, the shopping list, a second lunchbox with its own
+rules, export/import (including refusing junk), the v1 → v2 migration, the service
+worker, an offline launch, and the landing page. No test framework — one file, one
+dependency. CI runs it on every push to `main` or `dev` and on every pull request.
+
+Checks that must pass before launch but shouldn't block day-to-day work print as
+`WARN` rather than failing — the placeholder privacy address is currently one.
+
 ## Roadmap
 
 1. **Now** — hosted, installable, free. Measure whether strangers return in week two.

@@ -1,0 +1,14 @@
+{
+  "name": "lunchbox-tin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plan a week of packed school lunches in about a minute.",
+  "type": "module",
+  "scripts": {
+    "dev": "node -e \"import('node:http').then(async({default:h})=>{const fs=await import('node:fs'),p=await import('node:path');const T={'.html':'text/html','.js':'text/javascript','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json','.txt':'text/plain'};h.createServer((q,s)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';const f=p.join(process.cwd(),'public',u);if(!fs.existsSync(f)||fs.statSync(f).isDirectory()){s.writeHead(404);return s.end('not found')}s.writeHead(200,{'Content-Type':T[p.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(s)}).listen(8099,()=>console.log('http://127.0.0.1:8099/'))})\"",
+    "test": "node tests/smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

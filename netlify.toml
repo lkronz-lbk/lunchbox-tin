@@ -41,3 +41,28 @@
   from = "/app"
   to = "/app/"
   status = 301
+
+# ---------------------------------------------------------------------------
+# Deploy contexts.
+#
+#   production     main            → the live site
+#   branch-deploy  dev             → dev--<site>.netlify.app, the staging copy
+#   deploy-preview  any open PR    → a throwaway URL per pull request
+#
+# Netlify serves branch deploys and previews with X-Robots-Tag: noindex, so a
+# staging copy of the marketing page can't compete with the real one in search.
+#
+# There is no build step yet, so these variables do nothing today. They exist
+# because this is the seam that matters later: when phase two adds a database
+# and phase three adds Stripe, the test keys and the staging database URL are
+# set per context here, and production credentials never reach a preview.
+# ---------------------------------------------------------------------------
+
+[context.production.environment]
+  SITE_ENV = "production"
+
+[context.branch-deploy.environment]
+  SITE_ENV = "staging"
+
+[context.deploy-preview.environment]
+  SITE_ENV = "preview"
