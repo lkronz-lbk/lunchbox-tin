@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lunchbox Tin — a week of school lunches in about a minute</title>
+<meta name="description" content="Answer three questions and get a week of packed school lunches, matched so each box goes together, with the shopping list built for you. Free, works offline, nothing to install.">
+<meta name="theme-color" content="#E9EEE6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta property="og:title" content="Lunchbox Tin">
+<meta property="og:description" content="A week of packed school lunches in about a minute — matched boxes, school rules respected, shopping list built for you.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/icons/icon-1024.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme:light dark;
+  --ground:#E9EEE6; --surface:#FBFCF9; --surface-2:#F1F5EE; --sunk:#DFE7DB;
+  --ink:#16241E; --ink-2:#46584F; --ink-3:#78897F;
+  --line:#CFDACB; --line-strong:#1E3329;
+  --c-main:#2E5A48; --c-side:#A9670F; --c-fruit:#A2304C; --c-sweet:#57448A;
+  --accent:#2E5A48; --accent-fg:#FBFCF9; --accent-soft:#DCE8DF;
+  --f-display:"Familjen Grotesk","Trebuchet MS",sans-serif;
+  --f-body:"Karla","Helvetica Neue",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
+    --ink:#E6EEE7; --ink-2:#A6BAAE; --ink-3:#7A8E84;
+    --line:#2B3E36; --line-strong:#3D5A4C;
+    --c-main:#79C8A2; --c-side:#E0A253; --c-fruit:#EA8299; --c-sweet:#A793DC;
+    --accent:#79C8A2; --accent-fg:#0E1815; --accent-soft:#1F332A;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.6}
+img{max-width:100%;display:block}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.wrap{max-width:980px;margin:0 auto;padding:0 22px}
+nav{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 0 0}
+.mark{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:17px;
+  letter-spacing:-0.01em;color:var(--ink);text-decoration:none}
+.mark .tin{width:26px;height:26px;border:1.6px solid var(--line-strong);border-radius:7px;background:var(--line-strong);
+  display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:1.6px;overflow:hidden;flex:none}
+.mark .tin i:nth-child(1){background:var(--c-main)} .mark .tin i:nth-child(2){background:var(--c-side)}
+.mark .tin i:nth-child(3){background:var(--c-fruit)} .mark .tin i:nth-child(4){background:var(--c-sweet)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:48px;padding:0 20px;
+  border-radius:13px;border:1.6px solid var(--line-strong);background:var(--surface);color:var(--ink);
+  font-family:var(--f-display);font-weight:600;font-size:15.5px;text-decoration:none;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.sm{min-height:40px;padding:0 15px;font-size:14px;border-radius:10px}
+.btn:active{transform:translateY(1px)}
+
+header.hero{padding:56px 0 20px}
+.hero-grid{display:grid;gap:34px;align-items:center}
+@media (min-width:840px){ .hero-grid{grid-template-columns:1.05fr .95fr;gap:48px} header.hero{padding:76px 0 34px} }
+h1{font-family:var(--f-display);font-size:clamp(36px,7.4vw,58px);font-weight:700;letter-spacing:-0.03em;
+  line-height:1.03;margin:0 0 18px;text-wrap:balance}
+.lede{font-size:19px;color:var(--ink-2);margin:0 0 26px;max-width:46ch}
+.cta{display:flex;flex-wrap:wrap;gap:11px;align-items:center}
+.free{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+  margin:16px 0 0}
+.shot{border:1.6px solid var(--line-strong);border-radius:26px;overflow:hidden;background:var(--surface);
+  max-width:330px;margin:0 auto;box-shadow:0 18px 40px -28px rgba(10,25,18,.55)}
+
+h2{font-family:var(--f-display);font-size:clamp(25px,4.2vw,32px);font-weight:700;letter-spacing:-0.02em;
+  margin:0 0 10px;text-wrap:balance}
+.section{padding:56px 0;border-top:1px solid var(--line)}
+.section > .intro{max-width:52ch;margin:0 0 30px}
+.section > .intro p{color:var(--ink-2);margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);
+  margin:0 0 10px}
+
+/* the three steps are a real sequence, so they are numbered */
+.steps{display:grid;gap:20px}
+@media (min-width:760px){ .steps{grid-template-columns:repeat(3,1fr);gap:26px} }
+.step .n{font-family:var(--f-mono);font-size:11.5px;font-weight:600;color:var(--accent-fg);background:var(--accent);
+  width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.step h3{font-family:var(--f-display);font-size:18px;font-weight:600;margin:0 0 5px}
+.step p{margin:0;color:var(--ink-2);font-size:15px}
+
+/* four features in four compartments — the app's own tin, at page scale */
+.compartments{display:grid;grid-template-columns:1fr;gap:2px;background:var(--line-strong);
+  border:2px solid var(--line-strong);border-radius:22px;overflow:hidden}
+@media (min-width:700px){ .compartments{grid-template-columns:1fr 1fr} }
+.cmp{background:var(--surface);padding:26px 24px 28px}
+.cmp .lab{font-family:var(--f-mono);font-size:10px;font-weight:600;letter-spacing:.17em;text-transform:uppercase;
+  display:block;margin-bottom:9px}
+.cmp:nth-child(1) .lab{color:var(--c-main)} .cmp:nth-child(2) .lab{color:var(--c-side)}
+.cmp:nth-child(3) .lab{color:var(--c-fruit)} .cmp:nth-child(4) .lab{color:var(--c-sweet)}
+.cmp h3{font-family:var(--f-display);font-size:19px;font-weight:600;margin:0 0 7px;letter-spacing:-0.01em}
+.cmp p{margin:0;color:var(--ink-2);font-size:15px}
+.cmp em{font-style:normal;background:var(--surface-2);padding:1px 5px;border-radius:5px;
+  font-family:var(--f-mono);font-size:13px}
+
+.shots{display:grid;gap:22px;margin-top:8px}
+@media (min-width:700px){ .shots{grid-template-columns:repeat(3,1fr)} }
+/* three full-height phone shots stacked is a very long scroll on a phone,
+   so below the breakpoint they become a swipeable row instead */
+@media (max-width:699px){
+  .shots{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;
+    margin:8px -22px 0;padding:0 22px 8px;-webkit-overflow-scrolling:touch}
+  .shots figure{flex:0 0 74%;scroll-snap-align:center}
+}
+.shots figure{margin:0}
+.shots img{border:1.4px solid var(--line);border-radius:18px;background:var(--surface)}
+.shots figcaption{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);margin-top:11px;text-align:center}
+
+.install{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:26px 24px}
+.install ol{margin:12px 0 0;padding-left:20px;color:var(--ink-2)}
+.install li{margin-bottom:7px}
+.install b{color:var(--ink)}
+
+form.signup{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;max-width:520px}
+form.signup input[type=email]{flex:1 1 220px;min-height:48px;padding:0 15px;border-radius:13px;
+  border:1.6px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
+form.signup input[type=email]:focus{border-color:var(--accent);outline:none}
+.hp{position:absolute;left:-9999px}
+
+footer{border-top:1px solid var(--line);padding:30px 0 56px;color:var(--ink-3);font-size:14px}
+footer .row{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center}
+footer a{color:var(--ink-2)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav>
+    <a class="mark" href="/"><span class="tin"><i></i><i></i><i></i><i></i></span>Lunchbox Tin</a>
+    <a class="btn sm" href="/app/">Open the planner</a>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-grid">
+      <div>
+        <h1>A week of school lunches, in about a minute.</h1>
+        <p class="lede">Answer three questions — what can go in the box, what has to stay out, how picky they are —
+          and Lunchbox Tin builds the week, matches what goes with what, and hands you the shopping list.</p>
+        <div class="cta">
+          <a class="btn primary" href="/app/">Plan this week &mdash; free</a>
+          <a class="btn" href="#how">See how it works</a>
+        </div>
+        <p class="free">Free · no account · works offline · nothing leaves your phone</p>
+      </div>
+      <div class="shot"><img src="/img/screen-week.png" width="375" height="812"
+        alt="The planner showing Monday through Friday, each as a four-compartment lunchbox with a main, side, fruit and sweet."></div>
+    </div>
+  </header>
+</div>
+
+<div class="wrap">
+  <section class="section" id="how">
+    <div class="intro">
+      <p class="eyebrow">How it works</p>
+      <h2>Three taps, then a plan you can shop from.</h2>
+      <p>No blank screen, no setting up a database of your child's food before you get anything back.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="n">01</div>
+        <h3>Tell it the rules</h3>
+        <p>Cold only or is there a microwave. Nut-free, dairy-free, whatever your school and your kid need.</p></div>
+      <div class="step"><div class="n">02</div>
+        <h3>It draws the week</h3>
+        <p>A main, side, fruit and sweet for every pack day, arranged so each box actually works together.</p></div>
+      <div class="step"><div class="n">03</div>
+        <h3>Shop, then pack</h3>
+        <p>One shopping list grouped by aisle. Each morning, a checklist of exactly what goes in the bag.</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="intro">
+      <p class="eyebrow">What's in it</p>
+      <h2>Four compartments, four jobs.</h2>
+    </div>
+    <div class="compartments">
+      <div class="cmp"><span class="lab">Main</span>
+        <h3>It knows what goes together</h3>
+        <p>Not a random draw. Crunch against a soft main, protein when the main is light, something tangy
+          to cut the salt — and it tells you why each box was built that way.</p></div>
+      <div class="cmp"><span class="lab">Side</span>
+        <h3>Your school's rules, respected</h3>
+        <p>Nut-free, dairy-free, cold-only, plus anything else you list. Excluded foods are flagged in your
+          list, never silently dropped, so you always know why something stopped appearing.</p></div>
+      <div class="cmp"><span class="lab">Fruit</span>
+        <h3>The shopping list writes itself</h3>
+        <p>Every planned box rolls into one list grouped by aisle, with quantities. Tick off what the pantry
+          already has and shop the rest. More than one kid? One list covers them all.</p></div>
+      <div class="cmp"><span class="lab">Sweet</span>
+        <h3>Mornings become a checklist</h3>
+        <p>The next school day as four things to tick off, with a flag when the box needs an ice pack, a
+          sealed container, or is missing any protein.</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="intro">
+      <p class="eyebrow">On your phone</p>
+      <h2>Built for standing at the kitchen counter.</h2>
+      <p>Designed at phone size first, because that's where lunch actually gets planned.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="/img/screen-week.png" width="375" height="812" alt="Week view with five lunchbox tins.">
+        <figcaption>The week</figcaption></figure>
+      <figure><img src="/img/screen-shop.png" width="375" height="812" alt="Shopping list grouped by store aisle.">
+        <figcaption>The list</figcaption></figure>
+      <figure><img src="/img/screen-pack.png" width="375" height="812" alt="Tomorrow's box as a four-item checklist.">
+        <figcaption>The morning</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="intro">
+      <p class="eyebrow">Install it</p>
+      <h2>It can live on your home screen.</h2>
+      <p>There is no app to download. Add it to your home screen and it opens full-screen with its own icon,
+        works with no signal, and keeps everything on the device.</p>
+    </div>
+    <div class="install">
+      <ol>
+        <li><b>iPhone:</b> open the planner in Safari, tap Share, then <b>Add to Home Screen</b>.</li>
+        <li><b>Android:</b> open it in Chrome, tap the menu, then <b>Install app</b>.</li>
+        <li>Open it from the icon after that — installed, it holds onto your plans far more reliably than a browser tab.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="intro">
+      <p class="eyebrow">What's coming</p>
+      <h2>Tell me what would make this worth paying for.</h2>
+      <p>Sync between two parents' phones, a much bigger idea library, and a reminder the night before are
+        what's next. Leave an email if you want to hear when they land — that's the only thing this page collects,
+        and it's used for nothing else.</p>
+    </div>
+    <form class="signup" name="waitlist" method="POST" data-netlify="true" netlify-honeypot="bot-field">
+      <input type="hidden" name="form-name" value="waitlist">
+      <p class="hp"><label>Leave this empty: <input name="bot-field"></label></p>
+      <label class="hp" for="email">Email address</label>
+      <input id="email" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
+      <button class="btn primary" type="submit">Keep me posted</button>
+    </form>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap row">
+    <span>Lunchbox Tin &mdash; a Lila Bloom Enterprises project</span>
+    <span><a href="/privacy.html">Privacy</a> · <a href="/app/">Open the planner</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

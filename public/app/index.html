@@ -1,0 +1,1642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lunchbox Tin</title>
+<meta name="description" content="Plan a week of packed school lunches in about a minute. Cold-lunch ideas matched into balanced boxes, with the shopping list built for you.">
+<meta name="theme-color" content="#E9EEE6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Lunchbox">
+<style>
+:root{color-scheme:light dark}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#E9EEE6; --surface:#FBFCF9; --surface-2:#F1F5EE; --sunk:#DFE7DB;
+  --ink:#16241E; --ink-2:#4A5C53; --ink-3:#7B8C82;
+  --line:#CFDACB; --line-strong:#1E3329;
+  --c-main:#2E5A48; --c-side:#A9670F; --c-fruit:#A2304C; --c-sweet:#57448A;
+  --accent:#2E5A48; --accent-fg:#FBFCF9; --accent-soft:#DCE8DF;
+  --warn:#8A5A06; --warn-soft:#F6E9CE;
+  --toast-bg:#1E3329; --toast-fg:#F4F8F3;
+  --r-lg:20px; --r-md:12px; --r-sm:8px;
+  --f-display:"Familjen Grotesk","Trebuchet MS",sans-serif;
+  --f-body:"Karla","Helvetica Neue",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
+    --ink:#E6EEE7; --ink-2:#A6BAAE; --ink-3:#7A8E84;
+    --line:#2B3E36; --line-strong:#3D5A4C;
+    --c-main:#79C8A2; --c-side:#E0A253; --c-fruit:#EA8299; --c-sweet:#A793DC;
+    --accent:#79C8A2; --accent-fg:#0E1815; --accent-soft:#1F332A;
+    --warn:#E0A253; --warn-soft:#2C2415;
+    --toast-bg:#E6EEE7; --toast-fg:#0E1815;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
+  --ink:#E6EEE7; --ink-2:#A6BAAE; --ink-3:#7A8E84;
+  --line:#2B3E36; --line-strong:#3D5A4C;
+  --c-main:#79C8A2; --c-side:#E0A253; --c-fruit:#EA8299; --c-sweet:#A793DC;
+  --accent:#79C8A2; --accent-fg:#0E1815; --accent-soft:#1F332A;
+  --warn:#E0A253; --warn-soft:#2C2415;
+  --toast-bg:#E6EEE7; --toast-fg:#0E1815;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.app{max-width:600px;margin:0 auto;padding:18px 16px calc(96px + env(safe-area-inset-bottom))}
+.topbar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:-0.01em}
+.brand span{color:var(--c-side)}
+.kid{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-height:1.15;letter-spacing:-0.02em;margin:0;text-wrap:balance}
+.view-sub{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 4px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.row{display:flex;align-items:center;gap:10px}
+.spread{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.muted{color:var(--ink-2)}
+.hint{font-size:13px;color:var(--ink-3)}
+
+/* ---- the tin ---- */
+.tin{border:2px solid var(--line-strong);border-radius:var(--r-lg);background:var(--line-strong);
+  display:grid;grid-template-columns:1fr 1fr;gap:2px;overflow:hidden}
+.cmp{background:var(--surface);border:0;padding:12px 12px 13px;min-height:104px;display:flex;flex-direction:column;
+  gap:7px;text-align:left;align-items:stretch;transition:background .12s ease}
+.cmp:active{background:var(--surface-2)}
+.cmp .lab{font-family:var(--f-mono);font-size:9.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  display:flex;align-items:center;justify-content:space-between;gap:6px}
+.cmp .nm{font-family:var(--f-display);font-size:15.5px;font-weight:600;line-height:1.22;letter-spacing:-0.01em;color:var(--ink)}
+.cmp .sub{font-family:var(--f-mono);font-size:10px;color:var(--ink-3);letter-spacing:.04em;margin-top:auto}
+.cmp.empty .nm{color:var(--ink-3);font-weight:500}
+.c-main .lab{color:var(--c-main)} .c-side .lab{color:var(--c-side)}
+.c-fruit .lab{color:var(--c-fruit)} .c-sweet .lab{color:var(--c-sweet)}
+.cmp[aria-pressed="true"]{background:var(--surface-2)}
+.cmp[aria-pressed="true"] .nm{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--ink-3)}
+.tick{width:15px;height:15px;border:1.5px solid var(--line);border-radius:50%;display:inline-flex;
+  align-items:center;justify-content:center;flex:none}
+.cmp[aria-pressed="true"] .tick{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.tick svg{width:9px;height:9px;opacity:0}
+.cmp[aria-pressed="true"] .tick svg{opacity:1}
+.lock{opacity:.85}
+
+.daycard{display:flex;flex-direction:column;gap:9px}
+.dayhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-left:2px}
+.dayname{font-family:var(--f-display);font-size:16px;font-weight:600;letter-spacing:-0.01em}
+.dayname em{font-family:var(--f-mono);font-style:normal;font-size:11px;font-weight:500;color:var(--ink-3);
+  letter-spacing:.08em;margin-left:7px;text-transform:uppercase}
+.note{font-size:13.5px;color:var(--ink-2);padding:0 2px;line-height:1.45}
+.note b{font-weight:600;color:var(--ink)}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--f-mono);font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;
+  padding:4px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);
+  display:inline-flex;align-items:center;gap:5px}
+.chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.good{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+
+.btn{border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);border-radius:var(--r-md);
+  padding:0 16px;min-height:44px;font-family:var(--f-display);font-weight:600;font-size:14.5px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.ghost{border-color:var(--line);background:transparent;color:var(--ink-2);font-weight:500}
+.btn.wide{width:100%}
+.btn.sm{min-height:36px;padding:0 11px;font-size:13px;border-radius:var(--r-sm)}
+.btn.danger{border-color:var(--line);color:var(--c-fruit);background:transparent}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px}
+.card h3{font-family:var(--f-display);font-size:15px;font-weight:600;margin:0 0 3px}
+.meter{height:6px;border-radius:999px;background:var(--sunk);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--accent);border-radius:999px;transition:width .25s ease}
+.count{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-3);letter-spacing:.05em}
+
+.sect-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px;padding-left:2px}
+.sect-head h3{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;margin:0}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.item{display:flex;align-items:center;gap:11px;padding:11px 13px;min-height:52px;border-top:1px solid var(--line);
+  width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left}
+.item:first-child{border-top:0}
+.item .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.item .nm{display:block;font-size:14.5px;line-height:1.3}
+.item .meta{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.05em}
+.item.done .nm{text-decoration:line-through;color:var(--ink-3)}
+.box{width:22px;height:22px;flex:none;border:1.5px solid var(--line-strong);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;color:transparent}
+.item.done .box{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.box svg{width:12px;height:12px}
+.x{flex:none;width:34px;height:34px;border-radius:var(--r-sm);border:0;background:none;color:var(--ink-3);
+  display:flex;align-items:center;justify-content:center}
+.qty{font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-2);flex:none}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+input[type=text],select,textarea{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-md);
+  padding:11px 12px;min-height:44px;width:100%;font-size:15px}
+textarea{min-height:70px;resize:vertical}
+input[type=text]:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none}
+.toggles{display:flex;flex-wrap:wrap;gap:7px}
+.tg{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:0 13px;min-height:38px;
+  font-size:13.5px;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.tg[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.dow{display:flex;gap:6px}
+.dow .tg{min-width:42px;min-height:42px;padding:0;justify-content:center;font-family:var(--f-mono);font-size:13px}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
+.switch:first-of-type{border-top:0}
+.switch .t{font-size:14.5px}
+.switch .d{font-size:12.5px;color:var(--ink-3);line-height:1.4;margin-top:2px}
+.sw{flex:none;width:50px;height:30px;border-radius:999px;border:1.5px solid var(--line);background:var(--sunk);position:relative;transition:background .15s}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:var(--surface);
+  box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s ease}
+.sw[aria-pressed="true"]{background:var(--accent);border-color:var(--accent)}
+.sw[aria-pressed="true"]::after{transform:translateX(20px)}
+
+.empty{border:2px dashed var(--line);border-radius:var(--r-lg);padding:26px 20px;text-align:center;display:flex;
+  flex-direction:column;gap:12px;align-items:center;background:var(--surface)}
+.empty p{margin:0;color:var(--ink-2);font-size:14px;max-width:38ch}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:var(--r-md);padding:11px 13px;font-size:13.5px;
+  display:flex;gap:10px;align-items:center;justify-content:space-between}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--ground);background:color-mix(in srgb,var(--ground) 92%,transparent);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;
+  padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:20}
+nav.tabs button{flex:1;border:0;background:none;min-height:52px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;color:var(--ink-3);border-radius:var(--r-md)}
+nav.tabs button span{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+nav.tabs button[aria-current="true"]{color:var(--accent)}
+nav.tabs svg{width:21px;height:21px}
+
+.backdrop{position:fixed;inset:0;background:rgba(8,16,13,.5);z-index:30;opacity:0;pointer-events:none;transition:opacity .18s}
+.backdrop.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;background:var(--ground);border-radius:22px 22px 0 0;
+  border-top:1px solid var(--line);max-height:86vh;display:flex;flex-direction:column;
+  transform:translateY(102%);transition:transform .22s cubic-bezier(.32,.72,0,1)}
+.sheet.open{transform:none}
+.sheet header{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border-bottom:1px solid var(--line)}
+.sheet header h3{font-family:var(--f-display);font-size:17px;font-weight:700;margin:0}
+.sheet .body{overflow-y:auto;padding:14px 16px calc(20px + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
+.grab{width:38px;height:4px;border-radius:999px;background:var(--line);margin:8px auto 0}
+.toast{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translate(-50%,14px);
+  background:var(--toast-bg);color:var(--toast-fg);padding:10px 16px;border-radius:999px;font-size:13.5px;z-index:40;
+  opacity:0;pointer-events:none;transition:all .2s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (min-width:520px){
+  .cmp{min-height:112px}
+  h2.view-title{font-size:30px}
+}
+
+/* --- first run --- */
+.ob{min-height:100svh;display:flex;flex-direction:column;justify-content:center;gap:22px;
+  max-width:600px;margin:0 auto;padding:34px 20px calc(34px + env(safe-area-inset-bottom))}
+.ob h1{font-family:var(--f-display);font-size:clamp(30px,8.5vw,40px);font-weight:700;letter-spacing:-0.025em;
+  line-height:1.08;margin:0;text-wrap:balance}
+.ob .lede{font-size:16.5px;color:var(--ink-2);margin:8px 0 0;max-width:38ch}
+.ob .q{display:flex;flex-direction:column;gap:9px}
+.ob .q > span{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3)}
+.ob .go{margin-top:4px}
+.ob .skip{background:none;border:0;color:var(--ink-3);font-size:13.5px;text-decoration:underline;
+  text-underline-offset:3px;min-height:44px}
+.oblogo{display:grid;grid-template-columns:1fr 1fr;gap:2px;width:64px;height:64px;border-radius:14px;
+  border:2px solid var(--line-strong);background:var(--line-strong);overflow:hidden;margin-bottom:4px}
+.oblogo i:nth-child(1){background:var(--c-main)} .oblogo i:nth-child(2){background:var(--c-side)}
+.oblogo i:nth-child(3){background:var(--c-fruit)} .oblogo i:nth-child(4){background:var(--c-sweet)}
+
+/* --- multi-profile chrome --- */
+.topbar .who{display:flex;align-items:center;gap:8px}
+.kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);
+  border-radius:999px;padding:0 12px;min-height:36px;font-size:13.5px;font-weight:600;color:var(--ink)}
+.kidbtn .dot{width:8px;height:8px}
+.kidbtn .caret{font-size:10px;color:var(--ink-3)}
+.kidline{font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+  display:flex;align-items:center;gap:6px;margin:0 0 6px;padding-left:2px}
+.kidgroup{display:flex;flex-direction:column;gap:9px}
+.radio{width:20px;height:20px;flex:none;border:1.5px solid var(--line-strong);border-radius:50%;
+  display:flex;align-items:center;justify-content:center}
+.item.on .radio{border-color:var(--accent)}
+.item.on .radio::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.codebox{font-family:var(--f-mono);font-size:11px;line-height:1.45;min-height:110px;word-break:break-all}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:7px 0;border-top:1px solid var(--line)}
+.kv:first-child{border-top:0}
+.kv span:last-child{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand">Lunchbox <span>Tin</span></div>
+    <div class="who" id="who"></div>
+  </div>
+  <main id="view"></main>
+</div>
+
+<nav class="tabs" id="tabs"></nav>
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="grab"></div>
+  <header><h3 id="sheetTitle"></h3><button class="btn ghost sm" id="sheetClose">Done</button></header>
+  <div class="body" id="sheetBody"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* =================================================================
+   DATA MODEL — account > members > lunchboxes (profiles) > foods
+   -----------------------------------------------------------------
+   Shaped for more than one user from the start, even though today it
+   runs on one device with no server:
+
+     account   one household. Everything hangs off it, so a server only
+               ever has to filter by account id.
+     members   the adults who use the app. One is the owner. Actions
+               that could differ per person (packing, pantry ticks)
+               record `by: memberId`.
+     kids      lunchbox profiles. Each has its OWN school rules, food
+               list, week and pack state — two kids can attend two
+               schools with two allergy policies.
+     records   every row carries id / createdAt / updatedAt, and delete
+               is a `deletedAt` tombstone rather than a splice, so a
+               future sync can merge and propagate removals.
+
+   Persistence goes through Store (below) and nothing else. Swapping
+   localStorage for `fetch('/api/account')` is a change to that one
+   object; the app already awaits it.
+   ================================================================= */
+
+var SCHEMA = 2;
+
+/* ---------------------------------------------------------------- icons */
+var I = {
+  pack:'<path d="M4 8h16v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 8V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3"/><path d="M9.5 14l1.8 1.8L15 12"/>',
+  week:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M8 17.5h3M14 14h2"/>',
+  shop:'<path d="M4 7h16l-1.3 12.1a2 2 0 0 1-2 1.9H7.3a2 2 0 0 1-2-1.9z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/>',
+  foods:'<path d="M12 8.5c1.4-2.2 6-2.6 6 2 0 4-4.3 7.7-6 9.5-1.7-1.8-6-5.5-6-9.5 0-4.6 4.6-4.2 6-2z"/><path d="M12 8.5V5c0-1 .8-2 2-2"/>',
+  setup:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/>',
+  check:'<path d="M4 12.5l5 5L20 6.5"/>',
+  lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7a3.5 3.5 0 0 1 7 0v3.5"/>',
+  dice:'<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="9" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.3" fill="currentColor" stroke="none"/>',
+  trash:'<path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M7 7l1 12.2A1.8 1.8 0 0 0 9.8 21h4.4a1.8 1.8 0 0 0 1.8-1.8L17 7"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  people:'<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.7a3.2 3.2 0 0 1 0 5.6M17.5 20a5.6 5.6 0 0 0-2-4.3"/>',
+  save:'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v6h7V4M8 20v-6h8v6"/>'
+};
+function svg(n, w){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'+(w?' style="width:'+w+'px;height:'+w+'px"':'')+'>'+I[n]+'</svg>'; }
+
+/* ------------------------------------------------------------ constants */
+var CATS = [
+  {k:'main',  label:'Main',  plural:'Mains'},
+  {k:'side',  label:'Side',  plural:'Sides'},
+  {k:'fruit', label:'Fruit', plural:'Fruit'},
+  {k:'sweet', label:'Sweet', plural:'Sweets'}
+];
+var AISLES = ['produce','deli','bakery','dairy','pantry','snacks','frozen','other'];
+var ALLERGENS = [
+  {k:'nuts',label:'Nuts'},{k:'dairy',label:'Dairy'},{k:'gluten',label:'Gluten'},
+  {k:'egg',label:'Egg'},{k:'soy',label:'Soy'},{k:'fish',label:'Fish'}
+];
+var TAGS = ['protein','crunchy','soft','chewy','juicy','hearty','light','savory','sweet','salty','tangy','messy','ice','heat'];
+var KID_HUES = ['--c-main','--c-side','--c-fruit','--c-sweet'];
+var DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var DOWFULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var NUMWORD = ['No','One','Two','Three','Four','Five','Six','Seven'];
+
+function F(n,c,t,a,al,s,e){ return {n:n,c:c,t:t,a:a,al:al||[],s:!!s,e:!!e}; }
+var BANK = [
+  /* mains */,
+  F('Turkey & cheese roll-ups','main',['protein','soft','hearty','savory','ice'],'deli',['dairy'],1,1),
+  F('Ham & cheese sandwich','main',['protein','soft','hearty','savory','ice'],'deli',['dairy','gluten'],1,1),
+  F('Sunbutter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],1,1),
+  F('Peanut butter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['nuts','gluten'],0,1),
+  F('Peanut butter & banana wrap','main',['protein','soft','hearty','sweet'],'pantry',['nuts','gluten'],0,0),
+  F('Cream cheese & cucumber bagel','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,0),
+  F('Pasta salad cup','main',['chewy','hearty','savory','ice'],'pantry',['gluten'],1,0),
+  F('Chicken salad in a pita','main',['protein','soft','hearty','messy','ice'],'deli',['gluten','egg'],0,0),
+  F('Crackers, cheese cubes & salami','main',['protein','crunchy','salty','savory','ice'],'deli',['dairy','gluten'],1,1),
+  F('Egg salad sandwich','main',['protein','soft','hearty','messy','ice'],'deli',['gluten','egg'],0,0),
+  F('Hummus & veggie wrap','main',['protein','soft','light','savory'],'deli',['gluten','soy'],0,0),
+  F('Tuna salad with crackers','main',['protein','salty','savory','ice'],'pantry',['fish','gluten'],0,0),
+  F('Bean & cheese roll-up','main',['protein','soft','hearty','savory'],'deli',['dairy','gluten'],1,1),
+  F('Yogurt & granola parfait','main',['protein','soft','sweet','ice'],'dairy',['dairy'],1,1),
+  F('Chicken & cheese skewers','main',['protein','hearty','savory','ice'],'deli',['dairy'],0,1),
+  F('Cucumber sushi rolls','main',['light','chewy','savory','ice'],'deli',[],0,0),
+  F('Cold grilled chicken strips','main',['protein','hearty','savory','ice'],'deli',[],0,1),
+  F('Turkey & cheese pinwheels','main',['protein','soft','savory','ice'],'deli',['dairy','gluten'],1,1),
+  F('Mac & cheese thermos','main',['soft','hearty','savory','heat'],'pantry',['dairy','gluten'],0,1),
+  F('Turkey & avocado wrap','main',['protein','soft','hearty','savory','messy','ice'],'deli',['gluten'],0,0),
+  F('Grilled cheese, packed cold','main',['soft','hearty','savory'],'bakery',['dairy','gluten'],0,1),
+  F('Chicken caesar wrap','main',['protein','soft','hearty','savory','ice'],'deli',['dairy','gluten','fish'],0,0),
+  F('Cheese & cracker stackers','main',['protein','crunchy','savory','ice'],'snacks',['dairy','gluten'],1,1),
+  F('Bagel with cream cheese','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1),
+  F('Ham & cheese pinwheels','main',['protein','soft','savory','ice'],'deli',['dairy','gluten'],0,1),
+  F('Chicken nuggets, packed cold','main',['protein','crunchy','hearty','savory'],'frozen',['gluten'],0,1),
+  F('Mini bagel pizzas, cold','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1),
+  F('Rice & black bean bowl','main',['protein','chewy','hearty','savory'],'pantry',[],0,0),
+  F('Quinoa salad cup','main',['protein','chewy','light','savory','ice'],'pantry',[],0,0),
+  F('Lentil soup thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0),
+  F('Turkey chili thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0),
+  F('Chicken noodle soup thermos','main',['soft','hearty','savory','heat'],'pantry',['gluten'],0,1),
+  F('Deli turkey & crackers','main',['protein','crunchy','salty','savory','ice'],'deli',['gluten'],0,1),
+  F('Cheese quesadilla, packed cold','main',['soft','hearty','savory'],'deli',['dairy','gluten'],0,1),
+  F('Egg & cheese muffin, cold','main',['protein','soft','hearty','savory','ice'],'bakery',['dairy','egg','gluten'],0,0),
+  F('Tortellini salad','main',['chewy','hearty','savory','ice'],'pantry',['dairy','gluten','egg'],0,0),
+  F('Chicken & rice bowl','main',['protein','hearty','savory','heat'],'pantry',[],0,1),
+  F('Veggie & hummus pita','main',['protein','soft','light','savory'],'deli',['gluten','soy'],0,0),
+  F('Salmon & cracker bites','main',['protein','salty','savory','ice'],'pantry',['fish','gluten'],0,0),
+  F('Cottage cheese & fruit cup','main',['protein','soft','light','sweet','ice'],'dairy',['dairy'],0,0),
+  F('Chicken salad crackers','main',['protein','crunchy','savory','ice'],'deli',['gluten','egg'],0,0),
+  F('BLT wrap, hold the mayo','main',['protein','soft','crunchy','savory','ice'],'deli',['gluten'],0,0),
+  F('Sunbutter & honey roll-up','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],0,1),
+  F('Turkey & cheese sub roll','main',['protein','soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1),
+  F('Pesto pasta cup','main',['chewy','hearty','savory','ice'],'pantry',['dairy','gluten','nuts'],0,0)
+  /* sides */,
+  F('Pretzel sticks','side',['crunchy','salty'],'snacks',['gluten'],1,1),
+  F('Baby carrots & ranch','side',['crunchy','light','tangy'],'produce',['dairy'],1,1),
+  F('Cucumber coins','side',['crunchy','light'],'produce',[],1,1),
+  F('Cherry tomatoes','side',['juicy','light','tangy'],'produce',[],0,0),
+  F('Sugar snap peas','side',['crunchy','light'],'produce',[],1,0),
+  F('Celery sticks','side',['crunchy','light'],'produce',[],0,0),
+  F('Bell pepper strips','side',['crunchy','light'],'produce',[],1,0),
+  F('Dill pickle spear','side',['crunchy','tangy','messy'],'pantry',[],1,0),
+  F('Popcorn','side',['crunchy','light','salty'],'snacks',[],1,1),
+  F('Tortilla chips & salsa','side',['crunchy','salty','messy'],'snacks',[],0,1),
+  F('Cheese stick','side',['protein','soft','savory','ice'],'dairy',['dairy'],1,1),
+  F('Hard-boiled egg','side',['protein','soft','savory','ice'],'dairy',['egg'],0,0),
+  F('Edamame','side',['protein','light','salty','ice'],'frozen',['soy'],0,0),
+  F('Black olives','side',['salty','tangy','light'],'pantry',[],0,0),
+  F('Veggie straws','side',['crunchy','salty','light'],'snacks',[],1,1),
+  F('Wheat crackers','side',['crunchy','salty'],'snacks',['gluten'],1,1),
+  F('Hummus cup','side',['protein','soft','savory','ice'],'deli',['soy'],0,0),
+  F('Applesauce pouch','side',['soft','sweet','light'],'pantry',[],1,1),
+  F('Yogurt tube','side',['protein','soft','sweet','ice'],'dairy',['dairy'],1,1),
+  F('Trail mix','side',['crunchy','hearty','salty'],'snacks',['nuts'],0,0),
+  F('Goldfish crackers','side',['crunchy','salty','light'],'snacks',['dairy','gluten'],1,1),
+  F('Cheese crackers','side',['crunchy','salty'],'snacks',['dairy','gluten'],0,1),
+  F('Rice cakes','side',['crunchy','light'],'snacks',[],0,1),
+  F('Guacamole cup','side',['soft','savory','messy','ice'],'deli',[],0,0),
+  F('Snap pea crisps','side',['crunchy','light','salty'],'snacks',[],0,0),
+  F('Broccoli florets & dip','side',['crunchy','light','tangy'],'produce',['dairy'],0,0),
+  F('Corn salad cup','side',['juicy','light','savory','ice'],'deli',[],0,0),
+  F('Three-bean salad','side',['protein','chewy','tangy','ice'],'deli',[],0,0),
+  F('Potato salad cup','side',['soft','hearty','savory','messy','ice'],'deli',['egg'],0,0),
+  F('Coleslaw cup','side',['crunchy','tangy','messy','ice'],'deli',['egg'],0,0),
+  F('Seaweed snacks','side',['crunchy','light','salty'],'snacks',[],0,0),
+  F('Roasted chickpeas','side',['protein','crunchy','salty'],'snacks',[],0,0),
+  F('Sunflower seeds','side',['protein','crunchy','salty'],'snacks',[],0,0),
+  F('Pumpkin seeds','side',['protein','crunchy','salty'],'snacks',[],0,0),
+  F('Babybel cheese round','side',['protein','soft','savory','ice'],'dairy',['dairy'],1,1),
+  F('Pepperoni slices','side',['protein','salty','savory','ice'],'deli',[],0,1),
+  F('Turkey roll slices','side',['protein','soft','savory','ice'],'deli',[],0,1),
+  F('Olives & feta cup','side',['salty','tangy','savory','ice'],'deli',['dairy'],0,0),
+  F('Caprese skewers','side',['protein','soft','savory','ice'],'deli',['dairy'],0,0),
+  F('Pita chips','side',['crunchy','salty'],'snacks',['gluten'],0,1),
+  F('Plantain chips','side',['crunchy','salty','light'],'snacks',[],0,0),
+  F('Apple chips','side',['crunchy','sweet','light'],'snacks',[],0,1),
+  F('Mini pickles','side',['crunchy','tangy'],'pantry',[],0,1),
+  F('Corn chips','side',['crunchy','salty'],'snacks',[],0,1),
+  F('Breadsticks','side',['crunchy','light'],'bakery',['gluten'],0,1),
+  F('Cottage cheese cup','side',['protein','soft','light','savory','ice'],'dairy',['dairy'],0,0),
+  F('Cheese & pretzel bites','side',['protein','crunchy','salty','ice'],'snacks',['dairy','gluten'],0,1),
+  F('Sliced cucumbers & dip','side',['crunchy','light','tangy'],'produce',['dairy'],0,1),
+  F('Mixed nuts','side',['protein','crunchy','salty'],'snacks',['nuts'],0,0),
+  F('Granola cluster','side',['crunchy','sweet','hearty'],'snacks',['gluten'],0,0)
+  /* fruit */,
+  F('Apple slices','fruit',['crunchy','juicy','light','sweet'],'produce',[],1,1),
+  F('Green grapes','fruit',['juicy','light','sweet'],'produce',[],1,1),
+  F('Strawberries','fruit',['juicy','light','sweet','ice'],'produce',[],1,1),
+  F('Blueberries','fruit',['juicy','light','sweet'],'produce',[],1,1),
+  F('Clementine','fruit',['juicy','light','tangy','sweet'],'produce',[],1,1),
+  F('Banana','fruit',['soft','light','sweet'],'produce',[],1,1),
+  F('Watermelon cubes','fruit',['juicy','light','sweet','messy','ice'],'produce',[],0,1),
+  F('Pineapple chunks','fruit',['juicy','tangy','sweet','messy','ice'],'produce',[],0,0),
+  F('Cantaloupe cubes','fruit',['juicy','light','sweet','ice'],'produce',[],0,0),
+  F('Raspberries','fruit',['juicy','light','tangy','ice'],'produce',[],0,0),
+  F('Mandarin orange cup','fruit',['juicy','sweet','messy'],'pantry',[],0,1),
+  F('Peach slices','fruit',['juicy','soft','sweet','ice'],'produce',[],0,0),
+  F('Mango chunks','fruit',['juicy','sweet','messy','ice'],'produce',[],0,0),
+  F('Dried apricots','fruit',['chewy','sweet'],'pantry',[],0,0),
+  F('Raisins','fruit',['chewy','sweet'],'pantry',[],1,1),
+  F('Blackberries','fruit',['juicy','tangy','light','ice'],'produce',[],0,0),
+  F('Honeydew cubes','fruit',['juicy','light','sweet','ice'],'produce',[],0,0),
+  F('Kiwi slices','fruit',['juicy','tangy','sweet','messy','ice'],'produce',[],0,0),
+  F('Pear slices','fruit',['juicy','soft','sweet'],'produce',[],0,1),
+  F('Plum','fruit',['juicy','sweet','messy'],'produce',[],0,0),
+  F('Cherries','fruit',['juicy','sweet'],'produce',[],0,0),
+  F('Fruit salad cup','fruit',['juicy','sweet','messy','ice'],'deli',[],0,0),
+  F('Dried mango','fruit',['chewy','sweet'],'pantry',[],0,0),
+  F('Banana chips','fruit',['crunchy','sweet','light'],'snacks',[],0,1),
+  F('Freeze-dried strawberries','fruit',['crunchy','light','sweet'],'snacks',[],0,1),
+  F('Orange segments','fruit',['juicy','sweet','messy'],'produce',[],0,1),
+  F('Nectarine slices','fruit',['juicy','soft','sweet','ice'],'produce',[],0,0),
+  F('Grapes & blueberries','fruit',['juicy','light','sweet'],'produce',[],0,1),
+  F('Pomegranate seeds','fruit',['juicy','tangy','sweet','ice'],'produce',[],0,0),
+  F('Fruit cup in juice','fruit',['soft','sweet','messy'],'pantry',[],0,1),
+  F('Frozen grapes','fruit',['crunchy','sweet','light','ice'],'produce',[],0,1),
+  F('Melon skewers','fruit',['juicy','light','sweet','ice'],'produce',[],0,0),
+  F('Dried cranberries','fruit',['chewy','sweet','tangy'],'pantry',[],0,0),
+  F('Tangerine','fruit',['juicy','sweet','tangy'],'produce',[],0,1),
+  F('Red grapes','fruit',['juicy','light','sweet'],'produce',[],1,1),
+  F('Blueberry yogurt cup','fruit',['protein','soft','sweet','ice'],'dairy',['dairy'],0,1),
+  F('Apple & cinnamon slices','fruit',['crunchy','sweet','light'],'produce',[],0,1),
+  F('Sliced strawberries & cream','fruit',['soft','sweet','ice'],'dairy',['dairy'],0,0),
+  F('Dried apple rings','fruit',['chewy','sweet'],'pantry',[],0,1),
+  F('Blueberry & melon cup','fruit',['juicy','light','sweet','ice'],'produce',[],0,0)
+  /* sweets */,
+  F('Chocolate chip cookies','sweet',['crunchy','sweet','hearty'],'bakery',['gluten','dairy'],1,1),
+  F('Graham crackers','sweet',['crunchy','sweet','light'],'snacks',['gluten'],1,1),
+  F('Animal crackers','sweet',['crunchy','sweet','light'],'snacks',['gluten'],1,1),
+  F('Fruit snacks','sweet',['chewy','sweet','light'],'snacks',[],1,1),
+  F('Granola bar','sweet',['chewy','sweet','hearty'],'snacks',['gluten','nuts'],0,0),
+  F('Rice crispy treat','sweet',['chewy','sweet'],'snacks',['gluten'],0,1),
+  F('Brownie bite','sweet',['soft','sweet','hearty'],'bakery',['gluten','dairy','egg'],0,1),
+  F('Oatmeal cookie','sweet',['chewy','sweet','hearty'],'bakery',['gluten'],0,0),
+  F('Mini muffin','sweet',['soft','sweet'],'bakery',['gluten','egg'],1,1),
+  F('Pudding cup','sweet',['soft','sweet','ice'],'dairy',['dairy'],0,1),
+  F('Fruit leather','sweet',['chewy','sweet','light'],'snacks',[],1,1),
+  F('Chocolate-covered pretzels','sweet',['crunchy','sweet','salty'],'snacks',['gluten','dairy'],0,1),
+  F('Banana bread slice','sweet',['soft','sweet','hearty'],'bakery',['gluten','egg'],0,0),
+  F('Dark chocolate square','sweet',['sweet','light'],'snacks',['dairy'],1,0),
+  F('Jello cup','sweet',['soft','sweet','light'],'pantry',[],0,1),
+  F('Vanilla wafers','sweet',['crunchy','sweet','light'],'snacks',['gluten'],0,1),
+  F('Shortbread cookie','sweet',['crunchy','sweet'],'bakery',['gluten','dairy'],0,0),
+  F('Sugar cookie','sweet',['crunchy','sweet'],'bakery',['gluten','dairy','egg'],0,1),
+  F('Mini marshmallows','sweet',['chewy','sweet','light'],'snacks',[],0,1),
+  F('Yogurt-covered raisins','sweet',['chewy','sweet'],'snacks',['dairy'],0,1),
+  F('Mini donut','sweet',['soft','sweet','hearty'],'bakery',['gluten','dairy','egg'],0,1),
+  F('Blondie bite','sweet',['soft','sweet','hearty'],'bakery',['gluten','dairy','egg'],0,0),
+  F('Lemon bar','sweet',['soft','sweet','tangy'],'bakery',['gluten','dairy','egg'],0,0),
+  F('Snickerdoodle','sweet',['chewy','sweet'],'bakery',['gluten','dairy','egg'],0,0),
+  F('Gingersnaps','sweet',['crunchy','sweet'],'bakery',['gluten'],0,0),
+  F('Cereal bar','sweet',['chewy','sweet','light'],'snacks',['gluten'],0,1),
+  F('Chocolate pudding','sweet',['soft','sweet','ice'],'dairy',['dairy'],0,1),
+  F('Apple cinnamon muffin','sweet',['soft','sweet'],'bakery',['gluten','egg'],0,1),
+  F('Blueberry muffin','sweet',['soft','sweet'],'bakery',['gluten','egg'],0,1),
+  F('Zucchini bread slice','sweet',['soft','sweet','hearty'],'bakery',['gluten','egg'],0,0),
+  F('Pumpkin bread slice','sweet',['soft','sweet','hearty'],'bakery',['gluten','egg'],0,0),
+  F('Rice pudding cup','sweet',['soft','sweet','ice'],'dairy',['dairy'],0,0),
+  F('Mini cupcake','sweet',['soft','sweet','hearty'],'bakery',['gluten','dairy','egg'],0,1),
+  F('Chocolate sandwich cookies','sweet',['crunchy','sweet'],'snacks',['gluten'],0,1),
+  F('Chocolate wafer bar','sweet',['crunchy','sweet','light'],'snacks',['gluten','dairy'],0,1),
+  F('Caramel corn','sweet',['crunchy','sweet','salty'],'snacks',[],0,1),
+  F('Honey graham sticks','sweet',['crunchy','sweet','light'],'snacks',['gluten'],0,1),
+  F('Coconut macaroon','sweet',['chewy','sweet'],'bakery',['egg'],0,0),
+  F('Meringue cookie','sweet',['crunchy','sweet','light'],'bakery',['egg'],0,0),
+  F('Licorice twists','sweet',['chewy','sweet'],'snacks',['gluten'],0,0),
+  F('Gummy bears','sweet',['chewy','sweet','light'],'snacks',[],0,1),
+  F('Mini candy bar','sweet',['sweet','hearty'],'snacks',['dairy','nuts'],0,1),
+  F('Applesauce cookie','sweet',['soft','sweet'],'bakery',['gluten'],0,1),
+  F('Trail mix bar','sweet',['chewy','sweet','hearty'],'snacks',['nuts','gluten'],0,0),
+  F('Frosted animal cookies','sweet',['crunchy','sweet'],'snacks',['gluten','dairy'],0,1)
+];
+
+/* ================================================================ storage
+   The ONLY place that touches persistence. Both calls are async so the
+   UI already tolerates a round trip; a server version replaces the two
+   bodies with fetch() and nothing else in the app changes.
+   ---------------------------------------------------------------- */
+var Store = {
+  KEY:'lunchbox-tin',            /* the account document */
+  DEVICE_KEY:'lunchbox-tin-device', /* which member is on THIS device — never exported */
+  LEGACY_KEY:'lunchbox-tin-v1',  /* single-profile format, migrated on first run */
+  ok:true,
+  load:function(){
+    return new Promise(function(res){
+      var out = {doc:null, legacy:null, device:null};
+      try{
+        var raw = localStorage.getItem(Store.KEY);
+        if(raw) out.doc = JSON.parse(raw);
+        var old = localStorage.getItem(Store.LEGACY_KEY);
+        if(old) out.legacy = JSON.parse(old);
+        out.device = localStorage.getItem(Store.DEVICE_KEY);
+      }catch(e){ Store.ok = false; }
+      res(out);
+    });
+  },
+  save:function(doc, deviceMemberId){
+    return new Promise(function(res){
+      try{
+        localStorage.setItem(Store.KEY, JSON.stringify(doc));
+        if(deviceMemberId) localStorage.setItem(Store.DEVICE_KEY, deviceMemberId);
+      }catch(e){ Store.ok = false; }
+      res(true);
+    });
+  }
+};
+
+/* ---------------------------------------------------------------- model */
+var S = null;                          /* the account document */
+var DEVICE = {memberId:null};          /* device-local, not part of the account */
+var UI = {tab:'pack', armed:'', pendingImport:null, ob:{heat:false, avoid:['nuts'], breadth:'some'}};
+
+function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function now(){ return new Date().toISOString(); }
+function normKey(s){ return String(s).trim().toLowerCase().replace(/\s+/g,' '); }
+
+function newMember(name, role){
+  return {id:uid('mem'), name:name, role:role||'adult', createdAt:now(), updatedAt:now(), deletedAt:null};
+}
+function newKid(name, hue){
+  return {id:uid('kid'), name:name, hue:hue||0, createdAt:now(), updatedAt:now(), deletedAt:null,
+    settings:{days:[1,2,3,4,5], noHeat:true, avoidAllergens:['nuts'], avoidText:'', updatedAt:now()},
+    foods:[], week:null, packed:{}};
+}
+function newFood(kid, o){
+  return {id:uid('food'), kidId:kid.id, n:o.n, c:o.c, t:(o.t||[]).slice(), a:o.a||'other',
+    al:(o.al||[]).slice(), createdAt:now(), updatedAt:now(), deletedAt:null};
+}
+function newAccount(){
+  var owner = newMember('Me','owner');
+  var kid = newKid('Lunchbox', 0);
+  return {schema:SCHEMA, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
+    members:[owner], kids:[kid], activeKidId:kid.id, pantry:{}};
+}
+
+/* migrations: keyed by the schema they upgrade FROM */
+var MIGRATIONS = {
+  1: function(old){                       /* single-profile v1 -> account v2 */
+    var owner = newMember('Me','owner');
+    var kid = newKid((old.settings && old.settings.kid) || 'Lunchbox', 0);
+    var acct = {schema:2, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
+      members:[owner], kids:[kid], activeKidId:kid.id, pantry:{}};
+    if(old.settings){
+      kid.settings.days = old.settings.days || [1,2,3,4,5];
+      kid.settings.noHeat = old.settings.noHeat !== false;
+      kid.settings.avoidAllergens = old.settings.avoidAllergens || [];
+      kid.settings.avoidText = old.settings.avoidText || '';
+    }
+    var idMap = {};
+    (old.foods||[]).forEach(function(f){
+      var nf = newFood(kid, f); idMap[f.id] = nf.id; kid.foods.push(nf);
+    });
+    if(old.week && old.week.days){
+      kid.week = {id:uid('week'), kidId:kid.id, start:old.week.start, updatedAt:now(),
+        days: old.week.days.map(function(d){
+          var slots = {}, lock = {};
+          CATS.forEach(function(c){ slots[c.k] = idMap[d.slots[c.k]] || null; lock[c.k] = !!(d.lock||{})[c.k]; });
+          return {d:d.d, dow:d.dow, slots:slots, lock:lock};
+        })};
+    }
+    Object.keys(old.packed||{}).forEach(function(dt){
+      var row = {};
+      Object.keys(old.packed[dt]).forEach(function(c){ if(old.packed[dt][c]) row[c] = {at:now(), by:owner.id}; });
+      if(Object.keys(row).length) kid.packed[dt] = row;
+    });
+    Object.keys(old.have||{}).forEach(function(fid){
+      if(!old.have[fid]) return;
+      var nid = idMap[fid], f = kid.foods.filter(function(x){ return x.id===nid; })[0];
+      if(f) acct.pantry[normKey(f.n)] = {have:true, at:now(), by:owner.id};
+    });
+    return acct;
+  }
+};
+function migrate(doc){
+  if(!doc || typeof doc !== 'object') return null;
+  var guard = 0;
+  while((doc.schema || 1) < SCHEMA && guard++ < 10){
+    var fn = MIGRATIONS[doc.schema || 1];
+    if(!fn) return null;
+    doc = fn(doc);
+  }
+  return (doc.schema === SCHEMA) ? doc : null;
+}
+function isAccount(d){ return d && d.schema === SCHEMA && Array.isArray(d.kids) && Array.isArray(d.members); }
+
+var saveTimer = null;
+function save(){
+  if(!S) return;
+  S.updatedAt = now();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){ Store.save(S, DEVICE.memberId); }, 120);
+}
+
+/* ------------------------------------------------------------- accessors */
+function kids(){ return S.kids.filter(function(k){ return !k.deletedAt; }); }
+function activeKid(){
+  var ks = kids();
+  return ks.filter(function(k){ return k.id === S.activeKidId; })[0] || ks[0] || null;
+}
+function kidById(id){ return S.kids.filter(function(k){ return k.id===id && !k.deletedAt; })[0] || null; }
+function foodsOf(k){ return k ? k.foods.filter(function(f){ return !f.deletedAt; }) : []; }
+function foodById(k, id){
+  if(!k || !id) return null;
+  for(var i=0;i<k.foods.length;i++) if(k.foods[i].id===id && !k.foods[i].deletedAt) return k.foods[i];
+  return null;
+}
+function members(){ return S.members.filter(function(m){ return !m.deletedAt; }); }
+function memberById(id){ return members().filter(function(m){ return m.id===id; })[0] || null; }
+function deviceMember(){ return memberById(DEVICE.memberId) || members()[0] || null; }
+function hueVar(k){ return 'var('+KID_HUES[(k.hue||0) % KID_HUES.length]+')'; }
+function touch(rec){ rec.updatedAt = now(); }
+
+/* ------------------------------------------------------------- helpers */
+function esc(s){ return String(s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function parseISO(s){ var p = String(s).split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
+function today(){ var d = new Date(); d.setHours(0,0,0,0); return d; }
+function addDays(d,n){ var x = new Date(d.getTime()); x.setDate(x.getDate()+n); return x; }
+function weekStart(d){ return addDays(d, -((d.getDay()+6)%7)); }
+function has(item,tag){ return !!(item && item.t && item.t.indexOf(tag)>-1); }
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('show'); }, 2000);
+}
+
+/* --------------------------------------------------------- school rules */
+function violation(kid, food){
+  var s = kid.settings;
+  if(s.noHeat && has(food,'heat')) return 'needs heating';
+  var bad = (food.al||[]).filter(function(a){ return s.avoidAllergens.indexOf(a)>-1; });
+  if(bad.length) return bad.join(' + ');
+  var words = (s.avoidText||'').split(',').map(function(w){ return w.trim().toLowerCase(); })
+                .filter(function(w){ return w.length>1; });
+  for(var i=0;i<words.length;i++) if(food.n.toLowerCase().indexOf(words[i])>-1) return 'on your avoid list';
+  return null;
+}
+function eligible(kid, cat){
+  return foodsOf(kid).filter(function(f){ return f.c===cat && !violation(kid,f); });
+}
+
+/* ------------------------------------------------ pairing (deterministic) */
+function pairScore(main, item, cat){
+  if(!main || !item) return {s:0, why:[]};
+  var s = 0, why = [];
+  if(has(main,'soft') && has(item,'crunchy')){ s += 3; why.push({w:3,k:'crunch',n:item.n}); }
+  if(has(main,'crunchy') && has(item,'soft')) s += 1;
+  if(!has(main,'protein') && has(item,'protein')){ s += 3; why.push({w:3,k:'protein',n:item.n}); }
+  if(has(main,'hearty') && has(item,'light')){ s += 2; why.push({w:2,k:'light',n:item.n}); }
+  if(has(main,'hearty') && has(item,'hearty')) s -= 3;
+  if(has(main,'messy') && has(item,'messy')) s -= 3;
+  if(has(main,'savory') && has(item,'tangy')){ s += 2; why.push({w:2,k:'tangy',n:item.n}); }
+  if(has(main,'salty') && has(item,'juicy')){ s += 2; why.push({w:2,k:'juicy',n:item.n}); }
+  if(has(main,'sweet') && has(item,'sweet')) s -= 2;
+  if(cat==='sweet'){
+    if(has(main,'sweet')) s -= 2;
+    if(has(item,'light') && has(main,'hearty')){ s += 1; why.push({w:1,k:'finish',n:item.n}); }
+    if(has(item,'hearty') && has(main,'hearty')) s -= 2;
+  }
+  if(cat==='fruit' && has(item,'juicy') && !has(main,'messy')){ s += 1; why.push({w:1,k:'fresh',n:item.n}); }
+  return {s:s, why:why};
+}
+var NOTE = {
+  crunch: function(n){ return '<b>'+esc(n)+'</b> gives it some crunch against a soft main.'; },
+  protein:function(n){ return '<b>'+esc(n)+'</b> carries the protein so the meal holds until 3pm.'; },
+  light:  function(n){ return '<b>'+esc(n)+'</b> keeps it from being too heavy.'; },
+  tangy:  function(n){ return '<b>'+esc(n)+'</b> cuts through the savory main.'; },
+  juicy:  function(n){ return '<b>'+esc(n)+'</b> balances the salt.'; },
+  fresh:  function(n){ return '<b>'+esc(n)+'</b> freshens up the box.'; },
+  finish: function(n){ return '<b>'+esc(n)+'</b> is a light finish after a filling main.'; }
+};
+function dayNote(kid, day){
+  var main = foodById(kid, day.slots.main);
+  if(!main) return '';
+  var all = [];
+  ['side','fruit','sweet'].forEach(function(c){
+    all = all.concat(pairScore(main, foodById(kid, day.slots[c]), c).why);
+  });
+  all.sort(function(a,b){ return b.w-a.w; });
+  var usedKey = {}, usedName = {}, out = [];
+  for(var i=0;i<all.length && out.length<2;i++){
+    if(usedKey[all[i].k] || usedName[all[i].n]) continue;
+    usedKey[all[i].k] = 1; usedName[all[i].n] = 1;
+    out.push(NOTE[all[i].k](all[i].n));
+  }
+  return out.length ? out.join(' ') : 'Straightforward box &mdash; nothing fights, nothing wilts.';
+}
+function dayFlags(kid, day){
+  var items = CATS.map(function(c){ return foodById(kid, day.slots[c.k]); }).filter(Boolean);
+  var f = [];
+  if(items.some(function(i){ return has(i,'ice'); })) f.push({t:'Ice pack', cls:''});
+  if(items.some(function(i){ return has(i,'messy'); })) f.push({t:'Sealed container', cls:''});
+  if(items.length && !items.some(function(i){ return has(i,'protein'); })) f.push({t:'No protein', cls:'warn'});
+  return f;
+}
+
+/* ------------------------------------------------------- first-run seeding
+   The onboarding answers pick how wide a starting list to build. A stranger
+   should never face an empty app: three taps have to produce a planned week. */
+var BREADTH = {
+  variety:{n:{main:14,side:14,fruit:10,sweet:10}, easyOnly:false},
+  some:   {n:{main:8, side:9, fruit:7, sweet:7},  easyOnly:false},
+  picky:  {n:{main:5, side:5, fruit:4, sweet:4},  easyOnly:true}
+};
+function seedLibrary(kid, breadth){
+  var cfg = BREADTH[breadth] || BREADTH.some, added = 0;
+  CATS.forEach(function(c){
+    var pool = BANK.filter(function(b){
+      return b.c===c.k && !violation(kid,b) && (!cfg.easyOnly || b.e);
+    });
+    if(cfg.easyOnly && pool.length < cfg.n[c.k])   /* too strict to fill a week — widen */
+      pool = BANK.filter(function(b){ return b.c===c.k && !violation(kid,b); });
+    var ordered = shuffled(pool.filter(function(b){ return b.s; }))
+      .concat(shuffled(pool.filter(function(b){ return !b.s; })));
+    ordered.slice(0, cfg.n[c.k]).forEach(function(b){
+      if(foodsOf(kid).some(function(f){ return normKey(f.n)===normKey(b.n); })) return;
+      kid.foods.push(newFood(kid, b)); added++;
+    });
+  });
+  touch(kid);
+  return added;
+}
+
+/* ------------------------------------------------------ week generation */
+function shuffled(a){
+  a = a.slice();
+  for(var i=a.length-1;i>0;i--){ var j = Math.floor(Math.random()*(i+1)), t=a[i]; a[i]=a[j]; a[j]=t; }
+  return a;
+}
+function draw(pool, n, exclude){
+  var avail = pool.filter(function(f){ return exclude.indexOf(f.id)<0; });
+  var out = [], bag = shuffled(avail);
+  while(out.length < n){
+    if(!bag.length){ bag = shuffled(avail.length ? avail : pool); if(!bag.length) break; }
+    out.push(bag.shift());
+  }
+  return out;
+}
+function permutations(arr){
+  if(arr.length<=1) return [arr.slice()];
+  var out = [];
+  for(var i=0;i<arr.length;i++){
+    var rest = arr.slice(0,i).concat(arr.slice(i+1));
+    permutations(rest).forEach(function(p){ out.push([arr[i]].concat(p)); });
+  }
+  return out;
+}
+function bestAssignment(mains, items, cat){
+  if(!items.length) return [];
+  if(items.length<=6){
+    var best = items, bestScore = -1e9;
+    permutations(items).forEach(function(p){
+      var sc = 0;
+      for(var i=0;i<mains.length;i++) sc += pairScore(mains[i], p[i], cat).s;
+      if(sc > bestScore){ bestScore = sc; best = p; }
+    });
+    return best;
+  }
+  var pool = items.slice(), res = [];
+  mains.forEach(function(m){
+    var bi = 0, bs = -1e9;
+    pool.forEach(function(it,i){ var sc = pairScore(m,it,cat).s; if(sc>bs){ bs=sc; bi=i; } });
+    res.push(pool.splice(bi,1)[0]);
+  });
+  return res;
+}
+function packDaysSorted(kid){
+  return kid.settings.days.slice().sort(function(a,b){ return ((a+6)%7)-((b+6)%7); });
+}
+function anchorWeek(kid){
+  var t = today(), ws = weekStart(t), days = packDaysSorted(kid);
+  if(!days.length) return ws;
+  var last = addDays(ws, (days[days.length-1]+6)%7);
+  return t > last ? addDays(ws, 7) : ws;
+}
+function planWeek(kid){
+  var days = packDaysSorted(kid), ws = anchorWeek(kid);
+  var prev = kid.week && kid.week.start === iso(ws) ? kid.week : null;
+  var week = {id:(prev && prev.id) || uid('week'), kidId:kid.id, start:iso(ws), updatedAt:now(), days:[]};
+  days.forEach(function(dw){
+    var d = iso(addDays(ws, (dw+6)%7));
+    var old = prev ? prev.days.filter(function(x){ return x.d===d; })[0] : null;
+    week.days.push({d:d, dow:dw,
+      slots: old ? Object.assign({}, old.slots) : {main:null,side:null,fruit:null,sweet:null},
+      lock:  old ? Object.assign({}, old.lock)  : {main:false,side:false,fruit:false,sweet:false}});
+  });
+  week.days.forEach(function(day){
+    CATS.forEach(function(c){ if(!day.lock[c.k] || !foodById(kid, day.slots[c.k])) day.slots[c.k] = null; });
+  });
+  var shortfall = [];
+  CATS.forEach(function(c){
+    var pool = eligible(kid, c.k);
+    var open = week.days.filter(function(d){ return !d.slots[c.k]; });
+    if(!pool.length){ if(open.length) shortfall.push(c.plural); return; }
+    var locked = week.days.filter(function(d){ return d.slots[c.k]; }).map(function(d){ return d.slots[c.k]; });
+    var picks = draw(pool, open.length, locked);
+    if(c.k==='main'){
+      open.forEach(function(d,i){ d.slots.main = picks[i] ? picks[i].id : null; });
+    } else {
+      var mains = open.map(function(d){ return foodById(kid, d.slots.main); });
+      var arranged = bestAssignment(mains, picks, c.k);
+      open.forEach(function(d,i){ d.slots[c.k] = arranged[i] ? arranged[i].id : null; });
+    }
+  });
+  kid.week = week; touch(kid); save();
+  return shortfall;
+}
+function planAll(){
+  var short = {};
+  kids().forEach(function(k){
+    if(!foodsOf(k).length) return;
+    planWeek(k).forEach(function(c){ short[c] = 1; });
+  });
+  return Object.keys(short);
+}
+function reshuffleSlot(kid, day, cat){
+  var pool = eligible(kid, cat);
+  var main = foodById(kid, day.slots.main);
+  var elsewhere = kid.week.days.filter(function(x){ return x.d!==day.d; }).map(function(x){ return x.slots[cat]; });
+  var fresh = pool.filter(function(f){ return f.id!==day.slots[cat] && elsewhere.indexOf(f.id)<0; });
+  var choices = fresh.length ? fresh : pool.filter(function(f){ return f.id!==day.slots[cat]; });
+  if(!choices.length) return false;
+  if(cat==='main'){ day.slots.main = shuffled(choices)[0].id; }
+  else {
+    var scored = choices.map(function(f){ return {f:f, s:pairScore(main,f,cat).s + Math.random()*1.5}; });
+    scored.sort(function(a,b){ return b.s-a.s; });
+    day.slots[cat] = scored[0].f.id;
+  }
+  touch(kid.week); touch(kid); save();
+  return true;
+}
+
+/* --------------------------------------------- household-wide roll-ups */
+function upcomingDates(){
+  var map = {};
+  kids().forEach(function(k){
+    if(!k.week) return;
+    k.week.days.forEach(function(d){ (map[d.d] = map[d.d] || []).push({kid:k, day:d}); });
+  });
+  return Object.keys(map).sort().map(function(d){ return {date:d, entries:map[d]}; });
+}
+function shoppingList(){
+  var rows = {};
+  kids().forEach(function(k){
+    if(!k.week) return;
+    k.week.days.forEach(function(d){
+      CATS.forEach(function(c){
+        var f = foodById(k, d.slots[c.k]); if(!f) return;
+        var key = normKey(f.n);
+        var r = rows[key] || (rows[key] = {key:key, name:f.n, aisle:f.a||'other', qty:0, forKids:[]});
+        r.qty++;
+        if(r.forKids.indexOf(k.name)<0) r.forKids.push(k.name);
+      });
+    });
+  });
+  var order = {}; AISLES.forEach(function(a,i){ order[a]=i; });
+  return Object.keys(rows).map(function(k){
+    var r = rows[k]; r.have = !!(S.pantry[k] && S.pantry[k].have); return r;
+  }).sort(function(a,b){
+    return (order[a.aisle]-order[b.aisle]) || a.name.localeCompare(b.name);
+  });
+}
+function weekIsStale(kid){ return !!kid.week && kid.week.start !== iso(anchorWeek(kid)); }
+function anyStale(){ return kids().some(weekIsStale); }
+
+/* -------------------------------------------------------------- sheet */
+var sheetEl = document.getElementById('sheet'),
+    backEl  = document.getElementById('backdrop'),
+    bodyEl  = document.getElementById('sheetBody'),
+    titleEl = document.getElementById('sheetTitle');
+var sheetState = null;
+function openSheet(title, html, state){
+  titleEl.textContent = title; bodyEl.innerHTML = html; sheetState = state || null;
+  sheetEl.classList.add('open'); backEl.classList.add('open'); bodyEl.scrollTop = 0;
+}
+function closeSheet(){ sheetEl.classList.remove('open'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; }
+backEl.addEventListener('click', closeSheet);
+document.getElementById('sheetClose').addEventListener('click', closeSheet);
+
+/* ---------------------------------------------------------- fragments */
+function tinHTML(kid, day, mode){
+  var h = '<div class="tin">';
+  CATS.forEach(function(c){
+    var f = foodById(kid, day.slots[c.k]);
+    var packedRow = kid.packed[day.d] || {};
+    var packed = mode==='pack' && !!packedRow[c.k];
+    var sub = f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '');
+    var mark = mode==='pack' ? '<span class="tick">'+svg('check',9)+'</span>'
+             : (day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>' : '');
+    h += '<button class="cmp c-'+c.k+(f?'':' empty')+'" data-act="'+(mode==='pack'?'toggle':'slot')+'"'
+      +  ' data-kid="'+kid.id+'" data-day="'+day.d+'" data-cat="'+c.k+'"'
+      +  (mode==='pack' ? ' aria-pressed="'+(packed?'true':'false')+'"' : '')+'>'
+      +  '<span class="lab">'+c.label+mark+'</span>'
+      +  '<span class="nm">'+(f ? esc(f.n) : 'Nothing picked')+'</span>'
+      +  '<span class="sub">'+esc(sub)+'</span></button>';
+  });
+  return h+'</div>';
+}
+function chipsHTML(kid, day){
+  var f = dayFlags(kid, day); if(!f.length) return '';
+  return '<div class="chips">'+f.map(function(x){ return '<span class="chip '+x.cls+'">'+esc(x.t)+'</span>'; }).join('')+'</div>';
+}
+function kidLine(kid){
+  return '<p class="kidline"><span class="dot" style="background:'+hueVar(kid)+'"></span>'+esc(kid.name)+'</p>';
+}
+function dayLabel(dstr){
+  var d = parseISO(dstr), diff = Math.round((d-today())/86400000);
+  return {full:DOWFULL[d.getDay()], date:MON[d.getMonth()]+' '+d.getDate(),
+          rel: diff===0?'Today':diff===1?'Tomorrow':'', diff:diff};
+}
+function staleBanner(){
+  if(!anyStale()) return '';
+  return '<div class="banner"><span>This plan is from an earlier week.</span>'
+    + '<button class="btn sm primary" data-act="plan-all">Plan this week</button></div>';
+}
+function noFoodsEmpty(){
+  return '<div class="empty"><p>Add a few things they&#8217;ll actually eat and the week plans itself.</p>'
+    + '<button class="btn primary" data-act="go-foods">Add foods</button></div>';
+}
+
+/* ----------------------------------------------------------- first run */
+function viewOnboard(){
+  var o = UI.ob;
+  var chip = function(act, val, on, label){
+    return '<button class="tg" data-act="'+act+'" data-v="'+val+'" aria-pressed="'+(on?'true':'false')+'">'+label+'</button>';
+  };
+  return '<div class="ob">'
+    + '<div><div class="oblogo"><i></i><i></i><i></i><i></i></div>'
+    + '<h1>A week of packed lunches, in about a minute.</h1>'
+    + '<p class="lede">Answer three things and we&#8217;ll build the week, match what goes with what, '
+    + 'and hand you the shopping list. You can change any of it after.</p></div>'
+    + '<div class="q"><span>What can go in the box?</span><div class="toggles">'
+    +   chip('ob-heat','cold', !o.heat, 'Cold only') + chip('ob-heat','hot', o.heat, 'There&#8217;s a microwave')
+    + '</div></div>'
+    + '<div class="q"><span>Anything to keep out?</span><div class="toggles">'
+    +   ALLERGENS.map(function(a){ return chip('ob-avoid', a.k, o.avoid.indexOf(a.k)>-1, esc(a.label)); }).join('')
+    + '</div></div>'
+    + '<div class="q"><span>How adventurous are they?</span><div class="toggles">'
+    +   chip('ob-breadth','variety', o.breadth==='variety','Loves variety')
+    +   chip('ob-breadth','some',    o.breadth==='some',   'A few favourites')
+    +   chip('ob-breadth','picky',   o.breadth==='picky',  'Very picky')
+    + '</div></div>'
+    + '<button class="btn primary wide go" data-act="ob-go">'+svg('dice',18)+'Build this week&#8217;s lunches</button>'
+    + '<button class="skip" data-act="ob-skip">Skip &mdash; I&#8217;d rather start from an empty list</button>'
+    + '</div>';
+}
+
+/* ---------------------------------------------------------------- views */
+function viewPack(){
+  var ks = kids(), multi = ks.length>1;
+  if(!ks.some(function(k){ return foodsOf(k).length; }))
+    return '<div class="stack"><p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
+
+  var dates = upcomingDates();
+  if(!dates.length)
+    return '<div class="stack"><p class="view-sub">Pack list</p><h2 class="view-title">No plan yet</h2>'
+      + '<div class="empty"><p>Draw a week and this page becomes your morning checklist.</p>'
+      + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
+
+  var t = iso(today());
+  var slot = dates.filter(function(x){ return x.date>=t; })[0] || dates[0];
+  var lab = dayLabel(slot.date);
+  var total = 0, done = 0;
+  slot.entries.forEach(function(e){
+    var row = e.kid.packed[slot.date] || {};
+    CATS.forEach(function(c){ if(e.day.slots[c.k]){ total++; if(row[c.k]) done++; } });
+  });
+
+  var h = '<div class="stack">' + staleBanner()
+    + '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
+    + ' · '+esc(lab.date)+'</p><h2 class="view-title">'
+    + (lab.rel==='Today' ? 'Today&#8217;s box' : lab.rel==='Tomorrow' ? 'Tomorrow&#8217;s box' : esc(lab.full)+'&#8217;s box')
+    + (multi ? 'es' : '') + '</h2></div>';
+
+  slot.entries.forEach(function(e){
+    h += '<div class="kidgroup">' + (multi ? kidLine(e.kid) : '')
+      +  tinHTML(e.kid, e.day, 'pack') + chipsHTML(e.kid, e.day) + '</div>';
+  });
+
+  h += '<div class="stack" style="gap:8px"><div class="meter"><i style="width:'+(total?done/total*100:0)+'%"></i></div>'
+    +  '<div class="spread"><span class="count">'+done+' of '+total+' in the bag</span>'
+    +  (total && done===total ? '<span class="chip good">Ready</span>' : '')+'</div></div>';
+
+  if(!multi && slot.entries[0]) h += '<p class="note">'+dayNote(slot.entries[0].kid, slot.entries[0].day)+'</p>';
+
+  var rest = dates.filter(function(x){ return x.date > slot.date; });
+  if(rest.length){
+    h += '<div><div class="sect-head"><h3>Coming up</h3></div><div class="list">';
+    rest.forEach(function(x){
+      var l = dayLabel(x.date);
+      var who = multi ? x.entries.map(function(e){ return e.kid.name; }).join(', ')
+        : CATS.map(function(c){ var f = foodById(x.entries[0].kid, x.entries[0].day.slots[c.k]); return f?f.n:null; })
+              .filter(Boolean).join(' · ');
+      h += '<button class="item" data-act="go-week"><span class="grow"><span class="nm">'+esc(l.full)+'</span>'
+        +  '<span class="meta">'+esc(who || 'nothing picked')+'</span></span>'
+        +  '<span class="qty">'+esc(l.date)+'</span></button>';
+    });
+    h += '</div></div>';
+  }
+  return h+'</div>';
+}
+
+function viewWeek(){
+  var kid = activeKid(), multi = kids().length>1;
+  if(!foodsOf(kid).length)
+    return '<div class="stack"><p class="view-sub">The week</p><h2 class="view-title">No foods yet</h2>'+noFoodsEmpty()+'</div>';
+  var ws = kid.week ? parseISO(kid.week.start) : anchorWeek(kid);
+  var n = packDaysSorted(kid).length;
+  var h = '<div class="stack"><div class="spread"><div>'
+    + '<p class="view-sub">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+(multi ? ' · '+esc(kid.name) : '')+'</p>'
+    + '<h2 class="view-title">'+(NUMWORD[n]||n)+' box'+(n===1?'':'es')+'</h2></div>'
+    + '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+'Shuffle</button></div>'
+    + staleBanner();
+  if(!kid.week)
+    return h + '<div class="empty"><p>Shuffle draws a main, side, fruit and sweet for every pack day, '
+      + 'then arranges them so each box goes together.</p></div></div>';
+
+  kid.week.days.forEach(function(day){
+    var l = dayLabel(day.d);
+    h += '<div class="daycard"><div class="dayhead"><div class="dayname">'+esc(l.full)
+      +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):'')+'</em></div>'
+      +  '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+kid.id+'" data-day="'+day.d+'">'
+      +  svg('dice',15)+'Re-draw</button></div>'
+      +  tinHTML(kid, day, 'week') + '<p class="note">'+dayNote(kid, day)+'</p>' + chipsHTML(kid, day) + '</div>';
+  });
+  return h + '<p class="hint">Tap a compartment to swap it, lock it, or re-draw just that piece. '
+    + 'Locked pieces survive a shuffle.</p></div>';
+}
+
+function viewShop(){
+  var rows = shoppingList(), multi = kids().length>1;
+  var h = '<div class="stack"><div><p class="view-sub">Shopping list</p><h2 class="view-title">What to buy</h2></div>';
+  if(!rows.length)
+    return h + '<div class="empty"><p>Plan a week and the list builds itself from the boxes.</p>'
+      + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
+
+  var toBuy = rows.filter(function(r){ return !r.have; }).length;
+  h += '<div class="spread"><span class="count">'+toBuy+' to buy · '+(rows.length-toBuy)+' already home</span>'
+    +  '<button class="btn ghost sm" data-act="copy-list">Copy list</button></div>'
+    +  '<p class="hint">Check off what the pantry already has, then shop the rest.'
+    +  (multi ? ' Both lunchboxes are in one list.' : '')+'</p>';
+  var groups = {};
+  rows.forEach(function(r){ (groups[r.aisle] = groups[r.aisle] || []).push(r); });
+  AISLES.forEach(function(a){
+    if(!groups[a]) return;
+    h += '<div><div class="sect-head"><h3>'+esc(a)+'</h3><span class="count">'+groups[a].length+'</span></div><div class="list">';
+    groups[a].forEach(function(r){
+      h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
+        +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
+        +  (multi ? '<span class="meta">for '+esc(r.forKids.join(', '))+'</span>' : '')
+        +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
+    });
+    h += '</div></div>';
+  });
+  return h+'</div>';
+}
+
+function viewFoods(){
+  var kid = activeKid(), multi = kids().length>1;
+  var h = '<div class="stack"><div class="spread"><div>'
+    + '<p class="view-sub">Food list'+(multi ? ' · '+esc(kid.name) : '')+'</p>'
+    + '<h2 class="view-title">What they&#8217;ll eat</h2></div>'
+    + '<button class="btn sm" data-act="ideas">'+svg('plus',15)+'Ideas</button></div>';
+  if(!foodsOf(kid).length)
+    h += '<div class="empty"><p>Start from a set of cold-lunch staples, then add the things only '
+      + esc(kid.name)+' would ask for.</p><button class="btn primary" data-act="seed">Fill the list for me</button>'
+      + '<button class="btn ghost" data-act="ideas">Browse the idea bank</button></div>';
+  CATS.forEach(function(c){
+    var mine = foodsOf(kid).filter(function(f){ return f.c===c.k; });
+    h += '<div><div class="sect-head"><h3 style="color:var(--c-'+c.k+')">'+esc(c.plural)+'</h3>'
+      +  '<span class="count">'+mine.length+'</span></div>';
+    if(!mine.length){
+      h += '<div class="list"><div class="item"><span class="grow hint">No '+esc(c.plural.toLowerCase())+' yet</span></div></div></div>';
+      return;
+    }
+    h += '<div class="list">';
+    mine.forEach(function(f){
+      var v = violation(kid, f);
+      h += '<div class="item"><span class="dot" style="background:var(--c-'+c.k+')"></span>'
+        +  '<span class="grow"><span class="nm">'+esc(f.n)+'</span>'
+        +  (v ? '<span class="meta" style="color:var(--warn)">skipped &mdash; '+esc(v)+'</span>'
+             : '<span class="meta">'+esc(f.a)+(f.t.length?' · '+esc(f.t.slice(0,3).join(', ')):'')+'</span>')
+        +  '</span><button class="x" data-act="del-food" data-id="'+f.id+'" aria-label="Remove '+esc(f.n)+'">'
+        +  svg('trash',17)+'</button></div>';
+    });
+    h += '</div></div>';
+  });
+  return h + '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button></div>';
+}
+
+function viewSetup(){
+  var kid = activeKid(), s = kid.settings, me = deviceMember();
+  var h = '<div class="stack"><div><p class="view-sub">Setup</p><h2 class="view-title">Lunchboxes &amp; rules</h2></div>';
+
+  /* lunchbox profiles */
+  h += '<div><div class="sect-head"><h3>Lunchboxes</h3><span class="count">'+kids().length+'</span></div><div class="list">';
+  kids().forEach(function(k){
+    h += '<button class="item'+(k.id===kid.id?' on':'')+'" data-act="pick-kid" data-id="'+k.id+'">'
+      +  '<span class="radio"></span><span class="grow"><span class="nm">'+esc(k.name)+'</span>'
+      +  '<span class="meta">'+foodsOf(k).length+' foods · '+packDaysSorted(k).length+' days a week</span></span>'
+      +  '<span class="dot" style="background:'+hueVar(k)+'"></span></button>';
+  });
+  h += '</div><div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
+    +  '<button class="btn sm" data-act="add-kid">'+svg('plus',15)+'Add a lunchbox</button>'
+    +  (kids().length>1 ? '<button class="btn danger sm" data-act="del-kid" data-id="'+kid.id+'">'
+         +(UI.armed==='kid:'+kid.id?'Tap again to remove '+esc(kid.name):'Remove '+esc(kid.name))+'</button>' : '')
+    +  '</div></div>';
+
+  /* per-lunchbox rules */
+  h += '<div class="card stack" style="gap:14px">'
+    +  '<div class="field"><label for="kidName">Name on this lunchbox</label>'
+    +  '<input type="text" id="kidName" value="'+esc(kid.name)+'" placeholder="Whose lunch"></div>'
+    +  '<div class="field"><label>Pack days</label><div class="dow">'
+    +  [1,2,3,4,5,6,0].map(function(d){
+         return '<button class="tg" data-act="day" data-d="'+d+'" aria-pressed="'+(s.days.indexOf(d)>-1)+'">'+DOW[d][0]+'</button>';
+       }).join('')+'</div></div></div>';
+
+  h += '<div class="card"><div class="switch"><div><div class="t">Cold lunches only</div>'
+    +  '<div class="d">No microwave at '+esc(kid.name)+'&#8217;s school, so anything needing heat stays out of the draw.</div></div>'
+    +  '<button class="sw" data-act="noheat" aria-pressed="'+s.noHeat+'" aria-label="Cold lunches only"></button></div></div>';
+
+  h += '<div><div class="sect-head"><h3>Keep out of '+esc(kid.name)+'&#8217;s box</h3></div><div class="card">'
+    +  '<div class="toggles">'
+    +  ALLERGENS.map(function(a){
+         return '<button class="tg" data-act="allergen" data-k="'+a.k+'" aria-pressed="'
+           +(s.avoidAllergens.indexOf(a.k)>-1)+'">'+esc(a.label)+'</button>'; }).join('')
+    +  '</div><div class="field" style="margin-top:14px"><label for="avoidText">Anything else</label>'
+    +  '<textarea id="avoidText" placeholder="salami, kiwi, sesame">'+esc(s.avoidText)+'</textarea>'
+    +  '<span class="hint">Comma separated. Matching foods are skipped and flagged, never deleted.</span></div></div></div>';
+
+  /* who is on this device */
+  h += '<div><div class="sect-head"><h3>This phone</h3></div><div class="card stack" style="gap:12px">'
+    +  '<div class="field"><label for="memberName">You are</label>'
+    +  '<input type="text" id="memberName" value="'+esc(me?me.name:'')+'" placeholder="Your name"></div>'
+    +  '<p class="hint" style="margin:0">Packing and pantry ticks are stamped with who did them, so a second phone '
+    +  'can be added later without the two of you overwriting each other.</p></div></div>';
+
+  /* transfer */
+  h += '<div><div class="sect-head"><h3>Move to another phone</h3></div><div class="card stack" style="gap:12px">'
+    +  '<p class="hint" style="margin:0">Copy this household&#8217;s data, then paste it into the app on the other phone. '
+    +  'There is no server, so the two copies stay independent until you paste again.</p>'
+    +  '<div class="row" style="gap:8px;flex-wrap:wrap">'
+    +  '<button class="btn sm" data-act="copy-data">Copy household data</button>'
+    +  (Downloads ? '<button class="btn sm" data-act="save-file">'+svg('save',15)+'Save a backup file</button>' : '')
+    +  '<button class="btn ghost sm" data-act="import-open">Paste data in</button></div>'
+    +  '<div class="kv"><span>Lunchboxes</span><span>'+kids().length+'</span></div>'
+    +  '<div class="kv"><span>Foods saved</span><span>'+kids().reduce(function(a,k){ return a+foodsOf(k).length; },0)+'</span></div>'
+    +  '<div class="kv"><span>People</span><span>'+members().length+'</span></div>'
+    +  '<div class="kv"><span>Last change</span><span>'+esc(String(S.updatedAt).slice(0,10))+'</span></div>'
+    +  '</div></div>';
+
+  h += '<div class="card stack" style="gap:10px"><h3>On this phone only</h3>'
+    +  '<p class="hint" style="margin:0">Everything is stored in this browser. Nothing is uploaded and no one else can see it. '
+    +  'Use Share &rarr; <b>Add to Home Screen</b> to open it full-screen like an app.'
+    +  (Store.ok ? '' : ' <b>Storage is blocked in this browser, so changes will not survive a reload.</b>')+'</p>'
+    +  '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:4px">'
+    +  '<button class="btn ghost sm" data-act="clear-week">Clear the plans</button>'
+    +  '<button class="btn danger sm" data-act="clear-all">'+(UI.armed==='all'?'Tap again to erase':'Erase everything')+'</button>'
+    +  (UI.armed==='all' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : '')
+    +  '</div></div>';
+  return h+'</div>';
+}
+
+/* --------------------------------------------------------------- sheets */
+function kidSheet(){
+  var h = '<div class="list">';
+  kids().forEach(function(k){
+    h += '<button class="item'+(k.id===S.activeKidId?' on':'')+'" data-act="pick-kid" data-id="'+k.id+'" data-close="1">'
+      +  '<span class="radio"></span><span class="grow"><span class="nm">'+esc(k.name)+'</span>'
+      +  '<span class="meta">'+foodsOf(k).length+' foods'+(k.week?' · week planned':' · no plan yet')+'</span></span>'
+      +  '<span class="dot" style="background:'+hueVar(k)+'"></span></button>';
+  });
+  h += '</div><button class="btn wide" data-act="add-kid">'+svg('plus',17)+'Add a lunchbox</button>'
+    +  '<p class="hint">Each lunchbox keeps its own foods, school rules and week. '
+    +  'The shopping list and the pack checklist cover all of them together.</p>';
+  openSheet('Lunchboxes', h);
+}
+function slotSheet(kidId, dayStr, cat){
+  var kid = kidById(kidId); if(!kid || !kid.week) return;
+  var day = kid.week.days.filter(function(d){ return d.d===dayStr; })[0]; if(!day) return;
+  var c = CATS.filter(function(x){ return x.k===cat; })[0];
+  var pool = foodsOf(kid).filter(function(f){ return f.c===cat; });
+  var main = foodById(kid, day.slots.main);
+  var h = '<div class="row" style="gap:8px;flex-wrap:wrap">'
+    + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+kid.id+'" data-day="'+dayStr+'" data-cat="'+cat+'">'
+    + svg('dice',15)+'Re-draw this one</button>'
+    + '<button class="tg" data-act="sheet-lock" data-kid="'+kid.id+'" data-day="'+dayStr+'" data-cat="'+cat+'"'
+    + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Keep on shuffle</button></div>';
+  if(!pool.length){
+    h += '<div class="empty"><p>No '+esc(c.plural.toLowerCase())+' in '+esc(kid.name)+'&#8217;s list yet.</p></div>';
+  } else {
+    h += '<div class="list">';
+    pool.forEach(function(f){
+      var v = violation(kid, f);
+      var sc = cat==='main' ? null : pairScore(main, f, cat).s;
+      var meta = v ? 'skipped — '+v : (sc!==null && sc>=3 ? 'good match with '+(main?main.n:'the main') : f.a);
+      h += '<button class="item'+(day.slots[cat]===f.id?' done':'')+'" data-act="pick" data-kid="'+kid.id
+        +  '" data-day="'+dayStr+'" data-cat="'+cat+'" data-id="'+f.id+'">'
+        +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(f.n)+'</span>'
+        +  '<span class="meta"'+(v?' style="color:var(--warn)"':(sc!==null&&sc>=3?' style="color:var(--accent)"':''))
+        +  '>'+esc(meta)+'</span></span></button>';
+    });
+    h += '</div>';
+  }
+  openSheet(dayLabel(dayStr).full+' · '+c.label, h);
+}
+function ideasSheet(){
+  var kid = activeKid(), mine = {};
+  foodsOf(kid).forEach(function(f){ mine[normKey(f.n)] = 1; });
+  var h = '<p class="hint" style="margin:0">Filtered to '+esc(kid.name)+'&#8217;s school rules. Tap to add.</p>';
+  CATS.forEach(function(c){
+    var items = BANK.filter(function(b){ return b.c===c.k && !violation(kid,b); });
+    if(!items.length) return;
+    h += '<div><div class="sect-head"><h3 style="color:var(--c-'+c.k+')">'+esc(c.plural)+'</h3>'
+      +  '<span class="count">'+items.length+'</span></div><div class="list">';
+    items.forEach(function(b){
+      h += '<button class="item'+(mine[normKey(b.n)]?' done':'')+'" data-act="add-idea" data-name="'+esc(b.n)+'">'
+        +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(b.n)+'</span>'
+        +  '<span class="meta">'+esc(b.a)+(b.al.length?' · '+esc(b.al.join(', ')):'')+'</span></span></button>';
+    });
+    h += '</div></div>';
+  });
+  var hidden = BANK.filter(function(b){ return !!violation(kid,b); }).length;
+  if(hidden) h += '<p class="hint">'+hidden+' idea'+(hidden>1?'s':'')+' hidden by the rules you set.</p>';
+  openSheet('Idea bank', h);
+}
+function addOwnSheet(){
+  var kid = activeKid();
+  var h = '<div class="field"><label for="nfName">Food</label>'
+    + '<input type="text" id="nfName" placeholder="Grandma&#39;s zucchini muffins" autocomplete="off"></div>'
+    + '<div class="field"><label>Goes in</label><div class="toggles" id="nfCat">'
+    + CATS.map(function(c,i){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(i===0)+'">'+c.label+'</button>'; }).join('')
+    + '</div></div><div class="field"><label for="nfAisle">Store aisle</label><select id="nfAisle">'
+    + AISLES.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('')
+    + '</select></div><div class="field"><label>What it&#39;s like</label><div class="toggles" id="nfTags">'
+    + TAGS.map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="false">'+t+'</button>'; }).join('')
+    + '</div><span class="hint">These drive the pairing notes. <b>ice</b> = needs an ice pack, <b>heat</b> = needs warming.</span></div>'
+    + '<div class="field"><label>Contains</label><div class="toggles" id="nfAl">'
+    + ALLERGENS.map(function(a){ return '<button class="tg" data-nf="al" data-v="'+a.k+'" aria-pressed="false">'+a.label+'</button>'; }).join('')
+    + '</div></div><button class="btn primary wide" data-act="save-own">Add to '+esc(kid.name)+'&#8217;s list</button>';
+  openSheet('Add your own', h);
+  setTimeout(function(){ var el = document.getElementById('nfName'); if(el) el.focus(); }, 220);
+}
+function addKidSheet(){
+  var h = '<div class="field"><label for="nkName">Name on the lunchbox</label>'
+    + '<input type="text" id="nkName" placeholder="Sam" autocomplete="off"></div>'
+    + '<p class="hint" style="margin:0">A new lunchbox starts empty with its own school rules &mdash; different school, '
+    + 'different allergies, different days are all fine.</p>'
+    + '<button class="btn primary wide" data-act="save-kid">Add lunchbox</button>';
+  openSheet('Add a lunchbox', h);
+  setTimeout(function(){ var el = document.getElementById('nkName'); if(el) el.focus(); }, 220);
+}
+function importSheet(){
+  var h = '<p class="hint" style="margin:0">Paste the data you copied from the other phone. This <b>replaces</b> '
+    + 'everything on this phone &mdash; lunchboxes, foods, plans and rules.</p>'
+    + '<div class="field"><label for="impText">Household data</label>'
+    + '<textarea id="impText" class="codebox" placeholder="{&quot;app&quot;:&quot;lunchbox-tin&quot;, ...}"></textarea></div>'
+    + '<button class="btn primary wide" data-act="import-do">Replace what&#8217;s on this phone</button>';
+  openSheet('Paste data in', h);
+}
+function parseImport(text){
+  var doc = null;
+  try{ doc = JSON.parse(text); }catch(e){ return null; }
+  if(!doc || typeof doc !== 'object') return null;
+  var body = (doc.app === 'lunchbox-tin' && doc.account) ? doc.account : doc;
+  if(isAccount(body)) return body;
+  if(isLegacy(body)) return migrate(Object.assign({}, body, {schema:1}));
+  return null;
+}
+function isLegacy(d){ return !!(d && Array.isArray(d.foods) && d.settings && typeof d.settings === 'object'); }
+function exportText(){
+  return JSON.stringify({app:'lunchbox-tin', schema:SCHEMA, exportedAt:now(), account:S}, null, 2);
+}
+
+/* ------------------------------------------------------------ app shell */
+var TABS = [
+  {k:'pack', label:'Pack', icon:'pack'}, {k:'week', label:'Week', icon:'week'},
+  {k:'shop', label:'Shop', icon:'shop'}, {k:'foods',label:'Foods',icon:'foods'},
+  {k:'setup',label:'Setup',icon:'setup'}
+];
+function render(){
+  if(!S) return;
+  var kid = activeKid();
+  if(!S.onboardedAt){
+    document.getElementById('view').innerHTML = viewOnboard();
+    document.getElementById('tabs').style.display = 'none';
+    document.querySelector('.topbar').style.display = 'none';
+    document.getElementById('who').innerHTML = '';
+    return;
+  }
+  document.getElementById('tabs').style.display = '';
+  document.querySelector('.topbar').style.display = '';
+  document.getElementById('view').innerHTML =
+      UI.tab==='pack'  ? viewPack()
+    : UI.tab==='week'  ? viewWeek()
+    : UI.tab==='shop'  ? viewShop()
+    : UI.tab==='foods' ? viewFoods()
+    : viewSetup();
+  document.getElementById('tabs').innerHTML = TABS.map(function(t){
+    return '<button data-act="tab" data-tab="'+t.k+'" aria-current="'+(UI.tab===t.k)+'">'
+      + svg(t.icon)+'<span>'+t.label+'</span></button>'; }).join('');
+  /* Pack and Shop cover the whole household, so the per-lunchbox switcher
+     only belongs on the views it actually steers. */
+  var householdView = kids().length>1 && (UI.tab==='pack' || UI.tab==='shop');
+  document.getElementById('who').innerHTML = (kid && !householdView)
+    ? '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)+'"></span>'
+      + esc(kid.name)+'<span class="caret">&#9662;</span></button>'
+    : (kid ? '<span class="kid">'+kids().length+' lunchboxes</span>' : '');
+}
+
+/* ---------------------------------------------------------------- events */
+document.addEventListener('click', function(ev){
+  var el = ev.target.closest('[data-act],[data-nf]');
+  if(!el || !S) return;
+
+  var nf = el.getAttribute('data-nf');
+  if(nf){
+    if(nf==='cat'){
+      el.parentNode.querySelectorAll('.tg').forEach(function(b){ b.setAttribute('aria-pressed','false'); });
+      el.setAttribute('aria-pressed','true');
+    } else el.setAttribute('aria-pressed', el.getAttribute('aria-pressed')==='true' ? 'false' : 'true');
+    return;
+  }
+  var act = el.getAttribute('data-act');
+  var kid = activeKid();
+  if(act!=='clear-all' && act!=='del-kid' && act!=='disarm' && UI.armed) UI.armed = '';
+
+  /* first run */
+  if(act==='ob-heat'){ UI.ob.heat = el.getAttribute('data-v')==='hot'; render(); return; }
+  if(act==='ob-avoid'){
+    var av = el.getAttribute('data-v'), ai = UI.ob.avoid.indexOf(av);
+    if(ai>-1) UI.ob.avoid.splice(ai,1); else UI.ob.avoid.push(av);
+    render(); return;
+  }
+  if(act==='ob-breadth'){ UI.ob.breadth = el.getAttribute('data-v'); render(); return; }
+  if(act==='ob-go'){
+    kid.settings.noHeat = !UI.ob.heat;
+    kid.settings.avoidAllergens = UI.ob.avoid.slice();
+    touch(kid.settings);
+    seedLibrary(kid, UI.ob.breadth);
+    planWeek(kid);
+    S.onboardedAt = now(); UI.tab = 'week';
+    save(); render(); window.scrollTo(0,0);
+    toast('Your week is ready'); return;
+  }
+  if(act==='ob-skip'){
+    kid.settings.noHeat = !UI.ob.heat;
+    kid.settings.avoidAllergens = UI.ob.avoid.slice();
+    touch(kid.settings);
+    S.onboardedAt = now(); UI.tab = 'foods';
+    save(); render(); window.scrollTo(0,0); return;
+  }
+
+  /* navigation */
+  if(act==='tab'){ UI.tab = el.getAttribute('data-tab'); render(); window.scrollTo(0,0); return; }
+  if(act==='go-foods'){ UI.tab='foods'; render(); window.scrollTo(0,0); return; }
+  if(act==='go-week'){ UI.tab='week'; render(); window.scrollTo(0,0); return; }
+  if(act==='kidsheet'){ kidSheet(); return; }
+
+  /* lunchbox profiles */
+  if(act==='pick-kid'){
+    S.activeKidId = el.getAttribute('data-id'); save();
+    if(el.getAttribute('data-close')) closeSheet();
+    render(); return;
+  }
+  if(act==='add-kid'){ addKidSheet(); return; }
+  if(act==='save-kid'){
+    var nk = document.getElementById('nkName');
+    var name = (nk.value||'').trim();
+    if(!name){ nk.focus(); toast('Give the lunchbox a name'); return; }
+    var k = newKid(name, S.kids.length % KID_HUES.length);
+    S.kids.push(k); S.activeKidId = k.id; UI.tab='foods';
+    save(); closeSheet(); render(); toast(name+' added'); return;
+  }
+  if(act==='del-kid'){
+    var id = el.getAttribute('data-id'), k2 = kidById(id);
+    if(!k2 || kids().length<2) return;
+    if(UI.armed!=='kid:'+id){ UI.armed = 'kid:'+id; render(); toast('That removes '+k2.name+' and their foods'); return; }
+    k2.deletedAt = now(); touch(k2); UI.armed='';
+    if(S.activeKidId===id) S.activeKidId = (kids()[0]||{}).id;
+    save(); render(); toast(k2.name+' removed'); return;
+  }
+
+  /* planning */
+  if(act==='plan-kid'){
+    var short = planWeek(kid); render();
+    toast(short.length ? 'No '+short.join(' or ').toLowerCase()+' available — check Foods' : 'Week drawn');
+    return;
+  }
+  if(act==='plan-all'){
+    var short2 = planAll(); render();
+    toast(short2.length ? 'No '+short2.join(' or ').toLowerCase()+' available — check Foods' : 'Weeks drawn');
+    return;
+  }
+  if(act==='shuffle-day'){
+    var k3 = kidById(el.getAttribute('data-kid')) || kid;
+    var d = k3.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
+    if(d){ CATS.forEach(function(c){ if(!d.lock[c.k]) reshuffleSlot(k3, d, c.k); }); render(); }
+    return;
+  }
+  if(act==='slot'){ slotSheet(el.getAttribute('data-kid'), el.getAttribute('data-day'), el.getAttribute('data-cat')); return; }
+  if(act==='sheet-shuffle'){
+    var k4 = kidById(el.getAttribute('data-kid')), cat = el.getAttribute('data-cat');
+    var day4 = k4.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
+    if(reshuffleSlot(k4, day4, cat)){ slotSheet(k4.id, day4.d, cat); render(); }
+    else toast('Nothing else in that category');
+    return;
+  }
+  if(act==='sheet-lock'){
+    var k5 = kidById(el.getAttribute('data-kid')), cat5 = el.getAttribute('data-cat');
+    var day5 = k5.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
+    day5.lock[cat5] = !day5.lock[cat5]; touch(k5.week); touch(k5); save();
+    el.setAttribute('aria-pressed', day5.lock[cat5]); render(); return;
+  }
+  if(act==='pick'){
+    var k6 = kidById(el.getAttribute('data-kid'));
+    var day6 = k6.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
+    day6.slots[el.getAttribute('data-cat')] = el.getAttribute('data-id');
+    touch(k6.week); touch(k6); save(); closeSheet(); render(); return;
+  }
+
+  /* packing */
+  if(act==='toggle'){
+    var k7 = kidById(el.getAttribute('data-kid')), dt = el.getAttribute('data-day'), c7 = el.getAttribute('data-cat');
+    if(!k7 || !k7.week) return;
+    var day7 = k7.week.days.filter(function(x){ return x.d===dt; })[0];
+    if(!day7 || !foodById(k7, day7.slots[c7])) return;
+    var row = k7.packed[dt] = k7.packed[dt] || {};
+    if(row[c7]) delete row[c7];
+    else row[c7] = {at:now(), by:(deviceMember()||{}).id || null};
+    touch(k7); save(); render(); return;
+  }
+
+  /* shopping */
+  if(act==='have'){
+    var key = el.getAttribute('data-key');
+    if(S.pantry[key] && S.pantry[key].have) delete S.pantry[key];
+    else S.pantry[key] = {have:true, at:now(), by:(deviceMember()||{}).id || null};
+    save(); render(); return;
+  }
+  if(act==='copy-list'){
+    var txt = shoppingList().filter(function(r){ return !r.have; })
+      .map(function(r){ return '- '+r.name+(r.qty>1?' x'+r.qty:''); }).join('\n');
+    if(!txt){ toast('Nothing left to buy'); return; }
+    copy('Lunch shopping list\n'+txt, 'List copied'); return;
+  }
+
+  /* foods */
+  if(act==='ideas'){ ideasSheet(); return; }
+  if(act==='add-idea'){
+    var b = BANK.filter(function(x){ return x.n===el.getAttribute('data-name'); })[0];
+    if(!b) return;
+    if(foodsOf(kid).some(function(f){ return normKey(f.n)===normKey(b.n); })){ toast('Already on the list'); return; }
+    kid.foods.push(newFood(kid, b)); touch(kid); save(); ideasSheet(); render(); toast(b.n+' added'); return;
+  }
+  if(act==='seed'){
+    var added = seedLibrary(kid, 'some');
+    save(); render(); toast(added+' staples added'); return;
+  }
+  if(act==='add-own'){ addOwnSheet(); return; }
+  if(act==='save-own'){
+    var el2 = document.getElementById('nfName'), n = (el2.value||'').trim();
+    if(!n){ el2.focus(); toast('Give it a name first'); return; }
+    kid.foods.push(newFood(kid, {
+      n:n,
+      c:document.querySelector('#nfCat .tg[aria-pressed="true"]').getAttribute('data-v'),
+      a:document.getElementById('nfAisle').value,
+      t:[].slice.call(document.querySelectorAll('#nfTags .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
+      al:[].slice.call(document.querySelectorAll('#nfAl .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); })
+    }));
+    touch(kid); save(); closeSheet(); render(); toast(n+' added'); return;
+  }
+  if(act==='del-food'){
+    var f = foodById(kid, el.getAttribute('data-id')); if(!f) return;
+    f.deletedAt = now(); touch(f);
+    if(kid.week) kid.week.days.forEach(function(d){
+      CATS.forEach(function(c){ if(d.slots[c.k]===f.id){ d.slots[c.k]=null; d.lock[c.k]=false; } });
+    });
+    touch(kid); save(); render(); toast(f.n+' removed'); return;
+  }
+
+  /* rules */
+  if(act==='day'){
+    var dnum = +el.getAttribute('data-d'), i = kid.settings.days.indexOf(dnum);
+    if(i>-1){ if(kid.settings.days.length===1){ toast('Keep at least one day'); return; } kid.settings.days.splice(i,1); }
+    else kid.settings.days.push(dnum);
+    touch(kid.settings); touch(kid); save(); render(); return;
+  }
+  if(act==='noheat'){ kid.settings.noHeat = !kid.settings.noHeat; touch(kid.settings); touch(kid); save(); render(); return; }
+  if(act==='allergen'){
+    var ak = el.getAttribute('data-k'), j = kid.settings.avoidAllergens.indexOf(ak);
+    if(j>-1) kid.settings.avoidAllergens.splice(j,1); else kid.settings.avoidAllergens.push(ak);
+    touch(kid.settings); touch(kid); save(); render(); return;
+  }
+
+  /* transfer + reset */
+  if(act==='copy-data'){ copy(exportText(), 'Household data copied'); return; }
+  if(act==='save-file'){
+    if(!Downloads) return;
+    Downloads.save({filename:'lunchbox-tin-'+iso(today())+'.json', data:exportText()})
+      .then(function(){ toast('Backup saved'); },
+            function(err){ toast(err && err.code==='declined' ? 'Backup cancelled' : 'Could not save the file'); });
+    return;
+  }
+  if(act==='import-open'){ importSheet(); return; }
+  if(act==='import-do'){
+    if(!UI.pendingImport){
+      var acct0 = parseImport(document.getElementById('impText').value);
+      if(!acct0){ toast('That is not Lunchbox Tin data'); return; }
+      UI.pendingImport = acct0;
+      var names = acct0.kids.filter(function(k){ return !k.deletedAt; }).map(function(k){ return k.name; });
+      el.textContent = 'Tap again to replace with ' + (names.join(' and ') || 'an empty household');
+      return;
+    }
+    var acct = UI.pendingImport; UI.pendingImport = null;
+    S = acct;
+    if(!kids().length){ var k8 = newKid('Lunchbox',0); S.kids.push(k8); }
+    if(!activeKid()) S.activeKidId = kids()[0].id;
+    DEVICE.memberId = (members()[0]||{}).id || null;
+    save(); closeSheet(); UI.tab='pack'; render();
+    toast('Loaded '+kids().length+' lunchbox'+(kids().length===1?'':'es')); return;
+  }
+  if(act==='clear-week'){
+    kids().forEach(function(k){ k.week = null; k.packed = {}; touch(k); });
+    S.pantry = {}; save(); render(); toast('Plans cleared'); return;
+  }
+  if(act==='clear-all'){
+    if(UI.armed!=='all'){ UI.armed='all'; render(); toast('That erases every lunchbox on this phone'); return; }
+    S = newAccount(); DEVICE.memberId = S.members[0].id; UI.armed=''; UI.tab='setup';
+    save(); render(); toast('Everything erased'); return;
+  }
+  if(act==='disarm'){ UI.armed=''; render(); return; }
+});
+
+document.addEventListener('input', function(ev){
+  if(!S) return;
+  var kid = activeKid();
+  if(ev.target.id==='kidName'){
+    kid.name = ev.target.value; touch(kid); save();
+    var w = document.getElementById('who');
+    if(w) w.innerHTML = '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)
+      + '"></span>'+esc(kid.name || 'Lunchbox')+'<span class="caret">&#9662;</span></button>';
+  }
+  if(ev.target.id==='avoidText'){ kid.settings.avoidText = ev.target.value; touch(kid.settings); touch(kid); save(); }
+  if(ev.target.id==='memberName'){
+    var me = deviceMember(); if(!me) return;
+    me.name = ev.target.value; touch(me); save();
+  }
+});
+
+function copy(text, okMsg){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ toast(okMsg); },
+      function(){ toast('Copy blocked by the browser'); });
+  } else toast('Copy blocked by the browser');
+}
+
+/* -------------------------------------------------- optional capability */
+var Downloads = null;
+if(window.claude && typeof window.claude.use === 'function'){
+  try{
+    window.claude.use('downloads').then(function(d){
+      Downloads = d || null;
+      if(Downloads && UI.tab==='setup') render();
+    }, function(){});
+  }catch(e){}
+}
+
+/* ------------------------------------------------------------------ boot */
+Store.load().then(function(r){
+  var doc = isAccount(r.doc) ? r.doc : migrate(r.doc);
+  if(!doc && isLegacy(r.legacy)) doc = migrate(Object.assign({}, r.legacy, {schema:1}));
+  if(!doc) doc = newAccount();
+  S = doc;
+  if(!Array.isArray(S.members) || !members().length) S.members = [newMember('Me','owner')];
+  if(!S.pantry) S.pantry = {};
+  if(!kids().length){ var k = newKid('Lunchbox',0); S.kids = (S.kids||[]).concat([k]); }
+  if(!activeKid()) S.activeKidId = kids()[0].id;
+  DEVICE.memberId = (r.device && memberById(r.device)) ? r.device : members()[0].id;
+  /* anyone who already has a list has effectively finished onboarding */
+  if(!S.onboardedAt && kids().some(function(k){ return foodsOf(k).length; })) S.onboardedAt = now();
+  render();
+  save();
+});
+})();
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('/app/sw.js').catch(function(){ /* offline support is a bonus, not a requirement */ });
+  });
+}
+</script>
+</body>
+</html>
