@@ -226,6 +226,37 @@ nav.tabs svg{width:21px;height:21px}
 .oblogo i:nth-child(1){background:var(--c-main)} .oblogo i:nth-child(2){background:var(--c-side)}
 .oblogo i:nth-child(3){background:var(--c-fruit)} .oblogo i:nth-child(4){background:var(--c-sweet)}
 
+/* --- kid's pick: bounded choice, two pictures per compartment --- */
+.kidmode{position:fixed;inset:0;z-index:60;background:var(--ground);display:flex;flex-direction:column;
+  overflow-y:auto;-webkit-overflow-scrolling:touch}
+.kidmode .top{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(12px + env(safe-area-inset-top)) 16px 6px}
+.dots{display:flex;gap:7px}
+.dots i{width:9px;height:9px;border-radius:50%;background:var(--sunk);display:block}
+.dots i.on{background:var(--accent)} .dots i.did{background:var(--accent);opacity:.45}
+.kidmode .body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;
+  padding:8px 20px calc(28px + env(safe-area-inset-bottom));max-width:600px;width:100%;margin:0 auto}
+.kidmode .catlab{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase}
+.kidmode h1{font-family:var(--f-display);font-size:clamp(28px,8vw,38px);font-weight:700;letter-spacing:-0.025em;
+  line-height:1.08;margin:0;text-wrap:balance}
+.kidmode .hint{font-size:16px;color:var(--ink-2);margin:0}
+.picks{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.picks.one{grid-template-columns:1fr;max-width:260px}
+.pick{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:24px;min-height:210px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px 12px;
+  font:inherit;color:var(--ink);transition:transform .12s ease,background .12s ease}
+.pick:active{transform:scale(.96)}
+.pick .ic{font-size:68px;line-height:1;filter:drop-shadow(0 4px 0 rgba(0,0,0,.06))}
+.pick .nm{font-family:var(--f-display);font-size:17px;font-weight:600;line-height:1.2;text-align:center;text-wrap:balance}
+.pick.chosen{border-color:var(--accent);background:var(--accent-soft)}
+.kiddone{display:flex;flex-direction:column;gap:18px;align-items:stretch}
+.kiddone .big{font-size:64px;line-height:1;text-align:center}
+.kiddone h1{text-align:center}
+.kiddone .tin .cmp{min-height:112px}
+.kiddone .tin .ic{font-size:26px;line-height:1;margin-bottom:2px}
+.pickchip{display:inline-flex;align-items:center;gap:5px}
+@media (prefers-reduced-motion:reduce){.pick:active{transform:none}}
+
 /* --- multi-profile chrome --- */
 .topbar .who{display:flex;align-items:center;gap:8px}
 .kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);
@@ -262,6 +293,7 @@ nav.tabs svg{width:21px;height:21px}
   <header><h3 id="sheetTitle"></h3><button class="btn ghost sm" id="sheetClose">Done</button></header>
   <div class="body" id="sheetBody"></div>
 </div>
+<div id="kid" hidden></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -554,7 +586,7 @@ var Store = {
 /* ---------------------------------------------------------------- model */
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var UI = {tab:'pack', armed:'', pendingImport:null, ob:{heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, ob:{heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function now(){ return new Date().toISOString(); }
@@ -655,6 +687,41 @@ function memberById(id){ return members().filter(function(m){ return m.id===id; 
 function deviceMember(){ return memberById(DEVICE.memberId) || members()[0] || null; }
 function hueVar(k){ return 'var('+KID_HUES[(k.hue||0) % KID_HUES.length]+')'; }
 function touch(rec){ rec.updatedAt = now(); }
+
+/* ------------------------------------------------------------ food icons
+   Kid's-pick tiles need a picture for every food, including ones a parent typed
+   in. Emoji are the honest choice: instantly readable to a six-year-old, zero
+   bytes, and they work offline. First keyword match wins, so dish words come
+   before ingredient words ("chocolate chip cookies" is a cookie, not chocolate). */
+var ICONS = [
+  ['sushi','🍣'],['pizza','🍕'],['bagel','🥯'],['sandwich','🥪'],['sub roll','🥖'],['burrito','🌯'],['wrap','🌯'],
+  ['roll-up','🌯'],['pinwheel','🌯'],['pita','🥙'],['quesadilla','🫓'],['tortellini','🍝'],['pasta','🍝'],
+  ['mac & cheese','🧀'],['noodle','🍜'],['soup','🍲'],['chili','🍲'],['skewer','🍢'],['nugget','🍗'],
+  ['parfait','🍨'],['quinoa','🥗'],['salad','🥗'],['bowl','🍚'],['rice cake','🍘'],['rice','🍚'],
+  ['cookie','🍪'],['brownie','🍫'],['muffin','🧁'],['cupcake','🧁'],['donut','🍩'],['pudding','🍮'],['jello','🍮'],
+  ['marshmallow','🍡'],['graham','🍪'],['wafer','🍪'],['leather','🍬'],['gummy','🍬'],['candy','🍬'],['licorice','🍬'],
+  ['fruit snack','🍬'],['crispy treat','🍚'],['macaroon','🥥'],['meringue','🍥'],['caramel','🍿'],['lemon','🍋'],
+  ['blondie','🍰'],['cake','🍰'],['bread','🍞'],['cereal bar','🥣'],['granola','🥣'],['trail mix','🥜'],['bar','🍫'],
+  ['applesauce','🍎'],['apple','🍎'],['grape','🍇'],['strawberr','🍓'],['blueberr','🫐'],['raspberr','🍓'],
+  ['blackberr','🫐'],['cranberr','🍒'],['clementine','🍊'],['mandarin','🍊'],['tangerine','🍊'],['orange','🍊'],
+  ['banana','🍌'],['watermelon','🍉'],['cantaloupe','🍈'],['honeydew','🍈'],['melon','🍈'],['pineapple','🍍'],
+  ['peach','🍑'],['nectarine','🍑'],['apricot','🍑'],['mango','🥭'],['kiwi','🥝'],['pear','🍐'],['plum','🍑'],
+  ['cherr','🍒'],['pomegranate','🍎'],['raisin','🍇'],['fruit','🍇'],
+  ['carrot','🥕'],['cucumber','🥒'],['pickle','🥒'],['tomato','🍅'],['snap pea','🫛'],['edamame','🫛'],['pea','🫛'],
+  ['celery','🥬'],['pepper','🫑'],['broccoli','🥦'],['olive','🫒'],['corn','🌽'],['seaweed','🌿'],['avocado','🥑'],
+  ['guacamole','🥑'],['salsa','🍅'],['hummus','🫘'],['chickpea','🫘'],['bean','🫘'],['seed','🌻'],['nut','🥜'],
+  ['pretzel','🥨'],['popcorn','🍿'],['goldfish','🐟'],['cracker','🍘'],['chip','🍟'],['crisp','🍟'],['straw','🥕'],
+  ['breadstick','🥖'],['yogurt','🥛'],['cottage','🥣'],['babybel','🧀'],['cheese','🧀'],['egg','🥚'],['tuna','🐟'],
+  ['salmon','🐟'],['chicken','🍗'],['turkey','🦃'],['ham','🍖'],['salami','🥓'],['pepperoni','🍕'],['bacon','🥓'],
+  ['blt','🥓'],['dip','🥣'],['ranch','🥣'],['chocolate','🍫'],['coconut','🥥']
+];
+var CAT_ICON = {main:'🍱', side:'🥕', fruit:'🍎', sweet:'🍪'};
+function iconFor(food){
+  if(!food) return '';
+  var n = String(food.n).toLowerCase();
+  for(var i=0;i<ICONS.length;i++) if(n.indexOf(ICONS[i][0])>-1) return ICONS[i][1];
+  return CAT_ICON[food.c] || '🍱';
+}
 
 /* ------------------------------------------------------------- helpers */
 function esc(s){ return String(s).replace(/[&<>"']/g,function(c){
@@ -829,7 +896,8 @@ function planWeek(kid){
     var old = prev ? prev.days.filter(function(x){ return x.d===d; })[0] : null;
     week.days.push({d:d, dow:dw,
       slots: old ? Object.assign({}, old.slots) : {main:null,side:null,fruit:null,sweet:null},
-      lock:  old ? Object.assign({}, old.lock)  : {main:false,side:false,fruit:false,sweet:false}});
+      lock:  old ? Object.assign({}, old.lock)  : {main:false,side:false,fruit:false,sweet:false},
+      kidPick: old ? Object.assign({}, old.kidPick || {}) : {}});
   });
   week.days.forEach(function(day){
     CATS.forEach(function(c){ if(!day.lock[c.k] || !foodById(kid, day.slots[c.k])) day.slots[c.k] = null; });
@@ -875,6 +943,60 @@ function reshuffleSlot(kid, day, cat){
   }
   touch(kid.week); touch(kid); save();
   return true;
+}
+
+/* ------------------------------------------------------------ kid's pick
+   Bounded choice: the parent has already set the rules and drawn the box; the
+   child sees two parent-approved options per compartment and taps one. Option A
+   is what the draw picked, option B is the next-best match against that day's
+   main. Main is asked first so the later pairings score against what the kid
+   actually chose. Nothing the child can tap has ever been outside the rules. */
+function kidOptions(kid, day, cat, chosen){
+  var pool = eligible(kid, cat);
+  var elsewhere = kid.week.days.filter(function(x){ return x.d!==day.d; }).map(function(x){ return x.slots[cat]; });
+  pool = pool.filter(function(f){ return elsewhere.indexOf(f.id)<0; });
+  if(pool.length < 2) pool = eligible(kid, cat);            /* short list: allow repeats over a gap */
+  var mainId = chosen.main || day.slots.main;
+  var main = foodById(kid, mainId);
+  var planned = pool.filter(function(f){ return f.id === day.slots[cat]; })[0] || null;
+  var rest = pool.filter(function(f){ return !planned || f.id !== planned.id; });
+  if(cat === 'main') rest = shuffled(rest);
+  else {
+    rest = rest.map(function(f){ return {f:f, s:pairScore(main, f, cat).s + Math.random()*1.5}; })
+      .sort(function(a,b){ return b.s-a.s; }).map(function(x){ return x.f; });
+  }
+  var out = planned ? [planned] : [];
+  while(out.length < 2 && rest.length) out.push(rest.shift());
+  return out;
+}
+function startKidPick(kidId, dayStr){
+  var kid = kidById(kidId); if(!kid || !kid.week) return;
+  var day = kid.week.days.filter(function(d){ return d.d===dayStr; })[0]; if(!day) return;
+  UI.kid = {kidId:kidId, d:dayStr, step:0, chosen:{}, options:{}};
+  UI.kid.options.main = kidOptions(kid, day, 'main', UI.kid.chosen);
+  render();
+}
+function kidChoose(foodId){
+  var st = UI.kid; if(!st) return;
+  var kid = kidById(st.kidId), day = kid.week.days.filter(function(d){ return d.d===st.d; })[0];
+  var cat = CATS[st.step].k;
+  st.chosen[cat] = foodId;
+  st.step++;
+  if(st.step < CATS.length){
+    var next = CATS[st.step].k;
+    st.options[next] = kidOptions(kid, day, next, st.chosen);
+    if(!st.options[next].length){ st.chosen[next] = day.slots[next]; return kidChoose(day.slots[next]); }
+  } else {
+    day.kidPick = day.kidPick || {};
+    CATS.forEach(function(c){
+      if(!st.chosen[c.k]) return;
+      day.slots[c.k] = st.chosen[c.k];
+      day.lock[c.k] = true;                                  /* a choice the kid made survives a shuffle */
+      day.kidPick[c.k] = {at:now(), by:kid.id};
+    });
+    touch(kid.week); touch(kid); save();
+  }
+  render();
 }
 
 /* --------------------------------------------- household-wide roll-ups */
@@ -932,8 +1054,10 @@ function tinHTML(kid, day, mode){
     var packedRow = kid.packed[day.d] || {};
     var packed = mode==='pack' && !!packedRow[c.k];
     var sub = f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '');
+    var kidPicked = day.kidPick && day.kidPick[c.k];
     var mark = mode==='pack' ? '<span class="tick">'+svg('check',9)+'</span>'
-             : (day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>' : '');
+             : (kidPicked ? '<span title="'+esc(kid.name)+' picked this">★</span>'
+               : day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>' : '');
     h += '<button class="cmp c-'+c.k+(f?'':' empty')+'" data-act="'+(mode==='pack'?'toggle':'slot')+'"'
       +  ' data-kid="'+kid.id+'" data-day="'+day.d+'" data-cat="'+c.k+'"'
       +  (mode==='pack' ? ' aria-pressed="'+(packed?'true':'false')+'"' : '')+'>'
@@ -1006,6 +1130,41 @@ function viewOnboard(){
     + '</div>';
 }
 
+/* ----------------------------------------------------------- kid's pick */
+function viewKid(){
+  var st = UI.kid, kid = kidById(st.kidId);
+  var day = kid.week.days.filter(function(d){ return d.d===st.d; })[0];
+  var l = dayLabel(st.d);
+  var dots = '<div class="dots">'+CATS.map(function(c,i){
+    return '<i class="'+(i<st.step?'did':i===st.step?'on':'')+'"></i>'; }).join('')+'</div>';
+  var h = '<div class="kidmode"><div class="top">'+dots
+    + '<button class="btn ghost sm" data-act="kid-exit">'+(st.step>=CATS.length?'Done':'Stop')+'</button></div>';
+  if(st.step < CATS.length){
+    var c = CATS[st.step], opts = st.options[c.k] || [];
+    h += '<div class="body"><div>'
+      +  '<span class="catlab" style="color:var(--c-'+c.k+')">'+esc(c.label)+' · '+esc(l.rel || l.full)+'</span>'
+      +  '<h1>'+esc(kid.name)+', pick your '+esc(c.label.toLowerCase())+'.</h1>'
+      +  '<p class="hint">'+(opts.length>1 ? 'Tap the one you want.' : 'Only one to choose from today — tap it.')+'</p></div>'
+      +  '<div class="picks'+(opts.length===1?' one':'')+'">'
+      +  opts.map(function(f){
+           return '<button class="pick" data-act="kid-pick" data-id="'+f.id+'" aria-label="'+esc(f.n)+'">'
+             + '<span class="ic" aria-hidden="true">'+iconFor(f)+'</span><span class="nm">'+esc(f.n)+'</span></button>';
+         }).join('')
+      +  '</div></div>';
+  } else {
+    h += '<div class="body kiddone"><div class="big">🎉</div>'
+      +  '<h1>All packed, '+esc(kid.name)+'!</h1>'
+      +  '<div class="tin">'+CATS.map(function(c){
+           var f = foodById(kid, day.slots[c.k]);
+           return '<div class="cmp c-'+c.k+'"><span class="lab">'+c.label+'</span>'
+             + '<span class="ic">'+iconFor(f)+'</span><span class="nm">'+(f?esc(f.n):'')+'</span></div>';
+         }).join('')+'</div>'
+      +  '<p class="hint" style="text-align:center">Now hand the phone back.</p>'
+      +  '<button class="btn primary wide" data-act="kid-exit">Done</button></div>';
+  }
+  return h+'</div>';
+}
+
 /* ---------------------------------------------------------------- views */
 function viewPack(){
   var ks = kids(), multi = ks.length>1;
@@ -1034,8 +1193,16 @@ function viewPack(){
     + (multi ? 'es' : '') + '</h2></div>';
 
   slot.entries.forEach(function(e){
+    var picked = e.day.kidPick && Object.keys(e.day.kidPick).length;
+    var canPick = CATS.some(function(c){ return eligible(e.kid, c.k).length; });
     h += '<div class="kidgroup">' + (multi ? kidLine(e.kid) : '')
-      +  tinHTML(e.kid, e.day, 'pack') + chipsHTML(e.kid, e.day) + '</div>';
+      +  tinHTML(e.kid, e.day, 'pack')
+      +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(e.kid, e.day)
+      +  (picked ? '<span class="chip good pickchip">'+esc(e.kid.name)+' picked</span>' : '')
+      +  (canPick && lab.diff >= 0
+           ? '<button class="btn sm" data-act="kid-start" data-kid="'+e.kid.id+'" data-day="'+e.day.d+'" style="margin-left:auto">'
+             + (picked ? 'Pick again' : 'Let '+esc(e.kid.name)+' pick') + '</button>' : '')
+      +  '</div></div>';
   });
 
   h += '<div class="stack" style="gap:8px"><div class="meter"><i style="width:'+(total?done/total*100:0)+'%"></i></div>'
@@ -1342,6 +1509,9 @@ var TABS = [
 function render(){
   if(!S) return;
   var kid = activeKid();
+  var kidEl = document.getElementById('kid');
+  if(UI.kid){ kidEl.innerHTML = viewKid(); kidEl.hidden = false; document.body.style.overflow = 'hidden'; }
+  else { kidEl.innerHTML = ''; kidEl.hidden = true; document.body.style.overflow = ''; }
   if(!S.onboardedAt){
     document.getElementById('view').innerHTML = viewOnboard();
     document.getElementById('tabs').style.display = 'none';
@@ -1385,6 +1555,11 @@ document.addEventListener('click', function(ev){
   var act = el.getAttribute('data-act');
   var kid = activeKid();
   if(act!=='clear-all' && act!=='del-kid' && act!=='disarm' && UI.armed) UI.armed = '';
+
+  /* kid's pick */
+  if(act==='kid-start'){ startKidPick(el.getAttribute('data-kid'), el.getAttribute('data-day')); window.scrollTo(0,0); return; }
+  if(act==='kid-pick'){ kidChoose(el.getAttribute('data-id')); return; }
+  if(act==='kid-exit'){ UI.kid = null; render(); toast('Handed back'); return; }
 
   /* first run */
   if(act==='ob-heat'){ UI.ob.heat = el.getAttribute('data-v')==='hot'; render(); return; }

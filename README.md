@@ -29,7 +29,11 @@ food list from a 180-item library and produce a planned week immediately. From t
   compartment and it survives the next shuffle.
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes.
 - **Pack** — the next school day as a checklist, with ice-pack, sealed-container and
-  no-protein flags.
+  no-protein flags. **Kid's pick** lives here: the parent taps "Let Emma pick", the child
+  sees two parent-approved pictures per compartment (the draw's choice and the next-best
+  pairing), taps one, and hands the phone back. Chosen compartments lock so a re-draw
+  can't undo them, and the day records who picked. Every food has an emoji icon derived
+  from its name, so custom foods get a picture too.
 - **Setup** — lunchboxes, pack days, cold-only, allergen exclusions, an avoid list, and
   copy-out/paste-in transfer between phones.
 

@@ -103,6 +103,39 @@ try {
     return false;
   }));
 
+  /* ---------------------------------------------------------- kid's pick */
+  await page.click('[data-act="kid-start"]');
+  await page.waitForTimeout(250);
+  check("kid's pick takes over the screen with two pictures",
+    (await page.$$eval('.kidmode .pick', a => a.length)) === 2);
+  const firstMainLabel = await page.textContent('.kidmode h1');
+  check("the main is asked first, by name", /pick your main/i.test(firstMainLabel), firstMainLabel);
+  const chosenMain = await page.getAttribute('.kidmode .pick >> nth=1', 'data-id');   /* option B, not the draw */
+  await page.click('.kidmode .pick >> nth=1'); await page.waitForTimeout(150);
+  for (let i = 0; i < 3; i++) { await page.click('.kidmode .pick >> nth=0'); await page.waitForTimeout(150); }
+  check('four taps end on the finished box', (await page.$$eval('.kiddone .tin .cmp', a => a.length)) === 4);
+  await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
+  const afterPick = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchbox-tin'));
+    const k = d.kids[0], t = new Date(); t.setHours(0,0,0,0);
+    const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
+    return {main: day.slots.main, locked: Object.values(day.lock).every(Boolean),
+      picked: Object.keys(day.kidPick || {}).length, by: day.kidPick && day.kidPick.main && day.kidPick.main.by === k.id};
+  });
+  check("the kid's choice replaced the draw", afterPick.main === chosenMain, afterPick);
+  check('kid-picked compartments are locked and attributed', afterPick.locked && afterPick.picked === 4 && afterPick.by, afterPick);
+  check('the pack list says who picked', (await page.textContent('#view')).includes(' picked'));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="shuffle-day"] >> nth=0'); await page.waitForTimeout(300);
+  const stillMain = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('lunchbox-tin')).kids[0];
+    const t = new Date(); t.setHours(0,0,0,0);
+    const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
+    return day.slots.main;
+  });
+  check("a re-draw does not overwrite what the kid chose", stillMain === chosenMain);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(200);
+
   /* ----------------------------------------------------------- shopping */
   await page.click('[data-act="tab"][data-tab="shop"]');
   await page.waitForTimeout(200);
