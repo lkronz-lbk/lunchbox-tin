@@ -23,7 +23,7 @@ img{max-width:100%}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
 :root{
   --ground:#E9EEE6; --surface:#FBFCF9; --surface-2:#F1F5EE; --sunk:#DFE7DB;
@@ -206,7 +206,8 @@ nav.tabs svg{width:21px;height:21px}
 .toast{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translate(-50%,14px);
   background:var(--toast-bg);color:var(--toast-fg);padding:10px 16px;border-radius:999px;font-size:13.5px;z-index:40;
   opacity:0;pointer-events:none;transition:all .2s}
-.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast button{margin-left:12px;background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;min-height:32px}
 @media (min-width:520px){
   .cmp{min-height:112px}
   h2.view-title{font-size:30px}
@@ -309,7 +310,7 @@ nav.tabs svg{width:21px;height:21px}
   <div class="body" id="sheetBody"></div>
 </div>
 <div id="kid" hidden></div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (function(){
@@ -621,10 +622,11 @@ var Store = {
   ok:true,
   load:function(){
     return new Promise(function(res){
-      var out = {doc:null, legacy:null, device:null};
+      var out = {doc:null, legacy:null, device:null, raw:null, unreadable:false};
       try{
         var raw = localStorage.getItem(Store.KEY) || localStorage.getItem(Store.PRIOR_KEY);
-        if(raw) out.doc = JSON.parse(raw);
+        out.raw = raw;
+        if(raw){ try{ out.doc = JSON.parse(raw); }catch(e){ out.unreadable = true; } }
         var old = localStorage.getItem(Store.LEGACY_KEY);
         if(old) out.legacy = JSON.parse(old);
         out.device = localStorage.getItem(Store.DEVICE_KEY);
@@ -637,16 +639,25 @@ var Store = {
       try{
         localStorage.setItem(Store.KEY, JSON.stringify(doc));
         if(deviceMemberId) localStorage.setItem(Store.DEVICE_KEY, deviceMemberId);
+        localStorage.removeItem(Store.PRIOR_KEY);        /* one copy on disk, under one name */
       }catch(e){ Store.ok = false; }
       res(true);
     });
+  },
+  /* Never overwrite something we could not read: park the raw text under a
+     dated key so it can be recovered by hand or pasted back in. */
+  backup:function(raw){
+    try{ if(raw) localStorage.setItem('fiveboxes-backup-'+Date.now(), raw); return true; }catch(e){ return false; }
+  },
+  forget:function(){
+    try{ [Store.KEY, Store.PRIOR_KEY, Store.LEGACY_KEY, Store.DEVICE_KEY].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
 };
 
 /* ---------------------------------------------------------------- model */
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, ob:{heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, ob:{heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function now(){ return new Date().toISOString(); }
@@ -668,7 +679,7 @@ function newAccount(){
   var owner = newMember('Me','owner');
   var kid = newKid('Lunchbox', 0);
   return {schema:SCHEMA, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-    members:[owner], kids:[kid], activeKidId:kid.id, pantry:{}};
+    members:[owner], kids:[kid], activeKidId:kid.id, pantry:nullMap()};
 }
 
 /* migrations: keyed by the schema they upgrade FROM */
@@ -677,7 +688,7 @@ var MIGRATIONS = {
     var owner = newMember('Me','owner');
     var kid = newKid((old.settings && old.settings.kid) || 'Lunchbox', 0);
     var acct = {schema:2, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-      members:[owner], kids:[kid], activeKidId:kid.id, pantry:{}};
+      members:[owner], kids:[kid], activeKidId:kid.id, pantry:nullMap()};
     if(old.settings){
       kid.settings.days = old.settings.days || [1,2,3,4,5];
       kid.settings.noHeat = old.settings.noHeat !== false;
@@ -719,11 +730,123 @@ function migrate(doc){
   }
   return (doc.schema === SCHEMA) ? doc : null;
 }
-function isAccount(d){ return d && d.schema === SCHEMA && Array.isArray(d.kids) && Array.isArray(d.members); }
+function isAccount(d){ return !!(d && d.schema === SCHEMA && Array.isArray(d.kids) && Array.isArray(d.members)); }
+
+/* ------------------------------------------------------- normalization
+   Anything that arrives from outside the running app — a pasted import, a
+   hand-edited backup, a save from a future build, or simply a file that lost a
+   field — is rebuilt from a whitelist before it becomes state. Unknown keys are
+   dropped, wrong types fall back to defaults, ids and dates must look like ids
+   and dates. The point is that render() can never throw on stored data, because
+   a document that throws on load is a bricked app. */
+function plainObj(v){ return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
+function nullMap(){ return Object.create(null); }
+function own(o, k){ return Object.prototype.hasOwnProperty.call(o, k); }
+function safeId(v, p){ return (typeof v === 'string' && /^[a-z]+_[a-z0-9]{1,40}$/.test(v)) ? v : uid(p); }
+function safeIdOrNull(v){ return (typeof v === 'string' && /^[a-z]+_[a-z0-9]{1,40}$/.test(v)) ? v : null; }
+function safeDate(v){ return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : null; }
+function safeStamp(v, dflt){ return (typeof v === 'string' && v.length < 40) ? v : (dflt === undefined ? now() : dflt); }
+function safeStr(v, max, dflt){ return typeof v === 'string' ? v.slice(0, max) : dflt; }
+function normMember(m){
+  m = plainObj(m);
+  return {id:safeId(m.id,'mem'), name:safeStr(m.name, 60, 'Me').trim() || 'Me',
+    role: m.role === 'owner' ? 'owner' : 'adult',
+    createdAt:safeStamp(m.createdAt), updatedAt:safeStamp(m.updatedAt), deletedAt: m.deletedAt ? safeStamp(m.deletedAt) : null};
+}
+function normFood(kid, f){
+  f = plainObj(f);
+  if(!catByKey(f.c)) return null;
+  var n = safeStr(f.n, 80, '').trim(); if(!n) return null;
+  return {id:safeId(f.id,'food'), kidId:kid.id, n:n, c:f.c,
+    t:(Array.isArray(f.t) ? f.t : []).filter(function(x){ return TAGS.indexOf(x) > -1; }),
+    a: AISLES.indexOf(f.a) > -1 ? f.a : 'other',
+    al:(Array.isArray(f.al) ? f.al : []).filter(function(x){ return ALLERGENS.some(function(y){ return y.k === x; }); }),
+    createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt), deletedAt: f.deletedAt ? safeStamp(f.deletedAt) : null};
+}
+function normStamped(v){
+  v = plainObj(v);
+  return {at:safeStamp(v.at), by:safeIdOrNull(v.by)};
+}
+function normDay(d){
+  d = plainObj(d);
+  var date = safeDate(d.d); if(!date) return null;
+  var slots = {}, lock = {}, kidPick = {};
+  var sl = plainObj(d.slots), lk = plainObj(d.lock), kp = plainObj(d.kidPick);
+  ALL_CATS.forEach(function(c){
+    if(own(sl, c.k)) slots[c.k] = safeIdOrNull(sl[c.k]);
+    if(own(lk, c.k)) lock[c.k] = !!lk[c.k];
+    if(own(kp, c.k) && kp[c.k]){ var e = normStamped(kp[c.k]); e.picker = 'kid'; kidPick[c.k] = e; }
+  });
+  return {d:date, dow:parseISO(date).getDay(), slots:slots, lock:lock, kidPick:kidPick};
+}
+function normDateRows(v, perRow, cap){
+  var src = plainObj(v), out = {};
+  Object.keys(src).filter(safeDate).sort().slice(-cap).forEach(function(d){
+    var row = perRow(plainObj(src[d]));
+    if(row) out[d] = row;
+  });
+  return out;
+}
+function normKid(k, i){
+  k = plainObj(k);
+  var kid = newKid(safeStr(k.name, 40, '').trim() || 'Lunchbox', (+k.hue || i || 0) % KID_HUES.length);
+  kid.id = safeId(k.id, 'kid');
+  kid.createdAt = safeStamp(k.createdAt); kid.updatedAt = safeStamp(k.updatedAt);
+  kid.deletedAt = k.deletedAt ? safeStamp(k.deletedAt) : null;
+  var st = plainObj(k.settings);
+  var days = (Array.isArray(st.days) ? st.days : []).map(Number).filter(function(x){ return x >= 0 && x <= 6 && x === Math.floor(x); });
+  kid.settings.days = days.length ? days.filter(function(x, j){ return days.indexOf(x) === j; }) : [1,2,3,4,5];
+  kid.settings.noHeat = st.noHeat !== false;
+  ['noIce','shortWindow','noChoc'].forEach(function(r){ kid.settings[r] = !!st[r]; });
+  kid.settings.avoidAllergens = (Array.isArray(st.avoidAllergens) ? st.avoidAllergens : []).filter(function(a){ return ALLERGENS.some(function(y){ return y.k === a; }); });
+  kid.settings.avoidText = safeStr(st.avoidText, 500, '');
+  var so = plainObj(st.slots); kid.settings.slots = {snack:!!so.snack, drink:!!so.drink};
+  kid.settings.updatedAt = safeStamp(st.updatedAt);
+  kid.foods = (Array.isArray(k.foods) ? k.foods : []).slice(0, 2000).map(function(f){ return normFood(kid, f); }).filter(Boolean);
+  var w = plainObj(k.week);
+  var wdays = (Array.isArray(w.days) ? w.days : []).map(normDay).filter(Boolean);
+  kid.week = (safeDate(w.start) && wdays.length)
+    ? {id:safeId(w.id,'week'), kidId:kid.id, start:safeDate(w.start), createdAt:safeStamp(w.createdAt, w.updatedAt), updatedAt:safeStamp(w.updatedAt), days:wdays}
+    : null;
+  kid.past = (Array.isArray(k.past) ? k.past : []).map(normDay).filter(Boolean).slice(-40);
+  kid.packed = normDateRows(k.packed, function(row){
+    var out = {}; ALL_CATS.forEach(function(c){ if(row[c.k]) out[c.k] = normStamped(row[c.k]); });
+    return Object.keys(out).length ? out : null;
+  }, 60);
+  kid.eaten = normDateRows(k.eaten, function(row){
+    if(row.skipped){ var sk = normStamped(row); sk.skipped = true; return sk; }
+    var out = {};
+    ALL_CATS.forEach(function(c){
+      var e = plainObj(row[c.k]);
+      if(e.foodId && ['ate','some','left'].indexOf(e.r) > -1){ var st2 = normStamped(e); st2.foodId = safeIdOrNull(e.foodId); st2.r = e.r; if(st2.foodId) out[c.k] = st2; }
+    });
+    return Object.keys(out).length ? out : null;
+  }, 400);
+  return kid;
+}
+function normalizeAccount(doc){
+  if(!isAccount(doc)) return null;
+  var acct = {schema:SCHEMA, id:safeId(doc.id,'acc'), name:safeStr(doc.name, 60, 'My household'),
+    createdAt:safeStamp(doc.createdAt), updatedAt:safeStamp(doc.updatedAt),
+    members:doc.members.slice(0, 50).map(normMember), kids:doc.kids.slice(0, 20).map(normKid),
+    activeKidId:null, pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null};
+  if(!acct.members.length) acct.members = [newMember('Me','owner')];
+  if(!acct.members.some(function(m){ return m.role === 'owner' && !m.deletedAt; })) acct.members[0].role = 'owner';
+  var live = acct.kids.filter(function(k){ return !k.deletedAt; });
+  if(!live.length){ var k0 = newKid('Lunchbox', 0); acct.kids.push(k0); live = [k0]; }
+  acct.activeKidId = live.some(function(k){ return k.id === doc.activeKidId; }) ? doc.activeKidId : live[0].id;
+  var pantry = plainObj(doc.pantry);
+  Object.keys(pantry).slice(0, 500).forEach(function(key){
+    var p = plainObj(pantry[key]);
+    if(p.have && key.length <= 120){ var e = normStamped(p); e.have = true; acct.pantry[key] = e; }
+  });
+  return acct;
+}
 
 var saveTimer = null;
 function save(){
   if(!S) return;
+  EAT_IDX = nullMap();
   S.updatedAt = now();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(function(){ Store.save(S, DEVICE.memberId); }, 120);
@@ -794,10 +917,13 @@ function today(){ var d = new Date(); d.setHours(0,0,0,0); return d; }
 function addDays(d,n){ var x = new Date(d.getTime()); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ return addDays(d, -((d.getDay()+6)%7)); }
 function has(item,tag){ return !!(item && item.t && item.t.indexOf(tag)>-1); }
-function toast(msg){
+function toast(msg, undo){
   var t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('show'); }, 2000);
+  t.textContent = msg;
+  UI.undo = undo || null;
+  if(undo){ var b = document.createElement('button'); b.type='button'; b.setAttribute('data-act','undo'); b.textContent = 'Undo'; t.appendChild(b); }
+  t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('show'); UI.undo = null; }, undo ? 6000 : 2000);
 }
 
 /* --------------------------------------------------------- school rules */
@@ -863,7 +989,7 @@ function dayNote(kid, day){
     all = all.concat(pairScore(main, foodById(kid, day.slots[c.k]), c.k).why);
   });
   all.sort(function(a,b){ return b.w-a.w; });
-  var usedKey = {}, usedName = {}, out = [];
+  var usedKey = nullMap(), usedName = nullMap(), out = [];
   for(var i=0;i<all.length && out.length<2;i++){
     if(usedKey[all[i].k] || usedName[all[i].n]) continue;
     usedKey[all[i].k] = 1; usedName[all[i].n] = 1;
@@ -922,13 +1048,21 @@ function shuffled(a){
    foods that get eaten and rests anything that came home twice running — for
    three weeks, after which it quietly returns. No model, no server: a weighted
    shuffle over a six-outcome recency window. */
+var EAT_IDX = nullMap();                              /* kid.id -> foodId -> outcomes, newest first; reset on save */
 function eatHistory(kid, foodId){
-  var out = [], eaten = kid.eaten || {};
-  Object.keys(eaten).sort().reverse().forEach(function(d){
-    var row = eaten[d]; if(!row || row.skipped) return;
-    ALL_CATS.forEach(function(c){ var e = row[c.k]; if(e && e.foodId === foodId) out.push({d:d, r:e.r}); });
-  });
-  return out;                                          /* most recent first */
+  var idx = EAT_IDX[kid.id];
+  if(!idx){
+    idx = EAT_IDX[kid.id] = nullMap();
+    var eaten = kid.eaten || {};
+    Object.keys(eaten).sort().reverse().forEach(function(d){
+      var row = eaten[d]; if(!row || row.skipped) return;
+      ALL_CATS.forEach(function(c){
+        var e = row[c.k]; if(!e || !e.foodId) return;
+        (idx[e.foodId] = idx[e.foodId] || []).push({d:d, r:e.r});
+      });
+    });
+  }
+  return idx[foodId] || [];
 }
 function eatStats(kid, foodId){
   var h = eatHistory(kid, foodId).slice(0, 6);
@@ -1060,8 +1194,18 @@ function planWeek(kid){
   });
   var shortfall = [];
   catsFor(kid).forEach(function(c){ if(!fillCategory(kid, week, c)) shortfall.push(c.plural); });
-  kid.week = week; touch(kid); save();
+  kid.week = week;
+  prune(kid, ws);
+  touch(kid); save();
   return shortfall;
+}
+/* Keep the document bounded: packed ticks before this week, eat outcomes older
+   than a year, and tombstones older than ninety days are never read again. */
+function prune(kid, ws){
+  var floorPacked = iso(ws), floorEaten = iso(addDays(today(), -365)), floorTomb = addDays(today(), -90).getTime();
+  Object.keys(kid.packed || {}).forEach(function(d){ if(d < floorPacked) delete kid.packed[d]; });
+  Object.keys(kid.eaten || {}).forEach(function(d){ if(d < floorEaten) delete kid.eaten[d]; });
+  kid.foods = kid.foods.filter(function(f){ return !f.deletedAt || new Date(f.deletedAt).getTime() > floorTomb; });
 }
 function planAll(){
   var short = {};
@@ -1151,7 +1295,7 @@ function upcomingDates(){
   return Object.keys(map).sort().map(function(d){ return {date:d, entries:map[d]}; });
 }
 function shoppingList(){
-  var rows = {};
+  var rows = nullMap();
   kids().forEach(function(k){
     if(!k.week) return;
     k.week.days.forEach(function(d){
@@ -1166,7 +1310,7 @@ function shoppingList(){
   });
   var order = {}; AISLES.forEach(function(a,i){ order[a]=i; });
   return Object.keys(rows).map(function(k){
-    var r = rows[k]; r.have = !!(S.pantry[k] && S.pantry[k].have); return r;
+    var r = rows[k]; r.have = !!(own(S.pantry, k) && S.pantry[k].have); return r;
   }).sort(function(a,b){
     return (order[a.aisle]-order[b.aisle]) || a.name.localeCompare(b.name);
   });
@@ -1201,7 +1345,7 @@ function tinHTML(kid, day, mode){
              : (kidPicked ? '<span title="'+esc(kid.name)+' picked this">★</span>'
                : day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>' : '');
     h += '<button class="cmp c-'+c.k+(f?'':' empty')+(c.minor?' minor':'')+'" data-act="'+(mode==='pack'?'toggle':'slot')+'"'
-      +  ' data-kid="'+kid.id+'" data-day="'+day.d+'" data-cat="'+c.k+'"'
+      +  ' data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'"'
       +  (mode==='pack' ? ' aria-pressed="'+(packed?'true':'false')+'"' : '')+'>'
       +  '<span class="lab">'+c.label+mark+'</span>'
       +  '<span class="nm">'+(f ? esc(f.n) : 'Nothing picked')+'</span>'
@@ -1240,6 +1384,12 @@ function planBanner(){
   return '<div class="banner"><span>'+msg+'</span>'
     + '<button class="btn sm primary" data-act="plan-all">Plan the week</button></div>';
 }
+function noticeBanner(){
+  var msg = UI.notice || (!Store.ok ? 'This browser is not letting the app save. Changes will be lost when you close it.' : '');
+  if(!msg) return '';
+  return '<div class="banner"><span>'+esc(msg)+'</span>'
+    + (UI.notice ? '<button class="btn sm ghost" data-act="notice-dismiss">OK</button>' : '')+'</div>';
+}
 function noFoodsEmpty(){
   return '<div class="empty"><p>Add a few things they&#8217;ll actually eat and the week plans itself.</p>'
     + '<button class="btn primary" data-act="go-foods">Add foods</button></div>';
@@ -1251,7 +1401,7 @@ function viewOnboard(){
   var chip = function(act, val, on, label){
     return '<button class="tg" data-act="'+act+'" data-v="'+val+'" aria-pressed="'+(on?'true':'false')+'">'+label+'</button>';
   };
-  return '<div class="ob">'
+  return '<div class="ob">' + noticeBanner()
     + '<div><div class="oblogo"><i></i><i></i><i></i><i></i></div>'
     + '<h1>A week of packed lunches, in about a minute.</h1>'
     + '<p class="lede">Answer three things and we&#8217;ll build the week, match what goes with what, '
@@ -1278,18 +1428,18 @@ function reviewCard(kid, d){
   var h = '<div class="card review"><div class="spread" style="align-items:flex-start"><div>'
     + '<p class="view-sub" style="margin:0 0 3px">'+esc(l.diff === -1 ? 'Yesterday' : l.full)+' · '+esc(l.date)+'</p>'
     + '<h3>How did '+esc(kid.name)+'&#8217;s box go?</h3></div>'
-    + '<button class="btn ghost sm" data-act="eat-skip" data-kid="'+kid.id+'" data-day="'+d.d+'">Skip</button></div>';
+    + '<button class="btn ghost sm" data-act="eat-skip" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">Skip</button></div>';
   ALL_CATS.forEach(function(c){
     var f = foodById(kid, d.slots[c.k]); if(!f) return;
     var cur = row[c.k] ? row[c.k].r : '';
     h += '<div class="rrow"><span class="ric" aria-hidden="true">'+iconFor(f)+'</span><span class="rnm">'+esc(f.n)+'</span>'
       +  '<div class="seg" role="group" aria-label="'+esc(f.n)+'">'
       +  [['ate','Ate it'],['some','Some'],['left','Came home']].map(function(op){
-           return '<button data-act="eat-set" data-kid="'+kid.id+'" data-day="'+d.d+'" data-cat="'+c.k+'" data-r="'+op[0]
+           return '<button data-act="eat-set" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'" data-cat="'+c.k+'" data-r="'+op[0]
              + '" aria-pressed="'+(cur === op[0] ? 'true' : 'false')+'">'+op[1]+'</button>'; }).join('')
       +  '</div></div>';
   });
-  return h + '<button class="btn wide" data-act="eat-all" data-kid="'+kid.id+'" data-day="'+d.d+'">'+svg('check',16)+'All eaten</button></div>';
+  return h + '<button class="btn wide" data-act="eat-all" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">'+svg('check',16)+'All eaten</button></div>';
 }
 
 /* ----------------------------------------------------------- kid's pick */
@@ -1309,7 +1459,7 @@ function viewKid(){
       +  '<p class="hint">'+(opts.length>1 ? 'Tap the one you want.' : 'Only one to choose from today — tap it.')+'</p></div>'
       +  '<div class="picks'+(opts.length===1?' one':'')+'">'
       +  opts.map(function(f){
-           return '<button class="pick" data-act="kid-pick" data-id="'+f.id+'" aria-label="'+esc(f.n)+'">'
+           return '<button class="pick" data-act="kid-pick" data-id="'+esc(f.id)+'" aria-label="'+esc(f.n)+'">'
              + '<span class="ic" aria-hidden="true">'+iconFor(f)+'</span><span class="nm">'+esc(f.n)+'</span></button>';
          }).join('')
       +  '</div></div>';
@@ -1348,7 +1498,7 @@ function viewPack(){
     catsFor(e.kid).forEach(function(c){ if(e.day.slots[c.k]){ total++; if(row[c.k]) done++; } });
   });
 
-  var h = '<div class="stack">' + planBanner();
+  var h = '<div class="stack">' + noticeBanner() + planBanner();
   ks.forEach(function(k){ var rd = reviewDay(k); if(rd) h += reviewCard(k, rd); });
   h += '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
     + ' · '+esc(lab.date)+'</p><h2 class="view-title">'
@@ -1363,7 +1513,7 @@ function viewPack(){
       +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(e.kid, e.day)
       +  (picked ? '<span class="chip good pickchip">'+esc(e.kid.name)+' picked</span>' : '')
       +  (canPick && lab.diff >= 0
-           ? '<button class="btn sm" data-act="kid-start" data-kid="'+e.kid.id+'" data-day="'+e.day.d+'" style="margin-left:auto">'
+           ? '<button class="btn sm" data-act="kid-start" data-kid="'+esc(e.kid.id)+'" data-day="'+esc(e.day.d)+'" style="margin-left:auto">'
              + (picked ? 'Pick again' : 'Let '+esc(e.kid.name)+' pick') + '</button>' : '')
       +  '</div></div>';
   });
@@ -1410,7 +1560,7 @@ function viewWeek(){
     var l = dayLabel(day.d);
     h += '<div class="daycard"><div class="dayhead"><div class="dayname">'+esc(l.full)
       +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):'')+'</em></div>'
-      +  '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+kid.id+'" data-day="'+day.d+'">'
+      +  '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'">'
       +  svg('dice',15)+'Re-draw</button></div>'
       +  tinHTML(kid, day, 'week') + '<p class="note">'+dayNote(kid, day)+'</p>' + chipsHTML(kid, day) + '</div>';
   });
@@ -1430,7 +1580,7 @@ function viewShop(){
     +  '<button class="btn ghost sm" data-act="copy-list">Copy list</button></div>'
     +  '<p class="hint">Check off what the pantry already has, then shop the rest.'
     +  (multi ? ' Both lunchboxes are in one list.' : '')+'</p>';
-  var groups = {};
+  var groups = nullMap();
   rows.forEach(function(r){ (groups[r.aisle] = groups[r.aisle] || []).push(r); });
   AISLES.forEach(function(a){
     if(!groups[a]) return;
@@ -1472,7 +1622,7 @@ function viewFoods(){
         +  (v ? '<span class="meta" style="color:var(--warn)">skipped &mdash; '+esc(v)+'</span>'
              : '<span class="meta"'+(eatStats(kid,f.id).resting ? ' style="color:var(--warn)"' : '')+'>'
                  + esc(eatLabel(kid, f.id) || (f.a + (f.t.length ? ' · '+f.t.slice(0,3).join(', ') : '')))+'</span>')
-        +  '</span><button class="x" data-act="del-food" data-id="'+f.id+'" aria-label="Remove '+esc(f.n)+'">'
+        +  '</span><button class="x" data-act="del-food" data-id="'+esc(f.id)+'" aria-label="Remove '+esc(f.n)+'">'
         +  svg('trash',17)+'</button></div>';
     });
     h += '</div></div>';
@@ -1493,14 +1643,14 @@ function viewSetup(){
   /* lunchbox profiles */
   h += '<div><div class="sect-head"><h3>Lunchboxes</h3><span class="count">'+kids().length+'</span></div><div class="list">';
   kids().forEach(function(k){
-    h += '<button class="item'+(k.id===kid.id?' on':'')+'" data-act="pick-kid" data-id="'+k.id+'">'
+    h += '<button class="item'+(k.id===kid.id?' on':'')+'" data-act="pick-kid" data-id="'+esc(k.id)+'">'
       +  '<span class="radio"></span><span class="grow"><span class="nm">'+esc(k.name)+'</span>'
       +  '<span class="meta">'+foodsOf(k).length+' foods · '+packDaysSorted(k).length+' days a week</span></span>'
       +  '<span class="dot" style="background:'+hueVar(k)+'"></span></button>';
   });
   h += '</div><div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
     +  '<button class="btn sm" data-act="add-kid">'+svg('plus',15)+'Add a lunchbox</button>'
-    +  (kids().length>1 ? '<button class="btn danger sm" data-act="del-kid" data-id="'+kid.id+'">'
+    +  (kids().length>1 ? '<button class="btn danger sm" data-act="del-kid" data-id="'+esc(kid.id)+'">'
          +(UI.armed==='kid:'+kid.id?'Tap again to remove '+esc(kid.name):'Remove '+esc(kid.name))+'</button>' : '')
     +  '</div></div>';
 
@@ -1571,7 +1721,7 @@ function viewSetup(){
     +  'Use Share &rarr; <b>Add to Home Screen</b> to open it full-screen like an app.'
     +  (Store.ok ? '' : ' <b>Storage is blocked in this browser, so changes will not survive a reload.</b>')+'</p>'
     +  '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:4px">'
-    +  '<button class="btn ghost sm" data-act="clear-week">Clear the plans</button>'
+    +  '<button class="btn ghost sm" data-act="clear-week">'+(UI.armed==='week'?'Tap again to clear':'Clear the plans')+'</button>'
     +  '<button class="btn danger sm" data-act="clear-all">'+(UI.armed==='all'?'Tap again to erase':'Erase everything')+'</button>'
     +  (UI.armed==='all' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : '')
     +  '</div></div>';
@@ -1582,7 +1732,7 @@ function viewSetup(){
 function kidSheet(){
   var h = '<div class="list">';
   kids().forEach(function(k){
-    h += '<button class="item'+(k.id===S.activeKidId?' on':'')+'" data-act="pick-kid" data-id="'+k.id+'" data-close="1">'
+    h += '<button class="item'+(k.id===S.activeKidId?' on':'')+'" data-act="pick-kid" data-id="'+esc(k.id)+'" data-close="1">'
       +  '<span class="radio"></span><span class="grow"><span class="nm">'+esc(k.name)+'</span>'
       +  '<span class="meta">'+foodsOf(k).length+' foods'+(k.week?' · week planned':' · no plan yet')+'</span></span>'
       +  '<span class="dot" style="background:'+hueVar(k)+'"></span></button>';
@@ -1599,9 +1749,9 @@ function slotSheet(kidId, dayStr, cat){
   var pool = foodsOf(kid).filter(function(f){ return f.c===cat; });
   var main = foodById(kid, day.slots.main);
   var h = '<div class="row" style="gap:8px;flex-wrap:wrap">'
-    + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+kid.id+'" data-day="'+dayStr+'" data-cat="'+cat+'">'
+    + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'">'
     + svg('dice',15)+'Re-draw this one</button>'
-    + '<button class="tg" data-act="sheet-lock" data-kid="'+kid.id+'" data-day="'+dayStr+'" data-cat="'+cat+'"'
+    + '<button class="tg" data-act="sheet-lock" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'"'
     + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Keep on shuffle</button></div>';
   if(!pool.length){
     h += '<div class="empty"><p>No '+esc(c.plural.toLowerCase())+' in '+esc(kid.name)+'&#8217;s list yet.</p></div>';
@@ -1612,7 +1762,7 @@ function slotSheet(kidId, dayStr, cat){
       var sc = cat==='main' ? null : pairScore(main, f, cat).s;
       var meta = v ? 'skipped — '+v : (eatLabel(kid, f.id) || (sc!==null && sc>=3 ? 'good match with '+(main?main.n:'the main') : f.a));
       h += '<button class="item'+(day.slots[cat]===f.id?' done':'')+'" data-act="pick" data-kid="'+kid.id
-        +  '" data-day="'+dayStr+'" data-cat="'+cat+'" data-id="'+f.id+'">'
+        +  '" data-day="'+esc(dayStr)+'" data-cat="'+cat+'" data-id="'+esc(f.id)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(f.n)+'</span>'
         +  '<span class="meta"'+(v?' style="color:var(--warn)"':(sc!==null&&sc>=3?' style="color:var(--accent)"':''))
         +  '>'+esc(meta)+'</span></span></button>';
@@ -1622,7 +1772,7 @@ function slotSheet(kidId, dayStr, cat){
   openSheet(dayLabel(dayStr).full+' · '+c.label, h);
 }
 function ideasSheet(){
-  var kid = activeKid(), mine = {};
+  var kid = activeKid(), mine = nullMap();
   foodsOf(kid).forEach(function(f){ mine[normKey(f.n)] = 1; });
   var h = '<p class="hint" style="margin:0">Filtered to '+esc(kid.name)+'&#8217;s school rules. Tap to add.</p>';
   catsFor(kid).forEach(function(c){
@@ -1680,8 +1830,8 @@ function parseImport(text){
   try{ doc = JSON.parse(text); }catch(e){ return null; }
   if(!doc || typeof doc !== 'object') return null;
   var body = ((doc.app === 'fiveboxes' || doc.app === 'lunchbox-tin') && doc.account) ? doc.account : doc;
-  if(isAccount(body)) return body;
-  if(isLegacy(body)) return migrate(Object.assign({}, body, {schema:1}));
+  if(isAccount(body)) return normalizeAccount(body);
+  if(isLegacy(body)) return normalizeAccount(migrate(Object.assign({}, body, {schema:1})));
   return null;
 }
 function isLegacy(d){ return !!(d && Array.isArray(d.foods) && d.settings && typeof d.settings === 'object'); }
@@ -1743,7 +1893,7 @@ document.addEventListener('click', function(ev){
   }
   var act = el.getAttribute('data-act');
   var kid = activeKid();
-  if(act!=='clear-all' && act!=='del-kid' && act!=='disarm' && UI.armed) UI.armed = '';
+  if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='disarm' && UI.armed) UI.armed = '';
 
   /* did they eat it? */
   if(act==='eat-set' || act==='eat-all' || act==='eat-skip'){
@@ -1878,7 +2028,7 @@ document.addEventListener('click', function(ev){
   /* shopping */
   if(act==='have'){
     var key = el.getAttribute('data-key');
-    if(S.pantry[key] && S.pantry[key].have) delete S.pantry[key];
+    if(own(S.pantry, key) && S.pantry[key].have) delete S.pantry[key];
     else S.pantry[key] = {have:true, at:now(), by:(deviceMember()||{}).id || null};
     save(); render(); return;
   }
@@ -1916,11 +2066,19 @@ document.addEventListener('click', function(ev){
   }
   if(act==='del-food'){
     var f = foodById(kid, el.getAttribute('data-id')); if(!f) return;
+    var wasIn = [];
     f.deletedAt = now(); touch(f);
     if(kid.week) kid.week.days.forEach(function(d){
-      ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){ d.slots[c.k]=null; d.lock[c.k]=false; } });
+      ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){ wasIn.push({d:d, c:c.k, lock:d.lock[c.k]}); d.slots[c.k]=null; d.lock[c.k]=false; } });
     });
-    touch(kid); save(); render(); toast(f.n+' removed'); return;
+    touch(kid); save(); render();
+    var undoKid = kid;
+    toast(f.n+' removed', function(){
+      f.deletedAt = null; touch(f);
+      wasIn.forEach(function(w){ w.d.slots[w.c] = f.id; w.d.lock[w.c] = w.lock; });
+      touch(undoKid); save(); render(); toast('Put back');
+    });
+    return;
   }
 
   /* rules */
@@ -1985,15 +2143,19 @@ document.addEventListener('click', function(ev){
     toast('Loaded '+kids().length+' lunchbox'+(kids().length===1?'':'es')); return;
   }
   if(act==='clear-week'){
+    if(UI.armed!=='week'){ UI.armed='week'; render(); toast('That clears every lunchbox\u2019s plan for the week'); return; }
     kids().forEach(function(k){ k.week = null; k.packed = {}; touch(k); });
-    S.pantry = {}; save(); render(); toast('Plans cleared'); return;
+    UI.armed=''; save(); render(); toast('Plans cleared'); return;
   }
   if(act==='clear-all'){
     if(UI.armed!=='all'){ UI.armed='all'; render(); toast('That erases every lunchbox on this phone'); return; }
+    Store.forget();
     S = newAccount(); DEVICE.memberId = S.members[0].id; UI.armed=''; UI.tab='setup';
     save(); render(); toast('Everything erased'); return;
   }
   if(act==='disarm'){ UI.armed=''; render(); return; }
+  if(act==='notice-dismiss'){ UI.notice=''; render(); return; }
+  if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }
 });
 
 document.addEventListener('input', function(ev){
@@ -2032,19 +2194,32 @@ if(window.claude && typeof window.claude.use === 'function'){
 
 /* ------------------------------------------------------------------ boot */
 Store.load().then(function(r){
-  var doc = isAccount(r.doc) ? r.doc : migrate(r.doc);
-  if(!doc && isLegacy(r.legacy)) doc = migrate(Object.assign({}, r.legacy, {schema:1}));
+  var doc = null, rejected = false;
+  try{
+    if(r.doc) doc = normalizeAccount(isAccount(r.doc) ? r.doc : migrate(r.doc));
+    if(!doc && !r.raw && isLegacy(r.legacy)) doc = normalizeAccount(migrate(Object.assign({}, r.legacy, {schema:1})));
+  }catch(e){ doc = null; }
+  if(!doc && (r.raw || r.unreadable)){
+    /* something was saved here and we could not make sense of it: keep it, start fresh, say so */
+    rejected = true;
+    UI.notice = Store.backup(r.raw)
+      ? 'Your saved lunches could not be read, so this is a fresh start. A copy was kept on this phone.'
+      : 'Your saved lunches could not be read, so this is a fresh start.';
+  }
   if(!doc) doc = newAccount();
   S = doc;
-  if(!Array.isArray(S.members) || !members().length) S.members = [newMember('Me','owner')];
-  if(!S.pantry) S.pantry = {};
-  if(!kids().length){ var k = newKid('Lunchbox',0); S.kids = (S.kids||[]).concat([k]); }
-  if(!activeKid()) S.activeKidId = kids()[0].id;
   DEVICE.memberId = (r.device && memberById(r.device)) ? r.device : members()[0].id;
   /* anyone who already has a list has effectively finished onboarding */
   if(!S.onboardedAt && kids().some(function(k){ return foodsOf(k).length; })) S.onboardedAt = now();
-  render();
-  save();
+  try{ render(); }
+  catch(e){
+    /* the last line of defence: a document that renders badly must not become permanent */
+    if(!rejected) Store.backup(r.raw);
+    S = newAccount(); DEVICE.memberId = S.members[0].id;
+    UI.notice = 'Your saved lunches could not be shown, so this is a fresh start. A copy was kept on this phone.';
+    render();
+  }
+  if(!rejected) save();
 });
 })();
 </script>

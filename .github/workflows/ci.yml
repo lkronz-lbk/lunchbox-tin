@@ -5,6 +5,11 @@ on:
     branches: [main, dev]
   pull_request:
 
+# a burst of pushes cancels the superseded runs; one push is one run
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   smoke:
     name: Smoke tests
@@ -15,9 +20,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium

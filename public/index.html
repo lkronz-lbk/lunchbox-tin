@@ -12,7 +12,9 @@
 <meta property="og:title" content="Five Boxes">
 <meta property="og:description" content="A week of packed school lunches in about a minute — matched boxes, school rules respected, shopping list built for you.">
 <meta property="og:type" content="website">
-<meta property="og:image" content="/icons/icon-1024.png">
+<meta property="og:image" content="/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,6 +116,7 @@ h2{font-family:var(--f-display);font-size:clamp(25px,4.2vw,32px);font-weight:700
   .shots figure{flex:0 0 74%;scroll-snap-align:center}
 }
 .shots figure{margin:0}
+.shots img,.shots picture{display:block}
 .shots img{border:1.4px solid var(--line);border-radius:18px;background:var(--surface)}
 .shots figcaption{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
   color:var(--ink-3);margin-top:11px;text-align:center}
@@ -154,8 +157,7 @@ footer a{color:var(--ink-2)}
         </div>
         <p class="free">Free · no account · works offline · nothing leaves your phone</p>
       </div>
-      <div class="shot"><img src="/img/screen-week.png" width="375" height="812"
-        alt="The planner showing Monday through Friday, each as a four-compartment lunchbox with a main, side, fruit and sweet."></div>
+      <div class="shot"><picture><source type="image/webp" srcset="/img/screen-week.webp"><img src="/img/screen-week.png" width="375" height="812" decoding="async" alt="The planner showing Monday through Friday, each as a four-compartment lunchbox with a main, side, fruit and sweet."></picture></div>
     </div>
   </header>
 </div>
@@ -215,13 +217,13 @@ footer a{color:var(--ink-2)}
       <p>Designed at phone size first, because that's where lunch actually gets planned.</p>
     </div>
     <div class="shots">
-      <figure><img src="/img/screen-week.png" width="375" height="812" alt="Week view with five lunchbox tins.">
+      <figure><picture><source type="image/webp" srcset="/img/screen-week.webp"><img src="/img/screen-week.png" width="375" height="812" loading="lazy" decoding="async" alt="Week view with five lunchbox tins."></picture>
         <figcaption>The week</figcaption></figure>
-      <figure><img src="/img/screen-shop.png" width="375" height="812" alt="Shopping list grouped by store aisle.">
+      <figure><picture><source type="image/webp" srcset="/img/screen-shop.webp"><img src="/img/screen-shop.png" width="375" height="812" loading="lazy" decoding="async" alt="Shopping list grouped by store aisle."></picture>
         <figcaption>The list</figcaption></figure>
-      <figure><img src="/img/screen-pack.png" width="375" height="812" alt="Tomorrow's box as a four-item checklist.">
+      <figure><picture><source type="image/webp" srcset="/img/screen-pack.webp"><img src="/img/screen-pack.png" width="375" height="812" loading="lazy" decoding="async" alt="Tomorrow's box as a four-item checklist."></picture>
         <figcaption>The morning</figcaption></figure>
-      <figure><img src="/img/screen-kidpick.png" width="375" height="812" alt="Kid's pick: two large picture tiles to choose the main from.">
+      <figure><picture><source type="image/webp" srcset="/img/screen-kidpick.webp"><img src="/img/screen-kidpick.png" width="375" height="812" loading="lazy" decoding="async" alt="Kid's pick: two large picture tiles to choose the main from."></picture>
         <figcaption>The kid&#8217;s pick</figcaption></figure>
     </div>
   </section>
@@ -252,10 +254,10 @@ footer a{color:var(--ink-2)}
     </div>
     <form class="signup" name="waitlist" method="POST" data-netlify="true" netlify-honeypot="bot-field">
       <input type="hidden" name="form-name" value="waitlist">
-      <p class="hp"><label>Leave this empty: <input name="bot-field"></label></p>
       <label class="hp" for="email">Email address</label>
       <input id="email" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
       <button class="btn primary" type="submit">Keep me posted</button>
+      <p class="hp" aria-hidden="true"><label>Leave this empty: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
     </form>
   </section>
 </div>

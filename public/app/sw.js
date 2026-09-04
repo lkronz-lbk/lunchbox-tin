@@ -3,9 +3,8 @@
    install and served cache-first. Fonts come from Google and are cached at
    runtime, opaque responses included, so a second launch works with no
    network at all. Bump VERSION to ship a new build. */
-var VERSION = 'fiveboxes-v3';
+var VERSION = 'fiveboxes-v4';
 var SHELL = [
-  '/app/',
   '/app/index.html',
   '/app/manifest.webmanifest',
   '/icons/icon-192.png',
@@ -51,7 +50,9 @@ self.addEventListener('fetch', function(e){
     return;
   }
 
-  if(new URL(req.url).origin !== self.location.origin) return;
+  var url = new URL(req.url);
+  if(url.origin !== self.location.origin) return;
+  if(url.pathname.indexOf('/api/') === 0) return;   /* never serve an account from cache */
 
   /* Navigations: serve the cached app immediately, refresh it in the
      background so the next launch has the newest build. */
@@ -59,8 +60,12 @@ self.addEventListener('fetch', function(e){
     e.respondWith(
       caches.match('/app/index.html').then(function(hit){
         var net = fetch(req).then(function(res){
-          var copy = res.clone();
-          caches.open(VERSION).then(function(c){ c.put('/app/index.html', copy); });
+          /* only a real, successful HTML response may become the shell —
+             never a captive-portal page, a 5xx, or a mis-deploy */
+          if(res.ok && res.type === 'basic' && /text\/html/.test(res.headers.get('content-type') || '')){
+            var copy = res.clone();
+            caches.open(VERSION).then(function(c){ c.put('/app/index.html', copy); });
+          }
           return res;
         }).catch(function(){ return hit; });
         return hit || net;

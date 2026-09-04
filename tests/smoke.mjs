@@ -7,9 +7,18 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readPolicies } from '../scripts/csp.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
-const TYPES = {'.html':'text/html','.js':'text/javascript','.png':'image/png','.json':'application/json',
+/* The test server enforces the same Content-Security-Policy Netlify will, so a
+   policy that would break the app breaks the suite instead of the site. */
+const POLICIES = readPolicies(fs.readFileSync(path.join(ROOT, '..', 'netlify.toml'), 'utf8'));
+function cspFor(p){
+  if(p.startsWith('/app/')) return POLICIES['/app/*'];
+  if(p === '/' || p === '/index.html') return POLICIES['/index.html'];
+  return POLICIES[p] || null;
+}
+const TYPES = {'.html':'text/html','.js':'text/javascript','.png':'image/png','.webp':'image/webp','.json':'application/json',
   '.webmanifest':'application/manifest+json','.txt':'text/plain','.svg':'image/svg+xml'};
 
 function serve(){
@@ -20,7 +29,10 @@ function serve(){
     if(!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()){
       res.writeHead(404); return res.end('not found');
     }
-    res.writeHead(200, {'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream'});
+    const hdr = {'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream'};
+    const csp = cspFor(p.replace(/index\.html$/, m => (p === '/index.html' ? m : m)));
+    if(csp) hdr['Content-Security-Policy'] = csp;
+    res.writeHead(200, hdr);
     fs.createReadStream(file).pipe(res);
   });
   return new Promise(r => server.listen(0, '127.0.0.1', () => r({server, port: server.address().port})));
@@ -325,6 +337,105 @@ try {
   });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
 
+  /* -------------------------------------------------- safety: bad data can't brick it */
+  const goodDoc = await page.evaluate(() => localStorage.getItem('fiveboxes'));
+  const brickers = {
+    'a lunchbox with no foods':      d => { delete d.kids[0].foods; },
+    'a lunchbox with no settings':   d => { delete d.kids[0].settings; },
+    'a week whose days are not a list': d => { d.kids[0].week.days = {}; },
+    'a null lunchbox in the list':   d => { d.kids.push(null); },
+    'a lunchbox with no packed map': d => { delete d.kids[0].packed; }
+  };
+  for (const [name, mutate] of Object.entries(brickers)) {
+    await page.evaluate(([raw, fnSrc]) => {
+      const d = JSON.parse(raw); (new Function('d', fnSrc))(d);
+      localStorage.setItem('fiveboxes', JSON.stringify(d));
+    }, [goodDoc, mutate.toString().replace(/^[^{]*\{|\}$/g, '')]);
+    await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+    const alive = await page.evaluate(() => !!document.querySelector('nav.tabs') && document.querySelectorAll('#view *').length > 5);
+    check('storage with '+name+' still opens', alive);
+  }
+  await page.evaluate(raw => localStorage.setItem('fiveboxes', raw), goodDoc);
+
+  /* an unreadable save is kept, not overwritten */
+  await page.evaluate(() => localStorage.setItem('fiveboxes', '{"schema":2,"kids":[{"name":"Precious"'));
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  const kept = await page.evaluate(() => Object.keys(localStorage).some(k => k.startsWith('fiveboxes-backup-') && localStorage.getItem(k).includes('Precious')));
+  check('an unreadable save is backed up before anything is written', kept);
+  check('and the app says so', (await page.textContent('#view')).includes('could not be read'));
+  await page.evaluate(() => { Object.keys(localStorage).filter(k => k.startsWith('fiveboxes-backup-')).forEach(k => localStorage.removeItem(k)); });
+  await page.evaluate(raw => localStorage.setItem('fiveboxes', raw), goodDoc);
+
+  /* hostile ids are neutralised at the boundary */
+  await page.evaluate(raw => {
+    const d = JSON.parse(raw);
+    d.kids[0].id = 'kid_"><img src=x onerror="window.__pwned=1">';
+    d.kids[0].foods.forEach(f => f.kidId = d.kids[0].id);
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+  }, goodDoc);
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  check('a hostile id in stored data cannot inject markup', await page.evaluate(() => !window.__pwned && !document.querySelector('img[src="x"]')));
+  await page.evaluate(raw => localStorage.setItem('fiveboxes', raw), goodDoc);
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+
+  /* a food called Constructor is just a food */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0], ts = new Date().toISOString();
+    k.foods.push({id:'t_ctor', kidId:k.id, n:'Constructor', c:'side', t:['crunchy'], a:'snacks', al:[], createdAt:ts, updatedAt:ts, deletedAt:null});
+    k.week.days[0].slots.side = 't_ctor';
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+  });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(300);
+  await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
+  check('a food named "Constructor" does not crash the shopping list', (await page.textContent('#view')).includes('Constructor'));
+
+  /* destructive actions */
+  await page.click('.list .item'); await page.waitForTimeout(150);            /* tick one pantry row */
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="clear-week"]'); await page.waitForTimeout(200);
+  check('"Clear the plans" needs a second tap', (await page.textContent('[data-act="clear-week"]')).includes('again'));
+  await page.click('[data-act="clear-week"]'); await page.waitForTimeout(250);
+  const afterClear = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('fiveboxes')); return {week: d.kids[0].week, pantry: Object.keys(d.pantry).length}; });
+  check('clearing the plans leaves the shopping ticks alone', afterClear.week === null && afterClear.pantry >= 1, afterClear);
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300);
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(200);
+  const firstFood = await page.textContent('.list .item .nm');
+  await page.click('[data-act="del-food"]'); await page.waitForTimeout(200);
+  check('deleting a food offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
+  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(250);
+  check('Undo puts the food back', (await page.textContent('#view')).includes(firstFood.trim()));
+
+  /* erase really erases, old names included */
+  await page.evaluate(() => { localStorage.setItem('lunchbox-tin', localStorage.getItem('fiveboxes')); localStorage.setItem('lunchbox-tin-v1', '{"foods":[],"settings":{}}'); });
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="clear-all"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="clear-all"]'); await page.waitForTimeout(300);
+  check('"Erase everything" also removes the copies saved under the old name',
+    await page.evaluate(() => !localStorage.getItem('lunchbox-tin') && !localStorage.getItem('lunchbox-tin-v1')));
+  await page.evaluate(raw => localStorage.setItem('fiveboxes', raw), goodDoc);
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+
+  /* pruning keeps the document bounded */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0];
+    k.packed['2020-01-06'] = {main:{at:'2020-01-06T08:00:00Z', by:null}};
+    k.eaten['2020-01-06'] = {main:{foodId:k.foods[0].id, r:'ate', at:'2020-01-06T15:00:00Z', by:null}};
+    k.foods.push({id:'t_old', kidId:k.id, n:'Old thing', c:'side', t:[], a:'other', al:[], createdAt:'2020-01-01T00:00:00Z', updatedAt:'2020-01-01T00:00:00Z', deletedAt:'2020-01-02T00:00:00Z'});
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+  });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(300);
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300);
+  check('a re-plan prunes ancient ticks, outcomes and tombstones', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    return !k.packed['2020-01-06'] && !k.eaten['2020-01-06'] && !k.foods.some(f => f.id === 't_old');
+  }));
+
+  /* the site is served under its real CSP (the server above enforces netlify.toml) */
+  check('the app runs under the generated Content-Security-Policy', !!POLICIES['/app/*'] && POLICIES['/app/*'].includes('sha256-'));
+  check('the marketing pages carry a CSP too', !!POLICIES['/index.html'] && !!POLICIES['/privacy.html']);
+
   /* --------------------------------------------- the old name's data survives */
   await page.evaluate(() => {
     const doc = localStorage.getItem('fiveboxes');
@@ -356,8 +467,17 @@ try {
   await site.waitForTimeout(400);
   check('the landing page never scrolls sideways on a phone',
     !(await site.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)));
+  await site.evaluate(() => window.scrollTo(0, document.body.scrollHeight));   /* wake the lazy ones */
+  await site.waitForTimeout(600);
   check('every screenshot on the landing page loads',
     await site.$$eval('img', a => a.length > 0 && a.every(i => i.complete && i.naturalWidth > 0)));
+  check('screenshots ship as WebP with a PNG fallback and load lazily',
+    await site.$$eval('picture source[type="image/webp"]', a => a.length) === 5 &&
+    await site.$$eval('.shots img[loading="lazy"]', a => a.length) === 4);
+  check('the honeypot is hidden from assistive tech and the tab order',
+    await site.$eval('input[name="bot-field"]', i => i.closest('[aria-hidden="true"]') !== null && i.getAttribute('tabindex') === '-1'));
+  warn('og:image is an absolute URL (set once the domain exists)',
+    /^https?:\/\//.test(await site.$eval('meta[property="og:image"]', m => m.content)));
   check('the waitlist form is wired to Netlify',
     await site.$eval('form.signup', f => f.getAttribute('data-netlify') === 'true' &&
       !!f.querySelector('input[name="form-name"]')));

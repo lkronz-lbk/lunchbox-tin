@@ -39,6 +39,10 @@ food list from a 200-item library and produce a planned week immediately. From t
   stored against the food, so they survive re-plans. The draw leans toward foods that get
   eaten, and anything that came home twice running is rested for three weeks. Outgoing weeks
   are archived (`kid.past`) so Monday can still ask about Friday.
+- **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it
+  becomes state, so a bad import can never brick the app; a save the app can't read is kept
+  under a dated backup key rather than overwritten; "Clear the plans" and "Erase everything"
+  are two-tap, deleting a food offers Undo, and the shopping ticks survive a plan clear.
 - **Setup** — lunchboxes, pack days, and per-lunchbox school rules: cold-only, no ice pack,
   short eating time, no chocolate or candy, allergen exclusions (including seeds & sesame),
   and a free-text avoid list. Optional **snack** and **drink** compartments per lunchbox:
@@ -68,8 +72,9 @@ forward).
 - [ ] Replace the placeholder contact address in `public/privacy.html` (`hello@example.com`).
 - [ ] Point a real domain at the Netlify site and confirm HTTPS.
 - [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form.
-- [ ] Bump `VERSION` in `public/app/sw.js` on any release that changes the app shell,
-      or installed home-screen copies will keep serving the old build.
+- [ ] Run `npm run csp` after any change to `public/app/index.html` (the test suite refuses
+      a stale hash), and bump `VERSION` in `public/app/sw.js` when icons, the manifest or the
+      fonts change. The shell itself refreshes one launch behind a deploy without a bump.
 
 ## Environments
 
