@@ -105,6 +105,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .lock{opacity:.85}
 
 .daycard{display:flex;flex-direction:column;gap:9px}
+.daycard.past{opacity:.55}
 .dayhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-left:2px}
 .dayname{font-family:var(--f-display);font-size:16px;font-weight:600;letter-spacing:-0.01em}
 .dayname em{font-family:var(--f-mono);font-style:normal;font-size:11px;font-weight:500;color:var(--ink-3);
@@ -395,7 +396,7 @@ var NUMWORD = ['No','One','Two','Three','Four','Five','Six','Seven'];
 
 function F(n,c,t,a,al,s,e){ return {n:n,c:c,t:t,a:a,al:al||[],s:!!s,e:!!e}; }
 var BANK = [
-  /* mains */,
+  /* mains */
   F('Turkey & cheese roll-ups','main',['protein','soft','hearty','savory','ice'],'deli',['dairy'],1,1),
   F('Ham & cheese sandwich','main',['protein','soft','hearty','savory','ice'],'deli',['dairy','gluten'],1,1),
   F('Sunbutter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],1,1),
@@ -1096,10 +1097,21 @@ function reviewComplete(kid, d){
   if(row.skipped) return true;
   return ALL_CATS.every(function(c){ return !foodById(kid, d.slots[c.k]) || !!row[c.k]; });
 }
+/* A day is worth asking about if something was ticked into the bag, or if the
+   plan existed on that day. Onboarding on a Friday must not produce an
+   interrogation about Thursday. */
+function packedEvidence(kid, d){
+  var row = (kid.packed || {})[d.d];
+  if(row && Object.keys(row).length) return true;
+  var live = kid.week && kid.week.days.some(function(x){ return x.d === d.d; });
+  if(!live) return true;                               /* archived days came from an earlier week */
+  var created = kid.week.createdAt ? String(kid.week.createdAt).slice(0,10) : null;
+  return !created || created <= d.d;
+}
 function reviewDay(kid){
   var t = iso(today()), floor = iso(addDays(today(), -7));
   var cands = (kid.past || []).concat(kid.week ? kid.week.days : []).filter(function(d){
-    return d.d < t && d.d >= floor && ALL_CATS.some(function(c){ return foodById(kid, d.slots[c.k]); });
+    return d.d < t && d.d >= floor && packedEvidence(kid, d) && ALL_CATS.some(function(c){ return foodById(kid, d.slots[c.k]); });
   });
   if(!cands.length) return null;
   cands.sort(function(a,b){ return b.d.localeCompare(a.d); });
@@ -1148,11 +1160,37 @@ function bestAssignment(mains, items, cat){
 function packDaysSorted(kid){
   return kid.settings.days.slice().sort(function(a,b){ return ((a+6)%7)-((b+6)%7); });
 }
+/* Where a NEW plan goes: this week while at least two pack days are still
+   ahead (Thursday night still gets Thursday and Friday), otherwise next week.
+   A plan that already exists is re-drawn in place until its last day is gone. */
 function anchorWeek(kid){
-  var t = today(), ws = weekStart(t), days = packDaysSorted(kid);
+  var t = iso(today()), ws = weekStart(today()), days = packDaysSorted(kid);
   if(!days.length) return ws;
-  var last = addDays(ws, (days[days.length-1]+6)%7);
-  return t > last ? addDays(ws, 7) : ws;
+  var ahead = days.filter(function(dw){ return iso(addDays(ws, (dw+6)%7)) >= t; }).length;
+  return ahead >= 2 ? ws : addDays(ws, 7);
+}
+/* After any change to a lunchbox's rules, sweep the plan on screen: a food that
+   now breaks a rule leaves the box — locked, kid-picked or not — and the
+   compartment is drawn again. Returns how many compartments changed. */
+function enforceRules(kid){
+  if(!kid.week) return 0;
+  var hit = {}, n = 0;
+  kid.week.days.forEach(function(d){
+    catsFor(kid).forEach(function(c){
+      var f = foodById(kid, d.slots[c.k]);
+      if(f && violation(kid, f)){
+        d.slots[c.k] = null; d.lock[c.k] = false; if(d.kidPick) delete d.kidPick[c.k];
+        hit[c.k] = 1; n++;
+      }
+    });
+  });
+  Object.keys(hit).forEach(function(k){ fillCategory(kid, kid.week, catByKey(k)); });
+  if(n){ touch(kid.week); }
+  return n;
+}
+function rulesChanged(kid){
+  var n = enforceRules(kid);
+  if(n) toast(n + (n===1 ? ' compartment broke ' : ' compartments broke ') + kid.name + '\u2019s rules \u2014 drawn again');
 }
 /* Fill one category's empty days across a week: draw, then arrange against each
    day's main. Used by the weekly plan and by Setup when a slot is switched on
@@ -1174,14 +1212,21 @@ function fillCategory(kid, week, c){
   return true;
 }
 function planWeek(kid){
-  var days = packDaysSorted(kid), ws = anchorWeek(kid);
+  var days = packDaysSorted(kid);
+  /* re-plan the week already on screen while it still has days ahead; otherwise anchor fresh */
+  var ws = (kid.week && !weekIsStale(kid)) ? parseISO(kid.week.start) : anchorWeek(kid);
   var prev = kid.week && kid.week.start === iso(ws) ? kid.week : null;
+  if(!prev){
+    /* a brand-new plan started mid-week only covers the days still to come */
+    var t0 = iso(today());
+    days = days.filter(function(dw){ return iso(addDays(ws, (dw+6)%7)) >= t0; });
+  }
   if(kid.week && !prev){                               /* a new week: keep the old one's days for the eat review */
     var kept = kid.week.days.filter(function(d){ return ALL_CATS.some(function(c){ return d.slots[c.k]; }); })
       .map(function(d){ return {d:d.d, dow:d.dow, slots:Object.assign({}, d.slots), kidPick:Object.assign({}, d.kidPick || {})}; });
     kid.past = (kid.past || []).concat(kept).slice(-40);
   }
-  var week = {id:(prev && prev.id) || uid('week'), kidId:kid.id, start:iso(ws), updatedAt:now(), days:[]};
+  var week = {id:(prev && prev.id) || uid('week'), kidId:kid.id, start:iso(ws), createdAt:(prev && prev.createdAt) || now(), updatedAt:now(), days:[]};
   days.forEach(function(dw){
     var d = iso(addDays(ws, (dw+6)%7));
     var old = prev ? prev.days.filter(function(x){ return x.d===d; })[0] : null;
@@ -1228,6 +1273,7 @@ function reshuffleSlot(kid, day, cat){
     scored.sort(function(a,b){ return b.s-a.s; });
     day.slots[cat] = scored[0].f.id;
   }
+  if(day.kidPick) delete day.kidPick[cat];
   touch(kid.week); touch(kid); save();
   return true;
 }
@@ -1259,7 +1305,8 @@ function startKidPick(kidId, dayStr){
   var kid = kidById(kidId); if(!kid || !kid.week) return;
   var day = kid.week.days.filter(function(d){ return d.d===dayStr; })[0]; if(!day) return;
   UI.kid = {kidId:kidId, d:dayStr, step:0, chosen:{}, options:{}};
-  UI.kid.options.main = kidOptions(kid, day, 'main', UI.kid.chosen);
+  kidAdvance(kid, day);
+  if(UI.kid.step >= catsFor(kid).length){ UI.kid = null; toast('Nothing to choose from yet'); return; }
   render();
 }
 function kidChoose(foodId){
@@ -1267,22 +1314,28 @@ function kidChoose(foodId){
   var kid = kidById(st.kidId), day = kid.week.days.filter(function(d){ return d.d===st.d; })[0];
   var cats = catsFor(kid), cat = cats[st.step].k;
   st.chosen[cat] = foodId;
-  st.step++;
-  if(st.step < cats.length){
-    var next = cats[st.step].k;
-    st.options[next] = kidOptions(kid, day, next, st.chosen);
-    if(!st.options[next].length){ st.chosen[next] = day.slots[next]; return kidChoose(day.slots[next]); }
-  } else {
+  if(foodId && foodById(kid, foodId)){
+    /* commit now: a choice already made must survive the parent tapping Stop */
+    day.slots[cat] = foodId;
+    day.lock[cat] = true;                                    /* a choice the kid made survives a shuffle */
     day.kidPick = day.kidPick || {};
-    catsFor(kid).forEach(function(c){
-      if(!st.chosen[c.k]) return;
-      day.slots[c.k] = st.chosen[c.k];
-      day.lock[c.k] = true;                                  /* a choice the kid made survives a shuffle */
-      day.kidPick[c.k] = {at:now(), by:kid.id};
-    });
+    day.kidPick[cat] = {at:now(), by:(deviceMember()||{}).id || null, picker:'kid'};
     touch(kid.week); touch(kid); save();
   }
+  st.step++;
+  kidAdvance(kid, day);
   render();
+}
+/* move to the next compartment that actually has something to choose; skip the rest */
+function kidAdvance(kid, day){
+  var st = UI.kid, cats = catsFor(kid);
+  while(st.step < cats.length){
+    var next = cats[st.step].k;
+    st.options[next] = kidOptions(kid, day, next, st.chosen);
+    if(st.options[next].length) return;
+    st.chosen[next] = day.slots[next] || null;
+    st.step++;
+  }
 }
 
 /* --------------------------------------------- household-wide roll-ups */
@@ -1298,8 +1351,10 @@ function shoppingList(){
   var rows = nullMap();
   kids().forEach(function(k){
     if(!k.week) return;
+    var t0 = iso(today());
     k.week.days.forEach(function(d){
-      ALL_CATS.forEach(function(c){
+      if(d.d < t0) return;                              /* already packed; nothing left to buy for it */
+      catsFor(k).forEach(function(c){
         var f = foodById(k, d.slots[c.k]); if(!f) return;
         var key = normKey(f.n);
         var r = rows[key] || (rows[key] = {key:key, name:f.n, aisle:f.a||'other', qty:0, forKids:[]});
@@ -1315,7 +1370,11 @@ function shoppingList(){
     return (order[a.aisle]-order[b.aisle]) || a.name.localeCompare(b.name);
   });
 }
-function weekIsStale(kid){ return !!kid.week && kid.week.start !== iso(anchorWeek(kid)); }
+function weekIsStale(kid){
+  if(!kid.week || !kid.week.days.length) return false;
+  var last = kid.week.days.map(function(d){ return d.d; }).sort().pop();
+  return last < iso(today());                          /* every pack day of that plan has gone by */
+}
 function anyStale(){ return kids().some(weekIsStale); }
 
 /* -------------------------------------------------------------- sheet */
@@ -1370,8 +1429,15 @@ function dayLabel(dstr){
    would otherwise just be missing from the pack list with no explanation. */
 function needsPlan(k){ return !!foodsOf(k).length && (!k.week || weekIsStale(k)); }
 function planBanner(){
+  var h = '';
+  var empty = kids().filter(function(k){ return !foodsOf(k).length; });
+  if(empty.length && S.onboardedAt){
+    h += '<div class="banner"><span>'+esc(empty.map(function(k){ return k.name; }).join(' and '))
+      + (empty.length>1 ? ' have' : ' has') + ' no foods yet, so there is nothing to plan.</span>'
+      + '<button class="btn sm primary" data-act="go-kid-foods" data-id="'+esc(empty[0].id)+'">Add foods</button></div>';
+  }
   var need = kids().filter(needsPlan);
-  if(!need.length) return '';
+  if(!need.length) return h;
   var stale = need.some(function(k){ return !!k.week; });
   var msg;
   if(kids().length > 1){
@@ -1381,7 +1447,7 @@ function planBanner(){
   } else {
     msg = stale ? 'This plan is from an earlier week.' : 'No plan for this week yet.';
   }
-  return '<div class="banner"><span>'+msg+'</span>'
+  return h + '<div class="banner"><span>'+msg+'</span>'
     + '<button class="btn sm primary" data-act="plan-all">Plan the week</button></div>';
 }
 function noticeBanner(){
@@ -1490,7 +1556,7 @@ function viewPack(){
       + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
 
   var t = iso(today());
-  var slot = dates.filter(function(x){ return x.date>=t; })[0] || dates[0];
+  var slot = dates.filter(function(x){ return x.date>=t; })[0] || dates[dates.length-1];
   var lab = dayLabel(slot.date);
   var total = 0, done = 0;
   slot.entries.forEach(function(e){
@@ -1503,11 +1569,11 @@ function viewPack(){
   h += '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
     + ' · '+esc(lab.date)+'</p><h2 class="view-title">'
     + (lab.rel==='Today' ? 'Today&#8217;s box' : lab.rel==='Tomorrow' ? 'Tomorrow&#8217;s box' : esc(lab.full)+'&#8217;s box')
-    + (multi ? 'es' : '') + '</h2></div>';
+    + (slot.entries.length > 1 ? 'es' : '') + '</h2></div>';
 
   slot.entries.forEach(function(e){
     var picked = e.day.kidPick && Object.keys(e.day.kidPick).length;
-    var canPick = catsFor(e.kid).some(function(c){ return eligible(e.kid, c.k).length; });
+    var canPick = catsFor(e.kid).some(function(c){ return kidOptions(e.kid, e.day, c.k, {}).length; });
     h += '<div class="kidgroup">' + (multi ? kidLine(e.kid) : '')
       +  tinHTML(e.kid, e.day, 'pack')
       +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(e.kid, e.day)
@@ -1558,8 +1624,8 @@ function viewWeek(){
 
   kid.week.days.forEach(function(day){
     var l = dayLabel(day.d);
-    h += '<div class="daycard"><div class="dayhead"><div class="dayname">'+esc(l.full)
-      +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):'')+'</em></div>'
+    h += '<div class="daycard'+(l.diff<0?' past':'')+'"><div class="dayhead"><div class="dayname">'+esc(l.full)
+      +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):(l.diff<0?' · gone':''))+'</em></div>'
       +  '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'">'
       +  svg('dice',15)+'Re-draw</button></div>'
       +  tinHTML(kid, day, 'week') + '<p class="note">'+dayNote(kid, day)+'</p>' + chipsHTML(kid, day) + '</div>';
@@ -1872,10 +1938,11 @@ function render(){
   /* Pack and Shop cover the whole household, so the per-lunchbox switcher
      only belongs on the views it actually steers. */
   var householdView = kids().length>1 && (UI.tab==='pack' || UI.tab==='shop');
-  document.getElementById('who').innerHTML = (kid && !householdView)
-    ? '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)+'"></span>'
-      + esc(kid.name)+'<span class="caret">&#9662;</span></button>'
-    : (kid ? '<span class="kid">'+kids().length+' lunchboxes</span>' : '');
+  document.getElementById('who').innerHTML = !kid ? ''
+    : householdView
+      ? '<button class="kidbtn" data-act="kidsheet">'+kids().length+' lunchboxes<span class="caret">&#9662;</span></button>'
+      : '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)+'"></span>'
+        + esc(kid.name)+'<span class="caret">&#9662;</span></button>';
 }
 
 /* ---------------------------------------------------------------- events */
@@ -1948,6 +2015,7 @@ document.addEventListener('click', function(ev){
   /* navigation */
   if(act==='tab'){ UI.tab = el.getAttribute('data-tab'); render(); window.scrollTo(0,0); return; }
   if(act==='go-foods'){ UI.tab='foods'; render(); window.scrollTo(0,0); return; }
+  if(act==='go-kid-foods'){ S.activeKidId = el.getAttribute('data-id'); UI.tab='foods'; save(); render(); window.scrollTo(0,0); return; }
   if(act==='go-week'){ UI.tab='week'; render(); window.scrollTo(0,0); return; }
   if(act==='kidsheet'){ kidSheet(); return; }
 
@@ -2009,7 +2077,9 @@ document.addEventListener('click', function(ev){
   if(act==='pick'){
     var k6 = kidById(el.getAttribute('data-kid'));
     var day6 = k6.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
-    day6.slots[el.getAttribute('data-cat')] = el.getAttribute('data-id');
+    var cat6 = el.getAttribute('data-cat');
+    if(day6.slots[cat6] !== el.getAttribute('data-id') && day6.kidPick) delete day6.kidPick[cat6];
+    day6.slots[cat6] = el.getAttribute('data-id');
     touch(k6.week); touch(k6); save(); closeSheet(); render(); return;
   }
 
@@ -2049,7 +2119,8 @@ document.addEventListener('click', function(ev){
   }
   if(act==='seed'){
     var added = seedLibrary(kid, 'some');
-    save(); render(); toast(added+' staples added'); return;
+    planWeek(kid); UI.tab = 'week';
+    save(); render(); window.scrollTo(0,0); toast(added+' foods added and the week drawn'); return;
   }
   if(act==='add-own'){ addOwnSheet(); return; }
   if(act==='save-own'){
@@ -2069,7 +2140,7 @@ document.addEventListener('click', function(ev){
     var wasIn = [];
     f.deletedAt = now(); touch(f);
     if(kid.week) kid.week.days.forEach(function(d){
-      ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){ wasIn.push({d:d, c:c.k, lock:d.lock[c.k]}); d.slots[c.k]=null; d.lock[c.k]=false; } });
+      ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){ wasIn.push({d:d, c:c.k, lock:d.lock[c.k]}); d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; } });
     });
     touch(kid); save(); render();
     var undoKid = kid;
@@ -2088,10 +2159,10 @@ document.addEventListener('click', function(ev){
     else kid.settings.days.push(dnum);
     touch(kid.settings); touch(kid); save(); render(); return;
   }
-  if(act==='noheat'){ kid.settings.noHeat = !kid.settings.noHeat; touch(kid.settings); touch(kid); save(); render(); return; }
+  if(act==='noheat'){ kid.settings.noHeat = !kid.settings.noHeat; touch(kid.settings); touch(kid); rulesChanged(kid); save(); render(); return; }
   if(act==='rule'){
     var rk = el.getAttribute('data-k');
-    kid.settings[rk] = !kid.settings[rk]; touch(kid.settings); touch(kid); save(); render(); return;
+    kid.settings[rk] = !kid.settings[rk]; touch(kid.settings); touch(kid); rulesChanged(kid); save(); render(); return;
   }
   if(act==='compartment'){
     var sk = el.getAttribute('data-k'), sc = catByKey(sk);
@@ -2101,18 +2172,21 @@ document.addEventListener('click', function(ev){
     touch(kid.settings);
     if(turningOn){
       /* never hand back an empty compartment: seed a few and fill this week */
-      var addedN = foodsOf(kid).some(function(f){ return f.c===sk; }) ? 0
+      var addedN = eligible(kid, sk).length ? 0
         : seedCategory(kid, sk, (BREADTH.some.n[sk] || 3), false);
       if(kid.week){ kid.week.days.forEach(function(d){ if(!(sk in d.slots)) d.slots[sk] = null; if(!(sk in d.lock)) d.lock[sk] = false; });
         fillCategory(kid, kid.week, sc); touch(kid.week); }
       toast(addedN ? addedN+' '+sc.plural.toLowerCase()+' added to the list' : sc.label+' compartment on');
-    } else toast(sc.label+' compartment off');
+    } else {
+      if(kid.week) kid.week.days.forEach(function(d){ d.slots[sk] = null; d.lock[sk] = false; if(d.kidPick) delete d.kidPick[sk]; });
+      toast(sc.label+' compartment off');
+    }
     touch(kid); save(); render(); return;
   }
   if(act==='allergen'){
     var ak = el.getAttribute('data-k'), j = kid.settings.avoidAllergens.indexOf(ak);
     if(j>-1) kid.settings.avoidAllergens.splice(j,1); else kid.settings.avoidAllergens.push(ak);
-    touch(kid.settings); touch(kid); save(); render(); return;
+    touch(kid.settings); touch(kid); rulesChanged(kid); save(); render(); return;
   }
 
   /* transfer + reset */
@@ -2158,6 +2232,13 @@ document.addEventListener('click', function(ev){
   if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }
 });
 
+document.addEventListener('change', function(ev){
+  if(!S) return;
+  if(ev.target.id==='kidName' || ev.target.id==='avoidText'){
+    if(ev.target.id==='avoidText') rulesChanged(activeKid());
+    render();
+  }
+});
 document.addEventListener('input', function(ev){
   if(!S) return;
   var kid = activeKid();

@@ -94,7 +94,8 @@ try {
   const empties = await page.$$eval('.cmp.empty', a => a.length);
   check('every compartment is filled', empties === 0, empties);
   const notes = await page.$$eval('.note', a => a.filter(n => n.textContent.trim().length > 10).length);
-  check('each day gets a pairing note', notes >= 5, notes);
+  const planned = await page.evaluate(() => JSON.parse(localStorage.getItem('fiveboxes')).kids[0].week.days.length);
+  check('each day gets a pairing note', planned >= 2 && notes >= planned, {notes, planned});
   check('excluded allergens never enter the list', await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('fiveboxes'));
     return !d.kids[0].foods.some(f => (f.al||[]).includes('nuts') || (f.al||[]).includes('dairy'));
@@ -132,7 +133,8 @@ try {
     const k = d.kids[0], t = new Date(); t.setHours(0,0,0,0);
     const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
     return {main: day.slots.main, locked: Object.values(day.lock).every(Boolean),
-      picked: Object.keys(day.kidPick || {}).length, by: day.kidPick && day.kidPick.main && day.kidPick.main.by === k.id};
+      picked: Object.keys(day.kidPick || {}).length,
+      by: !!(day.kidPick && day.kidPick.main && d.members.some(m => m.id === day.kidPick.main.by) && day.kidPick.main.picker === 'kid')};
   });
   check("the kid's choice replaced the draw", afterPick.main === chosenMain, afterPick);
   check('kid-picked compartments are locked and attributed', afterPick.locked && afterPick.picked === 4 && afterPick.by, afterPick);
@@ -178,12 +180,8 @@ try {
 
   await page.click('[data-act="tab"][data-tab="pack"]');
   await page.waitForTimeout(250);
-  check('an unplanned lunchbox is announced, not silently dropped',
-    await page.$$eval('[data-act="plan-all"]', a => a.length) > 0);
-  await page.click('[data-act="plan-all"]');
-  await page.waitForTimeout(500);
   const lines = await page.$$eval('.kidline', a => a.length);
-  check('the pack list covers every lunchbox', lines === 2, lines);
+  check('filling a new lunchbox\'s list also plans it, so the pack list covers every lunchbox', lines === 2, lines);
 
   /* ------------------------------------------------- transfer round trip */
   const dump = await page.evaluate(() => localStorage.getItem('fiveboxes'));
@@ -231,6 +229,7 @@ try {
     const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);
     const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
     k.week.days[0].d = iso(y);                     /* pretend the first box was yesterday */
+    const c = new Date(); c.setDate(c.getDate() - 3); k.week.createdAt = c.toISOString();   /* and that the plan existed then */
     localStorage.setItem('fiveboxes', JSON.stringify(d));
   });
   await page.goto(BASE+'/app/');
@@ -335,6 +334,115 @@ try {
     k.foods = k.foods.filter(f => !/^t_/.test(f.id));
     localStorage.setItem('fiveboxes', JSON.stringify(d));
   });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+
+  /* ------------------------------------------- correctness: rules, compartments, picks */
+  const isoOff = n => { const x = new Date(); x.setDate(x.getDate()+n); x.setHours(0,0,0,0);
+    return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
+
+  /* a rule tightened after the draw clears even a locked compartment */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0], ts = new Date().toISOString();
+    k.foods.push({id:'t_dairy', kidId:k.id, n:'Test cheese stick', c:'side', t:['protein','soft'], a:'dairy', al:['dairy'], createdAt:ts, updatedAt:ts, deletedAt:null});
+    k.settings.avoidAllergens = ['nuts'];
+    k.week.days[0].slots.side = 't_dairy'; k.week.days[0].lock.side = true;
+    d.activeKidId = k.id;
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+  });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="allergen"][data-k="dairy"]'); await page.waitForTimeout(300);
+  const afterRule = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    return {side: k.week.days[0].slots.side, locked: k.week.days[0].lock.side};
+  });
+  check('a rule change clears a locked compartment that now breaks it and draws again',
+    afterRule.side !== 't_dairy' && afterRule.side !== null && !afterRule.locked, afterRule);
+  check('and says so', (await page.textContent('#toast')).includes('rules'));
+  await page.click('[data-act="allergen"][data-k="dairy"]'); await page.waitForTimeout(200);
+
+  /* switching a compartment off takes it out of the week and off the list */
+  if ((await page.getAttribute('[data-act="compartment"][data-k="drink"]', 'aria-pressed')) !== 'true') {
+    await page.click('[data-act="compartment"][data-k="drink"]'); await page.waitForTimeout(250); }   /* on */
+  await page.click('[data-act="compartment"][data-k="drink"]'); await page.waitForTimeout(250);       /* off */
+  const ghost = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    return k.week.days.some(dy => dy.slots.drink);
+  });
+  check('switching a compartment off clears it from this week', !ghost);
+  await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
+  check('and it is gone from the shopping list', !(await page.textContent('#view')).toLowerCase().includes('juice'));
+
+  /* stopping the kid's pick midway keeps what was already chosen */
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="kid-start"]'); await page.waitForTimeout(250);
+  const partial = await page.getAttribute('.kidmode .pick >> nth=1', 'data-id');
+  await page.click('.kidmode .pick >> nth=1'); await page.waitForTimeout(150);
+  await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
+  const kidKept = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0], t = new Date(); t.setHours(0,0,0,0);
+    const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
+    return {main: day.slots.main, locked: day.lock.main, picker: day.kidPick && day.kidPick.main && day.kidPick.main.picker,
+      by: d.members.some(m => m.id === (day.kidPick && day.kidPick.main && day.kidPick.main.by))};
+  });
+  check('a choice the kid already made survives Stop', kidKept.main === partial && kidKept.locked && kidKept.picker === 'kid' && kidKept.by, kidKept);
+
+  /* a manual swap clears the "picked" mark */
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+  await page.click('.tin .cmp[data-cat="main"] >> nth=0'); await page.waitForTimeout(350);
+  await page.click('#sheetBody .item:not(.done) >> nth=0'); await page.waitForTimeout(300);
+  const starGone = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    return !k.week.days[0].kidPick || !k.week.days[0].kidPick.main;
+  });
+  check('a manual swap clears the kid-picked mark', starGone);
+
+  /* the pack view names the last day of a plan that has gone by */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0];
+    k.week.days.forEach((dy, i) => { const x = new Date(); x.setDate(x.getDate() - 14 + i); x.setHours(0,0,0,0);
+      dy.d = x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); });
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+  });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  const gone = await page.evaluate(() => ({ sub: document.querySelector('.view-title').previousElementSibling.textContent,   /* the header, not the review card */
+    last: JSON.parse(localStorage.getItem('fiveboxes')).kids[0].week.days.map(x => x.d).sort().pop(),
+    all: JSON.parse(localStorage.getItem('fiveboxes')).kids.map(k => (k.deletedAt ? 'x' : '') + (k.week ? k.week.days.map(x => x.d).join(' ') : '-')) }));
+  check('"Already packed" shows the last day of the old plan', gone.sub.includes('Already packed') &&
+    gone.sub.includes(String(parseInt(gone.last.slice(8), 10))), gone);
+  /* and the review does not ask about a box planned after the fact */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0];
+    k.eaten = {}; k.packed = {}; k.week.createdAt = new Date().toISOString();
+    const y = new Date(); y.setDate(y.getDate()-1); y.setHours(0,0,0,0);
+    k.week.days[k.week.days.length-1].d = y.getFullYear()+'-'+String(y.getMonth()+1).padStart(2,'0')+'-'+String(y.getDate()).padStart(2,'0');
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+  });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  check('the review never asks about a box that was planned after the day', (await page.$$eval('.review', a => a.length)) === 0);
+
+  /* a fresh plan started mid-week only covers days still ahead */
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="clear-week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="clear-week"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(350);
+  check('a brand-new plan never includes days that have already happened', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0], t = new Date(); t.setHours(0,0,0,0);
+    const today = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+    return k.week.days.length > 0 && k.week.days.every(dy => dy.d >= today);
+  }));
+
+  /* a lunchbox with no foods is announced, and the title counts what is on screen */
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="add-kid"]'); await page.waitForTimeout(350);
+  await page.fill('#nkName', 'Nobody'); await page.click('[data-act="save-kid"]'); await page.waitForTimeout(350);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
+  const packText = await page.textContent('#view');
+  check('a lunchbox with no foods is announced on the pack view', packText.includes('Nobody has no foods yet'));
+  check('the title counts the boxes actually shown', !(await page.textContent('h2.view-title')).endsWith('boxes'));
+  await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('fiveboxes'));
+    d.kids = d.kids.filter(k => k.name !== 'Nobody'); d.activeKidId = d.kids[0].id; localStorage.setItem('fiveboxes', JSON.stringify(d)); });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
 
   /* -------------------------------------------------- safety: bad data can't brick it */
