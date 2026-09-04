@@ -265,6 +265,66 @@ try {
   await page.goto(BASE+'/app/');
   await page.waitForTimeout(400);
 
+  /* --------------------------------------------- optional slots and richer rules */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0], ts = new Date().toISOString();
+    const mk = (id, n, c, tags) => ({id, kidId:k.id, n, c, t:tags, a:'other', al:[], createdAt:ts, updatedAt:ts, deletedAt:null});
+    k.foods.push(mk('t_choc', 'Chocolate buttons', 'sweet', ['sweet']));
+    k.foods.push(mk('t_ice',  'Test cold main', 'main', ['protein','soft','ice']));
+    k.foods.push(mk('t_messy','Test messy side', 'side', ['messy']));
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+  });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  check('seeds & sesame is a keep-out option', (await page.$$eval('[data-act="allergen"][data-k="seeds"]', a => a.length)) === 1);
+  await page.click('[data-act="compartment"][data-k="snack"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="compartment"][data-k="drink"]'); await page.waitForTimeout(250);
+  const slotState = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    return {on: !!(k.settings.slots && k.settings.slots.snack && k.settings.slots.drink),
+      snacks: k.foods.filter(f => f.c==='snack' && !f.deletedAt).length,
+      drinks: k.foods.filter(f => f.c==='drink' && !f.deletedAt).length,
+      filled: k.week.days.every(dy => dy.slots.snack && dy.slots.drink)};
+  });
+  check('switching a compartment on seeds it and fills this week', slotState.on && slotState.snacks > 0 && slotState.drinks > 0 && slotState.filled, slotState);
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+  const perTin = await page.$$eval('.tin', tins => tins.map(t => t.querySelectorAll('.cmp').length));
+  check('the tin grows to six compartments', perTin.length > 0 && perTin.every(n => n === 6), perTin);
+  await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
+  check('drinks land on the shopping list under their own aisle', (await page.textContent('#view')).toLowerCase().includes('drinks'));
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="kid-start"]'); await page.waitForTimeout(250);
+  check("kid's pick walks all six compartments", (await page.$$eval('.kidmode .dots i', a => a.length)) === 6);
+  await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="rule"][data-k="noChoc"]');
+  await page.click('[data-act="rule"][data-k="noIce"]');
+  await page.click('[data-act="rule"][data-k="shortWindow"]');
+  await page.waitForTimeout(250);
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+  const foodsText = await page.textContent('#view');
+  check('"no chocolate or candy" flags chocolate', foodsText.includes('chocolate or candy'));
+  check('"no ice pack" flags foods that must stay cold', foodsText.includes('needs an ice pack'));
+  check('"short eating time" flags fiddly foods', foodsText.includes('fiddly for a short lunch'));
+  const excluded = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    return ['t_choc','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
+  });
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300);
+  const excludedAfter = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    return ['t_choc','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
+  });
+  check('a re-draw keeps every rule-breaking food out of the box', !excludedAfter, excludedAfter);
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0];
+    k.settings.noChoc = k.settings.noIce = k.settings.shortWindow = false;
+    k.foods = k.foods.filter(f => !/^t_/.test(f.id));
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+  });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+
   /* --------------------------------------------- the old name's data survives */
   await page.evaluate(() => {
     const doc = localStorage.getItem('fiveboxes');

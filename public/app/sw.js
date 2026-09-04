@@ -3,7 +3,7 @@
    install and served cache-first. Fonts come from Google and are cached at
    runtime, opaque responses included, so a second launch works with no
    network at all. Bump VERSION to ship a new build. */
-var VERSION = 'fiveboxes-v2';
+var VERSION = 'fiveboxes-v3';
 var SHELL = [
   '/app/',
   '/app/index.html',

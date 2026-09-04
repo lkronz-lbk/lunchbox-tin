@@ -21,7 +21,7 @@ need to be served over http, so use the server when testing install or offline.
 ## What the app does
 
 Three questions on first run — cold or microwave, what to keep out, how picky — seed a
-food list from a 180-item library and produce a planned week immediately. From there:
+food list from a 200-item library and produce a planned week immediately. From there:
 
 - **Week** — draws a main, side, fruit and sweet per pack day and *assigns* them to days
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
@@ -39,8 +39,11 @@ food list from a 180-item library and produce a planned week immediately. From t
   stored against the food, so they survive re-plans. The draw leans toward foods that get
   eaten, and anything that came home twice running is rested for three weeks. Outgoing weeks
   are archived (`kid.past`) so Monday can still ask about Friday.
-- **Setup** — lunchboxes, pack days, cold-only, allergen exclusions, an avoid list, and
-  copy-out/paste-in transfer between phones.
+- **Setup** — lunchboxes, pack days, and per-lunchbox school rules: cold-only, no ice pack,
+  short eating time, no chocolate or candy, allergen exclusions (including seeds & sesame),
+  and a free-text avoid list. Optional **snack** and **drink** compartments per lunchbox:
+  switching one on seeds a few foods and fills the current week, so the tin never grows an
+  empty cell. Copy-out/paste-in transfer between phones lives here too.
 
 ## Data model
 
