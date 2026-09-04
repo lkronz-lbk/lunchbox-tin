@@ -86,8 +86,12 @@ try {
 
   await page.click('[data-act="ob-avoid"][data-v="dairy"]');
   await page.click('[data-act="ob-breadth"][data-v="picky"]');
+  await page.fill('#obName', 'Nia');
   await page.click('[data-act="ob-go"]');
   await page.waitForTimeout(400);
+  check('the name typed at onboarding lands on the lunchbox',
+    await page.evaluate(() => JSON.parse(localStorage.getItem('fiveboxes')).kids[0].name === 'Nia'));
+  check('the week header leads with the date', /^Week of /.test((await page.textContent('.view-title')).trim()));
 
   check('three taps land on a planned week',
     await page.getAttribute('nav.tabs [aria-current="true"]', 'data-tab') === 'week');
@@ -122,7 +126,8 @@ try {
   check("kid's pick takes over the screen with two pictures",
     (await page.$$eval('.kidmode .pick', a => a.length)) === 2);
   const firstMainLabel = await page.textContent('.kidmode h1');
-  check("the main is asked first, by name", /pick your main/i.test(firstMainLabel), firstMainLabel);
+  check("the main is asked first, by name, in a child's words", /^Nia, pick your lunch/i.test(firstMainLabel.trim()), firstMainLabel);
+  check('the exit is worded for the parent', /give the phone back/i.test(await page.textContent('[data-act="kid-exit"]')));
   const chosenMain = await page.getAttribute('.kidmode .pick >> nth=1', 'data-id');   /* option B, not the draw */
   await page.click('.kidmode .pick >> nth=1'); await page.waitForTimeout(150);
   for (let i = 0; i < 3; i++) { await page.click('.kidmode .pick >> nth=0'); await page.waitForTimeout(150); }
@@ -243,6 +248,12 @@ try {
   await page.click('[data-act="eat-all"]');
   await page.waitForTimeout(250);
   check('answering closes the card', (await page.$$eval('.review', a => a.length)) === 0);
+  check('what was answered stays on screen with a way to change it',
+    (await page.$$eval('[data-act="eat-change"]', a => a.length)) === 1 && /all eaten/i.test(await page.textContent('#view')));
+  await page.click('[data-act="eat-change"]'); await page.waitForTimeout(200);
+  check('Change re-opens the card', (await page.$$eval('.review', a => a.length)) === 1);
+  await page.click('[data-act="eat-all"]'); await page.waitForTimeout(250);
+  check('and answering again closes it', (await page.$$eval('.review', a => a.length)) === 0);
   check('outcomes are stored against the food, with who and when', await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
     const rows = Object.values(k.eaten || {});
@@ -263,7 +274,8 @@ try {
   await page.waitForTimeout(500);
   await page.click('[data-act="tab"][data-tab="foods"]');
   await page.waitForTimeout(250);
-  check('a food that keeps coming home is shown as resting', (await page.textContent('#view')).includes('resting'));
+  check('a food that keeps coming home says so in plain words, with a date',
+    /came home twice — taking a break until [A-Z][a-z]{2} \d{1,2}/.test(await page.textContent('#view')), (await page.textContent('#view')).match(/came home[^<]{0,60}/));
   let restedDrawn = 0;
   for (let i = 0; i < 5; i++) {
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
@@ -275,6 +287,40 @@ try {
   await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('fiveboxes')); d.kids[0].eaten = {}; localStorage.setItem('fiveboxes', JSON.stringify(d)); });
   await page.goto(BASE+'/app/');
   await page.waitForTimeout(400);
+
+  /* ------------------------------------------------ friction: targets, sheet, words */
+  const small = async () => page.$$eval('.btn.sm, .tg, .kidbtn, .seg button, .x, .cmp[data-act], nav.tabs button', a =>
+    a.filter(e => e.checkVisibility()).map(e => ({h: Math.round(e.getBoundingClientRect().height), t: e.textContent.trim().slice(0,20)})).filter(x => x.h < 44));
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  const smallSetup = await small();
+  check('every tappable control on Setup is at least 44px tall', smallSetup.length === 0, smallSetup);
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+  const smallFoods = await small();
+  check('and on Foods', smallFoods.length === 0, smallFoods);
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+  const smallWeek = await small();
+  check('and on Week', smallWeek.length === 0, smallWeek);
+  await page.click('.cmp[data-act="slot"] >> nth=0'); await page.waitForTimeout(350);
+  const sheetOpen = await page.evaluate(() => ({vis: getComputedStyle(document.getElementById('sheet')).visibility,
+    lock: document.body.style.overflow, keep: /don.t change this one/i.test(document.getElementById('sheet').textContent)}));
+  check('opening a compartment sheet locks the page behind it and offers "Don\u2019t change this one"',
+    sheetOpen.vis === 'visible' && sheetOpen.lock === 'hidden' && sheetOpen.keep, sheetOpen);
+  await page.click('#backdrop', {position:{x:10, y:10}}); await page.waitForTimeout(350);
+  const sheetShut = await page.evaluate(() => ({vis: getComputedStyle(document.getElementById('sheet')).visibility, lock: document.body.style.overflow}));
+  check('closing it unlocks the page and hides the sheet from focus', sheetShut.vis === 'hidden' && sheetShut.lock === '', sheetShut);
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="add-own"]'); await page.waitForTimeout(350);
+  const tagWords = await page.$$eval('#nfTags .tg', a => a.filter(e => e.checkVisibility()).map(e => e.textContent.trim()));   /* a closed <details> hides by content-visibility, so offsetParent is not enough */
+  check('food tags are written for a parent, with the long tail folded away',
+    tagWords.includes('Has protein') && tagWords.includes('Needs an ice pack') && tagWords.length <= 6 && (await page.$$eval('details.more', a => a.length)) === 1, tagWords);
+  await page.fill('#nfName', 'Test seaweed snack');
+  await page.click('[data-nf="tag"][data-v="crunchy"]');
+  await page.click('details.more summary'); await page.waitForTimeout(150);
+  await page.click('[data-nf="tag"][data-v="salty"]');
+  await page.click('[data-act="save-own"]'); await page.waitForTimeout(300);
+  const savedTags = await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    const f = k.foods.filter(x => x.n === 'Test seaweed snack').pop(); return f ? f.t : null; });
+  check('a tag chosen under More is saved with the food', Array.isArray(savedTags) && savedTags.includes('salty') && savedTags.includes('crunchy'), savedTags);
 
   /* --------------------------------------------- optional slots and richer rules */
   await page.evaluate(() => {

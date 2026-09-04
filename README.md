@@ -30,9 +30,12 @@ food list from a 200-item library and produce a planned week immediately. From t
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes.
 - **Pack** — the next school day as a checklist, with ice-pack, sealed-container and
   no-protein flags. **Kid's pick** lives here: the parent taps "Let Emma pick", the child
-  sees two parent-approved pictures per compartment (the draw's choice and the next-best
-  pairing), taps one, and hands the phone back. Chosen compartments lock so a re-draw
-  can't undo them, and the day records who picked. Every food has an emoji icon derived
+  sees two parent-approved pictures per compartment (the draw's choice, and the next-best
+  by pairing score and eat history — for the main, by eat history alone), taps one, and
+  hands the phone back. Each choice is saved the moment it is made, so stopping early
+  keeps what was chosen. Chosen compartments lock so a re-draw can't undo them; the day
+  records the adult who handed the phone over, marked `picker: 'kid'`. A manual swap or
+  re-draw clears the mark. Every food has an emoji icon derived
   from its name, so custom foods get a picture too.
 - **Did they eat it?** — the morning after a pack day, the Pack view asks about
   yesterday's box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
@@ -43,6 +46,14 @@ food list from a 200-item library and produce a planned week immediately. From t
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and "Erase everything"
   are two-tap, deleting a food offers Undo, and the shopping ticks survive a plan clear.
+- **Rules re-check the plan.** Changing any rule sweeps the week on screen: a food that now
+  breaks a rule leaves its compartment — locked, kid-picked or not — and the compartment is
+  drawn again, with a toast saying how many changed. Switching a compartment off clears it
+  from the live week and the shopping list; past weeks keep it for history.
+- **Anchoring.** A new plan goes into this week while at least two pack days are still ahead
+  and only covers the days still to come; otherwise it goes into next week. An existing plan
+  is re-drawn in place until its last day has gone by. The morning review only asks about a
+  day the plan already existed on, or that had something ticked into the bag.
 - **Setup** — lunchboxes, pack days, and per-lunchbox school rules: cold-only, no ice pack,
   short eating time, no chocolate or candy, allergen exclusions (including seeds & sesame),
   and a free-text avoid list. Optional **snack** and **drink** compartments per lunchbox:
@@ -60,7 +71,9 @@ account            one household — a server only ever has to filter by account
 └── pantry{}       household-wide, keyed by normalized food name
 ```
 
-Every record carries `id`/`createdAt`/`updatedAt`; deletion is a `deletedAt` tombstone,
+Every entity (account, member, lunchbox, food, week) carries `id`/`createdAt`/`updatedAt`;
+event rows (packed ticks, pantry ticks, eat answers, kid picks) carry `at`/`by`. Deletion is a
+`deletedAt` tombstone,
 so a future sync can merge and propagate removals. **All persistence goes through the
 `Store` object** — two async methods over `localStorage`. Replacing those two bodies with
 `fetch('/api/account')` is the entire backend seam. Schema migrations are keyed by the
