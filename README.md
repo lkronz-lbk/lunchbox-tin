@@ -20,18 +20,20 @@ need to be served over http, so use the server when testing install or offline.
 
 ## What the app does
 
-Three questions on first run — cold or microwave, what to keep out, how picky — seed a
+A name and three questions on first run — cold or microwave, what to keep out, how picky — seed a
 food list from a 200-item library and produce a planned week immediately. From there:
 
 - **Week** — draws a main, side, fruit and sweet per pack day and *assigns* them to days
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
-  balance, tangy against savory), then explains each day's box in a sentence. Lock a
-  compartment and it survives the next shuffle.
+  balance, tangy against savory), then explains each day's box in a sentence. Keep a
+  compartment and it survives the next shuffle; re-drawing that one compartment on purpose
+  un-keeps it.
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes.
 - **Pack** — the next school day as a checklist, with ice-pack, sealed-container and
   no-protein flags. **Kid's pick** lives here: the parent taps "Let Emma pick", the child
   sees two parent-approved pictures per compartment (the draw's choice, and the next-best
-  by pairing score and eat history — for the main, by eat history alone), taps one, and
+  by pairing score then eat history — for the main, by eat history alone; no randomness,
+  and never a food that is resting), taps one, and
   hands the phone back. Each choice is saved the moment it is made, so stopping early
   keeps what was chosen. Chosen compartments lock so a re-draw can't undo them; the day
   records the adult who handed the phone over, marked `picker: 'kid'`. A manual swap or
@@ -50,9 +52,11 @@ food list from a 200-item library and produce a planned week immediately. From t
   breaks a rule leaves its compartment — locked, kid-picked or not — and the compartment is
   drawn again, with a toast saying how many changed. Switching a compartment off clears it
   from the live week and the shopping list; past weeks keep it for history.
-- **Anchoring.** A new plan goes into this week while at least two pack days are still ahead
-  and only covers the days still to come; otherwise it goes into next week. An existing plan
-  is re-drawn in place until its last day has gone by. The morning review only asks about a
+- **Anchoring.** A new plan goes into this week while at least two pack days (today included)
+  are still ahead and only covers the days still to come; otherwise it goes into next week. An
+  existing plan is re-drawn in place until its last day has gone by, and a re-draw never touches
+  a day that has already gone: what was packed stays exactly as it was, for the review and the
+  pack ticks. The shopping list likewise skips days already gone. The morning review only asks about a
   day the plan already existed on, or that had something ticked into the bag.
 - **Setup** — lunchboxes, pack days, and per-lunchbox school rules: cold-only, no ice pack,
   short eating time, no chocolate or candy, allergen exclusions (including seeds & sesame),
@@ -73,7 +77,8 @@ account            one household — a server only ever has to filter by account
 
 Every entity (account, member, lunchbox, food, week) carries `id`/`createdAt`/`updatedAt`;
 event rows (packed ticks, pantry ticks, eat answers, kid picks) carry `at`/`by`. Deletion is a
-`deletedAt` tombstone,
+`deletedAt` tombstone (kept for ninety days; `prune()` also drops packed ticks from before the
+current week and eat answers older than a year, so the document stays bounded),
 so a future sync can merge and propagate removals. **All persistence goes through the
 `Store` object** — two async methods over `localStorage`. Replacing those two bodies with
 `fetch('/api/account')` is the entire backend seam. Schema migrations are keyed by the
@@ -118,9 +123,11 @@ npm test
 ```
 
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
-onboarding, the week draw, packing, the shopping list, a second lunchbox with its own
-rules, export/import (including refusing junk), the v1 → v2 migration, the service
-worker, an offline launch, and the landing page. No test framework — one file, one
+onboarding, the week draw and its pairing notes, packing, the kid's pick, the morning review
+and resting, the school rules re-checking a live plan, compartments switching on and off,
+anchoring, the shopping list, a second lunchbox with its own rules, export/import (including
+refusing junk, hostile ids and a save it cannot read), the v1 → v2 migration, pruning, the
+generated CSP, the service worker, an offline launch, and the landing page. No test framework — one file, one
 dependency. CI runs it on every push to `main` or `dev` and on every pull request.
 
 Checks that must pass before launch but shouldn't block day-to-day work print as

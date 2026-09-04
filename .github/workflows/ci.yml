@@ -5,28 +5,26 @@ on:
     branches: [main, dev]
   pull_request:
 
-# a burst of pushes cancels the superseded runs; one push is one run
+# one run per commit: a push and its pull request share a group by head sha,
+# and a burst of pushes cancels the superseded runs
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
   smoke:
     name: Smoke tests
     runs-on: ubuntu-latest
+    # ships Chromium and its system libraries, so nothing is downloaded per run
+    container: mcr.microsoft.com/playwright:v1.62.1-jammy
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
+      - name: Check the CSP hashes before anything slow
+        run: node scripts/csp.mjs --check
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
 
       - name: Run smoke tests
         run: npm test

@@ -1,5 +1,8 @@
 [build]
   publish = "public"
+  # no build step, so the test-only dependencies are never installed on Netlify
+  [build.environment]
+    NPM_FLAGS = "--omit=dev"
 
 # The app shell and the worker must never be served stale, or a deploy
 # can take days to reach an installed home-screen app.
@@ -45,7 +48,7 @@
 [[headers]]
   for = "/app/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-HtHONfxAax71LGC/B7aOi4eiwk3R6xBPH4wwPYn3lVM=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-dNdjTFoql/qV9I3uTzMLxy+EC3dE+Ky8uuWMbA8Ahcs=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 [[headers]]
   for = "/"

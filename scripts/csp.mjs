@@ -7,8 +7,12 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 
 const html = fs.readFileSync('public/app/index.html', 'utf8');
-const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
-  .map(m => "'sha256-" + crypto.createHash('sha256').update(m[1], 'utf8').digest('base64') + "'");
+const tags = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+for (const [, attrs] of tags) {
+  /* every script must be an inline one we can hash; anything else would ship blocked */
+  if (/\bsrc\s*=/.test(attrs)) throw new Error('public/app/index.html has a <script src=...>; only inline scripts can be hashed into the CSP');
+}
+const hashes = tags.map(m => "'sha256-" + crypto.createHash('sha256').update(m[2], 'utf8').digest('base64') + "'");
 
 export const APP_CSP = [
   "default-src 'none'",
@@ -49,12 +53,14 @@ if (process.argv[1] && process.argv[1].endsWith('csp.mjs')) {
   let toml = fs.readFileSync('netlify.toml', 'utf8');
   if (process.argv.includes('--check')) {
     const have = readPolicies(toml);
-    const stale = have['/app/*'] !== APP_CSP;
-    if (stale) { console.error('netlify.toml CSP is stale for public/app/index.html — run `npm run csp`'); process.exit(1); }
+    const want = {'/app/*': APP_CSP, '/': SITE_CSP, '/index.html': SITE_CSP, '/privacy.html': SITE_CSP};
+    const stale = Object.keys(want).filter(p => have[p] !== want[p]);
+    if (stale.length) { console.error('netlify.toml CSP is stale for ' + stale.join(', ') + ' — run `npm run csp`'); process.exit(1); }
     console.log('CSP up to date'); process.exit(0);
   }
   const put = (path, value) => {
-    const re = new RegExp('(\\[\\[headers\\]\\]\\s*\\n\\s*for = "' + path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"[\\s\\S]*?Content-Security-Policy = ")[^"]*(")');
+    /* the tempered run stops at the next [[headers]], so a block without a slot can never rewrite the next one's */
+    const re = new RegExp('(\\[\\[headers\\]\\]\\s*\\n\\s*for = "' + path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"(?:(?!\\[\\[headers)[\\s\\S])*?Content-Security-Policy = ")[^"]*(")');
     if (!re.test(toml)) throw new Error('no CSP slot for ' + path + ' in netlify.toml');
     toml = toml.replace(re, '$1' + value + '$2');
   };

@@ -3,7 +3,8 @@
    install and served cache-first. Fonts come from Google and are cached at
    runtime, opaque responses included, so a second launch works with no
    network at all. Bump VERSION to ship a new build. */
-var VERSION = 'fiveboxes-v4';
+var VERSION = 'fiveboxes-v5';
+var FONTS = 'fiveboxes-fonts-v1';       /* not versioned: a new build must not re-download every font */
 var SHELL = [
   '/app/index.html',
   '/app/manifest.webmanifest',
@@ -25,7 +26,7 @@ self.addEventListener('activate', function(e){
   e.waitUntil(
     caches.keys()
       .then(function(keys){
-        return Promise.all(keys.filter(function(k){ return k !== VERSION; })
+        return Promise.all(keys.filter(function(k){ return k !== VERSION && k !== FONTS; })
                               .map(function(k){ return caches.delete(k); }));
       })
       .then(function(){ return self.clients.claim(); })
@@ -41,8 +42,10 @@ self.addEventListener('fetch', function(e){
     e.respondWith(
       caches.match(req).then(function(hit){
         return hit || fetch(req).then(function(res){
-          var copy = res.clone();
-          caches.open(VERSION).then(function(c){ c.put(req, copy); });
+          if(res.ok){                                   /* a 404 or 5xx must not become the font forever */
+            var copy = res.clone();
+            caches.open(FONTS).then(function(c){ c.put(req, copy); });
+          }
           return res;
         }).catch(function(){ return hit; });
       })
@@ -77,7 +80,7 @@ self.addEventListener('fetch', function(e){
   e.respondWith(
     caches.match(req).then(function(hit){
       return hit || fetch(req).then(function(res){
-        if(res && res.status === 200){
+        if(res && res.ok && res.type === 'basic'){
           var copy = res.clone();
           caches.open(VERSION).then(function(c){ c.put(req, copy); });
         }

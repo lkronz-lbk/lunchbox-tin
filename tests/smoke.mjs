@@ -84,14 +84,21 @@ try {
   check('onboarding takes the whole screen on first run',
     await page.$eval('nav.tabs', e => getComputedStyle(e).display === 'none'));
 
+  await page.fill('#obName', 'Nia');
+  await page.evaluate(() => { document.getElementById('obName').__kept = true; });
   await page.click('[data-act="ob-avoid"][data-v="dairy"]');
   await page.click('[data-act="ob-breadth"][data-v="picky"]');
-  await page.fill('#obName', 'Nia');
+  check('tapping a chip does not rebuild the form under the name field', await page.evaluate(() =>
+    document.getElementById('obName').__kept === true && document.getElementById('obName').value === 'Nia'
+    && document.querySelector('[data-act="ob-breadth"][data-v="picky"]').getAttribute('aria-pressed') === 'true'));
   await page.click('[data-act="ob-go"]');
   await page.waitForTimeout(400);
   check('the name typed at onboarding lands on the lunchbox',
     await page.evaluate(() => JSON.parse(localStorage.getItem('fiveboxes')).kids[0].name === 'Nia'));
   check('the week header leads with the date', /^Week of /.test((await page.textContent('.view-title')).trim()));
+  check('the week eyebrow counts the days actually planned', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0], words = ['No','One','Two','Three','Four','Five','Six','Seven'];
+    return document.querySelector('.view-sub').textContent.trim().startsWith(words[k.week.days.length]); }));
 
   check('three taps land on a planned week',
     await page.getAttribute('nav.tabs [aria-current="true"]', 'data-tab') === 'week');
@@ -128,6 +135,7 @@ try {
   const firstMainLabel = await page.textContent('.kidmode h1');
   check("the main is asked first, by name, in a child's words", /^Nia, pick your lunch/i.test(firstMainLabel.trim()), firstMainLabel);
   check('the exit is worded for the parent', /give the phone back/i.test(await page.textContent('[data-act="kid-exit"]')));
+  check('the eyebrow above it uses the same word', /^lunch/i.test((await page.textContent('.kidmode .catlab')).trim()));
   const chosenMain = await page.getAttribute('.kidmode .pick >> nth=1', 'data-id');   /* option B, not the draw */
   await page.click('.kidmode .pick >> nth=1'); await page.waitForTimeout(150);
   for (let i = 0; i < 3; i++) { await page.click('.kidmode .pick >> nth=0'); await page.waitForTimeout(150); }
@@ -199,6 +207,10 @@ try {
   await page.waitForTimeout(250);
   check('arbitrary JSON is refused', (await page.evaluate(() =>
     JSON.parse(localStorage.getItem('fiveboxes')).kids.filter(k => !k.deletedAt).length)) === 2);
+  await page.fill('#impText', '{"foods":[],"settings":{},"week":{"days":[{}]}}');
+  await page.click('[data-act="import-do"]');
+  await page.waitForTimeout(250);
+  check('a broken legacy save is refused with a message, not a crash', /not Five Boxes data/i.test(await page.textContent('#toast')) && errors.length === 0, errors);
   await page.fill('#impText', JSON.stringify({app:'fiveboxes', schema:2, account:JSON.parse(dump)}));
   await page.click('[data-act="import-do"]');           /* first tap arms */
   await page.waitForTimeout(200);
@@ -250,10 +262,19 @@ try {
   check('answering closes the card', (await page.$$eval('.review', a => a.length)) === 0);
   check('what was answered stays on screen with a way to change it',
     (await page.$$eval('[data-act="eat-change"]', a => a.length)) === 1 && /all eaten/i.test(await page.textContent('#view')));
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(500);
+  check('and it is still there after the app is reopened', (await page.$$eval('[data-act="eat-change"]', a => a.length)) === 1);
   await page.click('[data-act="eat-change"]'); await page.waitForTimeout(200);
   check('Change re-opens the card', (await page.$$eval('.review', a => a.length)) === 1);
-  await page.click('[data-act="eat-all"]'); await page.waitForTimeout(250);
+  await page.click('.review .seg button[data-cat="main"][data-r="left"]'); await page.waitForTimeout(150);
+  for (const c of ['side','fruit','sweet']) { if (await page.$('.review .seg button[data-cat="'+c+'"]')) { await page.click('.review .seg button[data-cat="'+c+'"][data-r="ate"]'); await page.waitForTimeout(120); } }
   check('and answering again closes it', (await page.$$eval('.review', a => a.length)) === 0);
+  const summaryText = await page.textContent('#view');
+  check('the summary names the food that came home', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0], f = k.foods.find(x => x.id === k.week.days[0].slots.main);
+    return f && document.querySelector('#view').textContent.includes(f.n + ' came home'); }), summaryText.slice(0, 200));
+  await page.click('[data-act="eat-change"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="eat-all"]'); await page.waitForTimeout(250);
   check('outcomes are stored against the food, with who and when', await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
     const rows = Object.values(k.eaten || {});
@@ -284,6 +305,13 @@ try {
       .week.days.filter(x => x.slots.main === id).length, reviewedFood);
   }
   check('the draw leaves a resting food out', restedDrawn === 0, restedDrawn);
+  let restedRedrawn = 0;
+  for (let i = 0; i < 5; i++) {
+    await page.click('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0'); await page.waitForTimeout(200);
+    restedRedrawn += await page.evaluate(id => JSON.parse(localStorage.getItem('fiveboxes')).kids[0]
+      .week.days.filter(x => x.slots.main === id).length, reviewedFood);
+  }
+  check('and so does a single re-draw', restedRedrawn === 0, restedRedrawn);
   await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('fiveboxes')); d.kids[0].eaten = {}; localStorage.setItem('fiveboxes', JSON.stringify(d)); });
   await page.goto(BASE+'/app/');
   await page.waitForTimeout(400);
@@ -293,6 +321,7 @@ try {
     a.filter(e => e.checkVisibility()).map(e => ({h: Math.round(e.getBoundingClientRect().height), t: e.textContent.trim().slice(0,20)})).filter(x => x.h < 44));
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   const smallSetup = await small();
+  check('the day-of-week chips are named in full for a screen reader', (await page.$$eval('.dow .tg[aria-label]', a => a.length)) === 7);
   check('every tappable control on Setup is at least 44px tall', smallSetup.length === 0, smallSetup);
   await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
   const smallFoods = await small();
@@ -407,6 +436,21 @@ try {
   check('and says so', (await page.textContent('#toast')).includes('rules'));
   await page.click('[data-act="allergen"][data-k="dairy"]'); await page.waitForTimeout(200);
 
+  /* a word typed into the avoid list sweeps the plan, and the sweep is saved */
+  const avoidTarget = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0], t = new Date(); t.setHours(0,0,0,0);
+    const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
+    return k.foods.find(f => f.id === day.slots.side).n; });
+  await page.fill('#avoidText', avoidTarget);
+  await page.locator('#avoidText').blur(); await page.waitForTimeout(300);   /* change fires on blur, as it does for a person */
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  check('a food typed into the avoid list is out of the week after a reload', await page.evaluate(name => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    return k.settings.avoidText === name && !k.week.days.some(d => { const f = k.foods.find(x => x.id === d.slots.side); return f && f.n === name; }); }, avoidTarget), avoidTarget);
+  await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('fiveboxes')); d.kids[0].settings.avoidText = ''; localStorage.setItem('fiveboxes', JSON.stringify(d)); });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+
   /* switching a compartment off takes it out of the week and off the list */
   if ((await page.getAttribute('[data-act="compartment"][data-k="drink"]', 'aria-pressed')) !== 'true') {
     await page.click('[data-act="compartment"][data-k="drink"]'); await page.waitForTimeout(250); }   /* on */
@@ -417,7 +461,9 @@ try {
   });
   check('switching a compartment off clears it from this week', !ghost);
   await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
-  check('and it is gone from the shopping list', !(await page.textContent('#view')).toLowerCase().includes('juice'));
+  const drinkNames = await page.evaluate(() => JSON.parse(localStorage.getItem('fiveboxes')).kids[0].foods.filter(f => f.c === 'drink').map(f => f.n));
+  const shopText = await page.textContent('#view');
+  check('and no drink is left on the shopping list', drinkNames.length > 0 && !drinkNames.some(n => shopText.includes(n)), drinkNames);
 
   /* stopping the kid's pick midway keeps what was already chosen */
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
@@ -435,13 +481,54 @@ try {
 
   /* a manual swap clears the "picked" mark */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
-  await page.click('.tin .cmp[data-cat="main"] >> nth=0'); await page.waitForTimeout(350);
+  await page.click('.daycard:not(.past) .tin .cmp[data-cat="main"] >> nth=0'); await page.waitForTimeout(350);
   await page.click('#sheetBody .item:not(.done) >> nth=0'); await page.waitForTimeout(300);
   const starGone = await page.evaluate(() => {
-    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
-    return !k.week.days[0].kidPick || !k.week.days[0].kidPick.main;
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0], t = new Date(); t.setHours(0,0,0,0);
+    const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
+    return !day.kidPick || !day.kidPick.main;
   });
   check('a manual swap clears the kid-picked mark', starGone);
+
+  /* "Re-draw this one" on a kept compartment un-keeps it */
+  await page.click('.daycard:not(.past) .tin .cmp[data-cat="side"] >> nth=0'); await page.waitForTimeout(350);
+  if ((await page.getAttribute('[data-act="sheet-lock"]', 'aria-pressed')) !== 'true') { await page.click('[data-act="sheet-lock"]'); await page.waitForTimeout(200); }
+  await page.click('[data-act="sheet-shuffle"]'); await page.waitForTimeout(350);
+  check('re-drawing a kept compartment on purpose clears the keep', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0], t = new Date(); t.setHours(0,0,0,0);
+    const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
+    return day.lock.side === false && !!day.slots.side; }));
+  check('and says so', /no longer kept/i.test(await page.textContent('#toast')));
+  await page.click('#backdrop', {position:{x:10, y:10}}); await page.waitForTimeout(300);
+
+  /* an in-place re-draw leaves the days already gone exactly as they were */
+  const pastKept = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0];
+    const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+    const t = new Date(); t.setHours(0,0,0,0);
+    const mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+    k.settings.days = [1,2,3,4,5];
+    const pick = c => k.foods.filter(f => f.c === c && !f.deletedAt).map(f => f.id);
+    k.week = {id:'week_test', kidId:k.id, start:iso(mon), createdAt:new Date(mon).toISOString(), updatedAt:new Date().toISOString(), days:[]};
+    for (let i = 0; i < 5; i++) { const x = new Date(mon); x.setDate(mon.getDate() + i);
+      const slots = {}, lock = {}; ['main','side','fruit','sweet'].forEach(c => { slots[c] = pick(c)[i % pick(c).length] || null; lock[c] = false; });
+      k.week.days.push({d:iso(x), dow:(i+1)%7, slots, lock, kidPick:{}}); }
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+    const filled = o => JSON.stringify(Object.fromEntries(Object.entries(o).filter(([, v]) => v)));
+    return k.week.days.filter(x => x.d < iso(t)).map(x => filled(x.slots));
+  });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300);
+  const pastAfter = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0], t = new Date(); t.setHours(0,0,0,0);
+    const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+    const filled = o => JSON.stringify(Object.fromEntries(Object.entries(o).filter(([, v]) => v)));
+    return {slots: k.week.days.filter(x => x.d < iso(t)).map(x => filled(x.slots)), n: k.week.days.length};
+  });
+  check('a re-draw in place keeps the days already gone exactly as they were (vacuous on a Monday)',
+    pastAfter.n === 5 && JSON.stringify(pastAfter.slots) === JSON.stringify(pastKept), {before: pastKept, after: pastAfter});
+  check('and offers no Re-draw on a day that has gone', (await page.$$eval('.daycard.past [data-act="shuffle-day"]', a => a.length)) === 0);
 
   /* the pack view names the last day of a plan that has gone by */
   await page.evaluate(() => {
@@ -561,12 +648,12 @@ try {
   check('Undo puts the food back', (await page.textContent('#view')).includes(firstFood.trim()));
 
   /* erase really erases, old names included */
-  await page.evaluate(() => { localStorage.setItem('lunchbox-tin', localStorage.getItem('fiveboxes')); localStorage.setItem('lunchbox-tin-v1', '{"foods":[],"settings":{}}'); });
+  await page.evaluate(() => { localStorage.setItem('lunchbox-tin', localStorage.getItem('fiveboxes')); localStorage.setItem('lunchbox-tin-v1', '{"foods":[],"settings":{}}'); localStorage.setItem('fiveboxes-backup-1', '{"old":1}'); });
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
   await page.click('[data-act="clear-all"]'); await page.waitForTimeout(150);
   await page.click('[data-act="clear-all"]'); await page.waitForTimeout(300);
-  check('"Erase everything" also removes the copies saved under the old name',
-    await page.evaluate(() => !localStorage.getItem('lunchbox-tin') && !localStorage.getItem('lunchbox-tin-v1')));
+  check('"Erase everything" also removes the copies saved under the old name, and the backups',
+    await page.evaluate(() => !localStorage.getItem('lunchbox-tin') && !localStorage.getItem('lunchbox-tin-v1') && !Object.keys(localStorage).some(k => k.startsWith('fiveboxes-backup-'))));
   await page.evaluate(raw => localStorage.setItem('fiveboxes', raw), goodDoc);
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
 
