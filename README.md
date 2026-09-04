@@ -1,4 +1,4 @@
-# Lunchbox Tin
+# Five Boxes
 
 Plan a week of packed school lunches in about a minute. A static site: a marketing
 page, and an installable offline web app. No build step, no framework, no server.
@@ -34,6 +34,11 @@ food list from a 180-item library and produce a planned week immediately. From t
   pairing), taps one, and hands the phone back. Chosen compartments lock so a re-draw
   can't undo them, and the day records who picked. Every food has an emoji icon derived
   from its name, so custom foods get a picture too.
+- **Did they eat it?** — the morning after a pack day, the Pack view asks about
+  yesterday's box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
+  stored against the food, so they survive re-plans. The draw leans toward foods that get
+  eaten, and anything that came home twice running is rested for three weeks. Outgoing weeks
+  are archived (`kid.past`) so Monday can still ask about Friday.
 - **Setup** — lunchboxes, pack days, cold-only, allergen exclusions, an avoid list, and
   copy-out/paste-in transfer between phones.
 
@@ -99,6 +104,13 @@ dependency. CI runs it on every push to `main` or `dev` and on every pull reques
 
 Checks that must pass before launch but shouldn't block day-to-day work print as
 `WARN` rather than failing — the placeholder privacy address is currently one.
+
+## The name
+
+The product is **Five Boxes** (a week of school lunches). The repository and directory are
+still called `lunchbox-tin` from the working title; rename the GitHub repo whenever
+convenient — Netlify follows the rename. Stored data under the old key is read and carried
+forward automatically.
 
 ## Roadmap
 

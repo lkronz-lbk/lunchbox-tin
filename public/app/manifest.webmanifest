@@ -1,6 +1,6 @@
 {
-  "name": "Lunchbox Tin",
-  "short_name": "Lunchbox",
+  "name": "Five Boxes",
+  "short_name": "Five Boxes",
   "description": "Plan a week of packed school lunches in about a minute.",
   "start_url": "/app/",
   "scope": "/app/",

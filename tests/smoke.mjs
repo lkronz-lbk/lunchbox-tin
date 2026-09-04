@@ -1,4 +1,4 @@
-/* End-to-end smoke tests for Lunchbox Tin.
+/* End-to-end smoke tests for Five Boxes.
    No test framework and no build: a tiny static server plus Playwright.
      npm test                    (installs nothing if playwright is present)
      CHROMIUM_PATH=/path/to/chrome npm test
@@ -84,7 +84,7 @@ try {
   const notes = await page.$$eval('.note', a => a.filter(n => n.textContent.trim().length > 10).length);
   check('each day gets a pairing note', notes >= 5, notes);
   check('excluded allergens never enter the list', await page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem('lunchbox-tin'));
+    const d = JSON.parse(localStorage.getItem('fiveboxes'));
     return !d.kids[0].foods.some(f => (f.al||[]).includes('nuts') || (f.al||[]).includes('dairy'));
   }));
 
@@ -97,7 +97,7 @@ try {
   check('ticking a compartment moves the progress count',
     before !== await page.textContent('.count'));
   check('packing records who and when', await page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem('lunchbox-tin'));
+    const d = JSON.parse(localStorage.getItem('fiveboxes'));
     for(const k of d.kids) for(const dt in k.packed) for(const c in k.packed[dt])
       return !!k.packed[dt][c].by && !!k.packed[dt][c].at;
     return false;
@@ -116,7 +116,7 @@ try {
   check('four taps end on the finished box', (await page.$$eval('.kiddone .tin .cmp', a => a.length)) === 4);
   await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
   const afterPick = await page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem('lunchbox-tin'));
+    const d = JSON.parse(localStorage.getItem('fiveboxes'));
     const k = d.kids[0], t = new Date(); t.setHours(0,0,0,0);
     const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
     return {main: day.slots.main, locked: Object.values(day.lock).every(Boolean),
@@ -128,7 +128,7 @@ try {
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200);
   await page.click('[data-act="shuffle-day"] >> nth=0'); await page.waitForTimeout(300);
   const stillMain = await page.evaluate(() => {
-    const k = JSON.parse(localStorage.getItem('lunchbox-tin')).kids[0];
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
     const t = new Date(); t.setHours(0,0,0,0);
     const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
     return day.slots.main;
@@ -160,7 +160,7 @@ try {
   await page.waitForTimeout(200);
   await page.click('[data-act="allergen"][data-k="gluten"]');
   await page.waitForTimeout(250);
-  const rules = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchbox-tin'))
+  const rules = await page.evaluate(() => JSON.parse(localStorage.getItem('fiveboxes'))
     .kids.filter(k => !k.deletedAt).map(k => k.settings.avoidAllergens.join('+')));
   check('each lunchbox keeps its own rules', rules[0] !== rules[1], rules);
 
@@ -174,7 +174,7 @@ try {
   check('the pack list covers every lunchbox', lines === 2, lines);
 
   /* ------------------------------------------------- transfer round trip */
-  const dump = await page.evaluate(() => localStorage.getItem('lunchbox-tin'));
+  const dump = await page.evaluate(() => localStorage.getItem('fiveboxes'));
   await page.click('[data-act="tab"][data-tab="setup"]');
   await page.waitForTimeout(200);
   await page.click('[data-act="import-open"]');
@@ -183,13 +183,13 @@ try {
   await page.click('[data-act="import-do"]');
   await page.waitForTimeout(250);
   check('arbitrary JSON is refused', (await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('lunchbox-tin')).kids.filter(k => !k.deletedAt).length)) === 2);
-  await page.fill('#impText', JSON.stringify({app:'lunchbox-tin', schema:2, account:JSON.parse(dump)}));
+    JSON.parse(localStorage.getItem('fiveboxes')).kids.filter(k => !k.deletedAt).length)) === 2);
+  await page.fill('#impText', JSON.stringify({app:'fiveboxes', schema:2, account:JSON.parse(dump)}));
   await page.click('[data-act="import-do"]');           /* first tap arms */
   await page.waitForTimeout(200);
   await page.click('[data-act="import-do"]');           /* second applies */
   await page.waitForTimeout(400);
-  const imported = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchbox-tin'))
+  const imported = await page.evaluate(() => JSON.parse(localStorage.getItem('fiveboxes'))
     .kids.filter(k => !k.deletedAt).map(k => k.name));
   check('a real export imports back intact', imported.length === 2 && imported.includes('Sam'), imported);
 
@@ -201,7 +201,7 @@ try {
   await page.goto(BASE+'/app/');
   await page.waitForTimeout(500);
   const migrated = await page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem('lunchbox-tin')), k = d.kids[0];
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0];
     return {schema:d.schema, name:k.name, foods:k.foods.length, days:k.settings.days.join(','),
       weekDays:k.week ? k.week.days.length : 0,
       slotResolves: k.week ? !!k.foods.find(f => f.id === k.week.days[0].slots.main) : false,
@@ -212,6 +212,69 @@ try {
     migrated.schema === 2 && migrated.name === 'Nora' && migrated.foods === 4 &&
     migrated.days === '1,3,5' && migrated.weekDays === 1 && migrated.slotResolves &&
     migrated.packed === 1 && migrated.pantry === 1 && migrated.stamped, migrated);
+
+  /* ----------------------------------------------------- did they eat it? */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0];
+    const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);
+    const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+    k.week.days[0].d = iso(y);                     /* pretend the first box was yesterday */
+    localStorage.setItem('fiveboxes', JSON.stringify(d));
+  });
+  await page.goto(BASE+'/app/');
+  await page.waitForTimeout(500);
+  check("the morning after, it asks how the box went", (await page.$$eval('.review', a => a.length)) === 1);
+  const reviewedFood = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0]; return k.week.days[0].slots.main; });
+  await page.click('.review .seg button[data-cat="main"][data-r="left"]');
+  await page.waitForTimeout(200);
+  check('a partial answer keeps the card open', (await page.$$eval('.review', a => a.length)) === 1);
+  await page.click('[data-act="eat-all"]');
+  await page.waitForTimeout(250);
+  check('answering closes the card', (await page.$$eval('.review', a => a.length)) === 0);
+  check('outcomes are stored against the food, with who and when', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('fiveboxes')).kids[0];
+    const rows = Object.values(k.eaten || {});
+    return rows.length === 1 && Object.values(rows[0]).every(e => e.foodId && e.r === 'ate' && e.at && e.by);
+  }));
+  /* two "came home" in a row rests a food and says so */
+  await page.evaluate(id => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes')), k = d.kids[0];
+    const iso = n => { const x = new Date(); x.setDate(x.getDate() - n); x.setHours(0,0,0,0);
+      return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
+    k.eaten = {}; k.eaten[iso(2)] = {main:{foodId:id, r:'left'}}; k.eaten[iso(4)] = {main:{foodId:id, r:'left'}};
+    d.activeKidId = k.id;                                    /* shuffle THIS lunchbox below */
+    for (let i = 0; i < 6; i++) k.foods.push({id:'test_main_'+i, kidId:k.id, n:'Test main '+i, c:'main',
+      t:['protein','soft'], a:'deli', al:[], createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(), deletedAt:null});
+    localStorage.setItem('fiveboxes', JSON.stringify(d));    /* enough mains that resting one costs nothing */
+  }, reviewedFood);
+  await page.goto(BASE+'/app/');
+  await page.waitForTimeout(500);
+  await page.click('[data-act="tab"][data-tab="foods"]');
+  await page.waitForTimeout(250);
+  check('a food that keeps coming home is shown as resting', (await page.textContent('#view')).includes('resting'));
+  let restedDrawn = 0;
+  for (let i = 0; i < 5; i++) {
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+    await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(250);
+    restedDrawn += await page.evaluate(id => JSON.parse(localStorage.getItem('fiveboxes')).kids[0]
+      .week.days.filter(x => x.slots.main === id).length, reviewedFood);
+  }
+  check('the draw leaves a resting food out', restedDrawn === 0, restedDrawn);
+  await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('fiveboxes')); d.kids[0].eaten = {}; localStorage.setItem('fiveboxes', JSON.stringify(d)); });
+  await page.goto(BASE+'/app/');
+  await page.waitForTimeout(400);
+
+  /* --------------------------------------------- the old name's data survives */
+  await page.evaluate(() => {
+    const doc = localStorage.getItem('fiveboxes');
+    localStorage.clear();
+    localStorage.setItem('lunchbox-tin', doc);          /* saved under the app's earlier name */
+  });
+  await page.goto(BASE+'/app/');
+  await page.waitForTimeout(500);
+  check('data saved under the old name is read and carried forward', await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('fiveboxes') || 'null'); return !!(d && d.kids && d.kids.length); }));
 
   /* ------------------------------------------------------- pwa + offline */
   check('the service worker takes control',

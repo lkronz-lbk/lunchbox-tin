@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Lunchbox Tin</title>
+<title>Five Boxes</title>
 <meta name="description" content="Plan a week of packed school lunches in about a minute. Cold-lunch ideas matched into balanced boxes, with the shopping list built for you.">
 <meta name="theme-color" content="#E9EEE6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Lunchbox">
+<meta name="apple-mobile-web-app-title" content="Five Boxes">
 <style>
 :root{color-scheme:light dark}
 html{-webkit-text-size-adjust:100%}
@@ -257,6 +257,18 @@ nav.tabs svg{width:21px;height:21px}
 .pickchip{display:inline-flex;align-items:center;gap:5px}
 @media (prefers-reduced-motion:reduce){.pick:active{transform:none}}
 
+/* --- "did they eat it?" review --- */
+.review h3{margin:0;font-family:var(--f-display);font-size:17px;font-weight:600}
+.rrow{display:grid;grid-template-columns:auto 1fr;gap:7px 10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.rrow:last-of-type{border-bottom:0;padding-bottom:4px}
+.ric{font-size:22px;line-height:1}
+.rnm{font-family:var(--f-display);font-weight:600;font-size:14.5px;line-height:1.25}
+.seg{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr 1fr;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:var(--surface);min-height:42px;font-size:13px;font-weight:500;color:var(--ink-2);border-left:1.5px solid var(--line)}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.review .btn.wide{margin-top:12px}
+
 /* --- multi-profile chrome --- */
 .topbar .who{display:flex;align-items:center;gap:8px}
 .kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);
@@ -280,7 +292,7 @@ nav.tabs svg{width:21px;height:21px}
 
 <div class="app">
   <div class="topbar">
-    <div class="brand">Lunchbox <span>Tin</span></div>
+    <div class="brand">Five <span>Boxes</span></div>
     <div class="who" id="who"></div>
   </div>
   <main id="view"></main>
@@ -555,15 +567,16 @@ var BANK = [
    bodies with fetch() and nothing else in the app changes.
    ---------------------------------------------------------------- */
 var Store = {
-  KEY:'lunchbox-tin',            /* the account document */
-  DEVICE_KEY:'lunchbox-tin-device', /* which member is on THIS device — never exported */
+  KEY:'fiveboxes',               /* the account document */
+  PRIOR_KEY:'lunchbox-tin',      /* the same document under the app's earlier name */
+  DEVICE_KEY:'fiveboxes-device', /* which member is on THIS device — never exported */
   LEGACY_KEY:'lunchbox-tin-v1',  /* single-profile format, migrated on first run */
   ok:true,
   load:function(){
     return new Promise(function(res){
       var out = {doc:null, legacy:null, device:null};
       try{
-        var raw = localStorage.getItem(Store.KEY);
+        var raw = localStorage.getItem(Store.KEY) || localStorage.getItem(Store.PRIOR_KEY);
         if(raw) out.doc = JSON.parse(raw);
         var old = localStorage.getItem(Store.LEGACY_KEY);
         if(old) out.legacy = JSON.parse(old);
@@ -841,11 +854,70 @@ function shuffled(a){
   for(var i=a.length-1;i>0;i--){ var j = Math.floor(Math.random()*(i+1)), t=a[i]; a[i]=a[j]; a[j]=t; }
   return a;
 }
-function draw(pool, n, exclude){
+/* ---------------------------------------------------------- eat history
+   The retention mechanic. After a pack day the parent records, per compartment,
+   whether it was eaten, partly eaten, or came home. Outcomes are stored against
+   the FOOD, not the slot, so they survive re-plans. The draw then leans toward
+   foods that get eaten and rests anything that came home twice running — for
+   three weeks, after which it quietly returns. No model, no server: a weighted
+   shuffle over a six-outcome recency window. */
+function eatHistory(kid, foodId){
+  var out = [], eaten = kid.eaten || {};
+  Object.keys(eaten).sort().reverse().forEach(function(d){
+    var row = eaten[d]; if(!row || row.skipped) return;
+    CATS.forEach(function(c){ var e = row[c.k]; if(e && e.foodId === foodId) out.push({d:d, r:e.r}); });
+  });
+  return out;                                          /* most recent first */
+}
+function eatStats(kid, foodId){
+  var h = eatHistory(kid, foodId).slice(0, 6);
+  if(!h.length) return {n:0, score:0.6, streakLeft:0, resting:false, last:null};
+  var w = 0, sum = 0;
+  h.forEach(function(e, i){ var wt = Math.pow(0.75, i); w += wt; sum += wt * (e.r==='ate' ? 1 : e.r==='some' ? 0.5 : 0); });
+  var streak = 0;
+  for(var i=0; i<h.length; i++){ if(h[i].r === 'left') streak++; else break; }
+  var daysAgo = Math.round((today() - parseISO(h[0].d)) / 86400000);
+  return {n:h.length, score:sum / w, streakLeft:streak, resting:(streak >= 2 && daysAgo < 21), last:h[0].r};
+}
+function eatLabel(kid, foodId){
+  var st = eatStats(kid, foodId);
+  if(!st.n) return '';
+  if(st.resting) return 'came home '+st.streakLeft+'× — resting';
+  if(st.last === 'ate') return (st.n > 1 && st.score > 0.8) ? 'eats it' : 'ate it last time';
+  if(st.last === 'some') return 'ate some last time';
+  return 'came home last time';
+}
+function weightedShuffle(kid, arr){
+  return arr.map(function(f){ var wt = 0.3 + eatStats(kid, f.id).score; return {f:f, k:Math.pow(Math.random(), 1/wt)}; })
+    .sort(function(a,b){ return b.k - a.k; }).map(function(x){ return x.f; });
+}
+function findDay(kid, dStr){
+  var all = (kid.past || []).concat(kid.week ? kid.week.days : []);
+  return all.filter(function(d){ return d.d === dStr; })[0] || null;
+}
+function reviewComplete(kid, d){
+  var row = (kid.eaten || {})[d.d];
+  if(!row) return false;
+  if(row.skipped) return true;
+  return CATS.every(function(c){ return !foodById(kid, d.slots[c.k]) || !!row[c.k]; });
+}
+function reviewDay(kid){
+  var t = iso(today()), floor = iso(addDays(today(), -7));
+  var cands = (kid.past || []).concat(kid.week ? kid.week.days : []).filter(function(d){
+    return d.d < t && d.d >= floor && CATS.some(function(c){ return foodById(kid, d.slots[c.k]); });
+  });
+  if(!cands.length) return null;
+  cands.sort(function(a,b){ return b.d.localeCompare(a.d); });
+  return reviewComplete(kid, cands[0]) ? null : cands[0];   /* only ever ask about the most recent */
+}
+
+function draw(kid, pool, n, exclude){
   var avail = pool.filter(function(f){ return exclude.indexOf(f.id)<0; });
-  var out = [], bag = shuffled(avail);
+  var awake = avail.filter(function(f){ return !eatStats(kid, f.id).resting; });
+  if(awake.length >= n) avail = awake;                 /* rest the repeat offenders when we can afford to */
+  var out = [], bag = weightedShuffle(kid, avail);
   while(out.length < n){
-    if(!bag.length){ bag = shuffled(avail.length ? avail : pool); if(!bag.length) break; }
+    if(!bag.length){ bag = weightedShuffle(kid, avail.length ? avail : pool); if(!bag.length) break; }
     out.push(bag.shift());
   }
   return out;
@@ -890,6 +962,11 @@ function anchorWeek(kid){
 function planWeek(kid){
   var days = packDaysSorted(kid), ws = anchorWeek(kid);
   var prev = kid.week && kid.week.start === iso(ws) ? kid.week : null;
+  if(kid.week && !prev){                               /* a new week: keep the old one's days for the eat review */
+    var kept = kid.week.days.filter(function(d){ return CATS.some(function(c){ return d.slots[c.k]; }); })
+      .map(function(d){ return {d:d.d, dow:d.dow, slots:Object.assign({}, d.slots), kidPick:Object.assign({}, d.kidPick || {})}; });
+    kid.past = (kid.past || []).concat(kept).slice(-40);
+  }
   var week = {id:(prev && prev.id) || uid('week'), kidId:kid.id, start:iso(ws), updatedAt:now(), days:[]};
   days.forEach(function(dw){
     var d = iso(addDays(ws, (dw+6)%7));
@@ -908,7 +985,7 @@ function planWeek(kid){
     var open = week.days.filter(function(d){ return !d.slots[c.k]; });
     if(!pool.length){ if(open.length) shortfall.push(c.plural); return; }
     var locked = week.days.filter(function(d){ return d.slots[c.k]; }).map(function(d){ return d.slots[c.k]; });
-    var picks = draw(pool, open.length, locked);
+    var picks = draw(kid, pool, open.length, locked);
     if(c.k==='main'){
       open.forEach(function(d,i){ d.slots.main = picks[i] ? picks[i].id : null; });
     } else {
@@ -960,11 +1037,10 @@ function kidOptions(kid, day, cat, chosen){
   var main = foodById(kid, mainId);
   var planned = pool.filter(function(f){ return f.id === day.slots[cat]; })[0] || null;
   var rest = pool.filter(function(f){ return !planned || f.id !== planned.id; });
-  if(cat === 'main') rest = shuffled(rest);
-  else {
-    rest = rest.map(function(f){ return {f:f, s:pairScore(main, f, cat).s + Math.random()*1.5}; })
-      .sort(function(a,b){ return b.s-a.s; }).map(function(x){ return x.f; });
-  }
+  rest = rest.map(function(f){
+      var base = cat === 'main' ? 0 : pairScore(main, f, cat).s;
+      return {f:f, s: base + eatStats(kid, f.id).score * 2 + Math.random() * 1.5};
+    }).sort(function(a,b){ return b.s-a.s; }).map(function(x){ return x.f; });
   var out = planned ? [planned] : [];
   while(out.length < 2 && rest.length) out.push(rest.shift());
   return out;
@@ -1130,6 +1206,26 @@ function viewOnboard(){
     + '</div>';
 }
 
+/* ------------------------------------------------------------ eat review */
+function reviewCard(kid, d){
+  var l = dayLabel(d.d), row = (kid.eaten || {})[d.d] || {};
+  var h = '<div class="card review"><div class="spread" style="align-items:flex-start"><div>'
+    + '<p class="view-sub" style="margin:0 0 3px">'+esc(l.diff === -1 ? 'Yesterday' : l.full)+' · '+esc(l.date)+'</p>'
+    + '<h3>How did '+esc(kid.name)+'&#8217;s box go?</h3></div>'
+    + '<button class="btn ghost sm" data-act="eat-skip" data-kid="'+kid.id+'" data-day="'+d.d+'">Skip</button></div>';
+  CATS.forEach(function(c){
+    var f = foodById(kid, d.slots[c.k]); if(!f) return;
+    var cur = row[c.k] ? row[c.k].r : '';
+    h += '<div class="rrow"><span class="ric" aria-hidden="true">'+iconFor(f)+'</span><span class="rnm">'+esc(f.n)+'</span>'
+      +  '<div class="seg" role="group" aria-label="'+esc(f.n)+'">'
+      +  [['ate','Ate it'],['some','Some'],['left','Came home']].map(function(op){
+           return '<button data-act="eat-set" data-kid="'+kid.id+'" data-day="'+d.d+'" data-cat="'+c.k+'" data-r="'+op[0]
+             + '" aria-pressed="'+(cur === op[0] ? 'true' : 'false')+'">'+op[1]+'</button>'; }).join('')
+      +  '</div></div>';
+  });
+  return h + '<button class="btn wide" data-act="eat-all" data-kid="'+kid.id+'" data-day="'+d.d+'">'+svg('check',16)+'All eaten</button></div>';
+}
+
 /* ----------------------------------------------------------- kid's pick */
 function viewKid(){
   var st = UI.kid, kid = kidById(st.kidId);
@@ -1186,8 +1282,9 @@ function viewPack(){
     CATS.forEach(function(c){ if(e.day.slots[c.k]){ total++; if(row[c.k]) done++; } });
   });
 
-  var h = '<div class="stack">' + planBanner()
-    + '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
+  var h = '<div class="stack">' + planBanner();
+  ks.forEach(function(k){ var rd = reviewDay(k); if(rd) h += reviewCard(k, rd); });
+  h += '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
     + ' · '+esc(lab.date)+'</p><h2 class="view-title">'
     + (lab.rel==='Today' ? 'Today&#8217;s box' : lab.rel==='Tomorrow' ? 'Tomorrow&#8217;s box' : esc(lab.full)+'&#8217;s box')
     + (multi ? 'es' : '') + '</h2></div>';
@@ -1307,7 +1404,8 @@ function viewFoods(){
       h += '<div class="item"><span class="dot" style="background:var(--c-'+c.k+')"></span>'
         +  '<span class="grow"><span class="nm">'+esc(f.n)+'</span>'
         +  (v ? '<span class="meta" style="color:var(--warn)">skipped &mdash; '+esc(v)+'</span>'
-             : '<span class="meta">'+esc(f.a)+(f.t.length?' · '+esc(f.t.slice(0,3).join(', ')):'')+'</span>')
+             : '<span class="meta"'+(eatStats(kid,f.id).resting ? ' style="color:var(--warn)"' : '')+'>'
+                 + esc(eatLabel(kid, f.id) || (f.a + (f.t.length ? ' · '+f.t.slice(0,3).join(', ') : '')))+'</span>')
         +  '</span><button class="x" data-act="del-food" data-id="'+f.id+'" aria-label="Remove '+esc(f.n)+'">'
         +  svg('trash',17)+'</button></div>';
     });
@@ -1421,7 +1519,7 @@ function slotSheet(kidId, dayStr, cat){
     pool.forEach(function(f){
       var v = violation(kid, f);
       var sc = cat==='main' ? null : pairScore(main, f, cat).s;
-      var meta = v ? 'skipped — '+v : (sc!==null && sc>=3 ? 'good match with '+(main?main.n:'the main') : f.a);
+      var meta = v ? 'skipped — '+v : (eatLabel(kid, f.id) || (sc!==null && sc>=3 ? 'good match with '+(main?main.n:'the main') : f.a));
       h += '<button class="item'+(day.slots[cat]===f.id?' done':'')+'" data-act="pick" data-kid="'+kid.id
         +  '" data-day="'+dayStr+'" data-cat="'+cat+'" data-id="'+f.id+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(f.n)+'</span>'
@@ -1490,14 +1588,14 @@ function parseImport(text){
   var doc = null;
   try{ doc = JSON.parse(text); }catch(e){ return null; }
   if(!doc || typeof doc !== 'object') return null;
-  var body = (doc.app === 'lunchbox-tin' && doc.account) ? doc.account : doc;
+  var body = ((doc.app === 'fiveboxes' || doc.app === 'lunchbox-tin') && doc.account) ? doc.account : doc;
   if(isAccount(body)) return body;
   if(isLegacy(body)) return migrate(Object.assign({}, body, {schema:1}));
   return null;
 }
 function isLegacy(d){ return !!(d && Array.isArray(d.foods) && d.settings && typeof d.settings === 'object'); }
 function exportText(){
-  return JSON.stringify({app:'lunchbox-tin', schema:SCHEMA, exportedAt:now(), account:S}, null, 2);
+  return JSON.stringify({app:'fiveboxes', schema:SCHEMA, exportedAt:now(), account:S}, null, 2);
 }
 
 /* ------------------------------------------------------------ app shell */
@@ -1555,6 +1653,25 @@ document.addEventListener('click', function(ev){
   var act = el.getAttribute('data-act');
   var kid = activeKid();
   if(act!=='clear-all' && act!=='del-kid' && act!=='disarm' && UI.armed) UI.armed = '';
+
+  /* did they eat it? */
+  if(act==='eat-set' || act==='eat-all' || act==='eat-skip'){
+    var ek = kidById(el.getAttribute('data-kid')), ed = ek && findDay(ek, el.getAttribute('data-day'));
+    if(!ek || !ed) return;
+    ek.eaten = ek.eaten || {};
+    var row = ek.eaten[ed.d] = (ek.eaten[ed.d] && !ek.eaten[ed.d].skipped) ? ek.eaten[ed.d] : {};
+    var me = (deviceMember() || {}).id || null;
+    if(act==='eat-skip'){ ek.eaten[ed.d] = {skipped:true, at:now(), by:me}; }
+    else if(act==='eat-all'){
+      CATS.forEach(function(c){ if(foodById(ek, ed.slots[c.k])) row[c.k] = {foodId:ed.slots[c.k], r:'ate', at:now(), by:me}; });
+    } else {
+      var ec = el.getAttribute('data-cat');
+      row[ec] = {foodId:ed.slots[ec], r:el.getAttribute('data-r'), at:now(), by:me};
+    }
+    touch(ek); save(); render();
+    if(act!=='eat-skip' && reviewComplete(ek, ed)) toast('Noted — the next draw learns from it');
+    return;
+  }
 
   /* kid's pick */
   if(act==='kid-start'){ startKidPick(el.getAttribute('data-kid'), el.getAttribute('data-day')); window.scrollTo(0,0); return; }
@@ -1733,7 +1850,7 @@ document.addEventListener('click', function(ev){
   if(act==='copy-data'){ copy(exportText(), 'Household data copied'); return; }
   if(act==='save-file'){
     if(!Downloads) return;
-    Downloads.save({filename:'lunchbox-tin-'+iso(today())+'.json', data:exportText()})
+    Downloads.save({filename:'five-boxes-'+iso(today())+'.json', data:exportText()})
       .then(function(){ toast('Backup saved'); },
             function(err){ toast(err && err.code==='declined' ? 'Backup cancelled' : 'Could not save the file'); });
     return;
@@ -1742,7 +1859,7 @@ document.addEventListener('click', function(ev){
   if(act==='import-do'){
     if(!UI.pendingImport){
       var acct0 = parseImport(document.getElementById('impText').value);
-      if(!acct0){ toast('That is not Lunchbox Tin data'); return; }
+      if(!acct0){ toast('That is not Five Boxes data'); return; }
       UI.pendingImport = acct0;
       var names = acct0.kids.filter(function(k){ return !k.deletedAt; }).map(function(k){ return k.name; });
       el.textContent = 'Tap again to replace with ' + (names.join(' and ') || 'an empty household');
