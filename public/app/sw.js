@@ -3,7 +3,7 @@
    install and served cache-first. Fonts come from Google and are cached at
    runtime, opaque responses included, so a second launch works with no
    network at all. Bump VERSION to ship a new build. */
-var VERSION = 'lunchbox-tin-v1';
+var VERSION = 'lunchbox-tin-v2';
 var SHELL = [
   '/app/',
   '/app/index.html',

@@ -243,6 +243,22 @@ nav.tabs svg{width:21px;height:21px}
 .kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:7px 0;border-top:1px solid var(--line)}
 .kv:first-child{border-top:0}
 .kv span:last-child{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+/* --- from the kitchen --- */
+.pn-top{display:flex;gap:14px;align-items:center}
+.pn-top .t{font-family:var(--f-display);font-weight:600;font-size:16px;line-height:1.3}
+.mic{width:64px;height:64px;border-radius:50%;border:2px solid var(--line-strong);background:var(--surface);color:var(--ink);
+  display:flex;align-items:center;justify-content:center;flex:none;position:relative}
+.mic svg{width:26px;height:26px}
+.mic[aria-pressed="true"]{background:var(--c-fruit);border-color:var(--c-fruit);color:#fff}
+.mic[aria-pressed="true"]::before{content:"";position:absolute;inset:-7px;border-radius:50%;border:2px solid var(--c-fruit);
+  animation:pulse 1.4s ease-out infinite}
+@keyframes pulse{0%{transform:scale(.9);opacity:.8}100%{transform:scale(1.35);opacity:0}}
+.chip.said{font-family:var(--f-body);font-size:13px;letter-spacing:0;text-transform:none;padding:5px 10px;cursor:pointer;color:var(--ink)}
+.chip.said span{color:var(--ink-3)}
+.btn[disabled]{opacity:.5;cursor:default}
+.item.pick .box{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.field .spread label{margin:0}
 </style>
 </head>
 <body>
@@ -282,6 +298,9 @@ nav.tabs svg{width:21px;height:21px}
      kids      lunchbox profiles. Each has its OWN school rules, food
                list, week and pack state — two kids can attend two
                schools with two allergy policies.
+     pantry    household-wide "already have it" ticks, keyed by food name.
+     stock     the last "what's in the kitchen" recording: the transcript
+               and the ingredients heard in it. Household-wide too.
      records   every row carries id / createdAt / updatedAt, and delete
                is a `deletedAt` tombstone rather than a splice, so a
                future sync can merge and propagate removals.
@@ -306,7 +325,8 @@ var I = {
   trash:'<path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M7 7l1 12.2A1.8 1.8 0 0 0 9.8 21h4.4a1.8 1.8 0 0 0 1.8-1.8L17 7"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   people:'<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.7a3.2 3.2 0 0 1 0 5.6M17.5 20a5.6 5.6 0 0 0-2-4.3"/>',
-  save:'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v6h7V4M8 20v-6h8v6"/>'
+  save:'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v6h7V4M8 20v-6h8v6"/>',
+  mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/>'
 };
 function svg(n, w){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'+(w?' style="width:'+w+'px;height:'+w+'px"':'')+'>'+I[n]+'</svg>'; }
 
@@ -516,6 +536,524 @@ var BANK = [
   F('Trail mix bar','sweet',['chewy','sweet','hearty'],'snacks',['nuts','gluten'],0,0),
   F('Frosted animal cookies','sweet',['crunchy','sweet'],'snacks',['gluten','dairy'],0,1)
 ];
+
+/* ================================================================ pantry
+   "Say what's in the kitchen." A transcript — spoken into the mic or typed —
+   is turned into ingredients, ingredients into the foods in the bank that can
+   be made from them, and the week is drawn from those first.
+
+     LEXICON   ingredient key <- the ways a parent actually says it. Every
+               alias is indexed as heard, singular and plural, so "cutie",
+               "cuties" and "a bag of cuties" all land on `clementines`.
+     RECIPES   bank food -> the ingredients it needs. Groups are separated by
+               commas, alternatives inside a group by "|", and a food can list
+               more than one way to make it. A bank food with no recipe is
+               never matched from the pantry, only picked by hand.
+     parse     greedy longest-alias match over the word stream, because the
+               speech engine rarely inserts commas. Whatever is left between
+               matches, minus filler, is offered back as "add this anyway".
+   ---------------------------------------------------------------- */
+var PAN = {keys:{}, index:{}, maxLen:1, recipes:{}};
+function singular(w){
+  if(w.length<=3) return w;
+  if(/ies$/.test(w)) return w.slice(0,-3)+'y';
+  if(/(ss|us|is)$/.test(w)) return w;
+  if(/(sses|shes|ches|xes|oes)$/.test(w)) return w.slice(0,-2);
+  if(/s$/.test(w)) return w.slice(0,-1);
+  return w;
+}
+function plural(w){
+  if(/[^aeiou]y$/.test(w)) return w.slice(0,-1)+'ies';
+  if(/(s|x|ch|sh)$/.test(w)) return w+'es';
+  return w+'s';
+}
+var PRE = [
+  [/\bm ?& ?m'?s\b|\bm and m'?s\b|\bm&m\b/g, 'mnms'],
+  [/\bmac(aroni)? ?(and|n|&) ?cheese\b/g, 'macncheese'],
+  [/\bpb ?& ?j\b|\bpb and j\b|\bpbj\b/g, 'pbj'],
+  [/\bcheez[ -]?its?\b/g, 'cheezits'],
+  [/\bgo[ -]?gurts?\b/g, 'gogurt'],
+  [/\bkit[ -]?kats?\b/g, 'kitkat'],
+  [/\bfruit roll[ -]?ups?\b/g, 'fruit rollups'],
+  [/\bfreeze[ -]dried\b/g, 'freezedried'],
+  [/\bhard[ -]boiled\b/g, 'hardboiled'],
+  [/\bstring[ -]cheese\b/g, 'string cheese']
+];
+function prep(s){
+  s = String(s).toLowerCase().replace(/['’]/g,'');
+  PRE.forEach(function(p){ s = s.replace(p[0], p[1]); });
+  return s;
+}
+function words(s){ return prep(s).replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean); }
+function L(k, aliases, c){
+  var kk = words(k).join(' ');
+  PAN.keys[kk] = {k:kk, d:k, c:c===undefined ? 'side' : c};
+  (k+'|'+(aliases||'')).split('|').forEach(function(a){
+    var w = words(a); if(!w.length) return;
+    if(w.length > PAN.maxLen) PAN.maxLen = w.length;
+    var last = w[w.length-1], head = w.slice(0,-1).join(' ');
+    [last, singular(last), plural(last)].forEach(function(f){
+      PAN.index[(head ? head+' ' : '')+f] = kk;
+    });
+  });
+}
+function R(name){
+  PAN.recipes[name] = [].slice.call(arguments,1).map(function(set){
+    return set.split(',').map(function(g){ return g.trim().split('|').map(function(x){ return words(x).join(' '); }); });
+  });
+}
+/* breads & wraps */
+L('bread','white bread|wheat bread|whole wheat bread|whole grain bread|sandwich bread|sliced bread|loaf|loaf of bread|brioche|sourdough|rye bread|multigrain bread|gluten free bread|potato bread|honey wheat|bun|dinner roll|rolls|roll',null);
+L('tortilla','tortillas|wraps|wrap|flour tortilla|corn tortilla|lavash|flatbread|soft tacos',null);
+L('pita','pitas|pita bread|pita pocket|pocket bread',null);
+L('bagel','bagels|mini bagel|everything bagel|plain bagel',null);
+L('sub roll','sub rolls|hoagie roll|hoagie|hoagies|hot dog bun|sandwich roll|kaiser roll',null);
+L('english muffin','english muffins',null);
+L('crackers','cracker|ritz|saltines|wheat thins|triscuits|club crackers|water crackers|rice crackers|town house|wheat crackers|butter crackers|graham? no',null);
+delete PAN.index['graham? no'];
+L('cheese crackers','cheezits|cheddar crackers|cheese cracker|cheese it','side');
+L('goldfish','goldfish crackers|gold fish|goldfishes','side');
+L('pita chips','pita chip|stacys','side');
+L('tortilla chips','tortilla chip|doritos|tostitos|nacho chips|scoops','side');
+L('corn chips','corn chip|fritos','side');
+L('potato chips','chips|chip|lays|pringles|kettle chips|sun chips|ruffles','side');
+L('pretzels','pretzel|pretzel sticks|pretzel twists|mini pretzels|pretzel crisps|pretzel thins|pretzel rods|snyders','side');
+L('popcorn','popcorn bags|microwave popcorn|skinny pop|smartfood|smart food|boom chicka pop','side');
+L('veggie straws','veggie straw|veggie chips|veggie sticks|veggie crisps','side');
+L('rice cakes','rice cake|mini rice cakes','side');
+L('breadsticks','bread sticks|breadstick|grissini','side');
+L('plantain chips','plantain chip|plantains','side');
+L('apple chips','apple chip|apple crisps','side');
+L('seaweed','seaweed snacks|seaweed snack|nori|roasted seaweed','side');
+L('snap pea crisps','harvest snaps|pea crisps|snap pea crisp','side');
+/* deli & protein */
+L('ham','deli ham|sliced ham|honey ham|black forest ham|ham slices|leftover ham|spiral ham',null);
+L('turkey','deli turkey|sliced turkey|turkey slices|turkey breast|smoked turkey|turkey lunch meat|leftover turkey','side');
+L('deli meat','lunch meat|lunchmeat|cold cuts|sandwich meat|deli slices|deli meats|luncheon meat',null);
+L('salami','genoa salami|sliced salami|summer sausage|soppressata|prosciutto','side');
+L('pepperoni','pepperoni slices|mini pepperoni|pepperonis|turkey pepperoni','side');
+L('bacon','turkey bacon|bacon bits',null);
+L('chicken','cooked chicken|rotisserie chicken|leftover chicken|grilled chicken|chicken breast|chicken strips|shredded chicken|chicken thighs|roast chicken','main');
+L('chicken nuggets','nuggets|dino nuggets|chicken tenders|chicken fingers|tenders|nugget|chicken bites','main');
+L('chicken salad','chicken salads','main');
+L('tuna','tuna fish|canned tuna|tuna packets|tuna pouches|tuna salad|tuna can|tuna cans','main');
+L('salmon','smoked salmon|lox|canned salmon|salmon packets|leftover salmon','main');
+L('eggs','egg|hardboiled eggs|hardboiled egg|boiled eggs|boiled egg|dozen eggs','side');
+L('egg salad','egg salads','main');
+L('hot dogs','hot dog|hotdogs|hotdog|corn dogs|corn dog|sausages|sausage|kielbasa','main');
+L('meatballs','meatball|turkey meatballs|leftover meatballs','main');
+L('tofu','baked tofu|tofu cubes','main');
+L('beans','black beans|canned beans|refried beans|pinto beans|kidney beans|bean|white beans|baked beans',null);
+L('chickpeas','garbanzo beans|garbanzos|roasted chickpeas|chickpea|garbanzo','side');
+L('lentils','lentil|lentil soup|red lentils|lentil stew','main');
+L('edamame','edamame beans|edamame pods','side');
+/* dairy */
+L('cheese','sliced cheese|cheese slices|cheese slice|american cheese|cheddar|cheddar cheese|swiss cheese|swiss|provolone|mozzarella|shredded cheese|cheese cubes|cubed cheese|cheese cube|colby jack|colby|monterey jack|muenster|gouda|havarti|pepper jack|kraft singles|singles|sharp cheddar|mild cheddar|block of cheese|cheese block|deli cheese|sandwich cheese',null);
+L('string cheese','cheese sticks|cheese stick|string cheeses|mozzarella sticks|mozzarella stick|cheese strings','side');
+L('babybel','babybels|baby bel|baby bels|mini babybel|cheese rounds|cheese round|cheese wheels|cheese wheel','side');
+L('fresh mozzarella','mozzarella balls|mozzarella ball|bocconcini|ciliegine|mozzarella pearls|fresh mozz',null);
+L('cream cheese','philadelphia|whipped cream cheese|philly cream cheese|cream cheese spread',null);
+L('cottage cheese','cottage cheese cups|cottage cheese cup','side');
+L('feta','feta cheese|crumbled feta|feta crumbles',null);
+L('yogurt','yoghurt|yogurt cups|yogurt cup|greek yogurt|vanilla yogurt|strawberry yogurt|yogurts|chobani|yoplait|siggis|activia|oikos|plain yogurt','side');
+L('yogurt tubes','yogurt tube|gogurt|squeeze yogurt|yogurt pouches|yogurt pouch|danimals|yogurt squeezes|yogurt sticks','side');
+L('pudding','pudding cups|pudding cup|chocolate pudding|snack pack|snack packs|vanilla pudding|jello pudding|puddings','sweet');
+L('rice pudding','rice pudding cups','sweet');
+L('butter','margarine|salted butter|unsalted butter',null);
+L('milk','whole milk|oat milk|almond milk|milk boxes|milk box|chocolate milk',null);
+/* spreads & dips */
+L('peanut butter','pb|jif|skippy|crunchy peanut butter|creamy peanut butter|smooth peanut butter|natural peanut butter',null);
+L('pb&j',null,'main');
+L('sunbutter','sun butter|sunflower butter|sunflower seed butter|sunflower seed spread',null);
+L('almond butter','nut butter|cashew butter',null);
+L('jelly','jam|grape jelly|strawberry jam|strawberry jelly|preserves|raspberry jam|apricot jam|marmalade|fruit spread',null);
+L('honey','honey bear|raw honey',null);
+L('hummus','humus|hummus cups|hummus cup|houmous|hummus tub|hummus container','side');
+L('guacamole','guac|guacamole cups|guacamole cup|wholly guacamole|guac cups','side');
+L('avocado','avocados|avo|avos','side');
+L('ranch','ranch dressing|ranch dip|ranch cups|ranch cup|dip|veggie dip|dressing|ranch packets|hidden valley',null);
+L('salsa','mild salsa|salsa jar|jar of salsa|pico de gallo|pico',null);
+L('pesto','basil pesto|pesto jar',null);
+L('caesar','caesar dressing|cesar dressing|caesar dressing packet',null);
+L('mayo','mayonnaise|hellmans|hellmanns|miracle whip',null);
+L('mustard','yellow mustard|dijon|dijon mustard|honey mustard',null);
+L('ketchup','catsup|heinz',null);
+L('pizza sauce','marinara|tomato sauce|pasta sauce|red sauce|spaghetti sauce|ragu|prego',null);
+/* grains & leftovers */
+L('pasta','noodles|noodle|rotini|penne|bowtie pasta|bowties|bow ties|farfalle|spaghetti|elbow noodles|elbows|fusilli|shells|pasta shells|orzo|dry pasta|cooked pasta|leftover pasta|angel hair|linguine|ziti|rigatoni','main');
+L('pasta salad','pasta salads|macaroni salad|leftover pasta salad','main');
+L('tortellini','cheese tortellini|tortellinis|ravioli|raviolis','main');
+L('mac and cheese','mac|kraft dinner|kraft mac|annies|boxed mac|easy mac|velveeta shells|velveeta','main');
+L('rice','white rice|brown rice|leftover rice|cooked rice|rice packets|jasmine rice|basmati rice|rice packet|minute rice|fried rice|sticky rice','main');
+L('quinoa','cooked quinoa|leftover quinoa|quinoa salad','main');
+L('soup','chicken noodle soup|chicken noodle|canned soup|tomato soup|soup cans|can of soup|cans of soup|leftover soup|noodle soup|progresso|campbells','main');
+L('chili','turkey chili|leftover chili|chili leftovers|beef chili|veggie chili|vegetarian chili','main');
+L('pizza','leftover pizza|pizza slices|pizza slice|cold pizza|pizza leftovers','main');
+L('pizza bagels','pizza bagel|bagel bites|mini pizzas|mini pizza|pizza rolls|pizza roll|totinos|pizza bites','main');
+L('quesadilla','quesadillas|leftover quesadilla|leftover quesadillas','main');
+L('waffles','waffle|eggo|eggos|frozen waffles|pancakes|pancake|leftover pancakes|french toast|french toast sticks','main');
+L('dumplings','dumpling|potstickers|potsticker|gyoza|pot stickers','main');
+L('cereal','cheerios|dry cereal|chex|cereal cups|cereal cup|honey nut cheerios|kix|rice krispies cereal|life cereal|granola cereal|cereal box|box of cereal','side');
+L('granola','granola clusters|granola cluster|homemade granola|bag of granola','side');
+/* vegetables */
+L('carrots','carrot|baby carrots|baby carrot|carrot sticks|carrot stick|mini carrots|carrot chips|shredded carrots','side');
+L('cucumber','cucumbers|cukes|cuke|persian cucumbers|persian cucumber|mini cucumbers|mini cucumber|english cucumber|cucumber slices','side');
+L('tomatoes','cherry tomatoes|cherry tomato|grape tomatoes|grape tomato|tomato|little tomatoes|baby tomatoes|tiny tomatoes|cherry toms','side');
+L('snap peas','sugar snap peas|sugar snaps|snow peas|snap pea|sugar snap pea|snow pea','side');
+L('celery','celery sticks|celery stick|celery stalks|celery stalk','side');
+L('bell pepper','bell peppers|peppers|pepper strips|red pepper|red peppers|mini peppers|mini pepper|sweet peppers|sweet pepper|yellow pepper|orange pepper|green pepper|pepper slices|sliced peppers','side');
+L('broccoli','broccoli florets|broccoli floret|raw broccoli|broccolini','side');
+L('cauliflower','cauliflower florets','side');
+L('lettuce','romaine|iceberg|salad greens|greens|mixed greens|spring mix|leaf lettuce|butter lettuce','side');
+L('spinach','baby spinach|fresh spinach',null);
+L('pickles','pickle|dill pickles|dill pickle|pickle spears|pickle spear|dill spears|whole pickles|pickle chips|bread and butter pickles','side');
+L('mini pickles','baby pickles|baby pickle|cornichons|cornichon|gherkins|gherkin|mini pickle|tiny pickles|little pickles','side');
+L('olives','olive|black olives|black olive|green olives|green olive|kalamata olives|kalamata|castelvetrano|sliced olives|olive cups|olive cup','side');
+L('corn','corn salad|sweet corn|corn kernels|leftover corn|corn on the cob|canned corn|frozen corn|corn cups','side');
+L('potato salad','potato salads|leftover potato salad','side');
+L('coleslaw','cole slaw|slaw|leftover coleslaw','side');
+L('three bean salad','bean salad|3 bean salad|leftover bean salad','side');
+L('sweet potato','sweet potatoes|sweet potato fries|yams','side');
+/* nuts & seeds */
+L('trail mix','trailmix|gorp|trail mixes|trail mix bags','side');
+L('nuts','mixed nuts|almonds|almond|cashews|cashew|peanuts|peanut|pistachios|pistachio|walnuts|walnut|pecans|pecan|macadamia|macadamias','side');
+L('sunflower seeds','sunflower seed|sunflower kernels|sunflower','side');
+L('pumpkin seeds','pumpkin seed|pepitas|pepita','side');
+/* fruit */
+L('apples','apple|apple slices|apple slice|honeycrisp|honeycrisps|gala apples|gala apple|fuji apples|fuji apple|pink lady|pink lady apples|granny smith|granny smiths|red apples|green apples|sliced apples','fruit');
+L('grapes','grape|green grapes|green grape|seedless grapes|cotton candy grapes|bag of grapes|bunch of grapes','fruit');
+L('red grapes','red grape|purple grapes|purple grape|black grapes|black grape|concord grapes','fruit');
+L('strawberries','strawberry|straw berries|strawbs','fruit');
+L('blueberries','blueberry|blue berries|blue berry','fruit');
+L('raspberries','raspberry|rasberries|razzberries','fruit');
+L('blackberries','blackberry|black berries','fruit');
+L('berries','berry|mixed berries|berry medley|berry mix|fresh berries|frozen berries','fruit');
+L('fruit salad','fruit salads|mixed fruit|cut fruit|cut up fruit|fruit bowl|fruit medley|chopped fruit|fruit platter','fruit');
+L('clementines','clementine|cuties|cutie|halos|halo|mandarin|mandarins|little oranges|little orange|satsuma|satsumas|baby oranges','fruit');
+L('tangerine','tangerines|tangelo|tangelos','fruit');
+L('oranges','orange|navel oranges|navel orange|orange segments|orange slices|cara cara|blood oranges','fruit');
+L('banana','bananas|nanas|nana','fruit');
+L('watermelon','watermelons|watermelon cubes|watermelon chunks|water melon|watermelon slices','fruit');
+L('pineapple','pineapples|pineapple chunks|pineapple chunk|pineapple rings|cut pineapple|pineapple spears|pineapple tidbits','fruit');
+L('cantaloupe','cantaloupes|cantelope|canteloupe|cantaloupe cubes|cantaloupe chunks|rockmelon|musk melon|muskmelon','fruit');
+L('honeydew','honeydews|honey dew|honeydew melon|honeydew cubes|green melon','fruit');
+L('melon','melons|melon cubes|melon chunks|cut melon|melon balls|mixed melon','fruit');
+L('peaches','peach|peach slices|peach slice|sliced peaches|white peaches|donut peaches','fruit');
+L('nectarines','nectarine|nectarine slices','fruit');
+L('mango','mangoes|mangos|mango chunks|mango chunk|cut mango|mango slices|mango cubes|frozen mango','fruit');
+L('kiwi','kiwis|kiwi fruit|kiwifruit|kiwi slices|gold kiwi','fruit');
+L('pear','pears|pear slices|pear slice|bartlett pears|bosc pears|asian pears|asian pear','fruit');
+L('plum','plums|pluots|pluot|plumcots','fruit');
+L('cherries','cherry|rainier cherries|bing cherries|fresh cherries|bag of cherries|pitted cherries','fruit');
+L('pomegranate','pomegranates|pomegranate seeds|pomegranate seed|pom seeds|pomegranate arils|arils|pom','fruit');
+L('raisins','raisin|raisin boxes|raisin box|little boxes of raisins|golden raisins|sun maid|sunmaid','fruit');
+L('dried cranberries','craisins|craisin|cranberries|cranberry|dried cranberry','fruit');
+L('dried apricots','apricots|apricot|dried apricot','fruit');
+L('dried mango','dried mangos|dried mangoes|mango strips|dried mango slices','fruit');
+L('dried apples','dried apple|dried apple rings|apple rings|apple ring','fruit');
+L('dried fruit','dried fruits|fruit and nut mix|dates|prunes|dried figs|figs|fig','fruit');
+L('banana chips','banana chip|dried banana|dried bananas','fruit');
+L('freeze-dried strawberries','freeze-dried strawberry|freeze-dried fruit|freeze-dried berries|freeze-dried apples|freeze-dried mango|freeze-dried raspberries|crispy fruit','fruit');
+L('fruit cups','fruit cup|fruit in juice|dole fruit cups|dole cups|dole cup|peach cups|peach cup|canned peaches|canned pears|canned fruit|pear cups|pear cup|fruit cocktail|fruit cocktail cups','fruit');
+L('mandarin cups','mandarin oranges|mandarin orange cups|mandarin orange cup|canned mandarins|canned mandarin oranges|mandarin cup|orange cups|orange cup','fruit');
+L('applesauce','apple sauce|applesauce pouches|applesauce pouch|applesauce cups|applesauce cup|gogo squeez|gogo squeeze|squeeze pouches|squeeze pouch|fruit pouches|fruit pouch|apple sauce pouches|apple sauce cups|motts applesauce|motts|apple pouches','side');
+/* sweets */
+L('fruit snacks','fruit snack|welchs|welchs fruit snacks|gummy snacks|gummy snack|fruit gummies|fruit gummy|motts fruit snacks|annies fruit snacks|fruit snack pouches|fruit snack packs','sweet');
+L('fruit leather','fruit leathers|fruit rollups|fruit rollup|fruit by the foot|fruit strips|fruit strip|fruit rolls|fruit roll|stretch island|that fruit leather stuff','sweet');
+L('gummy bears','gummy bear|gummy worms|gummy worm|gummies|gummy|haribo|gummy candy|gummy candies|sour gummies|sour patch kids|sour patch|swedish fish','sweet');
+L('cookies','cookie|chocolate chip cookies|chocolate chip cookie|chips ahoy|homemade cookies|bag of cookies|box of cookies|cookie dough','sweet');
+L('oatmeal cookies','oatmeal cookie|oatmeal raisin cookies|oatmeal raisin cookie|oatmeal raisin|oatmeal chocolate chip cookies','sweet');
+L('oreos','oreo|sandwich cookies|sandwich cookie|chocolate sandwich cookies|chocolate sandwich cookie|golden oreos|mini oreos|creme cookies','sweet');
+L('graham crackers','graham cracker|grahams|graham|honey grahams|honey graham crackers|cinnamon grahams|cinnamon graham crackers|honey maid','sweet');
+L('graham sticks','graham stick|teddy grahams|teddy graham|honey graham sticks|honey graham stick|graham snacks|scooby snacks','sweet');
+L('animal crackers','animal cracker|animal cookies|animal cookie|barnum animal crackers|zoo animal crackers','sweet');
+L('frosted animal cookies','frosted animal cracker|frosted animal crackers|frosted animal cookie|circus animal cookies|circus animal cookie|circus animals|circus animal|pink and white animal cookies|pink and white cookies|frosted animals','sweet');
+L('vanilla wafers','vanilla wafer|nilla wafers|nilla wafer|nilla|nillas|wafers|wafer|wafer cookies|wafer cookie|sugar wafers|sugar wafer','sweet');
+L('brownies','brownie|brownie bites|brownie bite|little brownies|mini brownies|leftover brownies|homemade brownies','sweet');
+L('muffins','muffin|mini muffins|mini muffin|blueberry muffins|blueberry muffin|chocolate chip muffins|chocolate chip muffin|banana muffins|banana muffin|apple muffins|apple cinnamon muffins|apple cinnamon muffin|little muffins|homemade muffins|muffin tops','sweet');
+L('banana bread','banana loaf|banana bread slices|banana bread slice|leftover banana bread','sweet');
+L('zucchini bread','zucchini loaf|zucchini bread slices|zucchini bread slice|zucchini muffins|zucchini muffin','sweet');
+L('pumpkin bread','pumpkin loaf|pumpkin bread slices|pumpkin bread slice|pumpkin muffins|pumpkin muffin','sweet');
+L('rice krispie treats','rice krispie treat|rice krispies treats|rice krispies treat|rice crispy treats|rice crispy treat|krispie treats|krispie treat|crispy treats|crispy treat|krispies treats|rice crispies treats|rice crispie squares|rice krispy treats|rice krispy treat|marshmallow treats|marshmallow squares','sweet');
+L('chocolate','dark chocolate|chocolate bar|chocolate bars|hersheys|hershey bar|hershey bars|chocolate squares|chocolate square|kisses|hershey kisses|hersheys kisses|mnms|chocolate chips|chocolate chip|milk chocolate|dove chocolate|dove chocolates|chocolate pieces|chocolate piece|mini chocolate bars|chocolate coins','sweet');
+L('candy','candy bars|candy bar|mini candy bars|mini candy bar|fun size candy|fun size|halloween candy|snickers|twix|reeses|reeses cups|peanut butter cups|milky way|three musketeers|3 musketeers|butterfinger|starburst|skittles|candies|lollipops|lollipop|jolly ranchers|jolly rancher|smarties|nerds|tootsie rolls|tootsie roll|leftover candy','sweet');
+L('marshmallows','marshmallow|mini marshmallows|mini marshmallow|little marshmallows|jet puffed|marshmallow bits','sweet');
+L('chocolate covered pretzels','chocolate covered pretzel|chocolate pretzels|chocolate pretzel|chocolate dipped pretzels|chocolate dipped pretzel|flipz|yogurt covered pretzels|yogurt pretzels','sweet');
+L('yogurt raisins','yogurt raisin|yogurt covered raisins|yogurt covered raisin|yoghurt raisins|yogurt dipped raisins','sweet');
+L('licorice','twizzlers|twizzler|red vines|red vine|liquorice|licorice twists|licorice twist|licorice sticks|black licorice|red licorice','sweet');
+L('caramel corn','caramel popcorn|kettle corn|crackerjacks|cracker jacks|cracker jack|caramel corns','sweet');
+L('donuts','donut|mini donuts|mini donut|doughnuts|doughnut|donut holes|donut hole|munchkins|munchkin|powdered donuts|powdered donut|chocolate donuts|glazed donuts|little donuts|entenmanns','sweet');
+L('cupcakes','cupcake|mini cupcakes|mini cupcake|leftover cupcakes|birthday cupcakes|cake|leftover cake|birthday cake|cake slices|slice of cake','sweet');
+L('gingersnaps','gingersnap|ginger snaps|ginger snap|ginger cookies|ginger cookie|gingerbread|gingerbread cookies|gingerbread cookie|gingerbread men|gingerbread man','sweet');
+L('shortbread','shortbread cookies|shortbread cookie|lorna doone|lorna doones|walkers shortbread|shortbreads|butter cookies|butter cookie','sweet');
+L('sugar cookies','sugar cookie|frosted sugar cookies|frosted sugar cookie|frosted cookies|frosted cookie|iced cookies|iced cookie|decorated cookies|pillsbury cookies','sweet');
+L('snickerdoodles','snickerdoodle|snicker doodles|snicker doodle|cinnamon sugar cookies|cinnamon sugar cookie','sweet');
+L('lemon bars','lemon bar|lemon squares|lemon square|lemon cookies|lemon cookie','sweet');
+L('blondies','blondie|blondie bites|blondie bite|butterscotch bars|butterscotch bar|congo bars','sweet');
+L('macaroons','macaroon|coconut macaroons|coconut macaroon|macarons|macaron|coconut cookies|coconut cookie','sweet');
+L('meringues','meringue|meringue cookies|meringue cookie|meringue kisses|meringue kiss|pavlova','sweet');
+L('cereal bars','cereal bar|nutrigrain|nutri grain|nutrigrain bars|nutrigrain bar|breakfast bars|breakfast bar|fig bars|fig bar|fig newtons|fig newton|belvita|belvitas|cereal bars box|soft baked bars|soft baked bar|quaker bars|chewy granola bar? no','sweet');
+delete PAN.index['chewy granola bar? no'];
+L('granola bars','granola bar|nature valley|chewy bars|chewy bar|kind bars|kind bar|clif bars|clif bar|z bars|z bar|zbar|zbars|protein bars|protein bar|larabars|larabar|rxbar|rxbars|quaker chewy|chewy granola bars|chewy granola bar|oat bars|oat bar|bars|bar|snack bars|snack bar|lara bars|lara bar','sweet');
+L('wafer bars','wafer bar|kitkat|kitkats|chocolate wafer bars|chocolate wafer bar|chocolate wafers|chocolate wafer','sweet');
+L('jello','jello cups|jello cup|jell o|gelatin|gelatin cups','sweet');
+/* drinks and things that go in nothing, but should still be heard */
+L('juice','juice boxes|juice box|capri sun|capri suns|apple juice|orange juice|juice pouches|juice pouch|honest kids|juicy juice',null);
+L('water','water bottles|water bottle|bottled water|sparkling water|la croix|lacroix',null);
+L('onion','onions|red onion|green onions|scallions',null);
+L('lemon','lemons|limes|lime',null);
+L('cinnamon','cinnamon sugar|sugar|brown sugar',null);
+
+/* ---- recipes: bank food name -> what it needs ---- */
+var FRUIT = 'apples|grapes|red grapes|strawberries|blueberries|raspberries|blackberries|berries|clementines|tangerine|oranges|banana|watermelon|pineapple|cantaloupe|honeydew|melon|peaches|nectarines|mango|kiwi|pear|plum|cherries|fruit cups|fruit salad|mandarin cups';
+var VEG = 'cucumber|carrots|bell pepper|lettuce|spinach|tomatoes|snap peas|celery|broccoli';
+var MEAT = 'ham|turkey|deli meat';
+/* mains */
+R('Turkey & cheese roll-ups', 'turkey|deli meat, cheese|cream cheese|string cheese');
+R('Ham & cheese sandwich', 'bread, ham|deli meat, cheese|cream cheese');
+R('Sunbutter & jelly sandwich', 'bread, sunbutter, jelly');
+R('Peanut butter & jelly sandwich', 'bread, peanut butter|pb&j, jelly|pb&j');
+R('Peanut butter & banana wrap', 'tortilla, peanut butter, banana');
+R('Cream cheese & cucumber bagel', 'bagel, cream cheese, cucumber');
+R('Pasta salad cup', 'pasta salad', 'pasta');
+R('Chicken salad in a pita', 'chicken salad, pita');
+R('Crackers, cheese cubes & salami', 'crackers, cheese, salami|pepperoni');
+R('Egg salad sandwich', 'egg salad, bread', 'eggs, mayo, bread');
+R('Hummus & veggie wrap', 'tortilla, hummus, '+VEG);
+R('Tuna salad with crackers', 'tuna, crackers');
+R('Bean & cheese roll-up', 'tortilla, beans, cheese');
+R('Yogurt & granola parfait', 'yogurt, granola');
+R('Chicken & cheese skewers', 'chicken, cheese|string cheese|babybel');
+R('Cucumber sushi rolls', 'rice, cucumber, seaweed');
+R('Cold grilled chicken strips', 'chicken');
+R('Turkey & cheese pinwheels', 'tortilla, turkey|deli meat, cheese|cream cheese');
+R('Mac & cheese thermos', 'mac and cheese', 'pasta, cheese, milk');
+R('Turkey & avocado wrap', 'tortilla, turkey|deli meat, avocado|guacamole');
+R('Grilled cheese, packed cold', 'bread, cheese');
+R('Chicken caesar wrap', 'tortilla, chicken, caesar');
+R('Cheese & cracker stackers', 'crackers, cheese');
+R('Bagel with cream cheese', 'bagel, cream cheese');
+R('Ham & cheese pinwheels', 'tortilla, ham|deli meat, cream cheese|cheese');
+R('Chicken nuggets, packed cold', 'chicken nuggets');
+R('Mini bagel pizzas, cold', 'pizza bagels', 'bagel, cheese, pizza sauce');
+R('Rice & black bean bowl', 'rice, beans');
+R('Quinoa salad cup', 'quinoa');
+R('Lentil soup thermos', 'lentils');
+R('Turkey chili thermos', 'chili');
+R('Chicken noodle soup thermos', 'soup');
+R('Deli turkey & crackers', 'turkey|deli meat, crackers');
+R('Cheese quesadilla, packed cold', 'quesadilla', 'tortilla, cheese');
+R('Egg & cheese muffin, cold', 'eggs, cheese, english muffin|bagel|bread');
+R('Tortellini salad', 'tortellini');
+R('Chicken & rice bowl', 'chicken, rice');
+R('Veggie & hummus pita', 'pita, hummus, '+VEG);
+R('Salmon & cracker bites', 'salmon, crackers');
+R('Cottage cheese & fruit cup', 'cottage cheese, '+FRUIT);
+R('Chicken salad crackers', 'chicken salad, crackers');
+R('BLT wrap, hold the mayo', 'tortilla, bacon, lettuce');
+R('Sunbutter & honey roll-up', 'tortilla, sunbutter, honey');
+R('Turkey & cheese sub roll', 'sub roll, turkey|deli meat, cheese');
+R('Pesto pasta cup', 'pasta, pesto');
+/* sides */
+R('Pretzel sticks', 'pretzels');
+R('Baby carrots & ranch', 'carrots, ranch');
+R('Cucumber coins', 'cucumber');
+R('Cherry tomatoes', 'tomatoes');
+R('Sugar snap peas', 'snap peas');
+R('Celery sticks', 'celery');
+R('Bell pepper strips', 'bell pepper');
+R('Dill pickle spear', 'pickles');
+R('Popcorn', 'popcorn');
+R('Tortilla chips & salsa', 'tortilla chips, salsa');
+R('Cheese stick', 'string cheese');
+R('Hard-boiled egg', 'eggs');
+R('Edamame', 'edamame');
+R('Black olives', 'olives');
+R('Veggie straws', 'veggie straws');
+R('Wheat crackers', 'crackers');
+R('Hummus cup', 'hummus');
+R('Applesauce pouch', 'applesauce');
+R('Yogurt tube', 'yogurt tubes');
+R('Trail mix', 'trail mix');
+R('Goldfish crackers', 'goldfish');
+R('Cheese crackers', 'cheese crackers');
+R('Rice cakes', 'rice cakes');
+R('Guacamole cup', 'guacamole|avocado');
+R('Snap pea crisps', 'snap pea crisps');
+R('Broccoli florets & dip', 'broccoli, ranch');
+R('Corn salad cup', 'corn');
+R('Three-bean salad', 'three bean salad');
+R('Potato salad cup', 'potato salad');
+R('Coleslaw cup', 'coleslaw');
+R('Seaweed snacks', 'seaweed');
+R('Roasted chickpeas', 'chickpeas');
+R('Sunflower seeds', 'sunflower seeds');
+R('Pumpkin seeds', 'pumpkin seeds');
+R('Babybel cheese round', 'babybel');
+R('Pepperoni slices', 'pepperoni');
+R('Turkey roll slices', 'turkey');
+R('Olives & feta cup', 'olives, feta');
+R('Caprese skewers', 'fresh mozzarella, tomatoes');
+R('Pita chips', 'pita chips');
+R('Plantain chips', 'plantain chips');
+R('Apple chips', 'apple chips');
+R('Mini pickles', 'mini pickles');
+R('Corn chips', 'corn chips');
+R('Breadsticks', 'breadsticks');
+R('Cottage cheese cup', 'cottage cheese');
+R('Cheese & pretzel bites', 'pretzels, cheese|string cheese');
+R('Mixed nuts', 'nuts');
+R('Granola cluster', 'granola');
+/* fruit */
+R('Apple slices', 'apples');
+R('Green grapes', 'grapes');
+R('Red grapes', 'red grapes');
+R('Strawberries', 'strawberries');
+R('Blueberries', 'blueberries');
+R('Clementine', 'clementines');
+R('Tangerine', 'tangerine');
+R('Banana', 'banana');
+R('Watermelon cubes', 'watermelon');
+R('Pineapple chunks', 'pineapple');
+R('Cantaloupe cubes', 'cantaloupe');
+R('Raspberries', 'raspberries');
+R('Mandarin orange cup', 'mandarin cups');
+R('Peach slices', 'peaches');
+R('Mango chunks', 'mango');
+R('Dried apricots', 'dried apricots');
+R('Raisins', 'raisins');
+R('Blackberries', 'blackberries');
+R('Honeydew cubes', 'honeydew');
+R('Kiwi slices', 'kiwi');
+R('Pear slices', 'pear');
+R('Plum', 'plum');
+R('Cherries', 'cherries');
+R('Fruit salad cup', 'fruit salad|berries');
+R('Dried mango', 'dried mango');
+R('Banana chips', 'banana chips');
+R('Freeze-dried strawberries', 'freeze-dried strawberries');
+R('Orange segments', 'oranges');
+R('Nectarine slices', 'nectarines');
+R('Pomegranate seeds', 'pomegranate');
+R('Fruit cup in juice', 'fruit cups');
+R('Melon skewers', 'melon');
+R('Dried cranberries', 'dried cranberries');
+R('Dried apple rings', 'dried apples');
+/* sweets */
+R('Chocolate chip cookies', 'cookies');
+R('Graham crackers', 'graham crackers');
+R('Animal crackers', 'animal crackers');
+R('Fruit snacks', 'fruit snacks');
+R('Granola bar', 'granola bars');
+R('Rice crispy treat', 'rice krispie treats');
+R('Brownie bite', 'brownies');
+R('Oatmeal cookie', 'oatmeal cookies');
+R('Mini muffin', 'muffins');
+R('Pudding cup', 'pudding');
+R('Fruit leather', 'fruit leather');
+R('Chocolate-covered pretzels', 'chocolate covered pretzels');
+R('Banana bread slice', 'banana bread');
+R('Dark chocolate square', 'chocolate');
+R('Jello cup', 'jello');
+R('Vanilla wafers', 'vanilla wafers');
+R('Shortbread cookie', 'shortbread');
+R('Sugar cookie', 'sugar cookies');
+R('Mini marshmallows', 'marshmallows');
+R('Yogurt-covered raisins', 'yogurt raisins');
+R('Mini donut', 'donuts');
+R('Blondie bite', 'blondies');
+R('Lemon bar', 'lemon bars');
+R('Snickerdoodle', 'snickerdoodles');
+R('Gingersnaps', 'gingersnaps');
+R('Cereal bar', 'cereal bars');
+R('Zucchini bread slice', 'zucchini bread');
+R('Pumpkin bread slice', 'pumpkin bread');
+R('Rice pudding cup', 'rice pudding');
+R('Mini cupcake', 'cupcakes');
+R('Chocolate sandwich cookies', 'oreos');
+R('Chocolate wafer bar', 'wafer bars');
+R('Caramel corn', 'caramel corn');
+R('Honey graham sticks', 'graham sticks');
+R('Coconut macaroon', 'macaroons');
+R('Meringue cookie', 'meringues');
+R('Licorice twists', 'licorice');
+R('Gummy bears', 'gummy bears');
+R('Mini candy bar', 'candy');
+R('Frosted animal cookies', 'frosted animal cookies');
+
+/* Words that carry no food: quantities, containers, places, and the way
+   people talk when they are reading a shelf out loud. */
+var FILLER = {};
+('a an the of my our his her their its some any few couple bunch bag bags box boxes jar jars can cans container containers '
++'pack packs package packages tub tubs bottle bottles carton cartons cup cups sleeve sleeves tube tubes piece pieces slice slices '
++'half whole lot lots ton tons plenty bit little big small large mini extra more another other rest '
++'one two three four five six seven eight nine ten dozen several many much '
++'i im ive we weve you youve got have has had there theres is are was were be been still also and or plus then so um uh uhh umm er erm hmm '
++'like just only really pretty kind sort of stuff things thing something yeah yes yep nope no ok okay oh well right actually basically '
++'in on at from for with to into out up down inside '
++'fridge refrigerator freezer pantry cupboard cabinet drawer shelf shelves kitchen counter house home garage '
++'lunch lunches lunchbox lunchboxes lunchbox school kids kid week this that these those next tomorrow today '
++'fresh frozen leftover leftovers left over cooked raw sliced cut chopped diced cubed shredded organic plain regular homemade store bought '
++'let lets see think guess know mean look looking probably maybe might could should would gonna going need needs want wants '
++'fruit veggies vegetables veggie vegetable snacks snack food foods stuff dinner breakfast '
++'etc etcetera whatever anything everything else all done finished thats its it um').split(/\s+/).forEach(function(w){ FILLER[w] = 1; });
+var SEP = /[,;.!?\n]+|\b(?:and|also|plus|then|or|with|um|uh|erm|hmm)\b/;
+var GUESS = [
+  ['sweet', /cooki|bar\b|cake|browni|candy|chocolat|muffin|donut|dough|treat|pudding|gumm|sweet|dessert|marshmallow|licorice|pie\b|tart|fudge|toffee|caramel|wafer|biscuit|scone/],
+  ['fruit', /berr|fruit|apple|melon|grape|orange|banana|peach|pear\b|plum|mango|kiwi|cherr|pineapple|raisin|dried|apricot|papaya|guava|lychee|fig\b|date/],
+  ['main',  /sandwich|wrap|roll|pasta|rice|chicken|turkey|ham\b|beef|pork|meat|bologna|pastrami|salad|soup|pizza|quesadilla|burrito|noodle|sushi|dumpling|meatball|hot ?dog|egg|bagel|bowl|leftover|tofu|salmon|tuna|taco|burger|steak|lasagna|curry|stew|falafel|kebab|pie\b|empanada|samosa/]
+];
+function guessCat(text){
+  for(var i=0;i<GUESS.length;i++) if(GUESS[i][1].test(text)) return GUESS[i][0];
+  return 'side';
+}
+/* text -> {items:[{k,said}], unknown:[{text,c}]} */
+function parsePantry(text){
+  var items = [], seen = {}, unknown = [], useen = {};
+  function flush(run){
+    var w = run.filter(function(x){ return !FILLER[x] && !/^\d+$/.test(x); });
+    if(!w.length || w.length > 4) return;
+    var t = w.join(' ');
+    if(t.length < 3 || useen[t]) return;
+    useen[t] = 1; unknown.push({text:t, c:guessCat(t)});
+  }
+  prep(text).split(SEP).forEach(function(seg){
+    var w = words(seg), i = 0, run = [];
+    while(i < w.length){
+      var hit = null, len;
+      for(len = Math.min(PAN.maxLen, w.length-i); len >= 1 && !hit; len--){
+        var ph = w.slice(i, i+len), key = ph.join(' ');
+        var k = PAN.index[key];
+        if(!k){ ph[ph.length-1] = singular(ph[ph.length-1]); k = PAN.index[ph.join(' ')]; }
+        if(k) hit = {k:k, said:w.slice(i, i+len).join(' '), len:len};
+      }
+      if(hit){
+        flush(run); run = [];
+        if(!seen[hit.k]){ seen[hit.k] = 1; items.push({k:hit.k, said:hit.said}); }
+        i += hit.len;
+      } else { run.push(w[i]); i++; }
+    }
+    flush(run);
+  });
+  return {items:items, unknown:unknown};
+}
+/* ingredient keys -> {can:[bank names], nearly:[{n, missing}]} */
+function matchPantry(keys){
+  var have = {}; keys.forEach(function(k){ have[k] = 1; });
+  var can = [], nearly = [];
+  Object.keys(PAN.recipes).forEach(function(n){
+    var best = null;
+    PAN.recipes[n].forEach(function(set){
+      var missing = set.filter(function(g){ return !g.some(function(k){ return have[k]; }); });
+      if(!best || missing.length < best.missing.length) best = {missing:missing, size:set.length};
+    });
+    if(!best) return;
+    if(!best.missing.length) can.push(n);
+    else if(best.missing.length === 1 && best.size > 1) nearly.push({n:n, missing:best.missing[0][0], got:best.size-1});
+  });
+  nearly.sort(function(a,b){ return b.got-a.got; });
+  return {can:can, nearly:nearly};
+}
 
 /* ================================================================ storage
    The ONLY place that touches persistence. Both calls are async so the
@@ -820,7 +1358,8 @@ function anchorWeek(kid){
   var last = addDays(ws, (days[days.length-1]+6)%7);
   return t > last ? addDays(ws, 7) : ws;
 }
-function planWeek(kid){
+function planWeek(kid, opts){
+  opts = opts || {};
   var days = packDaysSorted(kid), ws = anchorWeek(kid);
   var prev = kid.week && kid.week.start === iso(ws) ? kid.week : null;
   var week = {id:(prev && prev.id) || uid('week'), kidId:kid.id, start:iso(ws), updatedAt:now(), days:[]};
@@ -838,9 +1377,25 @@ function planWeek(kid){
   CATS.forEach(function(c){
     var pool = eligible(kid, c.k);
     var open = week.days.filter(function(d){ return !d.slots[c.k]; });
-    if(!pool.length){ if(open.length) shortfall.push(c.plural); return; }
     var locked = week.days.filter(function(d){ return d.slots[c.k]; }).map(function(d){ return d.slots[c.k]; });
-    var picks = draw(pool, open.length, locked);
+    var picks;
+    if(opts.prefer){
+      /* pantry-first: everything on hand goes in once, then the rest of the
+         list fills what is left — or, if asked, nothing does */
+      var pref = pool.filter(function(f){ return opts.prefer.indexOf(f.id)>-1; });
+      var rest = opts.only ? [] : pool.filter(function(f){ return opts.prefer.indexOf(f.id)<0; });
+      if(!pref.length && !rest.length){ if(open.length) shortfall.push(c.plural); return; }
+      var fresh = pref.filter(function(f){ return locked.indexOf(f.id)<0; });
+      picks = draw(fresh, Math.min(open.length, fresh.length), locked);
+      if(picks.length < open.length){
+        var more = rest.length ? rest : pref;
+        picks = picks.concat(draw(more, open.length - picks.length,
+          locked.concat(picks.map(function(f){ return f.id; }))));
+      }
+    } else {
+      if(!pool.length){ if(open.length) shortfall.push(c.plural); return; }
+      picks = draw(pool, open.length, locked);
+    }
     if(c.k==='main'){
       open.forEach(function(d,i){ d.slots.main = picks[i] ? picks[i].id : null; });
     } else {
@@ -920,7 +1475,10 @@ function openSheet(title, html, state){
   titleEl.textContent = title; bodyEl.innerHTML = html; sheetState = state || null;
   sheetEl.classList.add('open'); backEl.classList.add('open'); bodyEl.scrollTop = 0;
 }
-function closeSheet(){ sheetEl.classList.remove('open'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; }
+function closeSheet(){
+  if(sheetState==='pantry') voiceStop();
+  sheetEl.classList.remove('open'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null;
+}
 backEl.addEventListener('click', closeSheet);
 document.getElementById('sheetClose').addEventListener('click', closeSheet);
 
@@ -931,7 +1489,9 @@ function tinHTML(kid, day, mode){
     var f = foodById(kid, day.slots[c.k]);
     var packedRow = kid.packed[day.d] || {};
     var packed = mode==='pack' && !!packedRow[c.k];
-    var sub = f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '');
+    var home = f && S.pantry[normKey(f.n)] && S.pantry[normKey(f.n)].have;
+    var sub = [home ? 'at home' : '', f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '')]
+      .filter(Boolean).join(' · ');
     var mark = mode==='pack' ? '<span class="tick">'+svg('check',9)+'</span>'
              : (day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>' : '');
     h += '<button class="cmp c-'+c.k+(f?'':' empty')+'" data-act="'+(mode==='pack'?'toggle':'slot')+'"'
@@ -1071,10 +1631,11 @@ function viewWeek(){
     + '<p class="view-sub">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+(multi ? ' · '+esc(kid.name) : '')+'</p>'
     + '<h2 class="view-title">'+(NUMWORD[n]||n)+' box'+(n===1?'':'es')+'</h2></div>'
     + '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+'Shuffle</button></div>'
-    + planBanner();
+    + planBanner()
+    + '<button class="btn wide" data-act="pantry">'+svg('mic',18)+'Plan from what&#8217;s in the kitchen</button>';
   if(!kid.week)
     return h + '<div class="empty"><p>Shuffle draws a main, side, fruit and sweet for every pack day, '
-      + 'then arranges them so each box goes together.</p></div></div>';
+      + 'then arranges them so each box goes together. Or say what&#8217;s in the kitchen and it plans from that first.</p></div></div>';
 
   kid.week.days.forEach(function(day){
     var l = dayLabel(day.d);
@@ -1099,6 +1660,7 @@ function viewShop(){
   h += '<div class="spread"><span class="count">'+toBuy+' to buy · '+(rows.length-toBuy)+' already home</span>'
     +  '<button class="btn ghost sm" data-act="copy-list">Copy list</button></div>'
     +  '<p class="hint">Check off what the pantry already has, then shop the rest.'
+    +  (S.stock ? ' What you said was in the kitchen is already ticked.' : '')
     +  (multi ? ' Both lunchboxes are in one list.' : '')+'</p>';
   var groups = {};
   rows.forEach(function(r){ (groups[r.aisle] = groups[r.aisle] || []).push(r); });
@@ -1333,6 +1895,209 @@ function exportText(){
   return JSON.stringify({app:'lunchbox-tin', schema:SCHEMA, exportedAt:now(), account:S}, null, 2);
 }
 
+/* ------------------------------------------------------- pantry sheet
+   Voice goes through the browser's own speech engine (Web Speech API), so
+   there is still no server. Where it is missing — Firefox, some installed
+   home-screen copies — the textarea takes keyboard dictation or typing, and
+   everything below the mic works exactly the same. */
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+var PN = {text:'', on:false, rec:null, base:'', off:{}, add:{}, drop:{}, only:false, err:'', starts:0};
+var MIC_ERR = {
+  'not-allowed':'Microphone blocked — allow it in your browser settings, or type below.',
+  'service-not-allowed':'Microphone blocked — allow it in your browser settings, or type below.',
+  'network':'Speech needs a connection right now — type below instead.',
+  'audio-capture':'No microphone found — type below.'
+};
+function voiceStart(){
+  if(!SR || PN.on) return;
+  var r;
+  try{ r = new SR(); }catch(e){ PN.err = 'start'; syncPantry(); return; }
+  r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+  r.lang = navigator.language || 'en-US';
+  PN.base = PN.text.trim(); PN.err = ''; PN.starts = 0;
+  r.onstart = function(){ PN.starts++; };
+  r.onresult = function(e){
+    /* rebuild from the whole result list every time: Chrome and Safari
+       disagree about resultIndex, but both keep the session's results */
+    var s = '';
+    for(var i=0;i<e.results.length;i++) s += e.results[i][0].transcript+' ';
+    PN.text = (PN.base ? PN.base+', ' : '') + s.trim();
+    syncPantry();
+  };
+  r.onerror = function(e){
+    var code = e && e.error;
+    if(code==='no-speech' || code==='aborted') return;   /* onend restarts, or the user stopped */
+    PN.err = code || 'error'; PN.on = false;
+  };
+  r.onend = function(){
+    if(PN.rec !== r) return;
+    /* Chrome ends the session after a pause; keep listening until the user taps stop */
+    if(PN.on && !PN.err && PN.starts < 30){
+      PN.base = PN.text.trim();
+      try{ r.start(); return; }catch(x){}
+    }
+    PN.on = false; PN.rec = null; syncPantry();
+  };
+  PN.rec = r; PN.on = true;
+  try{ r.start(); }catch(e){ PN.on = false; PN.rec = null; PN.err = 'start'; }
+  syncPantry();
+}
+function voiceStop(){
+  PN.on = false;
+  if(PN.rec){ var r = PN.rec; PN.rec = null; try{ r.stop(); }catch(e){} }
+  syncPantry();
+}
+function pantryReset(){ PN.text=''; PN.off={}; PN.add={}; PN.drop={}; PN.err=''; }
+
+/* what the transcript amounts to, for one lunchbox */
+function pantryModel(kid){
+  var parsed = parsePantry(PN.text);
+  var items = parsed.items.filter(function(i){ return !PN.drop[i.k]; });
+  var have = {}; items.forEach(function(i){ have[i.k] = 1; });
+  var m = matchPantry(items.map(function(i){ return i.k; }));
+  var can = [], skipped = [], used = {}, mine = {};
+  foodsOf(kid).forEach(function(f){ mine[normKey(f.n)] = f; });
+  m.can.forEach(function(n){
+    var b = BANK.filter(function(x){ return x.n===n; })[0]; if(!b) return;
+    PAN.recipes[n].forEach(function(set){ set.forEach(function(g){ g.forEach(function(k){ if(have[k]) used[k] = 1; }); }); });
+    (violation(kid, b) ? skipped : can).push(mine[normKey(b.n)] || b);
+  });
+  /* things heard that no recipe uses, plus things not recognised at all:
+     if they are already on the list they count as on hand, otherwise offer them */
+  var offers = [];
+  items.forEach(function(i){
+    var d = PAN.keys[i.k].d, f = mine[normKey(d)] || mine[normKey(i.said)];
+    if(f){ if(can.indexOf(f)<0 && skipped.indexOf(f)<0) (violation(kid,f) ? skipped : can).push(f); return; }
+    if(!used[i.k] && PAN.keys[i.k].c) offers.push({text:d, c:PAN.keys[i.k].c});
+  });
+  parsed.unknown.forEach(function(u){
+    var f = mine[normKey(u.text)];
+    if(f){ if(can.indexOf(f)<0) (violation(kid,f) ? skipped : can).push(f); return; }
+    offers.push(u);
+  });
+  var chosen = can.filter(function(b){ return !PN.off[b.n]; });
+  var adds = offers.filter(function(o){ return PN.add[o.text]; });
+  return {items:items, can:can, chosen:chosen, skipped:skipped, offers:offers, adds:adds, nearly:m.nearly.slice(0,3)};
+}
+function pantrySheet(){
+  var h = '<div class="pn-top">'
+    + '<button class="mic" id="pnMic" data-act="pn-mic" aria-pressed="false" aria-label="Start listening">'+svg('mic')+'</button>'
+    + '<div><div class="t" id="pnStatus"></div><p class="hint" style="margin:2px 0 0">'
+    + (SR ? 'Tap, then read the shelves out loud: &#8220;white bread, tortillas, deli ham, cream cheese, string cheese, strawberries&#8230;&#8221;'
+          : 'This browser can&#8217;t listen on its own. Tap the mic on your keyboard and dictate into the box below, or just type.')
+    + '</p></div></div>'
+    + '<div class="field"><div class="spread"><label for="pnText">What&#8217;s in the kitchen</label>'
+    + '<button class="btn ghost sm" data-act="pn-clear">Start over</button></div>'
+    + '<textarea id="pnText" placeholder="white bread, tortillas, deli ham, cream cheese, string cheese, strawberries, blueberries">'+esc(PN.text)+'</textarea></div>'
+    + '<div id="pnResults" class="stack" style="gap:14px"></div>';
+  openSheet('Plan from the kitchen', h, 'pantry');
+  syncPantry();
+}
+function syncPantry(){
+  if(sheetState!=='pantry') return;
+  var kid = activeKid();
+  var mic = document.getElementById('pnMic'), st = document.getElementById('pnStatus'),
+      ta = document.getElementById('pnText'), out = document.getElementById('pnResults');
+  if(mic){ mic.setAttribute('aria-pressed', PN.on?'true':'false'); mic.setAttribute('aria-label', PN.on?'Stop listening':'Start listening'); }
+  if(st) st.textContent = PN.on ? 'Listening… tap to stop'
+    : PN.err ? (MIC_ERR[PN.err] || 'Couldn’t start listening — type below instead.')
+    : SR ? (PN.text.trim() ? 'Tap to add more' : 'Tap and talk') : 'Type or dictate below';
+  if(ta && document.activeElement!==ta && ta.value!==PN.text) ta.value = PN.text;
+  if(out) out.innerHTML = pantryResultsHTML(kid);
+}
+function pantryResultsHTML(kid){
+  if(!PN.text.trim()){
+    return S.stock && S.stock.said
+      ? '<button class="btn ghost sm" data-act="pn-last">Start from last time &middot; '+esc(String(S.stock.at).slice(0,10))+'</button>' : '';
+  }
+  var m = pantryModel(kid), h = '';
+  if(m.items.length){
+    h += '<div><div class="sect-head"><h3>Heard</h3><span class="count">'+m.items.length+'</span></div><div class="chips">'
+      + m.items.map(function(i){
+          return '<button class="chip said" data-act="pn-drop" data-k="'+esc(i.k)+'" aria-label="Remove '+esc(PAN.keys[i.k].d)+'">'
+            + esc(PAN.keys[i.k].d)+' <span aria-hidden="true">&times;</span></button>'; }).join('')
+      + '</div></div>';
+  }
+  if(m.offers.length){
+    h += '<div><div class="sect-head"><h3>Not in the idea bank</h3></div><div class="list">';
+    m.offers.forEach(function(o){
+      var on = !!PN.add[o.text];
+      h += '<div class="item"><span class="grow"><span class="nm">'+esc(o.text)+'</span></span>'
+        +  '<button class="tg" data-act="pn-add" data-text="'+esc(o.text)+'" data-c="'+o.c+'" aria-pressed="'+on+'">'
+        +  (on ? 'Adding as a ' : 'Add as a ')+o.c+'</button></div>';
+    });
+    h += '</div></div>';
+  }
+  if(m.can.length){
+    CATS.forEach(function(c){
+      var rows = m.can.filter(function(b){ return b.c===c.k; }); if(!rows.length) return;
+      h += '<div><div class="sect-head"><h3 style="color:var(--c-'+c.k+')">'+esc(c.plural)+' you can make</h3>'
+        +  '<span class="count">'+rows.length+'</span></div><div class="list">';
+      rows.forEach(function(b){
+        var on = !PN.off[b.n];
+        h += '<button class="item'+(on?' pick':'')+'" data-act="pn-toggle" data-name="'+esc(b.n)+'" aria-pressed="'+on+'">'
+          +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(b.n)+'</span>'
+          +  '<span class="meta">'+(b.id ? 'already on '+esc(kid.name)+'&#8217;s list' : esc(b.a))+'</span></span></button>';
+      });
+      h += '</div></div>';
+    });
+  } else if(m.items.length){
+    h += '<p class="hint" style="margin:0">Nothing in the idea bank comes together from just that yet. Keep going, or add the things above.</p>';
+  }
+  if(m.skipped.length)
+    h += '<p class="hint" style="margin:0">Skipped by '+esc(kid.name)+'&#8217;s rules: '+esc(m.skipped.map(function(b){ return b.n; }).join(', '))+'.</p>';
+  if(m.nearly.length)
+    h += '<p class="hint" style="margin:0">Nearly: '+m.nearly.map(function(x){
+      return '<b>'+esc(x.n)+'</b> if you pick up '+esc((PAN.keys[x.missing]||{}).d || x.missing); }).join('; ')+'.</p>';
+  var n = m.chosen.length + m.adds.length;
+  if(m.items.length || m.offers.length){
+    h += '<div class="card"><div class="switch"><div><div class="t">Only what&#8217;s in the kitchen</div>'
+      +  '<div class="d">Leave a compartment empty rather than add something to the shopping list.</div></div>'
+      +  '<button class="sw" data-act="pn-only" aria-pressed="'+PN.only+'" aria-label="Only what is in the kitchen"></button></div></div>'
+      +  '<button class="btn primary wide" data-act="pn-plan"'+(n?'':' disabled')+'>'+svg('dice',18)
+      +  (n ? 'Plan '+esc(kid.name)+'&#8217;s week from this' : 'Nothing to plan from yet')+'</button>';
+  }
+  h += '<p class="hint" style="margin:0">Transcribing is done by your browser&#8217;s speech service (on Chrome that is Google), '
+    +  'then the words stay on this phone like everything else.</p>';
+  return h;
+}
+/* the transcript becomes foods on the list, ticks in the pantry, and a week
+   drawn from those first */
+function applyPantry(kid){
+  var m = pantryModel(kid), by = (deviceMember()||{}).id || null, ids = [];
+  Object.keys(S.pantry).forEach(function(k){ if(S.pantry[k] && S.pantry[k].via==='stock') delete S.pantry[k]; });
+  function onHand(f){ ids.push(f.id); S.pantry[normKey(f.n)] = {have:true, at:now(), by:by, via:'stock'}; }
+  m.chosen.forEach(function(b){
+    var f = b.id ? b : foodsOf(kid).filter(function(x){ return normKey(x.n)===normKey(b.n); })[0];
+    if(!f){ f = newFood(kid, b); kid.foods.push(f); }
+    onHand(f);
+  });
+  m.adds.forEach(function(o){
+    var name = o.text.charAt(0).toUpperCase()+o.text.slice(1);
+    var f = foodsOf(kid).filter(function(x){ return normKey(x.n)===normKey(name); })[0];
+    if(!f){
+      f = newFood(kid, {n:name, c:o.c, a:o.c==='fruit'?'produce':o.c==='main'?'deli':'snacks',
+        t:o.c==='fruit'?['sweet','light']:o.c==='sweet'?['sweet']:o.c==='main'?['hearty']:[]});
+      kid.foods.push(f);
+    }
+    onHand(f);
+  });
+  S.stock = {id:(S.stock && S.stock.id) || uid('stock'), at:now(), by:by, said:PN.text.trim(),
+    items:m.items.map(function(i){ return {k:i.k, said:i.said}; })};
+  touch(kid);
+  var short = planWeek(kid, {prefer:ids, only:PN.only});
+  var total = 0, home = 0;
+  kid.week.days.forEach(function(d){ CATS.forEach(function(c){
+    var f = foodById(kid, d.slots[c.k]); if(!f) return; total++;
+    if(ids.indexOf(f.id)>-1) home++;
+  }); });
+  var msg = home+' of '+total+' pieces from the kitchen';
+  if(short.length) msg += ' — no '+short.join(' or ').toLowerCase()+(PN.only ? ' on hand' : ' available');
+  else if(home < total) msg += ' — the rest are on the shopping list';
+  PN.off = {}; PN.add = {}; PN.drop = {};
+  closeSheet(); UI.tab = 'week'; render(); window.scrollTo(0,0); toast(msg);
+}
+
 /* ------------------------------------------------------------ app shell */
 var TABS = [
   {k:'pack', label:'Pack', icon:'pack'}, {k:'week', label:'Week', icon:'week'},
@@ -1411,6 +2176,25 @@ document.addEventListener('click', function(ev){
     S.onboardedAt = now(); UI.tab = 'foods';
     save(); render(); window.scrollTo(0,0); return;
   }
+
+  /* the kitchen */
+  if(act==='pantry'){ PN.off={}; PN.add={}; PN.drop={}; PN.err=''; pantrySheet(); return; }
+  if(act==='pn-mic'){ if(PN.on) voiceStop(); else voiceStart(); return; }
+  if(act==='pn-last'){ PN.text = (S.stock && S.stock.said) || ''; syncPantry(); return; }
+  if(act==='pn-clear'){ voiceStop(); pantryReset(); syncPantry(); return; }
+  if(act==='pn-drop'){ PN.drop[el.getAttribute('data-k')] = 1; syncPantry(); return; }
+  if(act==='pn-add'){
+    var pt = el.getAttribute('data-text');
+    if(PN.add[pt]) delete PN.add[pt]; else PN.add[pt] = el.getAttribute('data-c');
+    syncPantry(); return;
+  }
+  if(act==='pn-toggle'){
+    var pnm = el.getAttribute('data-name');
+    if(PN.off[pnm]) delete PN.off[pnm]; else PN.off[pnm] = 1;
+    syncPantry(); return;
+  }
+  if(act==='pn-only'){ PN.only = !PN.only; syncPantry(); return; }
+  if(act==='pn-plan'){ applyPantry(kid); return; }
 
   /* navigation */
   if(act==='tab'){ UI.tab = el.getAttribute('data-tab'); render(); window.scrollTo(0,0); return; }
@@ -1583,7 +2367,7 @@ document.addEventListener('click', function(ev){
   }
   if(act==='clear-week'){
     kids().forEach(function(k){ k.week = null; k.packed = {}; touch(k); });
-    S.pantry = {}; save(); render(); toast('Plans cleared'); return;
+    S.pantry = {}; S.stock = null; save(); render(); toast('Plans cleared'); return;
   }
   if(act==='clear-all'){
     if(UI.armed!=='all'){ UI.armed='all'; render(); toast('That erases every lunchbox on this phone'); return; }
@@ -1596,6 +2380,7 @@ document.addEventListener('click', function(ev){
 document.addEventListener('input', function(ev){
   if(!S) return;
   var kid = activeKid();
+  if(ev.target.id==='pnText'){ PN.text = ev.target.value; syncPantry(); return; }
   if(ev.target.id==='kidName'){
     kid.name = ev.target.value; touch(kid); save();
     var w = document.getElementById('who');

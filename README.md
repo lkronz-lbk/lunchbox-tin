@@ -27,6 +27,13 @@ food list from a 180-item library and produce a planned week immediately. From t
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
   balance, tangy against savory), then explains each day's box in a sentence. Lock a
   compartment and it survives the next shuffle.
+- **Plan from the kitchen** — tap the mic and say what's on the shelves ("white bread,
+  tortillas, deli ham, cream cheese, string cheese, strawberries…"). The transcript is
+  parsed into ingredients, the ingredients into every bank food that can be made from
+  them, and the week is drawn from those first; the rest of the list fills what's left
+  (or nothing does, with the *only what's in the kitchen* switch). Matched foods land
+  on the shopping list already ticked. Things it doesn't recognise are offered back as
+  one-tap additions to the food list. Typing into the same box does exactly the same.
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes.
 - **Pack** — the next school day as a checklist, with ice-pack, sealed-container and
   no-protein flags.
@@ -41,7 +48,8 @@ Built for more than one user from the start, though it runs today with no accoun
 account            one household — a server only ever has to filter by account id
 ├── members[]      the adults who use it; per-person actions record `by: memberId`
 ├── kids[]         lunchbox profiles, each with its OWN rules, foods, week, pack state
-└── pantry{}       household-wide, keyed by normalized food name
+├── pantry{}       household-wide "already have it" ticks, keyed by normalized food name
+└── stock          the last "what's in the kitchen" recording: transcript + ingredients heard
 ```
 
 Every record carries `id`/`createdAt`/`updatedAt`; deletion is a `deletedAt` tombstone,
@@ -50,6 +58,23 @@ so a future sync can merge and propagate removals. **All persistence goes throug
 `fetch('/api/account')` is the entire backend seam. Schema migrations are keyed by the
 version they upgrade *from* (`MIGRATIONS[1]` carries the original single-profile save
 forward).
+
+## Voice
+
+Speech-to-text uses the browser's Web Speech API (`SpeechRecognition`), so there is still
+no server of ours involved: Chrome sends audio to Google, Safari to Apple, and the words
+come back to the page. Where the API is missing (Firefox; some installed home-screen
+copies), the sheet says so and the textarea takes keyboard dictation or typing instead —
+everything after the transcript is identical. `netlify.toml` allows `microphone=(self)`
+for this; it was fully denied before.
+
+The parser is deliberately not an LLM. The speech engine rarely inserts commas, so the
+transcript is scanned as a word stream with greedy longest-alias matching against a
+lexicon of ~190 ingredients and ~2,900 ways parents say them ("cuties" → clementines,
+"philadelphia" → cream cheese, "gogurt" → yogurt tubes). Each bank food carries a recipe
+(`R('Ham & cheese sandwich', 'bread, ham|deli meat, cheese|cream cheese')`); a food is
+"makeable" when every group has one ingredient present. Words left over between matches,
+minus filler, become "add this anyway" offers with a guessed category.
 
 ## Before this goes live
 
@@ -90,7 +115,8 @@ npm test
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
 onboarding, the week draw, packing, the shopping list, a second lunchbox with its own
 rules, export/import (including refusing junk), the v1 → v2 migration, the service
-worker, an offline launch, and the landing page. No test framework — one file, one
+worker, an offline launch, planning from the kitchen (with a stand-in speech engine, by
+typing, and with no speech support at all), and the landing page. No test framework — one file, one
 dependency. CI runs it on every push to `main` or `dev` and on every pull request.
 
 Checks that must pass before launch but shouldn't block day-to-day work print as
