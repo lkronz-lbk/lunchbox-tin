@@ -37,6 +37,12 @@ async function apiProxy(req, res){
   const out = {}; resp.headers.forEach((v, k) => { if (k !== 'set-cookie') out[k] = v; });
   const cookies = resp.headers.getSetCookie ? resp.headers.getSetCookie() : [];
   if (cookies.length) out['set-cookie'] = cookies;
+  if (process.env.LS_TRACE && method !== 'GET') {
+    const who = (req.headers.cookie || '').match(/ls_session=([A-Za-z0-9_-]{6})/); const body = Buffer.concat(chunks).toString('utf8');
+    let key = ''; try { const b = JSON.parse(body); const k = process.env.LS_TRACE; key = b.doc ? ' apple=' + JSON.stringify((b.doc.pantry || {})[k] || null) + ' v=' + b.version : ''; } catch {}
+    const rows = await db.query(`SELECT id, version, doc->'pantry'->'${process.env.LS_TRACE}' AS row FROM households ORDER BY id`);
+    console.error(`[trace] ${method} ${req.url} by ${who ? who[1] : '-'} -> ${resp.status}${key} | server ${JSON.stringify(rows.rows)}`);
+  }
   res.writeHead(resp.status, out); res.end(Buffer.from(await resp.arrayBuffer()));
 }
 function cspFor(p){
@@ -65,6 +71,17 @@ function serve(){
   return new Promise(r => server.listen(0, 'localhost', () => r({server, port: server.address().port})));   /* localhost: Secure cookies work over http there */
 }
 
+/* wait for a condition inside the page, or for the server to hold something, instead of sleeping */
+async function until(pg, fn, arg, ms = 15000){
+  /* evaluate() awaits a returned promise; waitForFunction would take the promise itself as truthy */
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    let v = false; try { v = await pg.evaluate(fn, arg); } catch {}
+    if (v) return true;
+    await new Promise(r => setTimeout(r, 250));
+  }
+  return false;
+}
 let failures = 0, checks = 0, warnings = 0;
 /* A launch gate: something that must be true before the site goes public, but
    that shouldn't paint CI red while the project is still pre-launch. */
@@ -122,8 +139,27 @@ const BASE = `http://localhost:${port}`;
   b.kids.push({id:'kid_2', name:'Ollie', hue:1, createdAt:t2, updatedAt:t2, deletedAt:null, settings:{days:[1], updatedAt:t2}, foods:[], week:null, packed:{}, eaten:{}, past:[]});
   m = M.merge(a, b);
   check('merge: a member and a lunchbox added on the other phone appear', m.members.length === 2 && m.kids.length === 2);
-  a = clone(); b = clone(); a.kids[0].name = 'Nia B'; a.kids[0].updatedAt = t2;
-  check('merge: ties and order do not matter for the result', JSON.stringify(M.merge(a, b)) === JSON.stringify(M.merge(b, a)));
+  a = clone(); b = clone();
+  a.kids.push({id:'kid_9', name:'Zed', hue:1, createdAt:t2, updatedAt:t2, deletedAt:null, settings:{days:[1], updatedAt:t2}, foods:[], week:null, packed:{}, eaten:{}, past:[]});
+  b.kids.push({id:'kid_2', name:'Ollie', hue:1, createdAt:t2, updatedAt:t2, deletedAt:null, settings:{days:[1], updatedAt:t2}, foods:[], week:null, packed:{}, eaten:{}, past:[]});
+  check('merge: two phones that each added a lunchbox compute the same document', M.same(M.merge(a, b), M.merge(b, a)) && M.merge(a, b).kids.map(k => k.id).join() === M.merge(b, a).kids.map(k => k.id).join());
+  a = clone(); b = clone();
+  a.kids[0].eaten['2026-09-01'] = {main:{foodId:'f1', r:'left', at:t2, by:'mem_a'}};
+  b.kids[0].eaten['2026-09-01'] = {skipped:true, at:t1, by:'mem_b'};
+  m = M.merge(a, b); const m2 = M.merge(b, a);
+  check('merge: a newer answer beats an older skip, whichever phone holds it', !m.kids[0].eaten['2026-09-01'].skipped && !m2.kids[0].eaten['2026-09-01'].skipped);
+  a = clone(); b = clone();
+  a.kids[0].packed['2026-09-01'] = {main:{at:t2, by:'mem_a', off:true}}; b.kids[0].packed['2026-09-01'] = {main:{at:t1, by:'mem_b'}};
+  a.pantry.bread = {have:false, at:t2}; b.pantry.bread = {have:true, at:t1};
+  m = M.merge(a, b);
+  check('merge: an un-tick travels and wins over the older tick', m.kids[0].packed['2026-09-01'].main.off === true && m.pantry.bread.have === false);
+  a = clone(); b = clone();
+  const dayA = {d:'2026-08-31', dow:1, slots:{main:'f1'}, lock:{}, kidPick:{}}, dayB = {d:'2026-08-31', dow:1, slots:{main:'f2'}, lock:{}, kidPick:{}};
+  a.kids[0].week = {id:'w1', kidId:'kid_1', start:'2026-08-31', createdAt:t1, updatedAt:t1, days:[dayA, {d:'2026-09-03', dow:4, slots:{main:'f1'}, lock:{}, kidPick:{}}]};
+  b.kids[0].week = {id:'w1', kidId:'kid_1', start:'2026-08-31', createdAt:t1, updatedAt:t2, days:[dayB, {d:'2026-09-03', dow:4, slots:{main:'f2'}, lock:{}, kidPick:{}}]};
+  m = M.merge(a, b, '2026-09-02');
+  check('merge: the newer plan wins for days ahead, and a day already gone keeps what was packed',
+    m.kids[0].week.days.find(d => d.d === '2026-09-03').slots.main === 'f2' && m.kids[0].week.days.find(d => d.d === '2026-08-31').slots.main === 'f1');
 }
 
 let chromium;
@@ -753,72 +789,129 @@ try {
 
   /* ------------------------------------------------------ accounts + sync */
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
-  check('signed out, Setup offers a sign-in link and nothing else about accounts', (await page.$$eval('#signinEmail', a => a.length)) === 1);
+  check('signed out, Setup offers a sign-in link and no member list', (await page.$$eval('#signinEmail', a => a.length)) === 1 && (await page.$$eval('[data-act="signout"]', a => a.length)) === 0);
+  check('a stranger cannot read a household', (await page.evaluate(() => fetch('/api/household').then(r => r.status))) === 401);
   await page.fill('#signinEmail', 'not-an-email'); await page.click('[data-act="signin-request"]'); await page.waitForTimeout(200);
   check('a bad address is refused before it leaves the phone', /does not look like an email/i.test(await page.textContent('#toast')));
-  await page.fill('#signinEmail', 'liz@example.com'); await page.click('[data-act="signin-request"]'); await page.waitForTimeout(700);
+  await page.fill('#signinEmail', 'liz@example.com'); await page.press('#signinEmail', 'Enter');
+  await until(page, () => !!document.querySelector('[data-dev-link]'));
   const devLink = await page.getAttribute('[data-dev-link]', 'href');
-  check('a sign-in link is issued', !!devLink && devLink.includes('/api/auth/verify?t='), devLink);
+  check('Enter sends the link', !!devLink && devLink.includes('/api/auth/verify?t='), devLink);
+  check('the sign-in field is styled like the others and tall enough', await page.$eval('#signinEmail', e => getComputedStyle(e).borderRadius !== '0px' && e.getBoundingClientRect().height >= 44));
+  const tokenOnly = devLink.split('t=')[1];
+  const forged = await page.evaluate(t => fetch('/api/auth/verify', {method:'POST', headers:{'content-type':'application/x-www-form-urlencoded'}, body:'t='+encodeURIComponent(t)}).then(r => r.status), tokenOnly);
+  check('a form posted from anywhere but the sign-in page is refused', forged === 403, forged);
   await page.goto(devLink); await page.waitForTimeout(300);
   check('the link shows a button rather than signing in on sight, so a mail scanner cannot spend it', /Sign in as liz@example\.com/.test(await page.content()));
   await page.goto(devLink); await page.waitForTimeout(200);
   check('following the link twice does not spend it', /Sign in as/.test(await page.content()));
-  await page.click('button[type="submit"]'); await page.waitForURL(/\/app\//); await page.waitForLoadState('load'); await page.waitForTimeout(1200);
-  check('one tap signs in and lands back in the app', page.url().endsWith('/app/') && /Signed in as\s*liz@example\.com/.test(await page.textContent('#view')), page.url());
+  await page.click('button[type="submit"]'); await page.waitForURL(/\/app\//); await page.waitForLoadState('load');
+  await until(page, () => /Signed in as\s*liz@example\.com/.test(document.querySelector('#view').textContent));
+  check('one tap signs in, lands back in the app, and the account card is at the top', page.url().endsWith('/app/') &&
+    await page.evaluate(() => { const v = document.querySelector('#view'); return /Signed in as/.test(v.textContent) && v.querySelector('.sect-head h3').textContent === 'Account'; }), page.url());
   const spent = await page.evaluate(u => fetch(u).then(r => r.status), devLink);
   check('a used link is gone', spent === 410, spent);
-  await page.waitForTimeout(800);
+  await until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1 && !!j.doc));
   const srv = await page.evaluate(() => fetch('/api/household').then(r => r.json()));
   check("this phone's lunches became the household on the server", !!(srv.doc && srv.doc.kids.length >= 1 && srv.version >= 1 && srv.me.role === 'owner'), {version: srv.version, role: srv.me && srv.me.role});
   check('the person on this phone is a member the document already knew', await page.evaluate(m => JSON.parse(localStorage.getItem('lunchsorted')).members.some(x => x.id === m) && localStorage.getItem('lunchsorted-device') === m, srv.me.memberId));
+  const stale = await page.evaluate(v => fetch('/api/household', {method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify({doc: JSON.parse(localStorage.getItem('lunchsorted')), version: v - 1})}).then(r => r.status), srv.version);
+  check('a push with a stale version is refused with 409', stale === 409, stale);
 
-  /* the other parent */
-  await page.click('[data-act="invite"]'); await page.waitForTimeout(600);
+  /* the other parent already uses the app on their own phone */
+  await page.click('[data-act="invite"]'); await until(page, () => !!document.querySelector('#inviteUrl'));
   const inviteUrl = await page.inputValue('#inviteUrl');
   check('an invite link is made', /\/app\/\?join=/.test(inviteUrl), inviteUrl);
   const ctx2 = await browser.newContext({ viewport:{width:375,height:812} });
   const p2 = await ctx2.newPage(); p2.on('pageerror', e => errors.push(String(e.message)));
-  await p2.goto(inviteUrl); await p2.waitForTimeout(600);
-  check('the invite opens a fresh phone at the sign-in card, with the household named',
-    /invite to join/i.test(await p2.textContent('#view')) && (await p2.$$eval('#signinEmail', a => a.length)) === 1, (await p2.textContent('#view')).slice(0, 160));
-  await p2.fill('#signinEmail', 'sam@example.com'); await p2.click('[data-act="signin-request"]'); await p2.waitForTimeout(700);
-  const link2 = await p2.getAttribute('[data-dev-link]', 'href');
-  await p2.goto(link2); await p2.waitForTimeout(200); await p2.click('button[type="submit"]'); await p2.waitForURL(/\/app\//); await p2.waitForLoadState('load'); await p2.waitForTimeout(1400);
-  check('the second parent signs in and is offered the household', /Join their household/.test(await p2.textContent('#view')), (await p2.textContent('#view')).slice(0, 200));
-  await p2.click('[data-act="join-accept"]'); await p2.waitForTimeout(1200);
+  await p2.goto(BASE+'/app/'); await p2.waitForTimeout(400);
+  await p2.fill('#obName', 'Ollie'); await p2.click('[data-act="ob-go"]'); await p2.waitForTimeout(400);   /* Sam has his own lunches already */
+  await p2.goto(inviteUrl); await p2.waitForLoadState('load');
+  await until(p2, () => /invited you to share/i.test(document.querySelector('#view').textContent));
+  check('the invite opens at the top of Setup, naming who sent it', await p2.evaluate(() => { const v = document.querySelector('#view'); return /liz@example\.com|Liz/.test(v.textContent) && /invited you to share/i.test(v.textContent) && !!v.querySelector('#signinEmail'); }), (await p2.textContent('#view')).slice(0, 160));
+  await p2.fill('#signinEmail', 'sam@example.com'); await p2.click('[data-act="signin-request"]');
+  await until(p2, () => !!document.querySelector('#signinCode'));
+  const devCode = await p2.evaluate(() => fetch('/api/auth/request', {method:'POST', headers:{'content-type':'application/json'}, body:'{"email":"sam@example.com"}'}).then(r => r.json()).then(j => j.devCode));
+  await p2.fill('#signinCode', devCode.toLowerCase()); await p2.press('#signinCode', 'Enter');
+  await until(p2, () => /Join their household/.test(document.querySelector('#view').textContent));
+  check('the code from the email signs in without leaving the app, and offers the household', /Join their household/.test(await p2.textContent('#view')) && await p2.evaluate(() => fetch('/api/household').then(r => r.status)) === 200);
+  const codeAgain = await p2.evaluate(c => fetch('/api/auth/code', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({email:'sam@example.com', code:c})}).then(r => r.status), devCode);
+  check('a code works once', codeAgain === 410, codeAgain);
+  await p2.click('[data-act="join-accept"]');
+  await until(p2, () => /you share their lunches/i.test(document.querySelector('#toast').textContent) || /Parent/.test(document.querySelector('#view').textContent));
+  await until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.members.length === 2));
+  await page.goto(BASE+'/app/'); await page.waitForLoadState('load'); await page.waitForTimeout(800);
   const ownerKids = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name).sort());
   const samKids = await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name).sort());
-  check('the second parent sees the same lunchboxes, and no phantom empty one', JSON.stringify(samKids) === JSON.stringify(ownerKids), {ownerKids, samKids});
+  check("joining with lunches of his own brings Ollie into the household on both phones", JSON.stringify(samKids) === JSON.stringify(ownerKids) && samKids.includes('Ollie') && samKids.length >= 2, {ownerKids, samKids});
   await p2.click('[data-act="tab"][data-tab="setup"]'); await p2.waitForTimeout(300);
   const memberText = await p2.textContent('#view');
-  check('both parents are listed as members', /sam@example\.com/.test(memberText) && /liz@example\.com/.test(memberText));
+  check('both parents are listed, by name, with the address as the small print', /Parent/.test(memberText) && /sam@example\.com/.test(memberText) && /liz@example\.com/.test(memberText) && !/sam\.example/.test(memberText));
+  check('Sam kept the member he already was', await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return d.members.filter(m => !m.deletedAt).length === 2 && d.members.some(m => m.id === localStorage.getItem('lunchsorted-device')); }));
+  const notOwner = await p2.evaluate(id => fetch('/api/household/remove', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({userId:id})}).then(r => r.status), srv.me.userId);
+  check('only the owner can remove someone', notOwner === 403, notOwner);
 
-  /* an edit on each phone reaches the other */
+  /* an edit on each phone reaches the other; an un-tick holds */
   await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
   await page.click('[data-act="add-own"]'); await page.waitForTimeout(350);
-  await page.fill('#nfName', 'Shared test food'); await page.click('[data-act="save-own"]'); await page.waitForTimeout(2600);
-  await p2.click('[data-act="tab"][data-tab="pack"]'); await p2.waitForTimeout(300);
-  const tickable = await p2.$('.cmp[data-act="toggle"]');
-  if (tickable) { await tickable.click(); await p2.waitForTimeout(2600); }
-  await p2.goto(BASE+'/app/'); await p2.waitForTimeout(1500);
-  check('a food added on one phone reaches the other', await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === 'Shared test food'))));
-  await page.goto(BASE+'/app/'); await page.waitForTimeout(1500);
-  check('a tick on the other phone reaches this one', !tickable || await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted'));
-    return d.kids.some(k => Object.values(k.packed || {}).some(row => Object.values(row).some(t => t.by && t.by !== d.members[0].id))); }));
+  await page.fill('#nfName', 'Shared test food'); await page.click('[data-act="save-own"]');
+  await until(page, () => fetch('/api/household').then(r => r.json()).then(j => JSON.stringify(j.doc).includes('Shared test food')));
+  await p2.click('[data-act="tab"][data-tab="shop"]'); await p2.waitForTimeout(300);
+  const pantryKey = await p2.getAttribute('.list .item[data-act="have"] >> nth=0', 'data-key');
+  await p2.click('.list .item[data-act="have"] >> nth=0');
+  await until(p2, k => !!JSON.parse(localStorage.getItem('lunchsorted')).pantry[k], pantryKey);   /* the save is debounced */
+  const first = await p2.evaluate(k => JSON.parse(localStorage.getItem('lunchsorted')).pantry[k].have, pantryKey);
+  check('a pantry tick reaches the server', await until(p2, a => fetch('/api/household').then(r => r.json()).then(j => !!j.doc.pantry[a.k] && j.doc.pantry[a.k].have === a.v), {k: pantryKey, v: first}), {pantryKey, first});
+  await p2.click('.list .item[data-act="have"] >> nth=0');                                   /* and straight back */
+  check('an un-tick reaches the server as a row, not an absence', await until(p2, a => fetch('/api/household').then(r => r.json()).then(j => !!j.doc.pantry[a.k] && j.doc.pantry[a.k].have === !a.v), {k: pantryKey, v: first}), {pantryKey, first});
+  await p2.goto(BASE+'/app/'); await p2.waitForLoadState('load');
+  check('a food added on one phone reaches the other', await until(p2, () => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === 'Shared test food'))));
+  await page.goto(BASE+'/app/'); await page.waitForLoadState('load');
+  const held = await until(page, a => { const p = JSON.parse(localStorage.getItem('lunchsorted')).pantry[a.k]; return !!p && p.have === !a.v; }, {k: pantryKey, v: first});
+  const holdDetail = held ? null : await page.evaluate(async k => ({
+    local: JSON.parse(localStorage.getItem('lunchsorted')).pantry[k] || null,
+    server: await fetch('/api/household').then(r => r.json()).then(j => ({v: j.version, row: j.doc.pantry[k] || null, me: j.me.memberId})),
+    line: (document.getElementById('syncLine') || {}).textContent || document.querySelector('#view').textContent.slice(0, 120),
+    device: localStorage.getItem('lunchsorted-device'), errors: window.__errs || null }), pantryKey);
+  check('an un-tick on the other phone holds here instead of coming back', held, holdDetail ? {pantryKey, first, ...holdDetail, pageErrors: errors.slice(-3)} : {pantryKey, first});
+
+  /* a helper sees the pack list and cannot change the plan */
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="invite-helper"]'); await until(page, () => !!document.querySelector('#inviteUrl'));
+  const helperUrl = await page.inputValue('#inviteUrl');
+  const ctx3 = await browser.newContext({ viewport:{width:375,height:812} });
+  const p3 = await ctx3.newPage(); p3.on('pageerror', e => errors.push(String(e.message)));
+  await p3.goto(helperUrl); await p3.waitForLoadState('load');
+  await until(p3, () => /help with the lunches/i.test(document.querySelector('#view').textContent));
+  await p3.fill('#signinEmail', 'gran@example.com'); await p3.click('[data-act="signin-request"]');
+  await until(p3, () => !!document.querySelector('[data-dev-link]'));
+  const link3 = await p3.getAttribute('[data-dev-link]', 'href');
+  await p3.goto(link3); await p3.click('button[type="submit"]'); await p3.waitForURL(/\/app\//); await p3.waitForLoadState('load');
+  await until(p3, () => /Join their household/.test(document.querySelector('#view').textContent));
+  await p3.click('[data-act="join-accept"]'); await until(p3, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
+  const helperState = await p3.evaluate(() => fetch('/api/household').then(r => r.json()));
+  check('a helper gets the plan and the foods in it, and nothing else', helperState.me.role === 'helper' && helperState.doc.kids.every(k => k.settings.avoidAllergens.length === 0 && k.foods.every(f => f.al.length === 0)) && helperState.members.every(m => !m.email || m.userId === helperState.me.userId));
+  const helperPut = await p3.evaluate(v => fetch('/api/household', {method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify({doc: JSON.parse(localStorage.getItem('lunchsorted')), version:v})}).then(r => r.status), helperState.version);
+  check("a helper's push is refused", helperPut === 403, helperPut);
+  await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
+  await p3.click('[data-act="plan-kid"]'); await p3.waitForTimeout(200);
+  check('and the app says so instead of pretending', /Only a parent can change the plan/.test(await p3.textContent('#toast')));
+  await ctx3.close();
 
   /* sign out keeps the phone's copy; delete removes the household everywhere */
   await p2.click('[data-act="tab"][data-tab="setup"]'); await p2.waitForTimeout(250);
-  await p2.click('[data-act="signout"]'); await p2.waitForTimeout(500);
-  check('signing out keeps the lunches on that phone', (await p2.$$eval('#signinEmail', a => a.length)) === 1 &&
-    await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length)));
+  await p2.click('[data-act="signout"]'); await until(p2, () => !!document.querySelector('#signinEmail'));
+  check('signing out keeps the lunches on that phone', await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length)));
   await ctx2.close();
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   await page.click('[data-act="delete-account"]'); await page.waitForTimeout(150);
-  await page.click('[data-act="delete-account"]'); await page.waitForTimeout(900);
-  const afterDelete = await page.evaluate(() => fetch('/api/auth/me').then(r => r.json()));
-  check('deleting the account signs out, removes the household from the server, and clears this phone',
-    afterDelete.user === null && (await page.$$eval('#signinEmail', a => a.length)) === 1 &&
+  await page.click('[data-act="delete-account"]'); await until(page, () => !!document.querySelector('.ob'));
+  const afterDelete = await page.evaluate(() => fetch('/api/household').then(r => r.status));
+  check('deleting the account signs out, removes the household from the server, and starts this phone over',
+    afterDelete === 401 && (await page.$$eval('.ob', a => a.length)) === 1 &&
     await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length)));
+  const rowsLeft = await db.query(`SELECT (SELECT count(*)::int FROM households) AS h, (SELECT count(*)::int FROM users WHERE email='liz@example.com') AS u`);
+  check('and the rows are really gone', rowsLeft.rows[0].u === 0, rowsLeft.rows[0]);
   await page.evaluate(raw => localStorage.setItem('lunchsorted', raw), goodDoc);
   await page.goto(BASE+'/app/'); await page.waitForTimeout(500);
 

@@ -14,11 +14,46 @@ export function normalizeEmail(email) {
 }
 
 /* ---- magic links ---- */
-export async function createMagicLink(email, ip) {
-  const token = secret();
+/* the same email carries a link and a short code: the link for the browser it
+   opens in, the code for the phone where the app is installed */
+function shortCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = randomBytes(8); let out = '';
+  for (let i = 0; i < 8; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out.slice(0, 4) + '-' + out.slice(4);
+}
+export function normalizeCode(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+export async function createMagicLink(email) {
+  const token = secret(), code = shortCode();
   const expires = new Date(Date.now() + LINK_MINUTES * 60 * 1000).toISOString();
-  await sql()`INSERT INTO magic_links (token_hash, email, ip, expires_at) VALUES (${hash(token)}, ${email}, ${ip || null}, ${expires})`;
-  return token;
+  await sql()`INSERT INTO magic_links (token_hash, code_hash, email, expires_at) VALUES (${hash(token)}, ${hash(email + ':' + normalizeCode(code))}, ${email}, ${expires})`;
+  return { token, code };
+}
+export async function consumeMagicCode(email, code) {
+  const rows = await sql()`
+    UPDATE magic_links SET used_at = now()
+    WHERE email = ${email} AND code_hash = ${hash(email + ':' + normalizeCode(code))} AND used_at IS NULL AND expires_at > now()
+    RETURNING email`;
+  return rows[0] ? rows[0].email : null;
+}
+
+/* The verify page sets a short-lived cookie and puts the same nonce in its form.
+   A form posted from anywhere else arrives without the cookie (SameSite), so a
+   stranger's page cannot press the button for you. */
+export const VERIFY_COOKIE = 'ls_verify';
+export function verifyNonce() { return secret(); }
+export function verifyCookie(nonce, clear = false) {
+  return { 'set-cookie': `${VERIFY_COOKIE}=${clear ? '' : nonce}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=${clear ? 0 : 900}` };
+}
+export function verifyCookieFrom(req) {
+  const c = (req.headers.get('cookie') || '').match(new RegExp(`(?:^|;\\s*)${VERIFY_COOKIE}=([A-Za-z0-9_-]{20,})`));
+  return c ? c[1] : null;
+}
+export function sameOrigin(req, site) {
+  const sfs = req.headers.get('sec-fetch-site');
+  if (sfs) return sfs === 'same-origin' || sfs === 'none';
+  const origin = req.headers.get('origin');
+  return !origin || origin === site;
 }
 
 /* peek without consuming: the verify page shows a button, so a mail scanner
@@ -74,7 +109,8 @@ export async function currentUser(req) {
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ${hash(token)} AND s.expires_at > now()`;
   if (!rows[0]) return null;
-  await sql()`UPDATE sessions SET last_used_at = now() WHERE token_hash = ${rows[0].token_hash}`;
+  /* a coarse "last used": one write an hour per session, not one per request */
+  await sql()`UPDATE sessions SET last_used_at = now() WHERE token_hash = ${rows[0].token_hash} AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')`;
   return { id: rows[0].id, email: rows[0].email, name: rows[0].name };
 }
 
@@ -105,8 +141,8 @@ export async function consumeInvite(code, userId) {
 
 export async function peekInvite(code) {
   const rows = await sql()`
-    SELECT i.household_id, i.role, h.name
-    FROM invites i JOIN households h ON h.id = i.household_id
+    SELECT i.household_id, i.role, h.name, u.email AS "inviterEmail", u.name AS "inviterName"
+    FROM invites i JOIN households h ON h.id = i.household_id JOIN users u ON u.id = i.created_by
     WHERE i.code_hash = ${hash(code)} AND i.used_at IS NULL AND i.expires_at > now()`;
   return rows[0] || null;
 }

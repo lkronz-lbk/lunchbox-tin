@@ -61,7 +61,7 @@
 [[headers]]
   for = "/app/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-ijdlN91twPyf1BeTz+lk/jvNeJrDMT5U2pp7i0FMRkE=' 'sha256-xmPvQSM02+m6Y7Viedo6rs+3PE0ZwRY48UkIYHDtMl8=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-J8EepnZSn25JkLazuXYQapqy5FVJVfr2TOXQRP8UZEk=' 'sha256-UmOZMyAn/YOU379m4Z0qpnK0kvzC5JwdSAHeJ5yy+co=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 [[headers]]
   for = "/"
@@ -95,9 +95,11 @@
 # staging copy of the marketing page can't compete with the real one in search.
 #
 # There is no build step yet, so these variables do nothing today. They exist
-# because this is the seam that matters later: when phase two adds a database
-# and phase three adds Stripe, the test keys and the staging database URL are
-# set per context here, and production credentials never reach a preview.
+# because this is the seam that matters: production reads NETLIFY_DATABASE_URL;
+# every other context reads STAGING_DATABASE_URL and refuses to run without it
+# (netlify/lib/db.js), so a branch deploy or a preview can never touch
+# production data or migrate it. Set STAGING_DATABASE_URL, scoped to branch
+# deploys and deploy previews, in the Netlify UI.
 # ---------------------------------------------------------------------------
 
 [context.production.environment]

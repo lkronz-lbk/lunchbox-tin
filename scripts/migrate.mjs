@@ -16,22 +16,24 @@ export async function migrate(sql, log = () => {}) {
     if (done.has(f)) continue;
     const body = fs.readFileSync(path.join(DIR, f), 'utf8');
     for (const stmt of splitStatements(body)) await sql(stmt);
-    await sql`INSERT INTO schema_migrations (name) VALUES (${f})`;
+    await sql`INSERT INTO schema_migrations (name) VALUES (${f}) ON CONFLICT (name) DO NOTHING`;
     log(`applied ${f}`);
   }
   return files.length - done.size;
 }
 
-/* migrations are plain statements separated by semicolons at line end; no
-   functions or dollar-quoted bodies, by convention */
+/* migrations are plain statements separated by semicolons; no functions or
+   dollar-quoted bodies, and every statement is idempotent (IF NOT EXISTS), so a
+   file that failed halfway or ran twice from two deploys is harmless */
 function splitStatements(body) {
   const noComments = body.replace(/--[^\n]*/g, '');
   return noComments.split(';').map(s => s.trim()).filter(Boolean);
 }
 
 if (process.argv[1] && process.argv[1].endsWith('migrate.mjs')) {
-  const url = process.env.NETLIFY_DATABASE_URL || process.env.NETLIFY_DB_URL || process.env.DEV_DB_URL;
-  if (!url) { console.log('migrate: no database URL, skipping'); process.exit(0); }
+  const { databaseUrl } = await import('../netlify/lib/db.js');
+  const url = databaseUrl();
+  if (!url) { console.log('migrate: this context has no database URL, skipping'); process.exit(0); }
   const { neon } = await import('@neondatabase/serverless');
   const client = neon(url);
   const sql = (strings, ...vals) => typeof strings === 'string' ? client.query(strings) : client(strings, ...vals);

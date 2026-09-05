@@ -2,7 +2,7 @@
 -- One household document per household (the same JSON the app keeps on the
 -- phone), versioned so two phones can never overwrite each other blind.
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id            SERIAL PRIMARY KEY,
   email         TEXT UNIQUE NOT NULL,
   name          TEXT,
@@ -12,17 +12,18 @@ CREATE TABLE users (
 
 -- magic links and sessions store only a hash of the secret, so a database
 -- read never yields a usable token
-CREATE TABLE magic_links (
+CREATE TABLE IF NOT EXISTS magic_links (
   token_hash  TEXT PRIMARY KEY,
+  code_hash   TEXT,                                  -- the short code in the same email, for a phone that cannot open the link in the app
   email       TEXT NOT NULL,
-  ip          TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at  TIMESTAMPTZ NOT NULL,
   used_at     TIMESTAMPTZ
 );
-CREATE INDEX magic_links_email_idx ON magic_links (email, created_at);
+CREATE INDEX IF NOT EXISTS magic_links_email_idx ON magic_links (email, created_at);
+CREATE INDEX IF NOT EXISTS magic_links_expires_idx ON magic_links (expires_at);
 
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
   token_hash   TEXT PRIMARY KEY,
   user_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   kind         TEXT NOT NULL DEFAULT 'web',          -- web (cookie) | native (bearer)
@@ -30,19 +31,19 @@ CREATE TABLE sessions (
   expires_at   TIMESTAMPTZ NOT NULL,
   last_used_at TIMESTAMPTZ
 );
-CREATE INDEX sessions_user_idx ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
 
-CREATE TABLE households (
+CREATE TABLE IF NOT EXISTS households (
   id             SERIAL PRIMARY KEY,
   name           TEXT NOT NULL DEFAULT 'My household',
-  owner_user_id  INT NOT NULL REFERENCES users(id),
+  owner_user_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   doc            JSONB,                              -- the account document; null until the first push
   version        INT NOT NULL DEFAULT 0,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE household_members (
+CREATE TABLE IF NOT EXISTS household_members (
   household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
   user_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   role         TEXT NOT NULL DEFAULT 'adult',        -- owner | adult | helper
@@ -50,9 +51,9 @@ CREATE TABLE household_members (
   joined_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (household_id, user_id)
 );
-CREATE UNIQUE INDEX household_members_user_idx ON household_members (user_id);   -- one household per person, for now
+CREATE UNIQUE INDEX IF NOT EXISTS household_members_user_idx ON household_members (user_id);   -- one household per person, for now
 
-CREATE TABLE invites (
+CREATE TABLE IF NOT EXISTS invites (
   code_hash    TEXT PRIMARY KEY,
   household_id INT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
   role         TEXT NOT NULL DEFAULT 'adult',
@@ -62,8 +63,15 @@ CREATE TABLE invites (
   used_by      INT REFERENCES users(id) ON DELETE SET NULL,
   used_at      TIMESTAMPTZ
 );
+CREATE INDEX IF NOT EXISTS invites_expires_idx ON invites (expires_at);
+CREATE INDEX IF NOT EXISTS invites_household_idx ON invites (household_id);
+CREATE INDEX IF NOT EXISTS invites_created_by_idx ON invites (created_by);
+CREATE INDEX IF NOT EXISTS invites_used_by_idx ON invites (used_by);
+CREATE INDEX IF NOT EXISTS households_owner_idx ON households (owner_user_id);
+CREATE INDEX IF NOT EXISTS magic_links_code_idx ON magic_links (email, code_hash);
+CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions (expires_at);
 
-CREATE TABLE entitlements (
+CREATE TABLE IF NOT EXISTS entitlements (
   household_id           INT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
   plan                   TEXT NOT NULL DEFAULT 'free',      -- free | household | lifetime
   source                 TEXT NOT NULL DEFAULT 'none',      -- none | stripe | apple | comp
@@ -75,8 +83,9 @@ CREATE TABLE entitlements (
 );
 
 -- throttling that survives function cold starts
-CREATE TABLE rate_events (
+CREATE TABLE IF NOT EXISTS rate_events (
   key TEXT NOT NULL,
   at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX rate_events_key_idx ON rate_events (key, at);
+CREATE INDEX IF NOT EXISTS rate_events_key_idx ON rate_events (key, at);
+CREATE INDEX IF NOT EXISTS rate_events_at_idx ON rate_events (at);
