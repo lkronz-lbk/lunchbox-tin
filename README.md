@@ -153,6 +153,22 @@ the visual identity.
 4. **Then** — a Capacitor iOS shell on the US storefront, with the night-before reminder,
    share sheet and a Home Screen widget; payments stay on the web.
 
+### Backlog (ideas to revisit, not scheduled)
+
+- **Home-cooked or store-bought.** Setup asks whether sides and sweets are mostly cooked at
+  home or bought ready-made. A family that never bakes should not be offered a slice of
+  zucchini bread unless there is a store-bought equivalent to recommend in its place; foods
+  carry a `homemade` flag and a suggested packaged stand-in.
+- **Shopping-list hand-off.** Send the week's list to Reminders, Google Keep, AnyList, or an
+  Instacart / Walmart cart, so the shop happens where the family already shops.
+- **Rated products.** Pull in product ratings (Yuka or similar) so the packaged suggestions
+  above lean toward well-rated items, and flag a poorly rated pantry staple with an
+  alternative.
+- **Macros and medical diets.** Per-kid targets (carbs, protein, calories, sodium) and a
+  per-day tally, for children with diabetes, allergies beyond avoidance, or a prescribed
+  diet. Needs nutrition data per food, portion sizes, and a clear "not medical advice"
+  line.
+
 ## Accounts and sync
 
 Signed out, the app is exactly the phone-only app it always was. Signed in, the household
