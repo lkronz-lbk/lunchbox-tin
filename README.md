@@ -156,25 +156,45 @@ Signed out, the app is exactly the phone-only app it always was. Signed in, the 
 document also lives on the server, versioned, and every phone in the household reads and
 writes the same one.
 
-- **Sign-in** is an email link (`POST /api/auth/request`). The link opens a page with one
-  button, so a mail scanner that follows links cannot spend it; the button posts to
-  `/api/auth/verify`, which creates a session cookie (HttpOnly, 180 days) and returns to
-  the app. Links and sessions are stored as hashes. No passwords anywhere.
+- **Sign-in** is an email (`POST /api/auth/request`) carrying a link and a short code. The
+  link opens a page with one button, so a mail scanner that follows links cannot spend it;
+  the button posts to `/api/auth/verify` with a nonce the page set in a cookie, so a form
+  posted from anywhere else is refused. The code (`POST /api/auth/code`) signs in the phone
+  where the app is installed when the link would open in another browser. Both work once,
+  for fifteen minutes. Sessions are HttpOnly cookies for 180 days; links, codes and
+  sessions are stored as hashes. No passwords anywhere.
 - **Households** (`/api/household`): one document per household with a version number.
   `PUT` with the version you last saw; if the server has moved on you get `409` with its
   copy, merge, and try again. The merge rules are the first script block in
   `public/app/index.html` (`window.LSMerge`): newer `updatedAt` wins per record, a newer
   deletion beats an older edit, packed and eat and pantry ticks merge by their own `at`
-  stamps, the local copy wins ties. The test suite runs the block on its own.
-- **Members**: owner, adult, helper. An invite (`POST /api/household/invite`) is a link
-  that works once, for a week; opening it on a fresh phone lands at the sign-in card. A
-  helper sees the pack list and cannot change the plan (the server refuses the `PUT`).
-- **Delete my account** removes the household from the server and from that phone.
-- **Environment**: `NETLIFY_DATABASE_URL` (Netlify DB / Neon), `RESEND_API_KEY` and
-  `MAIL_FROM` for the links (outside production a missing key returns the link to the
-  caller instead of sending it, which is what the tests use), `SITE_ENV` per context.
-  `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each and
-  runs as the build command, skipping quietly when there is no database URL.
+  stamps (an un-tick is a row marked `off`, so it travels too; a review row's stamp is its
+  latest answer), the newer plan wins day by day except that a day already gone keeps the
+  plan that existed on it, lists come out in a fixed order so both phones compute the same
+  document, and the local copy wins ties. The test suite runs the block on its own. A push
+  that fails is retried three times with growing waits, then waits for the next change;
+  returning to the app pulls if the last sync is more than thirty seconds old.
+- **Members**: owner, parent (adult), helper. An invite (`POST /api/household/invite`) is a
+  link that works once, for a week; opening it lands at the top of Setup with the sign-in
+  card and the inviter's name. A phone that already has lunches brings them into the
+  household when it joins, and keeps the member it already was. A helper receives only the
+  plan, the foods in it and the ticks (no rules, allergens, history or addresses), cannot
+  push (the server refuses, and the app says "Only a parent can change the plan"), and
+  their ticks stay on their phone.
+- **Leaving** a household leaves the lunches with it: the phone starts fresh in its own
+  empty household. Being removed signs that person's phones out; whatever is on their phone
+  stays there. **Delete my account** removes the household from the server and from that
+  phone, and cannot be undone.
+- **Environment**: production reads `NETLIFY_DATABASE_URL` (Netlify DB / Neon); branch
+  deploys and previews read `STAGING_DATABASE_URL` and refuse to run without it, so they
+  can never touch production data or migrate it. `RESEND_API_KEY` and `MAIL_FROM` send the
+  emails; without a key, production refuses and a deploy with `DEV_LINKS=1` (or the test
+  suite) returns the link and code to the caller instead. `SITE_ENV` is set per context.
+  `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each as the
+  build command; every statement is idempotent, so a half-applied file is harmless.
+  Housekeeping (expired links, sessions and invites, old rate-limit rows) rides along with
+  about one request in twenty-five.
 - **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
-  drive two browsers through sign-in, invite, join, an edit on each phone, sign-out and
-  delete.
+  drive three browser contexts through sign-in by link and by code, a forged sign-in form,
+  invite, joining with lunches of one's own, an edit on each phone, an un-tick round trip,
+  a helper's refused push, sign-out and delete, plus the merge rules on their own.
