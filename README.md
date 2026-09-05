@@ -1,4 +1,4 @@
-# Five Boxes
+# Lunch Sorted
 
 Plan a week of packed school lunches in about a minute. A static site: a marketing
 page, and an installable offline web app. No build step, no framework, no server.
@@ -135,10 +135,11 @@ Checks that must pass before launch but shouldn't block day-to-day work print as
 
 ## The name
 
-The product is **Five Boxes** (a week of school lunches). The repository and directory are
-still called `lunchbox-tin` from the working title; rename the GitHub repo whenever
-convenient — Netlify follows the rename. Stored data under the old key is read and carried
-forward automatically.
+The product is **Lunch Sorted**. It was briefly Five Boxes and, before that, Lunchbox Tin,
+which the repository and directory are still named after; rename the GitHub repo whenever
+convenient — Netlify follows the rename. Stored data under either earlier key is read and
+carried forward automatically, exports from either name still import, and the tin stays as
+the visual identity.
 
 ## Roadmap
 

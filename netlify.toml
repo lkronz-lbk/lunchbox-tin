@@ -48,7 +48,7 @@
 [[headers]]
   for = "/app/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-dNdjTFoql/qV9I3uTzMLxy+EC3dE+Ky8uuWMbA8Ahcs=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-q1oI5tXtxzfEQeakFruSi9h0W10bcpO16tOJmhNYybA=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 [[headers]]
   for = "/"

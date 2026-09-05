@@ -1,10 +1,10 @@
-/* Five Boxes service worker.
+/* Lunch Sorted service worker.
    The app is a single HTML file plus icons, so the shell is precached on
    install and served cache-first. Fonts come from Google and are cached at
    runtime, opaque responses included, so a second launch works with no
    network at all. Bump VERSION to ship a new build. */
-var VERSION = 'fiveboxes-v5';
-var FONTS = 'fiveboxes-fonts-v1';       /* not versioned: a new build must not re-download every font */
+var VERSION = 'lunchsorted-v1';
+var FONTS = 'lunchsorted-fonts-v1';       /* not versioned: a new build must not re-download every font */
 var SHELL = [
   '/app/index.html',
   '/app/manifest.webmanifest',

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Five Boxes</title>
+<title>Lunch Sorted</title>
 <meta name="description" content="Plan a week of packed school lunches in about a minute. Cold-lunch ideas matched into balanced boxes, with the shopping list built for you.">
 <meta name="theme-color" content="#E9EEE6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Five Boxes">
+<meta name="apple-mobile-web-app-title" content="Lunch Sorted">
 <style>
 :root{color-scheme:light dark}
 html{-webkit-text-size-adjust:100%}
@@ -303,7 +303,7 @@ nav.tabs svg{width:21px;height:21px}
 
 <div class="app">
   <div class="topbar">
-    <div class="brand">Five <span>Boxes</span></div>
+    <div class="brand">Lunch <span>Sorted</span></div>
     <div class="who" id="who"></div>
   </div>
   <main id="view"></main>
@@ -628,9 +628,10 @@ var BANK = [
    bodies with fetch() and nothing else in the app changes.
    ---------------------------------------------------------------- */
 var Store = {
-  KEY:'fiveboxes',               /* the account document */
-  PRIOR_KEY:'lunchbox-tin',      /* the same document under the app's earlier name */
-  DEVICE_KEY:'fiveboxes-device', /* which member is on THIS device — never exported */
+  KEY:'lunchsorted',             /* the account document */
+  PRIOR_KEYS:['fiveboxes','lunchbox-tin'],   /* the same document under the app's earlier names, newest first */
+  DEVICE_KEY:'lunchsorted-device', /* which member is on THIS device — never exported */
+  PRIOR_DEVICE_KEY:'fiveboxes-device',
   LEGACY_KEY:'lunchbox-tin-v1',  /* single-profile format, migrated on first run */
   ok:true,
   load:function(){
@@ -638,12 +639,15 @@ var Store = {
       var out = {doc:null, legacy:null, device:null, raw:null, unreadable:false, renamed:false};
       try{
         var raw = localStorage.getItem(Store.KEY);
-        if(!raw){ raw = localStorage.getItem(Store.PRIOR_KEY); out.renamed = !!raw; }   /* found under the old name: write it under the new one */
+        if(!raw){                                       /* found under an old name: write it under the new one */
+          for(var i=0; i<Store.PRIOR_KEYS.length && !raw; i++) raw = localStorage.getItem(Store.PRIOR_KEYS[i]);
+          out.renamed = !!raw;
+        }
         out.raw = raw;
         if(raw){ try{ out.doc = JSON.parse(raw); }catch(e){ out.unreadable = true; } }
         var old = localStorage.getItem(Store.LEGACY_KEY);
         if(old){ try{ out.legacy = JSON.parse(old); }catch(e){ out.legacy = null; } }
-        out.device = localStorage.getItem(Store.DEVICE_KEY);
+        out.device = localStorage.getItem(Store.DEVICE_KEY) || localStorage.getItem(Store.PRIOR_DEVICE_KEY);
       }catch(e){ Store.ok = false; }
       res(out);
     });
@@ -653,16 +657,17 @@ var Store = {
       try{
         localStorage.setItem(Store.KEY, JSON.stringify(doc));
         if(deviceMemberId) localStorage.setItem(Store.DEVICE_KEY, deviceMemberId);
-        localStorage.removeItem(Store.PRIOR_KEY);        /* one copy on disk, under one name */
+        Store.PRIOR_KEYS.forEach(function(k){ localStorage.removeItem(k); });   /* one copy on disk, under one name */
+        localStorage.removeItem(Store.PRIOR_DEVICE_KEY);
       }catch(e){ Store.ok = false; }
       res(true);
     });
   },
   /* Never overwrite something we could not read: park the raw text under a
      dated key so it can be recovered by hand or pasted back in. */
-  BACKUP_PREFIX:'fiveboxes-backup-',
+  BACKUP_PREFIX:'lunchsorted-backup-',
   backupKeys:function(){
-    try{ return Object.keys(localStorage).filter(function(k){ return k.indexOf(Store.BACKUP_PREFIX) === 0; }).sort(); }catch(e){ return []; }
+    try{ return Object.keys(localStorage).filter(function(k){ return k.indexOf(Store.BACKUP_PREFIX) === 0 || k.indexOf('fiveboxes-backup-') === 0; }).sort(); }catch(e){ return []; }
   },
   backup:function(raw){
     if(!raw) return false;
@@ -674,7 +679,7 @@ var Store = {
     }catch(e){ return false; }
   },
   forget:function(){
-    try{ [Store.KEY, Store.PRIOR_KEY, Store.LEGACY_KEY, Store.DEVICE_KEY].concat(Store.backupKeys())
+    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
 };
@@ -1996,7 +2001,7 @@ function parseImport(text){
   var doc = null;
   try{ doc = JSON.parse(text); }catch(e){ return null; }
   if(!doc || typeof doc !== 'object') return null;
-  var body = ((doc.app === 'fiveboxes' || doc.app === 'lunchbox-tin') && doc.account) ? doc.account : doc;
+  var body = ((doc.app === 'lunchsorted' || doc.app === 'fiveboxes' || doc.app === 'lunchbox-tin') && doc.account) ? doc.account : doc;
   try{
     if(isAccount(body)) return normalizeAccount(body);
     if(isLegacy(body)) return normalizeAccount(migrate(Object.assign({}, body, {schema:1})));
@@ -2005,7 +2010,7 @@ function parseImport(text){
 }
 function isLegacy(d){ return !!(d && Array.isArray(d.foods) && d.settings && typeof d.settings === 'object'); }
 function exportText(){
-  return JSON.stringify({app:'fiveboxes', schema:SCHEMA, exportedAt:now(), account:S}, null, 2);
+  return JSON.stringify({app:'lunchsorted', schema:SCHEMA, exportedAt:now(), account:S}, null, 2);
 }
 
 /* ------------------------------------------------------------ app shell */
@@ -2307,7 +2312,7 @@ document.addEventListener('click', function(ev){
   if(act==='copy-data'){ copy(exportText(), 'Copied \u2014 paste it into the app on the other phone'); return; }
   if(act==='save-file'){
     if(!Downloads) return;
-    Downloads.save({filename:'five-boxes-'+iso(today())+'.json', data:exportText()})
+    Downloads.save({filename:'lunch-sorted-'+iso(today())+'.json', data:exportText()})
       .then(function(){ toast('Backup saved'); },
             function(err){ toast(err && err.code==='declined' ? 'Backup cancelled' : 'Could not save the file'); });
     return;
@@ -2316,7 +2321,7 @@ document.addEventListener('click', function(ev){
   if(act==='import-do'){
     if(!UI.pendingImport){
       var acct0 = parseImport(document.getElementById('impText').value);
-      if(!acct0){ toast('That is not Five Boxes data'); return; }
+      if(!acct0){ toast('That is not Lunch Sorted data'); return; }
       UI.pendingImport = acct0;
       var names = acct0.kids.filter(function(k){ return !k.deletedAt; }).map(function(k){ return k.name; });
       el.textContent = 'Tap again to replace with ' + (names.join(' and ') || 'an empty household');
