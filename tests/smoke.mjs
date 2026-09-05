@@ -13,6 +13,32 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'publ
 /* The test server enforces the same Content-Security-Policy Netlify will, so a
    policy that would break the app breaks the suite instead of the site. */
 const POLICIES = readPolicies(fs.readFileSync(path.join(ROOT, '..', 'netlify.toml'), 'utf8'));
+
+/* The API runs in-process against an in-memory Postgres, through the same
+   handlers Netlify deploys, so sign-in, sync and invites are tested for real. */
+import { PGlite } from '@electric-sql/pglite';
+import { migrate } from '../scripts/migrate.mjs';
+process.env.SITE_ENV = 'test'; delete process.env.URL; delete process.env.DEPLOY_PRIME_URL; delete process.env.RESEND_API_KEY;
+const db = new PGlite();
+globalThis.__LS_SQL = async (strings, ...vals) => typeof strings === 'string' ? (await db.query(strings)).rows : (await db.sql(strings, ...vals)).rows;
+await migrate(globalThis.__LS_SQL);
+const { default: authHandler } = await import('../netlify/functions/api-auth.js');
+const { default: householdHandler } = await import('../netlify/functions/api-household.js');
+async function apiProxy(req, res){
+  const chunks = []; for await (const c of req) chunks.push(c);
+  const headers = new Headers(); for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v);
+  const method = req.method;
+  const request = new Request(`http://${req.headers.host}${req.url}`, {method, headers,
+    body: (method === 'GET' || method === 'HEAD') ? undefined : Buffer.concat(chunks), duplex: 'half'});
+  const handler = req.url.startsWith('/api/auth/') ? authHandler : householdHandler;
+  let resp;
+  try { resp = await handler(request, {ip: '127.0.0.1'}); }
+  catch (e) { res.writeHead(500); return res.end(String(e)); }
+  const out = {}; resp.headers.forEach((v, k) => { if (k !== 'set-cookie') out[k] = v; });
+  const cookies = resp.headers.getSetCookie ? resp.headers.getSetCookie() : [];
+  if (cookies.length) out['set-cookie'] = cookies;
+  res.writeHead(resp.status, out); res.end(Buffer.from(await resp.arrayBuffer()));
+}
 function cspFor(p){
   if(p.startsWith('/app/')) return POLICIES['/app/*'];
   if(p === '/' || p === '/index.html') return POLICIES['/index.html'];
@@ -24,6 +50,7 @@ const TYPES = {'.html':'text/html','.js':'text/javascript','.png':'image/png','.
 function serve(){
   const server = http.createServer((req, res) => {
     let p = decodeURIComponent(req.url.split('?')[0]);
+    if(p.startsWith('/api/')) return apiProxy(req, res);
     if(p.endsWith('/')) p += 'index.html';
     const file = path.join(ROOT, p);
     if(!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()){
@@ -35,7 +62,7 @@ function serve(){
     res.writeHead(200, hdr);
     fs.createReadStream(file).pipe(res);
   });
-  return new Promise(r => server.listen(0, '127.0.0.1', () => r({server, port: server.address().port})));
+  return new Promise(r => server.listen(0, 'localhost', () => r({server, port: server.address().port})));   /* localhost: Secure cookies work over http there */
 }
 
 let failures = 0, checks = 0, warnings = 0;
@@ -64,7 +91,40 @@ const V1_SAVE = {
 };
 
 const { server, port } = await serve();
-const BASE = `http://127.0.0.1:${port}`;
+const BASE = `http://localhost:${port}`;
+
+/* ------------------------------------------------ merge rules, without a browser */
+{
+  const html = fs.readFileSync(path.join(ROOT, 'app', 'index.html'), 'utf8');
+  const block = html.match(/<script>\s*\/\* Merge rules([\s\S]*?)<\/script>/)[0].replace(/^<script>|<\/script>$/g, '');
+  const w = {}; new Function('window', block)(w); const M = w.LSMerge;
+  const t1 = '2026-09-01T10:00:00.000Z', t2 = '2026-09-02T10:00:00.000Z';
+  const base = { schema:2, id:'acc_1', name:'H', createdAt:t1, updatedAt:t1, onboardedAt:t1, activeKidId:'kid_1', pantry:{},
+    members:[{id:'mem_a', name:'Liz', updatedAt:t1, deletedAt:null}],
+    kids:[{id:'kid_1', name:'Nia', hue:0, createdAt:t1, updatedAt:t1, deletedAt:null, settings:{days:[1,2,3,4,5], updatedAt:t1},
+      foods:[{id:'f1', n:'Apple', c:'fruit', updatedAt:t1, deletedAt:null}], week:null, packed:{}, eaten:{}, past:[]}] };
+  const clone = () => JSON.parse(JSON.stringify(base));
+  let a = clone(), b = clone();
+  b.kids[0].foods[0].n = 'Green apple'; b.kids[0].foods[0].updatedAt = t2;
+  a.kids[0].foods.push({id:'f2', n:'Crackers', c:'side', updatedAt:t1, deletedAt:null});
+  let m = M.merge(a, b);
+  check('merge: the newer edit to a food wins, and a food added elsewhere survives',
+    m.kids[0].foods.find(f => f.id === 'f1').n === 'Green apple' && m.kids[0].foods.some(f => f.id === 'f2'));
+  a = clone(); b = clone(); b.kids[0].foods[0].deletedAt = t2; b.kids[0].foods[0].updatedAt = t2; a.kids[0].foods[0].n = 'Red apple';
+  m = M.merge(a, b);
+  check('merge: a newer deletion beats an older rename', m.kids[0].foods[0].deletedAt === t2);
+  a = clone(); b = clone();
+  a.kids[0].packed['2026-09-01'] = {main:{at:t1, by:'mem_a'}}; b.kids[0].packed['2026-09-01'] = {side:{at:t2, by:'mem_b'}};
+  a.pantry['apples'] = {have:true, at:t1}; b.pantry['bread'] = {have:true, at:t2};
+  m = M.merge(a, b);
+  check('merge: ticks from both phones are kept', !!(m.kids[0].packed['2026-09-01'].main && m.kids[0].packed['2026-09-01'].side) && !!(m.pantry.apples && m.pantry.bread));
+  a = clone(); b = clone(); b.members.push({id:'mem_b', name:'Sam', updatedAt:t2, deletedAt:null});
+  b.kids.push({id:'kid_2', name:'Ollie', hue:1, createdAt:t2, updatedAt:t2, deletedAt:null, settings:{days:[1], updatedAt:t2}, foods:[], week:null, packed:{}, eaten:{}, past:[]});
+  m = M.merge(a, b);
+  check('merge: a member and a lunchbox added on the other phone appear', m.members.length === 2 && m.kids.length === 2);
+  a = clone(); b = clone(); a.kids[0].name = 'Nia B'; a.kids[0].updatedAt = t2;
+  check('merge: ties and order do not matter for the result', JSON.stringify(M.merge(a, b)) === JSON.stringify(M.merge(b, a)));
+}
 
 let chromium;
 try { ({ chromium } = await import('playwright')); }
@@ -690,6 +750,77 @@ try {
     check('data saved as "'+oldKey+'" is read and carried forward', await page.evaluate(k => {
       const d = JSON.parse(localStorage.getItem('lunchsorted') || 'null'); return !!(d && d.kids && d.kids.length) && !localStorage.getItem(k); }, oldKey));
   }
+
+  /* ------------------------------------------------------ accounts + sync */
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  check('signed out, Setup offers a sign-in link and nothing else about accounts', (await page.$$eval('#signinEmail', a => a.length)) === 1);
+  await page.fill('#signinEmail', 'not-an-email'); await page.click('[data-act="signin-request"]'); await page.waitForTimeout(200);
+  check('a bad address is refused before it leaves the phone', /does not look like an email/i.test(await page.textContent('#toast')));
+  await page.fill('#signinEmail', 'liz@example.com'); await page.click('[data-act="signin-request"]'); await page.waitForTimeout(700);
+  const devLink = await page.getAttribute('[data-dev-link]', 'href');
+  check('a sign-in link is issued', !!devLink && devLink.includes('/api/auth/verify?t='), devLink);
+  await page.goto(devLink); await page.waitForTimeout(300);
+  check('the link shows a button rather than signing in on sight, so a mail scanner cannot spend it', /Sign in as liz@example\.com/.test(await page.content()));
+  await page.goto(devLink); await page.waitForTimeout(200);
+  check('following the link twice does not spend it', /Sign in as/.test(await page.content()));
+  await page.click('button[type="submit"]'); await page.waitForURL(/\/app\//); await page.waitForLoadState('load'); await page.waitForTimeout(1200);
+  check('one tap signs in and lands back in the app', page.url().endsWith('/app/') && /Signed in as\s*liz@example\.com/.test(await page.textContent('#view')), page.url());
+  const spent = await page.evaluate(u => fetch(u).then(r => r.status), devLink);
+  check('a used link is gone', spent === 410, spent);
+  await page.waitForTimeout(800);
+  const srv = await page.evaluate(() => fetch('/api/household').then(r => r.json()));
+  check("this phone's lunches became the household on the server", !!(srv.doc && srv.doc.kids.length >= 1 && srv.version >= 1 && srv.me.role === 'owner'), {version: srv.version, role: srv.me && srv.me.role});
+  check('the person on this phone is a member the document already knew', await page.evaluate(m => JSON.parse(localStorage.getItem('lunchsorted')).members.some(x => x.id === m) && localStorage.getItem('lunchsorted-device') === m, srv.me.memberId));
+
+  /* the other parent */
+  await page.click('[data-act="invite"]'); await page.waitForTimeout(600);
+  const inviteUrl = await page.inputValue('#inviteUrl');
+  check('an invite link is made', /\/app\/\?join=/.test(inviteUrl), inviteUrl);
+  const ctx2 = await browser.newContext({ viewport:{width:375,height:812} });
+  const p2 = await ctx2.newPage(); p2.on('pageerror', e => errors.push(String(e.message)));
+  await p2.goto(inviteUrl); await p2.waitForTimeout(600);
+  check('the invite opens a fresh phone at the sign-in card, with the household named',
+    /invite to join/i.test(await p2.textContent('#view')) && (await p2.$$eval('#signinEmail', a => a.length)) === 1, (await p2.textContent('#view')).slice(0, 160));
+  await p2.fill('#signinEmail', 'sam@example.com'); await p2.click('[data-act="signin-request"]'); await p2.waitForTimeout(700);
+  const link2 = await p2.getAttribute('[data-dev-link]', 'href');
+  await p2.goto(link2); await p2.waitForTimeout(200); await p2.click('button[type="submit"]'); await p2.waitForURL(/\/app\//); await p2.waitForLoadState('load'); await p2.waitForTimeout(1400);
+  check('the second parent signs in and is offered the household', /Join their household/.test(await p2.textContent('#view')), (await p2.textContent('#view')).slice(0, 200));
+  await p2.click('[data-act="join-accept"]'); await p2.waitForTimeout(1200);
+  const ownerKids = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name).sort());
+  const samKids = await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name).sort());
+  check('the second parent sees the same lunchboxes, and no phantom empty one', JSON.stringify(samKids) === JSON.stringify(ownerKids), {ownerKids, samKids});
+  await p2.click('[data-act="tab"][data-tab="setup"]'); await p2.waitForTimeout(300);
+  const memberText = await p2.textContent('#view');
+  check('both parents are listed as members', /sam@example\.com/.test(memberText) && /liz@example\.com/.test(memberText));
+
+  /* an edit on each phone reaches the other */
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="add-own"]'); await page.waitForTimeout(350);
+  await page.fill('#nfName', 'Shared test food'); await page.click('[data-act="save-own"]'); await page.waitForTimeout(2600);
+  await p2.click('[data-act="tab"][data-tab="pack"]'); await p2.waitForTimeout(300);
+  const tickable = await p2.$('.cmp[data-act="toggle"]');
+  if (tickable) { await tickable.click(); await p2.waitForTimeout(2600); }
+  await p2.goto(BASE+'/app/'); await p2.waitForTimeout(1500);
+  check('a food added on one phone reaches the other', await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === 'Shared test food'))));
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(1500);
+  check('a tick on the other phone reaches this one', !tickable || await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    return d.kids.some(k => Object.values(k.packed || {}).some(row => Object.values(row).some(t => t.by && t.by !== d.members[0].id))); }));
+
+  /* sign out keeps the phone's copy; delete removes the household everywhere */
+  await p2.click('[data-act="tab"][data-tab="setup"]'); await p2.waitForTimeout(250);
+  await p2.click('[data-act="signout"]'); await p2.waitForTimeout(500);
+  check('signing out keeps the lunches on that phone', (await p2.$$eval('#signinEmail', a => a.length)) === 1 &&
+    await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length)));
+  await ctx2.close();
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="delete-account"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="delete-account"]'); await page.waitForTimeout(900);
+  const afterDelete = await page.evaluate(() => fetch('/api/auth/me').then(r => r.json()));
+  check('deleting the account signs out, removes the household from the server, and clears this phone',
+    afterDelete.user === null && (await page.$$eval('#signinEmail', a => a.length)) === 1 &&
+    await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length)));
+  await page.evaluate(raw => localStorage.setItem('lunchsorted', raw), goodDoc);
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(500);
 
   /* ------------------------------------------------------- pwa + offline */
   check('the service worker takes control',

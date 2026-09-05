@@ -1,8 +1,16 @@
 [build]
   publish = "public"
-  # no build step, so the test-only dependencies are never installed on Netlify
+  # the only build step: apply any new database migration before the deploy
+  # goes live (skips quietly on a deploy that has no database URL)
+  command = "node scripts/migrate.mjs"
+  # the test-only dependencies are never installed on Netlify
   [build.environment]
     NPM_FLAGS = "--omit=dev"
+    NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
 
 # The app shell and the worker must never be served stale, or a deploy
 # can take days to reach an installed home-screen app.
@@ -21,6 +29,11 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
     Content-Type = "application/manifest+json"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store"
 
 [[headers]]
   for = "/icons/*"
@@ -48,7 +61,7 @@
 [[headers]]
   for = "/app/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-q1oI5tXtxzfEQeakFruSi9h0W10bcpO16tOJmhNYybA=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-ijdlN91twPyf1BeTz+lk/jvNeJrDMT5U2pp7i0FMRkE=' 'sha256-xmPvQSM02+m6Y7Viedo6rs+3PE0ZwRY48UkIYHDtMl8=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 [[headers]]
   for = "/"

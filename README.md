@@ -144,7 +144,37 @@ the visual identity.
 ## Roadmap
 
 1. **Now** — hosted, installable, free. Measure whether strangers return in week two.
-2. **Next** — accounts and sync (Netlify Functions + Neon), swapping out `Store`.
-3. **Then** — Stripe Checkout, free tier plus a school-year subscription.
-4. **Later, only if the numbers justify it** — a Capacitor iOS wrapper with local
-   notifications and a Home Screen widget.
+2. **Built, not yet switched on** — accounts and sync (below). Needs a database and a
+   mail sender in the Netlify environment.
+3. **Then** — Stripe Checkout on the web, writing the household's entitlement row.
+4. **Then** — a Capacitor iOS shell on the US storefront, with the night-before reminder,
+   share sheet and a Home Screen widget; payments stay on the web.
+
+## Accounts and sync
+
+Signed out, the app is exactly the phone-only app it always was. Signed in, the household
+document also lives on the server, versioned, and every phone in the household reads and
+writes the same one.
+
+- **Sign-in** is an email link (`POST /api/auth/request`). The link opens a page with one
+  button, so a mail scanner that follows links cannot spend it; the button posts to
+  `/api/auth/verify`, which creates a session cookie (HttpOnly, 180 days) and returns to
+  the app. Links and sessions are stored as hashes. No passwords anywhere.
+- **Households** (`/api/household`): one document per household with a version number.
+  `PUT` with the version you last saw; if the server has moved on you get `409` with its
+  copy, merge, and try again. The merge rules are the first script block in
+  `public/app/index.html` (`window.LSMerge`): newer `updatedAt` wins per record, a newer
+  deletion beats an older edit, packed and eat and pantry ticks merge by their own `at`
+  stamps, the local copy wins ties. The test suite runs the block on its own.
+- **Members**: owner, adult, helper. An invite (`POST /api/household/invite`) is a link
+  that works once, for a week; opening it on a fresh phone lands at the sign-in card. A
+  helper sees the pack list and cannot change the plan (the server refuses the `PUT`).
+- **Delete my account** removes the household from the server and from that phone.
+- **Environment**: `NETLIFY_DATABASE_URL` (Netlify DB / Neon), `RESEND_API_KEY` and
+  `MAIL_FROM` for the links (outside production a missing key returns the link to the
+  caller instead of sending it, which is what the tests use), `SITE_ENV` per context.
+  `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each and
+  runs as the build command, skipping quietly when there is no database URL.
+- **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
+  drive two browsers through sign-in, invite, join, an edit on each phone, sign-out and
+  delete.

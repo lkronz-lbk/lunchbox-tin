@@ -320,6 +320,78 @@ nav.tabs svg{width:21px;height:21px}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
+/* Merge rules for one household edited on two phones. Pure: two account
+   documents in, one out; nothing else in the app knows how to merge, and the
+   test suite runs this block on its own. Per record the newer updatedAt wins,
+   a deletion beats an older edit, and per-event rows (packed ticks, eat
+   answers, pantry ticks) merge by their own "at" stamps so nobody's tick is
+   lost. The local copy wins every tie. */
+window.LSMerge = (function(){
+  "use strict";
+  function stamp(r){ return (r && (r.updatedAt || r.at)) || ''; }
+  function newer(a, b){ return stamp(b) > stamp(a) ? b : a; }
+  function byId(list){ var m = Object.create(null); (list || []).forEach(function(r){ if(r && r.id) m[r.id] = r; }); return m; }
+  function unionById(la, lb, mergeOne){
+    var a = byId(la), b = byId(lb), out = [], seen = Object.create(null);
+    (la || []).forEach(function(r){ if(!r || !r.id || seen[r.id]) return; seen[r.id] = 1; out.push(b[r.id] ? mergeOne(r, b[r.id]) : r); });
+    (lb || []).forEach(function(r){ if(!r || !r.id || seen[r.id]) return; seen[r.id] = 1; out.push(r); });
+    return out;
+  }
+  function mergeRows(ra, rb){                     /* {date: {cat: {at,...}}} */
+    var out = Object.create(null), keys = Object.create(null);
+    Object.keys(ra || {}).forEach(function(k){ keys[k] = 1; }); Object.keys(rb || {}).forEach(function(k){ keys[k] = 1; });
+    Object.keys(keys).forEach(function(d){
+      var x = (ra || {})[d], y = (rb || {})[d];
+      if(!x || !y){ out[d] = x || y; return; }
+      if(x.skipped || y.skipped){ out[d] = newer(x, y); return; }
+      var row = {}, cats = Object.create(null);
+      Object.keys(x).forEach(function(c){ cats[c] = 1; }); Object.keys(y).forEach(function(c){ cats[c] = 1; });
+      Object.keys(cats).forEach(function(c){ row[c] = (x[c] && y[c]) ? newer(x[c], y[c]) : (x[c] || y[c]); });
+      out[d] = row;
+    });
+    return out;
+  }
+  function mergeMap(ma, mb){                      /* {key: {at,...}} */
+    var out = Object.create(null);
+    Object.keys(ma || {}).forEach(function(k){ out[k] = ma[k]; });
+    Object.keys(mb || {}).forEach(function(k){ out[k] = out[k] ? newer(out[k], mb[k]) : mb[k]; });
+    return out;
+  }
+  function mergePast(pa, pb){
+    var seen = Object.create(null), out = [];
+    (pa || []).concat(pb || []).forEach(function(d){ if(d && d.d && !seen[d.d]){ seen[d.d] = 1; out.push(d); } });
+    return out.sort(function(x, y){ return x.d < y.d ? -1 : x.d > y.d ? 1 : 0; }).slice(-40);
+  }
+  function mergeKid(a, b){
+    var head = newer(a, b);                       /* name, hue, deletedAt travel with the kid's own stamp */
+    var settings = newer(a.settings || {}, b.settings || {});
+    var week = (a.week && b.week) ? newer(a.week, b.week) : (a.week || b.week);
+    return {
+      id:a.id, name:head.name, hue:head.hue, createdAt:a.createdAt < b.createdAt ? a.createdAt : b.createdAt,
+      updatedAt:stamp(a) > stamp(b) ? a.updatedAt : b.updatedAt,
+      deletedAt:(a.deletedAt || b.deletedAt) ? (stamp(head) === stamp(a) ? a.deletedAt : b.deletedAt) : null,
+      settings:settings, foods:unionById(a.foods, b.foods, newer), week:week,
+      packed:mergeRows(a.packed, b.packed), eaten:mergeRows(a.eaten, b.eaten), past:mergePast(a.past, b.past)
+    };
+  }
+  function merge(a, b){
+    if(!a) return b; if(!b) return a;
+    var head = newer(a, b);
+    return {
+      schema:2, id:a.id, name:head.name,
+      createdAt:a.createdAt < b.createdAt ? a.createdAt : b.createdAt,
+      updatedAt:stamp(a) > stamp(b) ? a.updatedAt : b.updatedAt,
+      onboardedAt:a.onboardedAt || b.onboardedAt || null,
+      members:unionById(a.members, b.members, newer),
+      kids:unionById(a.kids, b.kids, mergeKid),
+      activeKidId:a.activeKidId || b.activeKidId,
+      pantry:mergeMap(a.pantry, b.pantry)
+    };
+  }
+  return {merge:merge, newer:newer, mergeRows:mergeRows};
+})();
+</script>
+<script>
 (function(){
 "use strict";
 
@@ -684,7 +756,90 @@ var Store = {
   }
 };
 
-/* ---------------------------------------------------------------- model */
+/* ---------------------------------------------------------------- account
+   Signed in, the household document also lives on the server, versioned.
+   Every save schedules a push; every open pulls; a push that finds the
+   server ahead merges and tries once more. Signed out, nothing here runs and
+   the app is exactly the phone-only app it always was. */
+var Account = {user:null, me:null, members:[], entitlement:null, version:0, status:'idle', syncedAt:null, timer:null, busy:false, linkSent:'', devLink:'', invite:'', join:null};
+function api(method, path, body){
+  var opts = {method:method, credentials:'same-origin', headers:{}};
+  if(body){ opts.headers['content-type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  return fetch(path, opts).then(function(r){
+    return r.text().then(function(t){ var j = {}; try{ j = t ? JSON.parse(t) : {}; }catch(e){} j.status = r.status; return j; });
+  });
+}
+function signedIn(){ return !!Account.user; }
+function canWrite(){ return signedIn() && Account.me && Account.me.role !== 'helper'; }
+function applyState(st){
+  Account.user = {id:st.me.userId, email:st.me.email}; Account.me = st.me; Account.members = st.members || [];
+  Account.entitlement = st.entitlement || null; Account.version = st.version || 0;
+  /* the person on this phone is the member the server says they are, once the
+     household exists there; before the first push it is this phone's own member,
+     and the first push names it */
+  if(st.doc && st.me.memberId){
+    if(!memberById(st.me.memberId)){
+      var nm = newMember((st.me.email || '').split('@')[0] || 'Me', st.me.role === 'owner' ? 'owner' : 'adult');
+      nm.id = st.me.memberId; S.members.push(nm);
+    }
+    DEVICE.memberId = st.me.memberId;
+  }
+}
+var Sync = {
+  pull:function(){
+    if(!S || Account.busy || !navigator.onLine) return Promise.resolve();
+    Account.busy = true; Account.status = 'syncing'; renderSyncLine();
+    return api('GET', '/api/household').then(function(st){
+      Account.busy = false;
+      if(st.status === 401){ Account.user = null; Account.status = 'idle'; renderSyncLine(); return; }
+      if(st.status !== 200){ Account.status = 'error'; renderSyncLine(); return; }
+      applyState(st);
+      if(!st.doc){ return Sync.push(true); }                 /* a fresh household: this phone's copy becomes it */
+      var before = JSON.stringify(S);
+      var merged = normalizeAccount(window.LSMerge.merge(S, st.doc));
+      var after = JSON.stringify(merged);
+      if(after !== before){ S = merged; if(!activeKid() && kids().length) S.activeKidId = kids()[0].id; Store.save(S, DEVICE.memberId); render(); }
+      Account.status = 'ok'; Account.syncedAt = Date.now(); renderSyncLine();
+      if(after !== JSON.stringify(st.doc)) return Sync.push();
+    }).catch(function(){ Account.busy = false; Account.status = 'error'; renderSyncLine(); });
+  },
+  push:function(first){
+    if(!S || !canWrite() || !navigator.onLine) return Promise.resolve();
+    Account.status = 'syncing'; renderSyncLine();
+    var body = {doc:S, version:Account.version};
+    if(first) body.memberId = DEVICE.memberId;
+    return api('PUT', '/api/household', body).then(function(r){
+      if(r.status === 200){ Account.version = r.version; Account.status = 'ok'; Account.syncedAt = Date.now(); if(first){ Account.me.memberId = DEVICE.memberId; } renderSyncLine(); return; }
+      if(r.status === 409 && r.doc){                          /* the other phone got there first: merge, try once more */
+        Account.version = r.version;
+        var merged = normalizeAccount(window.LSMerge.merge(S, r.doc));
+        if(JSON.stringify(merged) !== JSON.stringify(S)){ S = merged; Store.save(S, DEVICE.memberId); render(); }
+        return api('PUT', '/api/household', {doc:S, version:Account.version}).then(function(r2){
+          if(r2.status === 200){ Account.version = r2.version; Account.status = 'ok'; Account.syncedAt = Date.now(); }
+          else Account.status = 'error';
+          renderSyncLine();
+        });
+      }
+      if(r.status === 401){ Account.user = null; }
+      Account.status = 'error'; renderSyncLine();
+    }).catch(function(){ Account.status = 'error'; renderSyncLine(); });
+  },
+  schedule:function(){
+    if(!canWrite()) return;
+    clearTimeout(Account.timer);
+    Account.timer = setTimeout(function(){ Sync.push(); }, 1500);
+  }
+};
+function syncLine(){
+  if(!signedIn()) return '';
+  if(!navigator.onLine) return 'Offline \u2014 changes are saved on this phone and sent when you are back';
+  if(Account.status === 'syncing') return 'Syncing\u2026';
+  if(Account.status === 'error') return 'Could not reach the server \u2014 will try again';
+  if(Account.syncedAt){ var m = Math.round((Date.now() - Account.syncedAt) / 60000); return 'Synced ' + (m < 1 ? 'just now' : m === 1 ? 'a minute ago' : m + ' minutes ago'); }
+  return 'Signed in';
+}
+function renderSyncLine(){ var el = document.getElementById('syncLine'); if(el) el.textContent = syncLine(); }
+
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
 var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
@@ -880,6 +1035,7 @@ function save(){
   S.updatedAt = now();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(function(){ Store.save(S, DEVICE.memberId); }, 120);
+  Sync.schedule();
 }
 
 /* ------------------------------------------------------------- accessors */
@@ -1867,6 +2023,7 @@ function viewSetup(){
     +  '<span class="hint">Comma separated. Matching foods are skipped and flagged, never deleted.</span></div></div></div>';
 
   /* who is on this device */
+  h += accountCard();
   h += '<div><div class="sect-head"><h3>This phone</h3></div><div class="card stack" style="gap:12px">'
     +  '<div class="field"><label for="memberName">Your name</label>'
     +  '<input type="text" id="memberName" value="'+esc(me?me.name:'')+'" placeholder="So the app knows who packed" maxlength="60"></div></div></div>';
@@ -1895,6 +2052,54 @@ function viewSetup(){
     +  (UI.armed==='all' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : '')
     +  '</div></div>';
   return h+'</div>';
+}
+
+/* -------------------------------------------------------------- account */
+function accountCard(){
+  var h = '<div><div class="sect-head"><h3>Account</h3></div><div class="card stack" style="gap:12px">';
+  if(Account.join){
+    h += '<p class="hint" style="margin:0">You have an invite to join <b>'+esc(Account.join.name || 'a household')+'</b>. '
+      +  (signedIn() ? 'Joining shares their lunches with you and yours with them.' : 'Sign in first, then you can join.')+'</p>'
+      +  (signedIn() ? '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary sm" data-act="join-accept">Join their household</button>'
+        + '<button class="btn ghost sm" data-act="join-dismiss">Not now</button></div>' : '');
+  }
+  if(!signedIn()){
+    h += '<p class="hint" style="margin:0">Sign in to keep this on more than one phone and share it with the other parent. No password: we email you a link.</p>'
+      +  '<div class="field"><label for="signinEmail">Email</label><input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email" inputmode="email" value="'+esc(Account.linkSent || '')+'"></div>'
+      +  '<button class="btn primary wide" data-act="signin-request">Email me a sign-in link</button>';
+    if(Account.linkSent) h += '<p class="hint" style="margin:0">Sent to <b>'+esc(Account.linkSent)+'</b>. The link works once, for fifteen minutes.'
+      + (Account.devLink ? ' <a href="'+esc(Account.devLink)+'" data-dev-link>Open the link</a> (development only)' : '')+'</p>';
+    return h + '</div></div>';
+  }
+  h += '<div class="kv"><span>Signed in as</span><span>'+esc(Account.user.email)+'</span></div>'
+    +  '<div class="kv"><span>Plan</span><span>'+esc(planLabel())+'</span></div>'
+    +  '<p class="hint" style="margin:0" id="syncLine">'+esc(syncLine())+'</p>';
+  if(Account.members.length){
+    h += '<div class="list">' + Account.members.map(function(m){
+      var mine = Account.me && m.userId === Account.me.userId;
+      return '<div class="item"><span class="grow"><span class="nm">'+esc(m.name || m.email)+(mine ? ' (you)' : '')+'</span>'
+        + '<span class="meta">'+esc(m.role === 'owner' ? 'Owner' : m.role === 'helper' ? 'Helper \u2014 sees the pack list' : 'Adult')+'</span></span>'
+        + (Account.me && Account.me.role === 'owner' && !mine ? '<button class="x" data-act="member-remove" data-id="'+esc(String(m.userId))+'" aria-label="Remove '+esc(m.email)+'">'+svg('trash',17)+'</button>' : '')
+        + '</div>'; }).join('') + '</div>';
+  }
+  if(Account.me && Account.me.role !== 'helper'){
+    h += '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="invite">Invite the other parent</button>'
+      +  '<button class="btn ghost sm" data-act="invite-helper">Invite a helper</button></div>';
+    if(Account.invite) h += '<div class="field"><label for="inviteUrl">Send them this link (it works once, for a week)</label>'
+      + '<textarea id="inviteUrl" class="codebox" readonly style="min-height:60px">'+esc(Account.invite)+'</textarea>'
+      + '<button class="btn sm" data-act="invite-copy">Copy the link</button></div>';
+  }
+  h += '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px"><button class="btn ghost sm" data-act="signout">Sign out on this phone</button>'
+    +  (Account.me && Account.me.role === 'owner'
+        ? '<button class="btn danger sm" data-act="delete-account">'+(UI.armed==='delete-account' ? 'Tap again to delete everything' : 'Delete my account')+'</button>'
+        : '<button class="btn danger sm" data-act="leave">Leave this household</button>')
+    +  (UI.armed==='delete-account' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : '') + '</div>'
+    +  (Account.me && Account.me.role === 'owner' ? '<p class="hint" style="margin:0">Deleting removes the household from our servers and from this phone. It cannot be undone.</p>' : '');
+  return h + '</div></div>';
+}
+function planLabel(){
+  var e = Account.entitlement; if(!e || e.plan === 'free') return 'Free';
+  return (e.plan === 'lifetime' ? 'Household, forever' : 'Household') + (e.status && e.status !== 'active' ? ' \u2014 ' + e.status.replace('_',' ') : '');
 }
 
 /* --------------------------------------------------------------- sheets */
@@ -2069,7 +2274,7 @@ document.addEventListener('click', function(ev){
   }
   var act = el.getAttribute('data-act');
   var kid = activeKid();
-  if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='disarm' && UI.armed) UI.armed = '';
+  if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='delete-account' && act!=='disarm' && UI.armed) UI.armed = '';
 
   /* did they eat it? */
   if(act==='eat-set' || act==='eat-all' || act==='eat-skip'){
@@ -2347,6 +2552,75 @@ document.addEventListener('click', function(ev){
     save(); render(); toast('Everything erased'); return;
   }
   if(act==='disarm'){ UI.armed=''; render(); return; }
+
+  /* account */
+  if(act==='signin-request'){
+    var inp = document.getElementById('signinEmail'), em = (inp.value || '').trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(em)){ inp.focus(); toast('That does not look like an email address'); return; }
+    el.disabled = true;
+    api('POST', '/api/auth/request', {email:em}).then(function(r){
+      el.disabled = false;
+      if(r.status !== 200){ toast(r.error || 'Could not send the link'); return; }
+      Account.linkSent = em; Account.devLink = r.devLink || ''; render(); toast('Check your email');
+    }).catch(function(){ el.disabled = false; toast('Could not reach the server'); });
+    return;
+  }
+  if(act==='signout'){
+    api('POST', '/api/auth/logout').then(function(){ Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; Account.linkSent = ''; Account.status = 'idle'; render(); toast('Signed out \u2014 your lunches stay on this phone'); });
+    return;
+  }
+  if(act==='invite' || act==='invite-helper'){
+    api('POST', '/api/household/invite', {role: act==='invite-helper' ? 'helper' : 'adult'}).then(function(r){
+      if(r.status !== 200){ toast(r.error || 'Could not make an invite'); return; }
+      Account.invite = r.url; render();
+    });
+    return;
+  }
+  if(act==='invite-copy'){ copy(Account.invite, 'Link copied \u2014 send it to them'); return; }
+  if(act==='member-remove'){
+    api('POST', '/api/household/remove', {userId: +el.getAttribute('data-id')}).then(function(r){
+      if(r.status !== 200){ toast(r.error || 'Could not remove them'); return; }
+      applyState(r); render(); toast('Removed');
+    });
+    return;
+  }
+  if(act==='leave'){
+    api('POST', '/api/household/leave').then(function(r){
+      if(r.status !== 200){ toast(r.error || 'Could not leave'); return; }
+      applyState(r); Account.version = r.version; return Sync.pull().then(function(){ render(); toast('You have your own household now'); });
+    });
+    return;
+  }
+  if(act==='join-accept'){
+    api('POST', '/api/household/join', {code: Account.join.code}).then(function(r){
+      if(r.status !== 200){ toast(r.error || 'Could not join'); return; }
+      Account.join = null; try{ localStorage.removeItem('lunchsorted-join'); }catch(e){}
+      applyState(r);
+      var theirs = r.doc ? normalizeAccount(r.doc) : null;
+      if(theirs){
+        /* bring along only what this phone actually has: lunchboxes with food in them, and the person on it */
+        var mine = Object.assign({}, S, {
+          kids:S.kids.filter(function(k){ return !k.deletedAt && (foodsOf(k).length || k.week); }),
+          members:S.members.filter(function(m){ return m.id === DEVICE.memberId; })
+        });
+        S = normalizeAccount(window.LSMerge.merge(theirs, mine)); S.activeKidId = (kids()[0] || {}).id; Store.save(S, DEVICE.memberId);
+      }
+      render(); toast('Joined \u2014 you share their lunches now');
+      return Sync.push();
+    });
+    return;
+  }
+  if(act==='join-dismiss'){ Account.join = null; try{ localStorage.removeItem('lunchsorted-join'); }catch(e){} render(); return; }
+  if(act==='delete-account'){
+    if(UI.armed!=='delete-account'){ UI.armed='delete-account'; render(); toast('That deletes the household everywhere'); return; }
+    api('POST', '/api/auth/delete', {confirm:'DELETE'}).then(function(r){
+      if(r.status !== 200){ toast(r.error || 'Could not delete'); return; }
+      Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; UI.armed = '';
+      Store.forget(); S = newAccount(); S.onboardedAt = now(); DEVICE.memberId = S.members[0].id; UI.tab = 'setup';
+      save(); render(); toast('Deleted');
+    });
+    return;
+  }
   if(act==='notice-dismiss'){ UI.notice=''; render(); return; }
   if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }
 });
@@ -2423,6 +2697,30 @@ Store.load().then(function(r){
     render();
   }
   if(!rejected && (r.renamed || JSON.stringify(S) !== r.raw)) save();   /* an unchanged document is not rewritten on every launch */
+
+  /* signed in? then the household on the server is part of the picture */
+  var qs = new URLSearchParams(location.search);
+  if(qs.get('signed-in')){ UI.tab = 'setup'; toast('Signed in'); }
+  var joinCode = qs.get('join') || (function(){ try{ return localStorage.getItem('lunchsorted-join') || ''; }catch(e){ return ''; } })();
+  if(joinCode){ try{ localStorage.setItem('lunchsorted-join', joinCode); }catch(e){} UI.tab = 'setup';
+    if(!S.onboardedAt){ S.onboardedAt = now(); save(); }   /* an invited phone starts at the sign-in card, not the questions */ }
+  if(qs.get('signed-in') || qs.get('join')) history.replaceState(null, '', location.pathname);
+  var afterMe = function(){
+    if(!joinCode) return;
+    api('GET', '/api/household/invite?code='+encodeURIComponent(joinCode)).then(function(r){
+      if(r.status === 200){ Account.join = {code:joinCode, name:r.name, role:r.role}; }
+      else { try{ localStorage.removeItem('lunchsorted-join'); }catch(e){} if(r.status === 410) toast(r.error); }
+      render();
+    });
+  };
+  if(navigator.onLine && !rejected){
+    api('GET', '/api/auth/me').then(function(r){
+      if(r.status === 200 && r.user){ Account.user = r.user; render(); return Sync.pull().then(function(){ render(); afterMe(); }); }
+      render(); afterMe();
+    }).catch(function(){});
+  }
+  window.addEventListener('online', function(){ if(signedIn()) Sync.pull(); else render(); });
+  window.addEventListener('offline', function(){ renderSyncLine(); });
 });
 })();
 </script>

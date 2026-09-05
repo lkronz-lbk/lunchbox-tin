@@ -28,18 +28,27 @@ strong{color:var(--ink)}
 </head>
 <body>
 <div class="wrap">
-<p class="eyebrow">Last updated 2 September 2026</p>
+<p class="eyebrow">Last updated 5 September 2026</p>
 <h1>Privacy</h1>
-<p>Short version: the planner keeps everything on your device, and the only thing this site collects is an
-email address if you type one into the form. Like every website, the company that hosts it keeps ordinary
-server logs (the address your connection comes from, your browser type) for a short time.</p>
+<p>Short version: signed out, the planner keeps everything on your device. Signed in, your household's
+lunches are also stored on our servers so a second phone can share them, and the only things we hold are
+your email address and that household. Like every website, the company that hosts it keeps ordinary server
+logs (the address your connection comes from, your browser type) for a short time.</p>
 
 <h2>The planner</h2>
 <p>Everything you enter — lunchbox names, food lists, school rules, plans, shopping ticks — is stored in your
-own browser's local storage on the device you used. <strong>It is never sent anywhere.</strong> There is no
-account, no server holding your data, and no way for anyone else, including me, to read it.</p>
-<p>Because it lives on the device, clearing your browser data or deleting the installed app deletes it too.
-The planner's Setup screen has a copy-out button so you can keep your own backup or move to another phone.</p>
+own browser's local storage on the device you used. <strong>Until you sign in, it is never sent anywhere.</strong>
+Clearing your browser data or deleting the installed app deletes it too. The planner's Setup screen has a
+copy-out button so you can keep your own backup or move to another phone.</p>
+
+<h2>Signing in</h2>
+<p>You can sign in with an email address so the same household works on more than one phone. There is no
+password: we email you a link that works once. Signed in, a copy of your household — the same data described
+above — is stored on our servers (hosted by Netlify, database by Neon, both in the United States) and shared
+only with the people you invite into it. We keep your email address, the household, and the sign-in sessions
+for your phones; nothing else. Signing out leaves the copy on your phone in place. <strong>Delete my
+account</strong>, in Setup, removes the household from our servers and from that phone and cannot be undone;
+if someone else you invited was in it, they keep their own copy.</p>
 
 <h2>The email form</h2>
 <p>If you submit the form on the home page, your email address is stored by Netlify, which hosts this site,
@@ -54,9 +63,11 @@ file&rdquo; button appears in Setup; it hands your lunches to that app&rsquo;s o
 
 <h2>Children's information</h2>
 <p>The planner is set up and run by an adult. The one part a child touches is the &ldquo;kid&rsquo;s pick&rdquo;
-screen, which shows two pictures at a time and never asks them for anything. If you type a child's name into a
-lunchbox it stays on your device with everything else, and you are welcome to use initials or a nickname instead
-&mdash; the app never needs a real name to work.</p>
+screen, which shows two pictures at a time and never asks them for anything. A child's name and any allergens
+you enter are personal information about a minor: they stay on your device unless you sign in, in which case
+they are stored with the rest of the household as described above, never shared beyond the people in it, and
+never used for anything else. You are welcome to use initials or a nickname instead &mdash; the app never needs
+a real name to work.</p>
 
 <h2>Contact</h2>
 <p>Questions, or a request to delete an email address: <a href="mailto:hello@example.com">hello@example.com</a>.</p>
