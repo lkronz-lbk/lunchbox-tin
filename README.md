@@ -34,7 +34,10 @@ food list from a 180-item library and produce a planned week immediately. From t
   (or nothing does, with the *only what's in the kitchen* switch). Matched foods land
   on the shopping list already ticked. Things it doesn't recognise are offered back as
   one-tap additions to the food list. Typing into the same box does exactly the same.
-- **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes.
+- **Shop** — every planned box broken into *ingredients* and rolled into one aisle-grouped
+  list across all lunchboxes: one loaf of bread covers every sandwich that week, and each
+  row says which boxes need it. Every bank food carries a recipe; a food of your own uses
+  what you typed under "made from", or is its own single ingredient.
 - **Pack** — the next school day as a checklist, with ice-pack, sealed-container and
   no-protein flags.
 - **Setup** — lunchboxes, pack days, cold-only, allergen exclusions, an avoid list, and
@@ -48,7 +51,7 @@ Built for more than one user from the start, though it runs today with no accoun
 account            one household — a server only ever has to filter by account id
 ├── members[]      the adults who use it; per-person actions record `by: memberId`
 ├── kids[]         lunchbox profiles, each with its OWN rules, foods, week, pack state
-├── pantry{}       household-wide "already have it" ticks, keyed by normalized food name
+├── pantry{}       household-wide "already have it" ticks, keyed by ingredient
 └── stock          the last "what's in the kitchen" recording: transcript + ingredients heard
 ```
 
@@ -57,7 +60,7 @@ so a future sync can merge and propagate removals. **All persistence goes throug
 `Store` object** — two async methods over `localStorage`. Replacing those two bodies with
 `fetch('/api/account')` is the entire backend seam. Schema migrations are keyed by the
 version they upgrade *from* (`MIGRATIONS[1]` carries the original single-profile save
-forward).
+forward, `MIGRATIONS[2]` moves pantry ticks from meal names onto ingredients).
 
 ## Voice
 
@@ -73,7 +76,8 @@ transcript is scanned as a word stream with greedy longest-alias matching agains
 lexicon of ~190 ingredients and ~2,900 ways parents say them ("cuties" → clementines,
 "philadelphia" → cream cheese, "gogurt" → yogurt tubes). Each bank food carries a recipe
 (`R('Ham & cheese sandwich', 'bread, ham|deli meat, cheese|cream cheese')`); a food is
-"makeable" when every group has one ingredient present. Words left over between matches,
+"makeable" when every group has one ingredient present. The same recipes drive the shopping
+list: each group buys whichever alternative the pantry already has, else the first listed. Words left over between matches,
 minus filler, become "add this anyway" offers with a guessed category.
 
 ## Before this goes live

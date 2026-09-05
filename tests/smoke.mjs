@@ -108,6 +108,11 @@ try {
   await page.waitForTimeout(200);
   const rows = await page.$$eval('.list .item', a => a.length);
   check('the week produces a shopping list', rows > 0, rows);
+  const rowNames = await page.$$eval('.list .item .nm', a => a.map(n => n.textContent));
+  check('the list is ingredients, not meals',
+    rowNames.length > 0 && !rowNames.some(n => /&|sandwich|wrap|roll-up|thermos/i.test(n)), rowNames);
+  check('every row says which box needs it',
+    await page.$$eval('.list .item .meta', a => a.length > 0 && a.every(m => m.textContent.trim().length > 0)));
   const head = await page.textContent('.count');
   await page.click('.list .item');
   await page.waitForTimeout(200);
@@ -172,11 +177,11 @@ try {
     return {schema:d.schema, name:k.name, foods:k.foods.length, days:k.settings.days.join(','),
       weekDays:k.week ? k.week.days.length : 0,
       slotResolves: k.week ? !!k.foods.find(f => f.id === k.week.days[0].slots.main) : false,
-      packed:Object.keys(k.packed).length, pantry:Object.keys(d.pantry).length,
+      packed:Object.keys(k.packed).length, pantry:Object.keys(d.pantry).length, pantryKey:Object.keys(d.pantry)[0],
       stamped: !!(k.createdAt && k.foods[0].updatedAt && k.foods[0].deletedAt === null)};
   });
-  check('a v1 save migrates whole',
-    migrated.schema === 2 && migrated.name === 'Nora' && migrated.foods === 4 &&
+  check('a v1 save migrates whole, with pantry ticks moved onto ingredients',
+    migrated.schema === 3 && migrated.pantryKey === 'pretzels' && migrated.name === 'Nora' && migrated.foods === 4 &&
     migrated.days === '1,3,5' && migrated.weekDays === 1 && migrated.slotResolves &&
     migrated.packed === 1 && migrated.pantry === 1 && migrated.stamped, migrated);
 
@@ -238,26 +243,28 @@ try {
   await voice.waitForTimeout(500);
   const planned = await voice.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchbox-tin')), k = d.kids[0];
-    const norm = s => s.trim().toLowerCase().replace(/\s+/g,' ');
-    const onHand = f => d.pantry[norm(f.n)] && d.pantry[norm(f.n)].have && d.pantry[norm(f.n)].via === 'stock';
-    let home = 0, total = 0, mains = 0, homeMains = 0;
-    k.week.days.forEach(day => ['main','side','fruit','sweet'].forEach(c => {
-      const f = k.foods.find(x => x.id === day.slots[c]); if(!f) return;
-      total++; if(onHand(f)) home++;
-      if(c === 'main'){ mains++; if(onHand(f)) homeMains++; }
-    }));
-    return {home, total, mains, homeMains, stock: d.stock && d.stock.items.length,
-      said: d.stock && d.stock.said, tab: document.querySelector('nav.tabs [aria-current="true"]').dataset.tab,
-      atHome: document.querySelectorAll('.cmp .sub').length && [...document.querySelectorAll('.cmp .sub')].some(s => s.textContent.includes('at home'))};
+    const subs = [...document.querySelectorAll('.cmp .sub')];
+    let total = 0; k.week.days.forEach(day => ['main','side','fruit','sweet'].forEach(c => { if(day.slots[c]) total++; }));
+    return {total, home: subs.filter(s => s.textContent.includes('at home')).length,
+      homeMains: [...document.querySelectorAll('.cmp.c-main .sub')].filter(s => s.textContent.includes('at home')).length,
+      stock: d.stock && d.stock.items.length, said: d.stock && d.stock.said,
+      ticks: Object.keys(d.pantry).filter(k => d.pantry[k].via === 'stock').sort().join(','),
+      tab: document.querySelector('nav.tabs [aria-current="true"]').dataset.tab};
   });
-  check('the week is drawn from the kitchen first',
-    planned.tab === 'week' && planned.total === 20 && planned.home === 5 && planned.mains === 5 && planned.homeMains === 2, planned);
+  check('the week is drawn from the kitchen first, and says so in the tin',
+    planned.tab === 'week' && planned.total === 20 && planned.home === 5 && planned.homeMains === 2, planned);
   check('the recording is kept as household stock', planned.stock === 7 && /deli ham/.test(planned.said), planned);
-  check('on-hand pieces are marked in the tin', planned.atHome === true, planned.atHome);
+  check('what was heard is ticked in the pantry as ingredients',
+    planned.ticks === 'blueberries,bread,cream cheese,ham,strawberries,string cheese,tortilla', planned.ticks);
   await voice.click('[data-act="tab"][data-tab="shop"]');
   await voice.waitForTimeout(200);
-  const shopCount = await voice.textContent('.count');
-  check('kitchen items arrive on the shopping list already ticked', /5 already home/.test(shopCount), shopCount);
+  const shop = await voice.$$eval('.list .item', a => a.map(r => ({
+    name: r.querySelector('.nm').textContent, meta: r.querySelector('.meta').textContent, done: r.classList.contains('done')})));
+  const bread = shop.find(r => r.name === 'Bread'), ham = shop.find(r => r.name === 'Ham');
+  check('one loaf covers every sandwich: ingredients roll up across meals',
+    !!bread && bread.done && /Ham & cheese sandwich/.test(bread.meta) && !!ham && ham.done, shop);
+  check('kitchen ingredients arrive on the shopping list already ticked',
+    shop.filter(r => r.done).length >= 7 && /7 already home/.test(await voice.textContent('.count')), shop.filter(r => r.done).map(r => r.name));
 
   /* typed instead of spoken: things the bank doesn't know are offered back */
   await voice.click('[data-act="tab"][data-tab="week"]');
@@ -288,6 +295,22 @@ try {
   check('"only what is in the kitchen" repeats what is there instead of shopping',
     strict.sweets.every(n => n === 'Chocolate sandwich cookies') && strict.sides.every(n => n === 'Goldfish crackers'), strict);
   check('a new recording replaces the old kitchen ticks', strict.stockVia === 4, strict.stockVia);
+
+  /* a food of your own carries its own ingredients into the list */
+  await voice.click('[data-act="tab"][data-tab="foods"]');
+  await voice.waitForTimeout(200);
+  await voice.click('[data-act="add-own"]');
+  await voice.waitForTimeout(350);
+  await voice.fill('#nfName', "Nana's meatball sub");
+  await voice.fill('#nfIng', 'sub rolls, meatballs, provolone');
+  await voice.click('[data-act="save-own"]');
+  await voice.waitForTimeout(300);
+  const own = await voice.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('lunchbox-tin')).kids[0];
+    const f = k.foods.find(x => x.n === "Nana's meatball sub");
+    return f && f.ing.join(',');
+  });
+  check('"made from" resolves through the lexicon', own === 'sub roll,meatballs,cheese', own);
   await vctx.close();
 
   /* no speech engine at all: the sheet still works from the keyboard */

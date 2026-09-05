@@ -310,7 +310,7 @@ nav.tabs svg{width:21px;height:21px}
    object; the app already awaits it.
    ================================================================= */
 
-var SCHEMA = 2;
+var SCHEMA = 3;
 
 /* ---------------------------------------------------------------- icons */
 var I = {
@@ -585,9 +585,10 @@ function prep(s){
   return s;
 }
 function words(s){ return prep(s).replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean); }
-function L(k, aliases, c){
+var LA = 'other';                     /* aisle for the section that follows */
+function L(k, aliases, c, a){
   var kk = words(k).join(' ');
-  PAN.keys[kk] = {k:kk, d:k, c:c===undefined ? 'side' : c};
+  PAN.keys[kk] = {k:kk, d:k, c:c===undefined ? 'side' : c, a:a || LA};
   (k+'|'+(aliases||'')).split('|').forEach(function(a){
     var w = words(a); if(!w.length) return;
     if(w.length > PAN.maxLen) PAN.maxLen = w.length;
@@ -603,14 +604,15 @@ function R(name){
   });
 }
 /* breads & wraps */
+LA = 'bakery';
 L('bread','white bread|wheat bread|whole wheat bread|whole grain bread|sandwich bread|sliced bread|loaf|loaf of bread|brioche|sourdough|rye bread|multigrain bread|gluten free bread|potato bread|honey wheat|bun|dinner roll|rolls|roll',null);
 L('tortilla','tortillas|wraps|wrap|flour tortilla|corn tortilla|lavash|flatbread|soft tacos',null);
 L('pita','pitas|pita bread|pita pocket|pocket bread',null);
 L('bagel','bagels|mini bagel|everything bagel|plain bagel',null);
 L('sub roll','sub rolls|hoagie roll|hoagie|hoagies|hot dog bun|sandwich roll|kaiser roll',null);
 L('english muffin','english muffins',null);
-L('crackers','cracker|ritz|saltines|wheat thins|triscuits|club crackers|water crackers|rice crackers|town house|wheat crackers|butter crackers|graham? no',null);
-delete PAN.index['graham? no'];
+LA = 'snacks';
+L('crackers','cracker|ritz|saltines|wheat thins|triscuits|club crackers|water crackers|rice crackers|town house|wheat crackers|butter crackers',null);
 L('cheese crackers','cheezits|cheddar crackers|cheese cracker|cheese it','side');
 L('goldfish','goldfish crackers|gold fish|goldfishes','side');
 L('pita chips','pita chip|stacys','side');
@@ -621,12 +623,13 @@ L('pretzels','pretzel|pretzel sticks|pretzel twists|mini pretzels|pretzel crisps
 L('popcorn','popcorn bags|microwave popcorn|skinny pop|smartfood|smart food|boom chicka pop','side');
 L('veggie straws','veggie straw|veggie chips|veggie sticks|veggie crisps','side');
 L('rice cakes','rice cake|mini rice cakes','side');
-L('breadsticks','bread sticks|breadstick|grissini','side');
+L('breadsticks','bread sticks|breadstick|grissini','side','bakery');
 L('plantain chips','plantain chip|plantains','side');
 L('apple chips','apple chip|apple crisps','side');
 L('seaweed','seaweed snacks|seaweed snack|nori|roasted seaweed','side');
 L('snap pea crisps','harvest snaps|pea crisps|snap pea crisp','side');
 /* deli & protein */
+LA = 'deli';
 L('ham','deli ham|sliced ham|honey ham|black forest ham|ham slices|leftover ham|spiral ham',null);
 L('turkey','deli turkey|sliced turkey|turkey slices|turkey breast|smoked turkey|turkey lunch meat|leftover turkey','side');
 L('deli meat','lunch meat|lunchmeat|cold cuts|sandwich meat|deli slices|deli meats|luncheon meat',null);
@@ -634,20 +637,21 @@ L('salami','genoa salami|sliced salami|summer sausage|soppressata|prosciutto','s
 L('pepperoni','pepperoni slices|mini pepperoni|pepperonis|turkey pepperoni','side');
 L('bacon','turkey bacon|bacon bits',null);
 L('chicken','cooked chicken|rotisserie chicken|leftover chicken|grilled chicken|chicken breast|chicken strips|shredded chicken|chicken thighs|roast chicken','main');
-L('chicken nuggets','nuggets|dino nuggets|chicken tenders|chicken fingers|tenders|nugget|chicken bites','main');
+L('chicken nuggets','nuggets|dino nuggets|chicken tenders|chicken fingers|tenders|nugget|chicken bites','main','frozen');
 L('chicken salad','chicken salads','main');
-L('tuna','tuna fish|canned tuna|tuna packets|tuna pouches|tuna salad|tuna can|tuna cans','main');
+L('tuna','tuna fish|canned tuna|tuna packets|tuna pouches|tuna salad|tuna can|tuna cans','main','pantry');
 L('salmon','smoked salmon|lox|canned salmon|salmon packets|leftover salmon','main');
-L('eggs','egg|hardboiled eggs|hardboiled egg|boiled eggs|boiled egg|dozen eggs','side');
+L('eggs','egg|hardboiled eggs|hardboiled egg|boiled eggs|boiled egg|dozen eggs','side','dairy');
 L('egg salad','egg salads','main');
 L('hot dogs','hot dog|hotdogs|hotdog|corn dogs|corn dog|sausages|sausage|kielbasa','main');
-L('meatballs','meatball|turkey meatballs|leftover meatballs','main');
+L('meatballs','meatball|turkey meatballs|leftover meatballs','main','frozen');
 L('tofu','baked tofu|tofu cubes','main');
-L('beans','black beans|canned beans|refried beans|pinto beans|kidney beans|bean|white beans|baked beans',null);
-L('chickpeas','garbanzo beans|garbanzos|roasted chickpeas|chickpea|garbanzo','side');
-L('lentils','lentil|lentil soup|red lentils|lentil stew','main');
-L('edamame','edamame beans|edamame pods','side');
+L('beans','black beans|canned beans|refried beans|pinto beans|kidney beans|bean|white beans|baked beans',null,'pantry');
+L('chickpeas','garbanzo beans|garbanzos|roasted chickpeas|chickpea|garbanzo','side','pantry');
+L('lentils','lentil|lentil soup|red lentils|lentil stew','main','pantry');
+L('edamame','edamame beans|edamame pods','side','frozen');
 /* dairy */
+LA = 'dairy';
 L('cheese','sliced cheese|cheese slices|cheese slice|american cheese|cheddar|cheddar cheese|swiss cheese|swiss|provolone|mozzarella|shredded cheese|cheese cubes|cubed cheese|cheese cube|colby jack|colby|monterey jack|muenster|gouda|havarti|pepper jack|kraft singles|singles|sharp cheddar|mild cheddar|block of cheese|cheese block|deli cheese|sandwich cheese',null);
 L('string cheese','cheese sticks|cheese stick|string cheeses|mozzarella sticks|mozzarella stick|cheese strings','side');
 L('babybel','babybels|baby bel|baby bels|mini babybel|cheese rounds|cheese round|cheese wheels|cheese wheel','side');
@@ -660,17 +664,18 @@ L('yogurt tubes','yogurt tube|gogurt|squeeze yogurt|yogurt pouches|yogurt pouch|
 L('pudding','pudding cups|pudding cup|chocolate pudding|snack pack|snack packs|vanilla pudding|jello pudding|puddings','sweet');
 L('rice pudding','rice pudding cups','sweet');
 L('butter','margarine|salted butter|unsalted butter',null);
-L('milk','whole milk|oat milk|almond milk|milk boxes|milk box|chocolate milk',null);
+L('milk','whole milk|oat milk|almond milk|milk boxes|milk box|chocolate milk',null,'dairy');
 /* spreads & dips */
+LA = 'pantry';
 L('peanut butter','pb|jif|skippy|crunchy peanut butter|creamy peanut butter|smooth peanut butter|natural peanut butter',null);
 L('pb&j',null,'main');
 L('sunbutter','sun butter|sunflower butter|sunflower seed butter|sunflower seed spread',null);
 L('almond butter','nut butter|cashew butter',null);
 L('jelly','jam|grape jelly|strawberry jam|strawberry jelly|preserves|raspberry jam|apricot jam|marmalade|fruit spread',null);
 L('honey','honey bear|raw honey',null);
-L('hummus','humus|hummus cups|hummus cup|houmous|hummus tub|hummus container','side');
-L('guacamole','guac|guacamole cups|guacamole cup|wholly guacamole|guac cups','side');
-L('avocado','avocados|avo|avos','side');
+L('hummus','humus|hummus cups|hummus cup|houmous|hummus tub|hummus container','side','deli');
+L('guacamole','guac|guacamole cups|guacamole cup|wholly guacamole|guac cups','side','deli');
+L('avocado','avocados|avo|avos','side','produce');
 L('ranch','ranch dressing|ranch dip|ranch cups|ranch cup|dip|veggie dip|dressing|ranch packets|hidden valley',null);
 L('salsa','mild salsa|salsa jar|jar of salsa|pico de gallo|pico',null);
 L('pesto','basil pesto|pesto jar',null);
@@ -680,22 +685,24 @@ L('mustard','yellow mustard|dijon|dijon mustard|honey mustard',null);
 L('ketchup','catsup|heinz',null);
 L('pizza sauce','marinara|tomato sauce|pasta sauce|red sauce|spaghetti sauce|ragu|prego',null);
 /* grains & leftovers */
+LA = 'pantry';
 L('pasta','noodles|noodle|rotini|penne|bowtie pasta|bowties|bow ties|farfalle|spaghetti|elbow noodles|elbows|fusilli|shells|pasta shells|orzo|dry pasta|cooked pasta|leftover pasta|angel hair|linguine|ziti|rigatoni','main');
-L('pasta salad','pasta salads|macaroni salad|leftover pasta salad','main');
-L('tortellini','cheese tortellini|tortellinis|ravioli|raviolis','main');
+L('pasta salad','pasta salads|macaroni salad|leftover pasta salad','main','deli');
+L('tortellini','cheese tortellini|tortellinis|ravioli|raviolis','main','dairy');
 L('mac and cheese','mac|kraft dinner|kraft mac|annies|boxed mac|easy mac|velveeta shells|velveeta','main');
 L('rice','white rice|brown rice|leftover rice|cooked rice|rice packets|jasmine rice|basmati rice|rice packet|minute rice|fried rice|sticky rice','main');
 L('quinoa','cooked quinoa|leftover quinoa|quinoa salad','main');
 L('soup','chicken noodle soup|chicken noodle|canned soup|tomato soup|soup cans|can of soup|cans of soup|leftover soup|noodle soup|progresso|campbells','main');
 L('chili','turkey chili|leftover chili|chili leftovers|beef chili|veggie chili|vegetarian chili','main');
-L('pizza','leftover pizza|pizza slices|pizza slice|cold pizza|pizza leftovers','main');
-L('pizza bagels','pizza bagel|bagel bites|mini pizzas|mini pizza|pizza rolls|pizza roll|totinos|pizza bites','main');
-L('quesadilla','quesadillas|leftover quesadilla|leftover quesadillas','main');
-L('waffles','waffle|eggo|eggos|frozen waffles|pancakes|pancake|leftover pancakes|french toast|french toast sticks','main');
-L('dumplings','dumpling|potstickers|potsticker|gyoza|pot stickers','main');
+L('pizza','leftover pizza|pizza slices|pizza slice|cold pizza|pizza leftovers','main','frozen');
+L('pizza bagels','pizza bagel|bagel bites|mini pizzas|mini pizza|pizza rolls|pizza roll|totinos|pizza bites','main','frozen');
+L('quesadilla','quesadillas|leftover quesadilla|leftover quesadillas','main','deli');
+L('waffles','waffle|eggo|eggos|frozen waffles|pancakes|pancake|leftover pancakes|french toast|french toast sticks','main','frozen');
+L('dumplings','dumpling|potstickers|potsticker|gyoza|pot stickers','main','frozen');
 L('cereal','cheerios|dry cereal|chex|cereal cups|cereal cup|honey nut cheerios|kix|rice krispies cereal|life cereal|granola cereal|cereal box|box of cereal','side');
 L('granola','granola clusters|granola cluster|homemade granola|bag of granola','side');
 /* vegetables */
+LA = 'produce';
 L('carrots','carrot|baby carrots|baby carrot|carrot sticks|carrot stick|mini carrots|carrot chips|shredded carrots','side');
 L('cucumber','cucumbers|cukes|cuke|persian cucumbers|persian cucumber|mini cucumbers|mini cucumber|english cucumber|cucumber slices','side');
 L('tomatoes','cherry tomatoes|cherry tomato|grape tomatoes|grape tomato|tomato|little tomatoes|baby tomatoes|tiny tomatoes|cherry toms','side');
@@ -706,20 +713,22 @@ L('broccoli','broccoli florets|broccoli floret|raw broccoli|broccolini','side');
 L('cauliflower','cauliflower florets','side');
 L('lettuce','romaine|iceberg|salad greens|greens|mixed greens|spring mix|leaf lettuce|butter lettuce','side');
 L('spinach','baby spinach|fresh spinach',null);
-L('pickles','pickle|dill pickles|dill pickle|pickle spears|pickle spear|dill spears|whole pickles|pickle chips|bread and butter pickles','side');
-L('mini pickles','baby pickles|baby pickle|cornichons|cornichon|gherkins|gherkin|mini pickle|tiny pickles|little pickles','side');
-L('olives','olive|black olives|black olive|green olives|green olive|kalamata olives|kalamata|castelvetrano|sliced olives|olive cups|olive cup','side');
+L('pickles','pickle|dill pickles|dill pickle|pickle spears|pickle spear|dill spears|whole pickles|pickle chips|bread and butter pickles','side','pantry');
+L('mini pickles','baby pickles|baby pickle|cornichons|cornichon|gherkins|gherkin|mini pickle|tiny pickles|little pickles','side','pantry');
+L('olives','olive|black olives|black olive|green olives|green olive|kalamata olives|kalamata|castelvetrano|sliced olives|olive cups|olive cup','side','pantry');
 L('corn','corn salad|sweet corn|corn kernels|leftover corn|corn on the cob|canned corn|frozen corn|corn cups','side');
-L('potato salad','potato salads|leftover potato salad','side');
-L('coleslaw','cole slaw|slaw|leftover coleslaw','side');
-L('three bean salad','bean salad|3 bean salad|leftover bean salad','side');
+L('potato salad','potato salads|leftover potato salad','side','deli');
+L('coleslaw','cole slaw|slaw|leftover coleslaw','side','deli');
+L('three bean salad','bean salad|3 bean salad|leftover bean salad','side','deli');
 L('sweet potato','sweet potatoes|sweet potato fries|yams','side');
 /* nuts & seeds */
+LA = 'snacks';
 L('trail mix','trailmix|gorp|trail mixes|trail mix bags','side');
 L('nuts','mixed nuts|almonds|almond|cashews|cashew|peanuts|peanut|pistachios|pistachio|walnuts|walnut|pecans|pecan|macadamia|macadamias','side');
 L('sunflower seeds','sunflower seed|sunflower kernels|sunflower','side');
 L('pumpkin seeds','pumpkin seed|pepitas|pepita','side');
 /* fruit */
+LA = 'produce';
 L('apples','apple|apple slices|apple slice|honeycrisp|honeycrisps|gala apples|gala apple|fuji apples|fuji apple|pink lady|pink lady apples|granny smith|granny smiths|red apples|green apples|sliced apples','fruit');
 L('grapes','grape|green grapes|green grape|seedless grapes|cotton candy grapes|bag of grapes|bunch of grapes','fruit');
 L('red grapes','red grape|purple grapes|purple grape|black grapes|black grape|concord grapes','fruit');
@@ -746,34 +755,35 @@ L('pear','pears|pear slices|pear slice|bartlett pears|bosc pears|asian pears|asi
 L('plum','plums|pluots|pluot|plumcots','fruit');
 L('cherries','cherry|rainier cherries|bing cherries|fresh cherries|bag of cherries|pitted cherries','fruit');
 L('pomegranate','pomegranates|pomegranate seeds|pomegranate seed|pom seeds|pomegranate arils|arils|pom','fruit');
-L('raisins','raisin|raisin boxes|raisin box|little boxes of raisins|golden raisins|sun maid|sunmaid','fruit');
-L('dried cranberries','craisins|craisin|cranberries|cranberry|dried cranberry','fruit');
-L('dried apricots','apricots|apricot|dried apricot','fruit');
-L('dried mango','dried mangos|dried mangoes|mango strips|dried mango slices','fruit');
-L('dried apples','dried apple|dried apple rings|apple rings|apple ring','fruit');
-L('dried fruit','dried fruits|fruit and nut mix|dates|prunes|dried figs|figs|fig','fruit');
-L('banana chips','banana chip|dried banana|dried bananas','fruit');
-L('freeze-dried strawberries','freeze-dried strawberry|freeze-dried fruit|freeze-dried berries|freeze-dried apples|freeze-dried mango|freeze-dried raspberries|crispy fruit','fruit');
-L('fruit cups','fruit cup|fruit in juice|dole fruit cups|dole cups|dole cup|peach cups|peach cup|canned peaches|canned pears|canned fruit|pear cups|pear cup|fruit cocktail|fruit cocktail cups','fruit');
-L('mandarin cups','mandarin oranges|mandarin orange cups|mandarin orange cup|canned mandarins|canned mandarin oranges|mandarin cup|orange cups|orange cup','fruit');
-L('applesauce','apple sauce|applesauce pouches|applesauce pouch|applesauce cups|applesauce cup|gogo squeez|gogo squeeze|squeeze pouches|squeeze pouch|fruit pouches|fruit pouch|apple sauce pouches|apple sauce cups|motts applesauce|motts|apple pouches','side');
+L('raisins','raisin|raisin boxes|raisin box|little boxes of raisins|golden raisins|sun maid|sunmaid','fruit','pantry');
+L('dried cranberries','craisins|craisin|cranberries|cranberry|dried cranberry','fruit','pantry');
+L('dried apricots','apricots|apricot|dried apricot','fruit','pantry');
+L('dried mango','dried mangos|dried mangoes|mango strips|dried mango slices','fruit','pantry');
+L('dried apples','dried apple|dried apple rings|apple rings|apple ring','fruit','pantry');
+L('dried fruit','dried fruits|fruit and nut mix|dates|prunes|dried figs|figs|fig','fruit','pantry');
+L('banana chips','banana chip|dried banana|dried bananas','fruit','snacks');
+L('freeze-dried strawberries','freeze-dried strawberry|freeze-dried fruit|freeze-dried berries|freeze-dried apples|freeze-dried mango|freeze-dried raspberries|crispy fruit','fruit','pantry');
+L('fruit cups','fruit cup|fruit in juice|dole fruit cups|dole cups|dole cup|peach cups|peach cup|canned peaches|canned pears|canned fruit|pear cups|pear cup|fruit cocktail|fruit cocktail cups','fruit','pantry');
+L('mandarin cups','mandarin oranges|mandarin orange cups|mandarin orange cup|canned mandarins|canned mandarin oranges|mandarin cup|orange cups|orange cup','fruit','pantry');
+L('applesauce','apple sauce|applesauce pouches|applesauce pouch|applesauce cups|applesauce cup|gogo squeez|gogo squeeze|squeeze pouches|squeeze pouch|fruit pouches|fruit pouch|apple sauce pouches|apple sauce cups|motts applesauce|motts|apple pouches','side','pantry');
 /* sweets */
+LA = 'snacks';
 L('fruit snacks','fruit snack|welchs|welchs fruit snacks|gummy snacks|gummy snack|fruit gummies|fruit gummy|motts fruit snacks|annies fruit snacks|fruit snack pouches|fruit snack packs','sweet');
 L('fruit leather','fruit leathers|fruit rollups|fruit rollup|fruit by the foot|fruit strips|fruit strip|fruit rolls|fruit roll|stretch island|that fruit leather stuff','sweet');
 L('gummy bears','gummy bear|gummy worms|gummy worm|gummies|gummy|haribo|gummy candy|gummy candies|sour gummies|sour patch kids|sour patch|swedish fish','sweet');
-L('cookies','cookie|chocolate chip cookies|chocolate chip cookie|chips ahoy|homemade cookies|bag of cookies|box of cookies|cookie dough','sweet');
-L('oatmeal cookies','oatmeal cookie|oatmeal raisin cookies|oatmeal raisin cookie|oatmeal raisin|oatmeal chocolate chip cookies','sweet');
+L('cookies','cookie|chocolate chip cookies|chocolate chip cookie|chips ahoy|homemade cookies|bag of cookies|box of cookies|cookie dough','sweet','bakery');
+L('oatmeal cookies','oatmeal cookie|oatmeal raisin cookies|oatmeal raisin cookie|oatmeal raisin|oatmeal chocolate chip cookies','sweet','bakery');
 L('oreos','oreo|sandwich cookies|sandwich cookie|chocolate sandwich cookies|chocolate sandwich cookie|golden oreos|mini oreos|creme cookies','sweet');
 L('graham crackers','graham cracker|grahams|graham|honey grahams|honey graham crackers|cinnamon grahams|cinnamon graham crackers|honey maid','sweet');
 L('graham sticks','graham stick|teddy grahams|teddy graham|honey graham sticks|honey graham stick|graham snacks|scooby snacks','sweet');
 L('animal crackers','animal cracker|animal cookies|animal cookie|barnum animal crackers|zoo animal crackers','sweet');
 L('frosted animal cookies','frosted animal cracker|frosted animal crackers|frosted animal cookie|circus animal cookies|circus animal cookie|circus animals|circus animal|pink and white animal cookies|pink and white cookies|frosted animals','sweet');
 L('vanilla wafers','vanilla wafer|nilla wafers|nilla wafer|nilla|nillas|wafers|wafer|wafer cookies|wafer cookie|sugar wafers|sugar wafer','sweet');
-L('brownies','brownie|brownie bites|brownie bite|little brownies|mini brownies|leftover brownies|homemade brownies','sweet');
-L('muffins','muffin|mini muffins|mini muffin|blueberry muffins|blueberry muffin|chocolate chip muffins|chocolate chip muffin|banana muffins|banana muffin|apple muffins|apple cinnamon muffins|apple cinnamon muffin|little muffins|homemade muffins|muffin tops','sweet');
-L('banana bread','banana loaf|banana bread slices|banana bread slice|leftover banana bread','sweet');
-L('zucchini bread','zucchini loaf|zucchini bread slices|zucchini bread slice|zucchini muffins|zucchini muffin','sweet');
-L('pumpkin bread','pumpkin loaf|pumpkin bread slices|pumpkin bread slice|pumpkin muffins|pumpkin muffin','sweet');
+L('brownies','brownie|brownie bites|brownie bite|little brownies|mini brownies|leftover brownies|homemade brownies','sweet','bakery');
+L('muffins','muffin|mini muffins|mini muffin|blueberry muffins|blueberry muffin|chocolate chip muffins|chocolate chip muffin|banana muffins|banana muffin|apple muffins|apple cinnamon muffins|apple cinnamon muffin|little muffins|homemade muffins|muffin tops','sweet','bakery');
+L('banana bread','banana loaf|banana bread slices|banana bread slice|leftover banana bread','sweet','bakery');
+L('zucchini bread','zucchini loaf|zucchini bread slices|zucchini bread slice|zucchini muffins|zucchini muffin','sweet','bakery');
+L('pumpkin bread','pumpkin loaf|pumpkin bread slices|pumpkin bread slice|pumpkin muffins|pumpkin muffin','sweet','bakery');
 L('rice krispie treats','rice krispie treat|rice krispies treats|rice krispies treat|rice crispy treats|rice crispy treat|krispie treats|krispie treat|crispy treats|crispy treat|krispies treats|rice crispies treats|rice crispie squares|rice krispy treats|rice krispy treat|marshmallow treats|marshmallow squares','sweet');
 L('chocolate','dark chocolate|chocolate bar|chocolate bars|hersheys|hershey bar|hershey bars|chocolate squares|chocolate square|kisses|hershey kisses|hersheys kisses|mnms|chocolate chips|chocolate chip|milk chocolate|dove chocolate|dove chocolates|chocolate pieces|chocolate piece|mini chocolate bars|chocolate coins','sweet');
 L('candy','candy bars|candy bar|mini candy bars|mini candy bar|fun size candy|fun size|halloween candy|snickers|twix|reeses|reeses cups|peanut butter cups|milky way|three musketeers|3 musketeers|butterfinger|starburst|skittles|candies|lollipops|lollipop|jolly ranchers|jolly rancher|smarties|nerds|tootsie rolls|tootsie roll|leftover candy','sweet');
@@ -782,27 +792,27 @@ L('chocolate covered pretzels','chocolate covered pretzel|chocolate pretzels|cho
 L('yogurt raisins','yogurt raisin|yogurt covered raisins|yogurt covered raisin|yoghurt raisins|yogurt dipped raisins','sweet');
 L('licorice','twizzlers|twizzler|red vines|red vine|liquorice|licorice twists|licorice twist|licorice sticks|black licorice|red licorice','sweet');
 L('caramel corn','caramel popcorn|kettle corn|crackerjacks|cracker jacks|cracker jack|caramel corns','sweet');
-L('donuts','donut|mini donuts|mini donut|doughnuts|doughnut|donut holes|donut hole|munchkins|munchkin|powdered donuts|powdered donut|chocolate donuts|glazed donuts|little donuts|entenmanns','sweet');
-L('cupcakes','cupcake|mini cupcakes|mini cupcake|leftover cupcakes|birthday cupcakes|cake|leftover cake|birthday cake|cake slices|slice of cake','sweet');
+L('donuts','donut|mini donuts|mini donut|doughnuts|doughnut|donut holes|donut hole|munchkins|munchkin|powdered donuts|powdered donut|chocolate donuts|glazed donuts|little donuts|entenmanns','sweet','bakery');
+L('cupcakes','cupcake|mini cupcakes|mini cupcake|leftover cupcakes|birthday cupcakes|cake|leftover cake|birthday cake|cake slices|slice of cake','sweet','bakery');
 L('gingersnaps','gingersnap|ginger snaps|ginger snap|ginger cookies|ginger cookie|gingerbread|gingerbread cookies|gingerbread cookie|gingerbread men|gingerbread man','sweet');
 L('shortbread','shortbread cookies|shortbread cookie|lorna doone|lorna doones|walkers shortbread|shortbreads|butter cookies|butter cookie','sweet');
-L('sugar cookies','sugar cookie|frosted sugar cookies|frosted sugar cookie|frosted cookies|frosted cookie|iced cookies|iced cookie|decorated cookies|pillsbury cookies','sweet');
-L('snickerdoodles','snickerdoodle|snicker doodles|snicker doodle|cinnamon sugar cookies|cinnamon sugar cookie','sweet');
-L('lemon bars','lemon bar|lemon squares|lemon square|lemon cookies|lemon cookie','sweet');
-L('blondies','blondie|blondie bites|blondie bite|butterscotch bars|butterscotch bar|congo bars','sweet');
-L('macaroons','macaroon|coconut macaroons|coconut macaroon|macarons|macaron|coconut cookies|coconut cookie','sweet');
-L('meringues','meringue|meringue cookies|meringue cookie|meringue kisses|meringue kiss|pavlova','sweet');
-L('cereal bars','cereal bar|nutrigrain|nutri grain|nutrigrain bars|nutrigrain bar|breakfast bars|breakfast bar|fig bars|fig bar|fig newtons|fig newton|belvita|belvitas|cereal bars box|soft baked bars|soft baked bar|quaker bars|chewy granola bar? no','sweet');
-delete PAN.index['chewy granola bar? no'];
+L('sugar cookies','sugar cookie|frosted sugar cookies|frosted sugar cookie|frosted cookies|frosted cookie|iced cookies|iced cookie|decorated cookies|pillsbury cookies','sweet','bakery');
+L('snickerdoodles','snickerdoodle|snicker doodles|snicker doodle|cinnamon sugar cookies|cinnamon sugar cookie','sweet','bakery');
+L('lemon bars','lemon bar|lemon squares|lemon square|lemon cookies|lemon cookie','sweet','bakery');
+L('blondies','blondie|blondie bites|blondie bite|butterscotch bars|butterscotch bar|congo bars','sweet','bakery');
+L('macaroons','macaroon|coconut macaroons|coconut macaroon|macarons|macaron|coconut cookies|coconut cookie','sweet','bakery');
+L('meringues','meringue|meringue cookies|meringue cookie|meringue kisses|meringue kiss|pavlova','sweet','bakery');
+L('cereal bars','cereal bar|nutrigrain|nutri grain|nutrigrain bars|nutrigrain bar|breakfast bars|breakfast bar|fig bars|fig bar|fig newtons|fig newton|belvita|belvitas|cereal bars box|soft baked bars|soft baked bar|quaker bars','sweet');
 L('granola bars','granola bar|nature valley|chewy bars|chewy bar|kind bars|kind bar|clif bars|clif bar|z bars|z bar|zbar|zbars|protein bars|protein bar|larabars|larabar|rxbar|rxbars|quaker chewy|chewy granola bars|chewy granola bar|oat bars|oat bar|bars|bar|snack bars|snack bar|lara bars|lara bar','sweet');
 L('wafer bars','wafer bar|kitkat|kitkats|chocolate wafer bars|chocolate wafer bar|chocolate wafers|chocolate wafer','sweet');
 L('jello','jello cups|jello cup|jell o|gelatin|gelatin cups','sweet');
 /* drinks and things that go in nothing, but should still be heard */
+LA = 'other';
 L('juice','juice boxes|juice box|capri sun|capri suns|apple juice|orange juice|juice pouches|juice pouch|honest kids|juicy juice',null);
 L('water','water bottles|water bottle|bottled water|sparkling water|la croix|lacroix',null);
-L('onion','onions|red onion|green onions|scallions',null);
-L('lemon','lemons|limes|lime',null);
-L('cinnamon','cinnamon sugar|sugar|brown sugar',null);
+L('onion','onions|red onion|green onions|scallions',null,'produce');
+L('lemon','lemons|limes|lime',null,'produce');
+L('cinnamon','cinnamon sugar|sugar|brown sugar',null,'pantry');
 
 /* ---- recipes: bank food name -> what it needs ---- */
 var FRUIT = 'apples|grapes|red grapes|strawberries|blueberries|raspberries|blackberries|berries|clementines|tangerine|oranges|banana|watermelon|pineapple|cantaloupe|honeydew|melon|peaches|nectarines|mango|kiwi|pear|plum|cherries|fruit cups|fruit salad|mandarin cups';
@@ -939,6 +949,13 @@ R('Fruit cup in juice', 'fruit cups');
 R('Melon skewers', 'melon');
 R('Dried cranberries', 'dried cranberries');
 R('Dried apple rings', 'dried apples');
+R('Grapes & blueberries', 'grapes, blueberries');
+R('Frozen grapes', 'grapes');
+R('Blueberry yogurt cup', 'yogurt, blueberries');
+R('Apple & cinnamon slices', 'apples, cinnamon');
+R('Sliced strawberries & cream', 'strawberries, yogurt');
+R('Blueberry & melon cup', 'blueberries, melon|cantaloupe|honeydew');
+R('Sliced cucumbers & dip', 'cucumber, ranch');
 /* sweets */
 R('Chocolate chip cookies', 'cookies');
 R('Graham crackers', 'graham crackers');
@@ -980,6 +997,11 @@ R('Licorice twists', 'licorice');
 R('Gummy bears', 'gummy bears');
 R('Mini candy bar', 'candy');
 R('Frosted animal cookies', 'frosted animal cookies');
+R('Chocolate pudding', 'pudding');
+R('Apple cinnamon muffin', 'muffins');
+R('Blueberry muffin', 'muffins');
+R('Applesauce cookie', 'cookies');
+R('Trail mix bar', 'granola bars');
 
 /* Words that carry no food: quantities, containers, places, and the way
    people talk when they are reading a shelf out loud. */
@@ -1036,6 +1058,32 @@ function parsePantry(text){
     flush(run);
   });
   return {items:items, unknown:unknown};
+}
+/* A food on someone's list -> the ingredients to buy for it. Bank foods
+   carry a recipe; a food of your own uses what you typed under "made from",
+   or failing that is its own single ingredient. Each group picks whichever
+   alternative the pantry already has, else the first one listed, so "ham &
+   cheese sandwich" asks for cream cheese if that is what is in the fridge. */
+function foodSets(f){
+  var sets = PAN.recipes[f.n];
+  if(sets) return sets;
+  if(f.ing && f.ing.length) return [f.ing.map(function(k){ return [k]; })];
+  return [[[normKey(f.n)]]];
+}
+function ingName(k){ var e = PAN.keys[k]; return e ? e.d : k; }
+function ingAisle(k, f){ var e = PAN.keys[k]; return e ? e.a : ((f && f.a) || 'other'); }
+function resolveFood(f){
+  var have = function(k){ return !!(S.pantry[k] && S.pantry[k].have); };
+  var best = null;
+  foodSets(f).forEach(function(set){
+    var rows = set.map(function(g){
+      var k = g.filter(have)[0] || g[0];
+      return {k:k, have:have(k)};
+    });
+    var got = rows.filter(function(r){ return r.have; }).length;
+    if(!best || got > best.got) best = {rows:rows, got:got};
+  });
+  return {ing:best.rows, onHand:best.got === best.rows.length};
 }
 /* ingredient keys -> {can:[bank names], nearly:[{n, missing}]} */
 function matchPantry(keys){
@@ -1108,13 +1156,13 @@ function newKid(name, hue){
 }
 function newFood(kid, o){
   return {id:uid('food'), kidId:kid.id, n:o.n, c:o.c, t:(o.t||[]).slice(), a:o.a||'other',
-    al:(o.al||[]).slice(), createdAt:now(), updatedAt:now(), deletedAt:null};
+    al:(o.al||[]).slice(), ing:(o.ing||[]).slice(), createdAt:now(), updatedAt:now(), deletedAt:null};
 }
 function newAccount(){
   var owner = newMember('Me','owner');
   var kid = newKid('Lunchbox', 0);
   return {schema:SCHEMA, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-    members:[owner], kids:[kid], activeKidId:kid.id, pantry:{}};
+    members:[owner], kids:[kid], activeKidId:kid.id, pantry:{}, stock:null};
 }
 
 /* migrations: keyed by the schema they upgrade FROM */
@@ -1153,6 +1201,17 @@ var MIGRATIONS = {
       if(f) acct.pantry[normKey(f.n)] = {have:true, at:now(), by:owner.id};
     });
     return acct;
+  },
+  2: function(doc){                       /* pantry ticks: food names -> ingredients */
+    var p = {};
+    Object.keys(doc.pantry||{}).forEach(function(k){
+      var v = doc.pantry[k]; if(!v || !v.have) return;
+      var b = BANK.filter(function(x){ return normKey(x.n)===k; })[0];
+      var sets = b && PAN.recipes[b.n];
+      (sets ? sets[0].map(function(g){ return g[0]; }) : [k]).forEach(function(ik){ p[ik] = Object.assign({}, v); });
+    });
+    doc.pantry = p; doc.schema = 3;
+    return doc;
   }
 };
 function migrate(doc){
@@ -1448,17 +1507,19 @@ function shoppingList(){
     k.week.days.forEach(function(d){
       CATS.forEach(function(c){
         var f = foodById(k, d.slots[c.k]); if(!f) return;
-        var key = normKey(f.n);
-        var r = rows[key] || (rows[key] = {key:key, name:f.n, aisle:f.a||'other', qty:0, forKids:[]});
-        r.qty++;
-        if(r.forKids.indexOf(k.name)<0) r.forKids.push(k.name);
+        resolveFood(f).ing.forEach(function(i){
+          var name = ingName(i.k);
+          var r = rows[i.k] || (rows[i.k] = {key:i.k, name:name.charAt(0).toUpperCase()+name.slice(1),
+            aisle:ingAisle(i.k, f), qty:0, forKids:[], meals:[], have:i.have});
+          r.qty++;
+          if(r.forKids.indexOf(k.name)<0) r.forKids.push(k.name);
+          if(r.meals.indexOf(f.n)<0) r.meals.push(f.n);
+        });
       });
     });
   });
   var order = {}; AISLES.forEach(function(a,i){ order[a]=i; });
-  return Object.keys(rows).map(function(k){
-    var r = rows[k]; r.have = !!(S.pantry[k] && S.pantry[k].have); return r;
-  }).sort(function(a,b){
+  return Object.keys(rows).map(function(k){ return rows[k]; }).sort(function(a,b){
     return (order[a.aisle]-order[b.aisle]) || a.name.localeCompare(b.name);
   });
 }
@@ -1489,7 +1550,7 @@ function tinHTML(kid, day, mode){
     var f = foodById(kid, day.slots[c.k]);
     var packedRow = kid.packed[day.d] || {};
     var packed = mode==='pack' && !!packedRow[c.k];
-    var home = f && S.pantry[normKey(f.n)] && S.pantry[normKey(f.n)].have;
+    var home = f && resolveFood(f).onHand;
     var sub = [home ? 'at home' : '', f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '')]
       .filter(Boolean).join(' · ');
     var mark = mode==='pack' ? '<span class="tick">'+svg('check',9)+'</span>'
@@ -1506,6 +1567,13 @@ function tinHTML(kid, day, mode){
 function chipsHTML(kid, day){
   var f = dayFlags(kid, day); if(!f.length) return '';
   return '<div class="chips">'+f.map(function(x){ return '<span class="chip '+x.cls+'">'+esc(x.t)+'</span>'; }).join('')+'</div>';
+}
+/* "bread · ham · cheese" for a bank food, whatever was typed for your own */
+function madeFrom(f){
+  var sets = PAN.recipes[f.n];
+  var ks = sets ? sets[0].map(function(g){ return g[0]; }) : (f.ing || []);
+  if(!ks.length || (ks.length===1 && ks[0]===normKey(f.n))) return '';
+  return ks.map(ingName).join(' · ');
 }
 function kidLine(kid){
   return '<p class="kidline"><span class="dot" style="background:'+hueVar(kid)+'"></span>'+esc(kid.name)+'</p>';
@@ -1659,7 +1727,8 @@ function viewShop(){
   var toBuy = rows.filter(function(r){ return !r.have; }).length;
   h += '<div class="spread"><span class="count">'+toBuy+' to buy · '+(rows.length-toBuy)+' already home</span>'
     +  '<button class="btn ghost sm" data-act="copy-list">Copy list</button></div>'
-    +  '<p class="hint">Check off what the pantry already has, then shop the rest.'
+    +  '<p class="hint">Ingredients, not meals: one loaf covers every sandwich this week. '
+    +  'Check off what the kitchen already has, then shop the rest.'
     +  (S.stock ? ' What you said was in the kitchen is already ticked.' : '')
     +  (multi ? ' Both lunchboxes are in one list.' : '')+'</p>';
   var groups = {};
@@ -1670,7 +1739,8 @@ function viewShop(){
     groups[a].forEach(function(r){
       h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
-        +  (multi ? '<span class="meta">for '+esc(r.forKids.join(', '))+'</span>' : '')
+        +  '<span class="meta">'+esc(r.meals.slice(0,3).join(', ')+(r.meals.length>3 ? ' +'+(r.meals.length-3) : ''))
+        +  (multi ? ' · '+esc(r.forKids.join(', ')) : '')+'</span>'
         +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
     });
     h += '</div></div>';
@@ -1702,7 +1772,7 @@ function viewFoods(){
       h += '<div class="item"><span class="dot" style="background:var(--c-'+c.k+')"></span>'
         +  '<span class="grow"><span class="nm">'+esc(f.n)+'</span>'
         +  (v ? '<span class="meta" style="color:var(--warn)">skipped &mdash; '+esc(v)+'</span>'
-             : '<span class="meta">'+esc(f.a)+(f.t.length?' · '+esc(f.t.slice(0,3).join(', ')):'')+'</span>')
+             : '<span class="meta">'+esc(madeFrom(f) || f.a)+'</span>')
         +  '</span><button class="x" data-act="del-food" data-id="'+f.id+'" aria-label="Remove '+esc(f.n)+'">'
         +  svg('trash',17)+'</button></div>';
     });
@@ -1839,7 +1909,7 @@ function ideasSheet(){
     items.forEach(function(b){
       h += '<button class="item'+(mine[normKey(b.n)]?' done':'')+'" data-act="add-idea" data-name="'+esc(b.n)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(b.n)+'</span>'
-        +  '<span class="meta">'+esc(b.a)+(b.al.length?' · '+esc(b.al.join(', ')):'')+'</span></span></button>';
+        +  '<span class="meta">'+esc(madeFrom(b) || b.a)+(b.al.length?' · contains '+esc(b.al.join(', ')):'')+'</span></span></button>';
     });
     h += '</div></div>';
   });
@@ -1855,7 +1925,10 @@ function addOwnSheet(){
     + CATS.map(function(c,i){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(i===0)+'">'+c.label+'</button>'; }).join('')
     + '</div></div><div class="field"><label for="nfAisle">Store aisle</label><select id="nfAisle">'
     + AISLES.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('')
-    + '</select></div><div class="field"><label>What it&#39;s like</label><div class="toggles" id="nfTags">'
+    + '</select></div><div class="field"><label for="nfIng">Made from</label>'
+    + '<input type="text" id="nfIng" placeholder="bread, roast beef, swiss" autocomplete="off">'
+    + '<span class="hint">Optional, comma separated. The shopping list and the kitchen work off these, not the meal.</span></div>'
+    + '<div class="field"><label>What it&#39;s like</label><div class="toggles" id="nfTags">'
     + TAGS.map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="false">'+t+'</button>'; }).join('')
     + '</div><span class="hint">These drive the pairing notes. <b>ice</b> = needs an ice pack, <b>heat</b> = needs warming.</span></div>'
     + '<div class="field"><label>Contains</label><div class="toggles" id="nfAl">'
@@ -1887,6 +1960,7 @@ function parseImport(text){
   if(!doc || typeof doc !== 'object') return null;
   var body = (doc.app === 'lunchbox-tin' && doc.account) ? doc.account : doc;
   if(isAccount(body)) return body;
+  if(body && Array.isArray(body.kids) && Array.isArray(body.members) && (body.schema||1) < SCHEMA) return migrate(body);
   if(isLegacy(body)) return migrate(Object.assign({}, body, {schema:1}));
   return null;
 }
@@ -2066,7 +2140,10 @@ function pantryResultsHTML(kid){
 function applyPantry(kid){
   var m = pantryModel(kid), by = (deviceMember()||{}).id || null, ids = [];
   Object.keys(S.pantry).forEach(function(k){ if(S.pantry[k] && S.pantry[k].via==='stock') delete S.pantry[k]; });
-  function onHand(f){ ids.push(f.id); S.pantry[normKey(f.n)] = {have:true, at:now(), by:by, via:'stock'}; }
+  function tick(k){ if(!S.pantry[k] || !S.pantry[k].have) S.pantry[k] = {have:true, at:now(), by:by, via:'stock'}; }
+  m.items.forEach(function(i){ tick(i.k); });
+  /* a chosen food is on hand by definition; make sure its own ingredients say so */
+  function onHand(f){ ids.push(f.id); resolveFood(f).ing.forEach(function(r){ if(!r.have) tick(r.k); }); }
   m.chosen.forEach(function(b){
     var f = b.id ? b : foodsOf(kid).filter(function(x){ return normKey(x.n)===normKey(b.n); })[0];
     if(!f){ f = newFood(kid, b); kid.foods.push(f); }
@@ -2089,7 +2166,7 @@ function applyPantry(kid){
   var total = 0, home = 0;
   kid.week.days.forEach(function(d){ CATS.forEach(function(c){
     var f = foodById(kid, d.slots[c.k]); if(!f) return; total++;
-    if(ids.indexOf(f.id)>-1) home++;
+    if(resolveFood(f).onHand) home++;
   }); });
   var msg = home+' of '+total+' pieces from the kitchen';
   if(short.length) msg += ' — no '+short.join(' or ').toLowerCase()+(PN.only ? ' on hand' : ' available');
@@ -2306,10 +2383,12 @@ document.addEventListener('click', function(ev){
   if(act==='save-own'){
     var el2 = document.getElementById('nfName'), n = (el2.value||'').trim();
     if(!n){ el2.focus(); toast('Give it a name first'); return; }
+    var ingParsed = parsePantry(document.getElementById('nfIng').value);
     kid.foods.push(newFood(kid, {
       n:n,
       c:document.querySelector('#nfCat .tg[aria-pressed="true"]').getAttribute('data-v'),
       a:document.getElementById('nfAisle').value,
+      ing:ingParsed.items.map(function(i){ return i.k; }).concat(ingParsed.unknown.map(function(u){ return u.text; })),
       t:[].slice.call(document.querySelectorAll('#nfTags .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
       al:[].slice.call(document.querySelectorAll('#nfAl .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); })
     }));
