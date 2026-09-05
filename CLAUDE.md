@@ -45,10 +45,11 @@ Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
 
 - `public/app/index.html`: the whole app, one file, vanilla JS, three inline script blocks
   (merge rules, the app, service-worker registration). `public/app/sw.js`, `manifest.webmanifest`.
-- `public/index.html`, `public/privacy.html`: the site. `public/img/og.png` and the four
+- `public/index.html`, `public/privacy.html`, `public/terms.html`: the site. `public/img/og.png` and the four
   screenshots carry the product name; regenerate them on a rename.
 - `netlify/functions/`: `api-auth.js` (magic links, sessions, delete), `api-household.js`
-  (document sync, invites, members). `netlify/lib/`: `db.js`, `auth.js`, `mail.js`.
+  (document sync, invites, members), `api-billing.js` (Stripe checkout, portal, webhook).
+  `netlify/lib/`: `db.js`, `auth.js`, `mail.js`, `stripe.js`.
 - `netlify/database/migrations/`: numbered SQL, applied by `scripts/migrate.mjs` at build.
 - `tests/smoke.mjs`: one file, one command, real browser, real functions against PGlite.
 - `scripts/csp.mjs`: generates and checks the Content-Security-Policy in `netlify.toml`.

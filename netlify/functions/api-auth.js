@@ -3,6 +3,7 @@ import { normalizeEmail, createMagicLink, peekMagicLink, consumeMagicLink, consu
          createSession, sessionCookie, currentUser, destroySession, destroyAllSessions,
          verifyNonce, verifyCookie, verifyCookieFrom, sameOrigin } from '../lib/auth.js';
 import { sendMagicLink } from '../lib/mail.js';
+import { cancelSubscription } from '../lib/stripe.js';
 
 /* Sign-in by email link. No passwords: nothing to forget, nothing to leak.
    POST /api/auth/request   {email}         -> sends the link (honeypot: "website")
@@ -119,7 +120,9 @@ export default async function handler(req, context) {
       const body = await req.json().catch(() => ({}));
       if (body.confirm !== 'DELETE') return fail('Confirmation missing');
       const q = sql();
-      /* a household the person owns goes with them; one they merely joined loses a member */
+      /* a household the person owns goes with them, and its yearly plan stops charging; one they merely joined loses a member */
+      const subs = await q`SELECT e.stripe_subscription_id AS id FROM entitlements e JOIN households h ON h.id = e.household_id WHERE h.owner_user_id = ${user.id} AND e.stripe_subscription_id IS NOT NULL AND e.status IN ('active', 'past_due')`;
+      for (const s of subs) await cancelSubscription(s.id);
       await q`DELETE FROM households WHERE owner_user_id = ${user.id}`;
       await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
       await q`DELETE FROM invites WHERE created_by = ${user.id}`;

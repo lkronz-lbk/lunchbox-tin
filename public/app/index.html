@@ -81,6 +81,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .spread{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .muted{color:var(--ink-2)}
 .hint{font-size:13px;color:var(--ink-3)}
+.hint a{color:var(--accent)}
 
 /* ---- the tin ---- */
 .tin{border:2px solid var(--line-strong);border-radius:var(--r-lg);background:var(--line-strong);
@@ -778,7 +779,7 @@ var Store = {
     }catch(e){ return false; }
   },
   forget:function(){
-    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join'].concat(Store.PRIOR_KEYS, Store.backupKeys())
+    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after'].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
 };
@@ -791,22 +792,75 @@ var Store = {
    Signed out, nothing here runs and the app is exactly the phone-only app it
    always was. */
 var Account = {user:null, me:null, members:[], entitlement:null, version:0, status:'idle', syncedAt:null, timer:null, retry:null, tries:0,
-  busy:false, pushing:false, linkSent:'', devLink:'', devCode:'', invite:'', inviteRole:'', join:null, first:false, sending:false};
+  busy:false, pushing:false, linkSent:'', devLink:'', devCode:'', invite:'', inviteRole:'', join:null, first:false, sending:false, billing:null, buying:false, settling:false};
 var PUSH_WAIT = 2500, RETRY_WAITS = [15000, 60000, 180000];
-function api(method, path, body){
+function api(method, path, body, extra){
   var opts = {method:method, credentials:'same-origin', headers:{}};
+  if(extra) for(var k in extra) opts[k] = extra[k];
   if(body){ opts.headers['content-type'] = 'application/json'; opts.body = JSON.stringify(body); }
   return fetch(path, opts).then(function(r){
     return r.text().then(function(t){ var j = {}; try{ j = t ? JSON.parse(t) : {}; }catch(e){} j.status = r.status; return j; });
   });
 }
 function signedIn(){ return !!Account.user; }
+/* ---- billing: the plan is a row on the household that only Stripe's webhook writes.
+   Free is one lunchbox on one phone; the Household plan is every lunchbox and the other
+   parent's phone. When billing is not switched on (no Stripe in this deploy) nothing is gated. */
+var BILLING_KEY = 'lunchsorted-billing';
+function paid(){ var e = Account.entitlement; return !!(e && e.plan !== 'free' && (e.status === 'active' || e.status === 'past_due')); }
+function gated(){ return !!(Account.billing && Account.billing.enabled) && !paid(); }
+function loadBilling(force){
+  try{ var c = JSON.parse(localStorage.getItem(BILLING_KEY) || 'null'); if(c && c.enabled !== undefined) Account.billing = c; }catch(e){}
+  if(!navigator.onLine) return Promise.resolve();
+  /* the answer is cached for an hour; a household whose server disagrees asks past the cache */
+  return api('GET', '/api/billing', null, force ? {cache:'reload'} : null).then(function(r){
+    if(r.status !== 200) return;
+    Account.billing = {enabled: !!r.enabled, prices: r.prices || null};
+    try{ localStorage.setItem(BILLING_KEY, JSON.stringify(Account.billing)); }catch(e){}
+  }).catch(function(){});
+}
+function money(p){
+  if(!p || !Number.isFinite(p.amount)) return '';
+  try{ return new Intl.NumberFormat(undefined, {style:'currency', currency:(p.currency || 'usd').toUpperCase(), minimumFractionDigits: p.amount % 100 ? 2 : 0}).format(p.amount / 100); }
+  catch(e){ return '$' + (p.amount / 100); }
+}
+/* why the sheet opened is remembered across the sign-in or the payment, so the parent
+   lands back at the thing they were doing */
+var AFTER_KEY = 'lunchsorted-after';
+function rememberAfter(why){ try{ if(why) localStorage.setItem(AFTER_KEY, why); else localStorage.removeItem(AFTER_KEY); }catch(e){} }
+function resumeAfter(){
+  var why = ''; try{ why = localStorage.getItem(AFTER_KEY) || ''; localStorage.removeItem(AFTER_KEY); }catch(e){}
+  if(!why || !signedIn()) return;
+  if(gated()){ upgradeSheet(why); return; }
+  if(why === 'lunchbox'){ UI.tab = 'setup'; render(); addKidSheet(); }
+  else if(why === 'share'){ UI.tab = 'setup'; render(); }
+}
+function upgradeSheet(why){
+  var pr = (Account.billing && Account.billing.prices) || {}, forever = why === 'forever';
+  var h = '<p style="margin:0">'+(why === 'share' ? 'Sharing the lunches with the other parent’s phone, or a helper, is part of the Household plan.'
+        : why === 'lunchbox' ? 'A second lunchbox is part of the Household plan. The first is free for as long as you like.'
+        : forever ? 'You have the yearly plan. Pay once and it never renews: the year you have paid for runs to its end and is not charged again.'
+        : 'The Household plan is every lunchbox, the other parent’s phone, and a helper’s pack list.')+'</p>';
+  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
+  if(!signedIn()){
+    h += '<p class="hint" style="margin:0">Sign in first — the Household plan belongs to the household, so it works on every phone.</p>'
+      +  '<button class="btn primary wide" data-act="go-signin" data-why="'+esc(why || '')+'" data-close="1">Sign in</button>';
+  } else {
+    var dis = Account.buying ? ' disabled' : '';
+    h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
+      +  (forever ? '' : '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>')
+      +  '<button class="btn '+(forever ? 'primary ' : '')+'wide" data-act="buy" data-plan="lifetime" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.lifetime ? money(pr.lifetime)+', once, forever' : 'Once, forever')+'</button></div>'
+      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+'Payment is on Stripe’s page; tax is added where it applies. Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
+  }
+  openSheet('The Household plan', h);
+}
 function isHelper(){ return !!(Account.me && Account.me.role === 'helper'); }
 function canWrite(){ return signedIn() && !isHelper(); }
 function firstNameFrom(email){ var p = String(email || '').split('@')[0].split(/[._+-]/)[0]; return p ? p.charAt(0).toUpperCase() + p.slice(1) : 'Me'; }
 function applyState(st){
   Account.user = {id:st.me.userId, email:st.me.email}; Account.me = st.me; Account.members = st.members || [];
   Account.entitlement = st.entitlement || null; Account.version = st.version || 0;
+  if(typeof st.billing === 'boolean' && (!Account.billing || Account.billing.enabled !== st.billing)) loadBilling(true).then(render);
   /* the person on this phone is the member the server says they are, once the
      household exists there; before the first push it is this phone's own member,
      and the first push names it */
@@ -2146,8 +2200,15 @@ function accountCard(){
     return h + '</div></div>';
   }
   h += '<div class="kv"><span>Signed in as</span><span style="overflow-wrap:anywhere;white-space:normal;text-align:right">'+esc(Account.user.email)+'</span></div>'
-    +  '<div class="kv"><span>Plan</span><span>'+esc(planLabel())+'</span></div>'
+    +  (Account.billing && Account.billing.enabled && !isHelper() ? '<div class="kv"><span>Household plan</span><span>'+esc(planLabel())+'</span></div>' : '')
     +  '<p class="hint" style="margin:0" id="syncLine">'+esc(syncLine())+'</p>';
+  if(Account.billing && Account.billing.enabled && !isHelper()){
+    var e = Account.entitlement || {}, lapsing = paid() && e.status === 'past_due';
+    if(lapsing) h += '<p class="hint" style="margin:0;color:var(--warn)">The last payment did not go through. Update the card in Manage billing'+(planDate() ? ', or the Household plan ends on '+esc(planDate()) : '')+'.</p>';
+    h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
+      +  (Account.settling ? '' : paid() ? (e.plan !== 'lifetime' ? '<button class="btn sm" data-act="upgrade" data-why="forever">Switch to forever</button>' : '') : '<button class="btn primary sm" data-act="upgrade">Get the Household plan</button>')
+      +  (e.portal ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '')+'</div>';
+  }
   if(Account.members.length){
     h += '<div class="list">' + Account.members.map(function(m){
       var mine = Account.me && m.userId === Account.me.userId, armed = UI.armed === 'rm:'+m.userId;
@@ -2172,15 +2233,23 @@ function accountCard(){
     +  (Account.me && Account.me.role !== 'owner' ? '<button class="btn danger sm" data-act="leave">Leave this household</button>' : '')+'</div>';
   if(Account.me && Account.me.role === 'owner'){
     h += '<p class="hint" style="margin:0">Deleting removes the household from our servers, from this phone'
-      +  (Account.members.length > 1 ? ', and from '+esc(Account.members.filter(function(m){ return m.userId !== Account.me.userId; }).map(memberLabel).join(' and '))+'\u2019s sign-in' : '')+'. It cannot be undone.</p>'
+      +  (Account.members.length > 1 ? ', and from '+esc(Account.members.filter(function(m){ return m.userId !== Account.me.userId; }).map(memberLabel).join(' and '))+'\u2019s sign-in' : '')+'. It cannot be undone'+(paid() ? (Account.entitlement.plan === 'lifetime' ? ', and the forever purchase goes with it' : ', and the yearly plan stops at once') : '')+'.</p>'
       +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn danger sm" data-act="delete-account">'+(UI.armed==='delete-account' ? 'Tap again to delete everything' : 'Delete my account')+'</button>'
       +  (UI.armed==='delete-account' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : '')+'</div>';
   }
   return h + '</div></div>';
 }
+function planDate(){
+  var e = Account.entitlement, when = e && e.currentPeriodEnd ? new Date(e.currentPeriodEnd) : null;
+  return when && !isNaN(when) ? when.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : '';
+}
 function planLabel(){
-  var e = Account.entitlement; if(!e || e.plan === 'free') return 'Free';
-  return (e.plan === 'lifetime' ? 'Household, forever' : 'Household') + (e.status && e.status !== 'active' ? ' \u2014 ' + e.status.replace('_',' ') : '');
+  var e = Account.entitlement;
+  if(!paid()) return Account.settling ? 'Switching on\u2026' : 'Free';
+  if(e.plan === 'lifetime') return 'Forever';
+  if(e.status === 'past_due') return 'Payment failed';
+  var d = planDate();
+  return d ? (e.cancelAtPeriodEnd ? 'Ends ' : 'Renews ') + d : 'Yearly';
 }
 
 /* --------------------------------------------------------------- sheets */
@@ -2267,6 +2336,7 @@ function addOwnSheet(){
   setTimeout(function(){ var el = document.getElementById('nfName'); if(el) el.focus(); }, 220);
 }
 function addKidSheet(){
+  if(gated() && kids().length >= 1){ upgradeSheet('lunchbox'); return; }
   var h = '<div class="field"><label for="nkName">Name on the lunchbox</label>'
     + '<input type="text" id="nkName" placeholder="Sam" autocomplete="off" maxlength="40"></div>'
     + '<p class="hint" style="margin:0">A new lunchbox starts empty with its own school rules &mdash; different school, '
@@ -2638,7 +2708,7 @@ document.addEventListener('click', function(ev){
   if(act==='disarm'){ UI.armed=''; render(); return; }
 
   /* account: every one of these talks to the server, so offline they say so and stop */
-  var ACCOUNT_ACTS = ['signin-request','signin-code','signout','invite','invite-helper','member-remove','leave','join-accept','delete-account'];
+  var ACCOUNT_ACTS = ['signin-request','signin-code','signout','invite','invite-helper','member-remove','leave','join-accept','delete-account','buy','portal'];
   if(ACCOUNT_ACTS.indexOf(act) > -1 && !navigator.onLine){ toast('You are offline \u2014 try that when you have signal'); return; }
   var offline = function(){ toast('Could not reach the server'); };
   if(act==='signin-request'){
@@ -2670,8 +2740,24 @@ document.addEventListener('click', function(ev){
     }).catch(offline);
     return;
   }
+  if(act==='upgrade'){ upgradeSheet(el.getAttribute('data-why') || ''); return; }
+  if(act==='go-signin'){ rememberAfter(el.getAttribute('data-why')); UI.tab = 'setup'; render(); setTimeout(function(){ var el = document.getElementById('signinEmail'); if(el) el.focus(); }, 120); return; }
+  if(act==='buy' || act==='portal'){
+    if(Account.buying) return;
+    Account.buying = true; var was = el.textContent; el.disabled = true; el.textContent = 'Opening Stripe\u2026';
+    var undoBtn = function(){ Account.buying = false; el.disabled = false; el.textContent = was; };
+    if(act==='buy') rememberAfter(el.getAttribute('data-why'));
+    var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') === 'lifetime' ? 'lifetime' : 'year'}) : api('POST', '/api/billing/portal');
+    call.then(function(r){
+      if(r.status !== 200 || !r.url){ undoBtn(); toast(r.error || (act==='buy' ? 'Could not open the checkout' : 'Could not open billing')); return; }
+      location.href = r.url;                                 /* Stripe's page; it sends you back to /app/ */
+    }).catch(function(){ undoBtn(); offline(); });
+    return;
+  }
   if(act==='invite' || act==='invite-helper'){
+    if(gated()){ upgradeSheet('share'); return; }
     api('POST', '/api/household/invite', {role: act==='invite-helper' ? 'helper' : 'adult'}).then(function(r){
+      if(r.status === 402){ upgradeSheet('share'); return; }
       if(r.status !== 200){ toast(r.error || 'Could not make an invite'); return; }
       Account.invite = r.url; Account.inviteRole = r.role; render();
     }).catch(offline);
@@ -2820,7 +2906,13 @@ Store.load().then(function(r){
   if(qs.get('signed-in')){ UI.tab = 'setup'; Account.first = true; toast('Signed in'); }
   var joinCode = qs.get('join') || (function(){ try{ return localStorage.getItem('lunchsorted-join') || ''; }catch(e){ return ''; } })();
   if(joinCode){ try{ localStorage.setItem('lunchsorted-join', joinCode); }catch(e){} UI.tab = 'setup'; }
-  if(qs.get('signed-in') || qs.get('join')) history.replaceState(null, '', location.pathname);
+  var back = qs.get('paid'), portalBack = qs.get('portal');
+  if(back === '1'){ UI.tab = 'setup'; Account.first = true; Account.settling = true; toast('Thank you \u2014 switching on the Household plan\u2026'); }
+  else if(back === '0'){ UI.tab = 'setup'; Account.first = true; rememberAfter(''); toast('No charge was made'); }
+  else if(portalBack){ UI.tab = 'setup'; Account.first = true; }
+  if(qs.get('signed-in') || qs.get('join') || back !== null || portalBack) history.replaceState(null, '', location.pathname);
+  /* what the plans cost and whether anything is gated at all; cached, and answered from the phone offline */
+  loadBilling().then(function(){ if(!signedIn()) render(); });
   var afterMe = function(){
     if(!joinCode) return;
     api('GET', '/api/household/invite?code='+encodeURIComponent(joinCode)).then(function(r){
@@ -2833,9 +2925,19 @@ Store.load().then(function(r){
   };
   if(navigator.onLine && !rejected){
     /* one request answers "who am I" and "what does the household hold" together */
-    Sync.pull().then(function(){ if(signedIn() || joinCode) render(); afterMe(); }).catch(function(){});
+    Sync.pull().then(function(){ if(signedIn() || joinCode) render(); afterMe(); if(qs.get('signed-in')) resumeAfter(); }).catch(function(){});
+    /* back from Stripe: the webhook usually lands within a second or two of the redirect, so look a few times */
+    if(back === '1'){
+      var looks = 0, look = function(){
+        if(paid()){ Account.settling = false; render(); toast('Welcome to the Household plan'); resumeAfter(); return; }
+        if(++looks > 8){ Account.settling = false; render(); toast('Paid \u2014 it can take a minute to show up here'); return; }
+        setTimeout(function(){ Sync.pull().then(look).catch(look); }, looks < 3 ? 1500 : 3000);
+      };
+      setTimeout(look, 1200);
+    }
   }
   window.addEventListener('online', function(){ if(signedIn()) Sync.resume(); else render(); });
+  window.addEventListener('pageshow', function(e){ if(e.persisted && Account.buying){ Account.buying = false; closeSheet(); render(); } });
   window.addEventListener('offline', function(){ renderSyncLine(); });
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) Sync.resume(); });
 });

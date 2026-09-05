@@ -3,7 +3,7 @@
    install and served cache-first. Fonts come from Google and are cached at
    runtime, opaque responses included, so a second launch works with no
    network at all. Bump VERSION to ship a new build. */
-var VERSION = 'lunchsorted-v1';
+var VERSION = 'lunchsorted-v2';
 var FONTS = 'lunchsorted-fonts-v1';       /* not versioned: a new build must not re-download every font */
 var SHELL = [
   '/app/index.html',

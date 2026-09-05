@@ -31,6 +31,9 @@ function splitStatements(body) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith('migrate.mjs')) {
+  /* a Stripe key scoped to the wrong context fails the deploy here, loudly, rather than at the first checkout */
+  const { stripeKey } = await import('../netlify/lib/stripe.js');
+  try { stripeKey(); } catch (e) { console.error('deploy refused:', e.message); process.exit(1); }
   const { databaseUrl } = await import('../netlify/lib/db.js');
   const url = databaseUrl();
   if (!url) { console.log('migrate: this context has no database URL, skipping'); process.exit(0); }

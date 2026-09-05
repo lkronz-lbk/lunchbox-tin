@@ -53,7 +53,7 @@ if (process.argv[1] && process.argv[1].endsWith('csp.mjs')) {
   let toml = fs.readFileSync('netlify.toml', 'utf8');
   if (process.argv.includes('--check')) {
     const have = readPolicies(toml);
-    const want = {'/app/*': APP_CSP, '/': SITE_CSP, '/index.html': SITE_CSP, '/privacy.html': SITE_CSP};
+    const want = {'/app/*': APP_CSP, '/': SITE_CSP, '/index.html': SITE_CSP, '/privacy.html': SITE_CSP, '/terms.html': SITE_CSP};
     const stale = Object.keys(want).filter(p => have[p] !== want[p]);
     if (stale.length) { console.error('netlify.toml CSP is stale for ' + stale.join(', ') + ' — run `npm run csp`'); process.exit(1); }
     console.log('CSP up to date'); process.exit(0);

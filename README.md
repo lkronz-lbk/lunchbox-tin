@@ -91,7 +91,10 @@ forward).
 - [x] Domain: lunchsorted.app (the og:image and canonical URLs point at it).
 - [ ] Import the repo into Netlify, attach the domain, confirm HTTPS; set
       `STAGING_DATABASE_URL` for branch deploys and previews, `RESEND_API_KEY` and
-      `MAIL_FROM` for sign-in email.
+      `MAIL_FROM` for sign-in email, and the `STRIPE_*` variables per context (Billing, below).
+- [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
+      `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
+      function responses instead, every app open becomes a function call (remove that rule).
 - [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form.
 - [ ] Run `npm run csp` after any change to `public/app/index.html` (the test suite refuses
       a stale hash), and bump `VERSION` in `public/app/sw.js` when icons, the manifest or the
@@ -109,10 +112,11 @@ Work on `dev`, look at the staging URL on a real phone, then open a PR into `mai
 Netlify marks staging and preview deploys `noindex`, so they never compete with the
 live marketing page in search results.
 
-`netlify.toml` carries a per-context environment block. It does nothing today —
-there is no build step — but it is the seam that matters later: when the backend and
-Stripe arrive, the test keys and staging database URL go there, and production
-credentials never reach a pull request preview.
+`netlify.toml` carries a per-context environment block that sets only `SITE_ENV`; the
+keys themselves live in the Netlify UI, scoped by deploy context. That is the seam that
+matters: production reads its own database and its live Stripe key, and neither can reach
+a branch deploy or a pull request preview. The build refuses a Stripe key scoped to the
+wrong context.
 
 **Netlify setup, once:** Site configuration → Build & deploy → Branches and deploy
 contexts → add `dev` as a branch deploy, and leave Deploy Previews on.
@@ -130,8 +134,11 @@ onboarding, the week draw and its pairing notes, packing, the kid's pick, the mo
 and resting, the school rules re-checking a live plan, compartments switching on and off,
 anchoring, the shopping list, a second lunchbox with its own rules, export/import (including
 refusing junk, hostile ids and a save it cannot read), the v1 → v2 migration, pruning, the
-generated CSP, the service worker, an offline launch, and the landing page. No test framework — one file, one
-dependency. CI runs it on every push to `main` or `dev` and on every pull request.
+generated CSP, the service worker, an offline launch, the landing page, accounts and sync
+(below), and billing: the key guard, webhook signatures, a checkout, every webhook event the
+code handles including a redelivery after a failure and one arriving out of order, the
+gates, the plan line, cancellation, forever, a refund, who may manage billing, and a deleted
+account stopping its subscription. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
 
 Checks that must pass before launch but shouldn't block day-to-day work print as
 `WARN` rather than failing — the placeholder privacy address is currently one.
@@ -149,7 +156,8 @@ the visual identity.
 1. **Now** — hosted, installable, free. Measure whether strangers return in week two.
 2. **Built, not yet switched on** — accounts and sync (below). Needs a database and a
    mail sender in the Netlify environment.
-3. **Then** — Stripe Checkout on the web, writing the household's entitlement row.
+3. **Built, behind the same switch** — Stripe Checkout on the web (below). Needs the four
+   `STRIPE_*` variables per context and a webhook endpoint registered in Stripe.
 4. **Then** — a Capacitor iOS shell on the US storefront, with the night-before reminder,
    share sheet and a Home Screen widget; payments stay on the web.
 
@@ -217,3 +225,61 @@ writes the same one.
   drive three browser contexts through sign-in by link and by code, a forged sign-in form,
   invite, joining with lunches of one's own, an edit on each phone, an un-tick round trip,
   a helper's refused push, sign-out and delete, plus the merge rules on their own.
+
+## Billing
+
+The plan is a row on the household (`entitlements`) that only Stripe's webhook writes.
+Free is one lunchbox for one parent. The **Household** plan is every lunchbox, the other
+parent's phone and a helper's pack list, yearly or once forever. With no `STRIPE_*`
+variables in a deploy nothing is gated and the app is exactly the free one. Nothing is ever
+taken away: a household whose plan ends keeps every lunchbox and member it has and cannot
+add more.
+
+- **Checkout** (`POST /api/billing/checkout {plan}`) opens Stripe's hosted page for the
+  signed-in household (owner or adult; a helper cannot buy). The session carries the
+  household id, comes back to `/app/?paid=1` or `/app/?paid=0`, allows promotion codes,
+  and asks Stripe Tax to add tax where it applies (if Tax is not finished in the
+  dashboard the session is retried without it and the error logged). A household that
+  already has the plan is not sold it again (409).
+- **Webhook** (`POST /api/billing/webhook`, signature checked against the raw body, five
+  minutes of clock drift, and the event's `livemode` must match the deploy context) listens
+  for `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+  `customer.subscription.created / updated / deleted` and `charge.refunded`; anything else
+  is acknowledged and dropped. An event id is recorded once it has been applied, so Stripe's
+  retries are no-ops but a delivery that failed halfway is retried for real. Every write is
+  one upsert that only applies when the event is not older than the last one applied, so
+  two deliveries racing each other are ordered by Postgres. On checkout the subscription
+  is read back from Stripe for its renewal date, so the plan line is complete at once. A
+  lifetime purchase is never lowered by a subscription ending; buying forever on top of a
+  yearly plan stops the yearly plan at its period end; a fresh yearly checkout replaces an
+  unpaid one; a forever purchase refunded in full is undone (a yearly refund is paired with
+  cancelling the subscription in the dashboard). Deleting the account, or an owner folding
+  their household into another, cancels its subscription first.
+- **Portal** (`POST /api/billing/portal`) opens Stripe's customer portal for the card,
+  invoices and cancellation, and comes back to `/app/?portal=1`. It is for the owner and
+  whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
+  available after a plan ends, for the invoices.
+- **In the app**, Setup's account card has a "Household plan" line (Free, Renews DATE,
+  Ends DATE, Payment failed, Forever, or Switching on… while the webhook lands), "Get the
+  Household plan" or "Switch to forever", and "Manage billing" (the main button when a
+  payment has failed). A second lunchbox or an invite on a free household opens the plan
+  sheet with both prices (read from Stripe, cached an hour, never typed into the app);
+  signed out it offers sign-in first, and remembers what you were doing so the sheet, or
+  the lunchbox, comes back after the sign-in or the payment. The server refuses an invite
+  from a free household (402) whatever the app shows; the lunchbox gate is the app's alone.
+  Coming back from Checkout the app pulls up to eight times over about twenty seconds until
+  the webhook has landed; a helper sees none of this.
+- **Environment**, per deploy context, test keys everywhere but production:
+  `STRIPE_SECRET_KEY` (production refuses a test key, every other context refuses a live
+  one), `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
+  production URL each give their own), `STRIPE_PRICE_YEAR` and `STRIPE_PRICE_LIFETIME`
+  (the two price ids; test mode and live mode have different ones). `STRIPE_TAX=0` turns
+  automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
+- **Stripe setup, once per mode:** one product, two prices; Developers → Webhooks → add
+  `https://<site>/api/billing/webhook` with the six event types above and paste the
+  signing secret; Settings → Billing → Customer portal → save the default configuration
+  (live mode has none until it is saved once); Settings → Billing → Subscriptions and
+  emails → send the renewal reminder and failed-payment emails (the terms promise both),
+  and after the retries "cancel the subscription" rather than leave it unpaid; Stripe Tax
+  on, with the origin address. Never add a Payment Link for the product: a link accepts a
+  `client_reference_id` from anyone, and the webhook would honour it.

@@ -1,9 +1,10 @@
 import { sql, json, fail, siteUrl, throttled } from '../lib/db.js';
 import { currentUser, createInvite, consumeInvite, peekInvite } from '../lib/auth.js';
+import { billingEnabled, cancelSubscription } from '../lib/stripe.js';
 
 /* The household is the unit: one document, one version, everyone signed in
    reads and writes the same one.
-   GET  /api/household                -> {household, members, doc, version, entitlement, me}
+   GET  /api/household                -> {household, members, doc, version, entitlement, billing, me}
    PUT  /api/household {doc, version} -> {version}  or 409 {doc, version} when the phone is behind
    POST /api/household/invite         -> {url}  (owner or adult)
    GET  /api/household/invite?code=   -> {name, role}  what the link is for, before joining
@@ -19,8 +20,10 @@ async function membership(userId, withDoc) {
   const rows = withDoc
     ? await sql()`SELECT h.id, h.name, h.owner_user_id, h.doc, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id
                   FROM household_members m JOIN households h ON h.id = m.household_id WHERE m.user_id = ${userId}`
-    : await sql()`SELECT h.id, h.name, h.owner_user_id, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id
-                  FROM household_members m JOIN households h ON h.id = m.household_id WHERE m.user_id = ${userId}`;
+    : await sql()`SELECT h.id, h.name, h.owner_user_id, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id,
+                         e.plan, e.status, e.stripe_subscription_id
+                  FROM household_members m JOIN households h ON h.id = m.household_id LEFT JOIN entitlements e ON e.household_id = h.id
+                  WHERE m.user_id = ${userId}`;
   return rows[0] || null;
 }
 
@@ -55,15 +58,19 @@ async function state(user) {
   const members = await sql()`
     SELECT m.user_id AS "userId", m.role, m.member_id AS "memberId", u.email, u.name
     FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = ${h.id} ORDER BY m.joined_at`;
-  const [ent] = await sql()`SELECT plan, source, status, current_period_end AS "currentPeriodEnd" FROM entitlements WHERE household_id = ${h.id}`;
+  const [ent] = await sql()`SELECT plan, source, status, current_period_end AS "currentPeriodEnd", cancel_at_period_end AS "cancelAtPeriodEnd",
+    (stripe_customer_id IS NOT NULL AND (${h.owner_user_id} = ${user.id} OR paid_by = ${user.id})) AS portal FROM entitlements WHERE household_id = ${h.id}`;
   return {
     household: { id: h.id, name: h.name },
     me: { userId: user.id, email: user.email, role: h.role, memberId: h.member_id },
     members: helper ? members.map(m => ({ userId: m.userId, role: m.role, memberId: m.memberId, name: m.name || (m.userId === user.id ? m.email : 'A parent') })) : members,
     doc: helper ? helperView(h.doc) : h.doc, version: h.version,
-    entitlement: ent || { plan: 'free', source: 'none', status: 'none', currentPeriodEnd: null }
+    entitlement: ent || { plan: 'free', source: 'none', status: 'none', currentPeriodEnd: null, cancelAtPeriodEnd: false, portal: false },
+    billing: billingEnabled()
   };
 }
+
+const paid = (h) => !!(h.plan && h.plan !== 'free' && (h.status === 'active' || h.status === 'past_due'));
 
 function docLooksRight(doc) {
   return doc && typeof doc === 'object' && !Array.isArray(doc) && Number.isInteger(doc.schema) && doc.schema >= 2 && Array.isArray(doc.kids) && Array.isArray(doc.members);
@@ -114,6 +121,8 @@ export default async function handler(req) {
     if (req.method === 'POST' && action === 'invite') {
       const h = await ensureHousehold(user);
       if (h.role === 'helper') return fail('Only an adult can invite', 403);
+      /* the second phone is what the Household plan is for; the row says whether this household has one */
+      if (billingEnabled() && !paid(h)) return fail('Sharing the lunches with another phone is part of the Household plan', 402, { upgrade: true });
       const body = await req.json().catch(() => ({}));
       const role = body.role === 'helper' ? 'helper' : 'adult';
       const code = await createInvite(h.id, user.id, role);
@@ -138,7 +147,7 @@ export default async function handler(req) {
       if (!used) return fail('That invite has expired or was already used', 410);
       if (have) {
         await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
-        if (owned) await q`DELETE FROM households WHERE id = ${have.id}`;
+        if (owned) { if (paid(have)) await cancelSubscription(have.stripe_subscription_id); await q`DELETE FROM households WHERE id = ${have.id}`; }
       }
       /* the phone says which member it is, so the name typed there and its ticks stay its own */
       const memberId = (typeof body.memberId === 'string' && MEMBER_ID.test(body.memberId)) ? body.memberId : 'mem_' + Math.random().toString(36).slice(2, 10);

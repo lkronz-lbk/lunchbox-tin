@@ -4,6 +4,7 @@
      CHROMIUM_PATH=/path/to/chrome npm test
    Every check below guards something that has actually broken at least once. */
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,13 +25,36 @@ globalThis.__LS_SQL = async (strings, ...vals) => typeof strings === 'string' ? 
 await migrate(globalThis.__LS_SQL);
 const { default: authHandler } = await import('../netlify/functions/api-auth.js');
 const { default: householdHandler } = await import('../netlify/functions/api-household.js');
+const { default: billingHandler } = await import('../netlify/functions/api-billing.js');
+const stripeLib = await import('../netlify/lib/stripe.js');
+/* Stripe itself is a stub: it answers the four calls the code makes and records what it was asked */
+const stripeCalls = [];
+globalThis.__LS_STRIPE_FETCH = async (url, init) => {
+  const u = new URL(url); const params = Object.fromEntries(new URLSearchParams(init.body || ''));
+  stripeCalls.push({ method: init.method, path: u.pathname, params, auth: init.headers.authorization });
+  const reply = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
+  if (u.pathname === '/v1/prices/price_year') return reply({ id: 'price_year', unit_amount: 2900, currency: 'usd', recurring: { interval: 'year' } });
+  if (u.pathname === '/v1/prices/price_life') return reply({ id: 'price_life', unit_amount: 7900, currency: 'usd' });
+  if (u.pathname === '/v1/checkout/sessions') {
+    if (params['automatic_tax[enabled]'] === 'true' && globalThis.__LS_STRIPE_NO_TAX) return reply({ error: { message: 'You must configure Stripe Tax before enabling automatic_tax', code: 'invalid_request_error' } }, 400);
+    return reply({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
+  }
+  if (u.pathname === '/v1/billing_portal/sessions') return reply({ url: 'https://billing.stripe.com/p/session/test_1' });
+  if (u.pathname.startsWith('/v1/subscriptions/')) {
+    const id = u.pathname.split('/').pop();
+    if (init.method === 'GET') return reply({ id, object: 'subscription', status: 'active', cancel_at_period_end: false, customer: 'cus_pat', items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] } });
+    if (init.method === 'DELETE') return reply({ id, status: 'canceled' });
+    return reply({ id, cancel_at_period_end: true });
+  }
+  return reply({ error: { message: 'stub: ' + u.pathname } }, 404);
+};
 async function apiProxy(req, res){
   const chunks = []; for await (const c of req) chunks.push(c);
   const headers = new Headers(); for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v);
   const method = req.method;
   const request = new Request(`http://${req.headers.host}${req.url}`, {method, headers,
     body: (method === 'GET' || method === 'HEAD') ? undefined : Buffer.concat(chunks), duplex: 'half'});
-  const handler = req.url.startsWith('/api/auth/') ? authHandler : householdHandler;
+  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : householdHandler;
   let resp;
   try { resp = await handler(request, {ip: '127.0.0.1'}); }
   catch (e) { res.writeHead(500); return res.end(String(e)); }
@@ -772,7 +796,7 @@ try {
 
   /* the site is served under its real CSP (the server above enforces netlify.toml) */
   check('the app runs under the generated Content-Security-Policy', !!POLICIES['/app/*'] && POLICIES['/app/*'].includes('sha256-'));
-  check('the marketing pages carry a CSP too', !!POLICIES['/index.html'] && !!POLICIES['/privacy.html']);
+  check('the marketing pages carry a CSP too', !!POLICIES['/index.html'] && !!POLICIES['/privacy.html'] && !!POLICIES['/terms.html']);
 
   /* --------------------------------------------- the old name's data survives */
   for (const oldKey of ['fiveboxes', 'lunchbox-tin']) {
@@ -905,7 +929,7 @@ try {
   await ctx2.close();
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   await page.click('[data-act="delete-account"]'); await page.waitForTimeout(150);
-  await page.click('[data-act="delete-account"]'); await until(page, () => !!document.querySelector('.ob'));
+  await page.click('[data-act="delete-account"]'); await until(page, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));   /* the fresh document lands after the save debounce */
   const afterDelete = await page.evaluate(() => fetch('/api/household').then(r => r.status));
   check('deleting the account signs out, removes the household from the server, and starts this phone over',
     afterDelete === 401 && (await page.$$eval('.ob', a => a.length)) === 1 &&
@@ -914,6 +938,182 @@ try {
   check('and the rows are really gone', rowsLeft.rows[0].u === 0, rowsLeft.rows[0]);
   await page.evaluate(raw => localStorage.setItem('lunchsorted', raw), goodDoc);
   await page.goto(BASE+'/app/'); await page.waitForTimeout(500);
+
+  /* ------------------------------------------------------------ billing */
+  const bcfgOff = await page.evaluate(() => fetch('/api/billing').then(r => r.json()));
+  check('with no Stripe in the deploy nothing is gated', bcfgOff.enabled === false);
+  /* the key guard: a live key can never serve a branch, a test key can never serve production */
+  const guard = (env, key) => { const was = { e: process.env.SITE_ENV, k: process.env.STRIPE_SECRET_KEY }; process.env.SITE_ENV = env; process.env.STRIPE_SECRET_KEY = key;
+    let threw = false; try { stripeLib.stripeKey(); } catch { threw = true; } process.env.SITE_ENV = was.e; process.env.STRIPE_SECRET_KEY = was.k; return threw; };
+  check('a test key in production, or a live key anywhere else, refuses to start', guard('production', 'sk_test_x') && guard('staging', 'sk_live_x') && !guard('production', 'sk_live_x') && !guard('staging', 'sk_test_x'));
+  const WH = 'whsec_test_secret';
+  const sign = (body, t = Math.floor(Date.now() / 1000), secret = WH) => `t=${t},v1=${crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
+  check('a webhook signature is checked against the raw body and the clock',
+    stripeLib.verifyWebhook('{"a":1}', sign('{"a":1}'), WH) && !stripeLib.verifyWebhook('{"a":2}', sign('{"a":1}'), WH) &&
+    !stripeLib.verifyWebhook('{"a":1}', sign('{"a":1}', Math.floor(Date.now() / 1000) - 600), WH) && !stripeLib.verifyWebhook('{"a":1}', sign('{"a":1}', undefined, 'whsec_other'), WH) && !stripeLib.verifyWebhook('{"a":1}', '', WH));
+  check('the period end is read from either shape of subscription',
+    stripeLib.periodEnd({ current_period_end: 1800000000 }) === '2027-01-15T08:00:00.000Z' && stripeLib.periodEnd({ items: { data: [{ current_period_end: 1800000000 }] } }) === '2027-01-15T08:00:00.000Z' && stripeLib.periodEnd({}) === null);
+
+  Object.assign(process.env, { STRIPE_SECRET_KEY: 'sk_test_stub', STRIPE_WEBHOOK_SECRET: WH, STRIPE_PRICE_YEAR: 'price_year', STRIPE_PRICE_LIFETIME: 'price_life' });
+  const ctxB = await browser.newContext({ viewport:{width:375,height:812} });
+  const pb = await ctxB.newPage(); pb.on('pageerror', e => errors.push(String(e.message)));
+  await pb.route('https://checkout.stripe.com/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stripe checkout</title>' }));
+  await pb.route('https://billing.stripe.com/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stripe portal</title>' }));
+  await pb.goto(BASE+'/app/'); await pb.waitForTimeout(400);
+  await pb.fill('#obName', 'Remy'); await pb.click('[data-act="ob-go"]'); await pb.waitForTimeout(400);
+  const bcfg = await pb.evaluate(() => fetch('/api/billing').then(r => r.json()));
+  check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 2900 && bcfg.prices.lifetime.amount === 7900 && bcfg.prices.year.interval === 'year', bcfg);
+  await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
+  await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
+  check('signed out, a second lunchbox opens the Household plan sheet with a sign-in button', (await pb.$$eval('#nkName', a => a.length)) === 0 && (await pb.$$eval('[data-act="go-signin"]', a => a.length)) === 1 && /second lunchbox/i.test(await pb.textContent('#sheetBody')));
+  await pb.click('[data-act="go-signin"]'); await pb.waitForTimeout(300);
+  check('and that button lands on the sign-in field', await pb.evaluate(() => document.activeElement && document.activeElement.id === 'signinEmail'));
+  await pb.fill('#signinEmail', 'pat@example.com'); await pb.press('#signinEmail', 'Enter');
+  await until(pb, () => !!document.querySelector('[data-dev-link]'));
+  await pb.goto(await pb.getAttribute('[data-dev-link]', 'href')); await pb.click('button[type="submit"]'); await pb.waitForURL(/\/app\//); await pb.waitForLoadState('load');
+  await until(pb, () => /Signed in as\s*pat@example\.com/.test(document.querySelector('#view').textContent) && !!document.querySelector('[data-act="upgrade"]'));
+  const resumed = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /second lunchbox/i.test(document.querySelector('#sheetBody').textContent));
+  check('after signing in, the plan sheet comes back on its own for the lunchbox they were adding', resumed);
+  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  check('signed in and free, Setup says Free and offers the plan', /Household plan\s*Free/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 0);
+  const noCustomer = await pb.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
+  check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
+  await until(pb, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1));
+  const patState = await pb.evaluate(() => fetch('/api/household').then(r => r.json()));
+  const inviteFree = await pb.evaluate(() => fetch('/api/household/invite', {method:'POST', headers:{'content-type':'application/json'}, body:'{}'}).then(r => r.status));
+  check('the server refuses an invite from a free household', inviteFree === 402, inviteFree);
+  await pb.click('[data-act="invite"]'); await pb.waitForTimeout(300);
+  check('and the app opens the plan sheet instead, with both prices', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$29 a year/.test(await pb.textContent('#sheetBody')) && /\$79, once, forever/.test(await pb.textContent('#sheetBody')));
+  check('links in the sheet use the accent, not browser blue', await pb.$eval('#sheetBody a[href="/terms.html"]', a => getComputedStyle(a).color !== 'rgb(0, 0, 238)' && getComputedStyle(a).color !== 'rgb(0, 0, 255)'));
+  const ownerCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
+  check('checkout is opened on the server, for this household, on Stripe\'s page', ownerCheckout.url === 'https://checkout.stripe.com/c/pay/cs_test_1' &&
+    stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params.client_reference_id === String(patState.household.id) && c.params.mode === 'subscription' && c.params['line_items[0][price]'] === 'price_year' && c.params.customer_email === 'pat@example.com' && /\/app\/\?paid=1$/.test(c.params.success_url) && c.params['automatic_tax[enabled]'] === 'true' && c.auth === 'Bearer sk_test_stub'), stripeCalls.slice(-1));
+  stripeCalls.length = 0; globalThis.__LS_STRIPE_NO_TAX = true;
+  await pb.click('[data-act="buy"][data-plan="year"]'); await pb.waitForURL(/checkout\.stripe\.com/); 
+  check('when Stripe Tax is not set up yet, the checkout is retried without it and still opens', pb.url().startsWith('https://checkout.stripe.com/') && stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length === 2 && stripeCalls[1].params['automatic_tax[enabled]'] === 'false');
+  globalThis.__LS_STRIPE_NO_TAX = false;
+  const anon = await fetch(BASE+'/api/billing/checkout', { method: 'POST', body: '{}' });
+  check('a stranger cannot open a checkout', anon.status === 401);
+
+  /* Stripe calls back */
+  const hook = async (ev, opts = {}) => { if (ev.livemode === undefined) ev.livemode = false; const body = JSON.stringify(ev); const r = await fetch(BASE+'/api/billing/webhook', { method:'POST', headers: { 'content-type':'application/json', 'stripe-signature': opts.sig === undefined ? sign(body, opts.t) : opts.sig }, body }); return { status: r.status, body: await r.json().catch(() => ({})) }; };
+  const ent = async () => (await db.query(`SELECT plan, source, status, cancel_at_period_end AS cape, current_period_end AS pe, stripe_customer_id AS cust, stripe_subscription_id AS sub FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
+  const t0 = Math.floor(Date.now() / 1000);
+  const completed = { id: 'evt_1', type: 'checkout.session.completed', created: t0, data: { object: { id: 'cs_test_1', mode: 'subscription', payment_status: 'paid', customer: 'cus_pat', subscription: 'sub_pat', client_reference_id: String(patState.household.id), metadata: { household_id: String(patState.household.id), plan: 'year' } } } };
+  const forgedHook = await hook(completed, { sig: 't=1,v1=deadbeef' });
+  check('an unsigned webhook is refused and grants nothing', forgedHook.status === 400 && (await ent()).plan === 'free');
+  const wrongMode = await hook(Object.assign({}, completed, { id: 'evt_live', livemode: true }));
+  check('a live-mode event is refused outside production, whatever secret was pasted', wrongMode.status === 400 && (await ent()).plan === 'free');
+  const noise = await hook({ id: 'evt_noise', type: 'invoice.paid', created: t0, data: { object: {} } });
+  check('an event type we do not handle is acknowledged without touching the database', noise.status === 200 && noise.body.ignored === true && (await db.query(`SELECT count(*)::int AS n FROM stripe_events WHERE id='evt_noise'`)).rows[0].n === 0);
+  /* the database fails once mid-apply: the event must not count as seen */
+  const realSql = globalThis.__LS_SQL; let blow = true;
+  globalThis.__LS_SQL = async (strings, ...vals) => { if (blow && typeof strings !== 'string' && strings.join('').includes('INSERT INTO entitlements')) { blow = false; throw new Error('neon blinked'); } return realSql(strings, ...vals); };
+  const blinked = await hook(completed);
+  globalThis.__LS_SQL = realSql;
+  const ok = await hook(completed);
+  check('a delivery that failed mid-apply is retried by Stripe and applied the second time', blinked.status === 500 && ok.status === 200 && !ok.body.duplicate && (await ent()).plan === 'household', [blinked.status, ok.body]);
+  check('a signed checkout.session.completed makes the household paid, with the renewal date from the subscription itself', (await ent()).status === 'active' && (await ent()).cust === 'cus_pat' && (await ent()).sub === 'sub_pat' && new Date((await ent()).pe).toISOString() === '2027-01-15T08:00:00.000Z' && stripeCalls.some(c => c.method === 'GET' && c.path === '/v1/subscriptions/sub_pat'), await ent());
+  const again = await hook(completed);
+  check('the same event delivered twice is a no-op', again.status === 200 && again.body.duplicate === true);
+  const subEv = (id, type, created, extra = {}) => ({ id, type, created, data: { object: Object.assign({ id: 'sub_pat', object: 'subscription', customer: 'cus_pat', status: 'active', cancel_at_period_end: false, items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] }, metadata: { household_id: String(patState.household.id) } }, extra) } });
+  const early = await hook(subEv('evt_2', 'customer.subscription.created', t0 - 1));
+  check('the subscription.created event, stamped a second earlier, is stale and harmless', early.status === 200 && (await ent()).status === 'active');
+  const staleHook = await hook(subEv('evt_0', 'customer.subscription.updated', t0 - 100, { status: 'canceled' }));
+  check('an older event arriving late cannot undo a newer one', staleHook.status === 200 && (await ent()).status === 'active');
+
+  await pb.goto(BASE+'/app/?paid=1'); await pb.waitForLoadState('load');
+  const backOk = await until(pb, () => /Renews Jan 15, 2027/.test(document.querySelector('#view').textContent));
+  if (!backOk) console.log('  (diag) url=' + pb.url() + ' view=' + (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 400) + ' errors=' + JSON.stringify(errors.slice(-3)));
+  check('back from Stripe, the account card is at the top with the renewal date, Manage billing, and no second buy button', backOk && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1 && !pb.url().includes('paid=') &&
+    await pb.evaluate(() => document.querySelector('#view .sect-head h3').textContent === 'Account') && (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0, (await pb.textContent('#view')).match(/Household plan[^\n]{0,60}/));
+  await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
+  check('a paid household can add a second lunchbox', (await pb.$$eval('#nkName', a => a.length)) === 1);
+  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  const invitePaid = await pb.evaluate(() => fetch('/api/household/invite', {method:'POST', headers:{'content-type':'application/json'}, body:'{}'}).then(r => r.status));
+  check('and invite the other parent', invitePaid === 200, invitePaid);
+  const dupYear = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
+  check('a household that already has the yearly plan is not sold it again', dupYear === 409);
+  await pb.click('[data-act="upgrade"][data-why="forever"]'); await pb.waitForTimeout(300);
+  check('Switch to forever offers only the forever price', (await pb.$$eval('[data-act="buy"][data-plan="year"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="buy"][data-plan="lifetime"]', a => a.length)) === 1 && /never renews/.test(await pb.textContent('#sheetBody')));
+  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  await pb.click('[data-act="portal"]'); await pb.waitForURL(/billing\.stripe\.com/);
+  check('Manage billing opens Stripe\'s portal for this customer', stripeCalls.some(c => c.path === '/v1/billing_portal/sessions' && c.params.customer === 'cus_pat' && /\/app\/\?portal=1$/.test(c.params.return_url)));
+
+  await hook(subEv('evt_3', 'customer.subscription.updated', t0 + 2, { cancel_at_period_end: true }));
+  await pb.goto(BASE+'/app/?portal=1'); await pb.waitForLoadState('load');
+  await until(pb, () => /Ends Jan 15, 2027/.test(document.querySelector('#view').textContent));
+  check('a cancellation shows as the plan ending on its date, still paid until then', /Ends Jan 15, 2027/.test(await pb.textContent('#view')) && (await ent()).cape === true && (await ent()).status === 'active');
+  await hook(subEv('evt_3b', 'customer.subscription.updated', t0 + 2, { status: 'past_due' }));
+  await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]');
+  await until(pb, () => /Payment failed/.test(document.querySelector('#view').textContent));
+  check('a failed payment says so with the date, keeps the plan for now, and makes Manage billing the main button', /update the card in Manage billing, or the Household plan ends on Jan 15, 2027/i.test(await pb.textContent('#view')) && await pb.$eval('[data-act="portal"]', b => b.classList.contains('primary')) && (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0);
+  const pastDueYear = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
+  check('and a second yearly checkout is refused while the first is unpaid', pastDueYear === 409);
+  await hook(subEv('evt_4', 'customer.subscription.deleted', t0 + 3, { status: 'canceled' }));
+  check('when the subscription ends the household is free again', (await ent()).plan === 'free' && (await ent()).status === 'canceled' && (await ent()).cust === 'cus_pat');
+  await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]');
+  await until(pb, () => /Household plan\s*Free/.test(document.querySelector('#view').textContent));
+  await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
+  check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
+  await pb.click('#sheetClose'); await pb.waitForTimeout(200);
+
+  /* forever */
+  await hook({ id: 'evt_5', type: 'checkout.session.completed', created: t0 + 4, data: { object: { id: 'cs_test_2', mode: 'payment', payment_status: 'paid', customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { household_id: String(patState.household.id), plan: 'lifetime' } } } });
+  check('a lifetime purchase is forever', (await ent()).plan === 'lifetime' && (await ent()).status === 'active' && (await ent()).pe === null);
+  await hook(subEv('evt_6', 'customer.subscription.deleted', t0 + 5, { status: 'canceled' }));
+  check('and an old subscription ending later does not touch it', (await ent()).plan === 'lifetime');
+  const lifeAgain = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"lifetime"}'}).then(r => r.status));
+  check('nor is forever sold twice', lifeAgain === 409);
+  await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]');
+  const forever = await until(pb, () => /Household plan\s*Forever/.test(document.querySelector('#view').textContent));
+  check('Setup says forever and offers no upgrade', forever && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
+  /* a yearly household that buys forever stops its subscription so nobody pays twice */
+  await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_old', event_at=NULL WHERE household_id=${patState.household.id}`);
+  stripeCalls.length = 0;
+  await hook({ id: 'evt_7', type: 'checkout.session.completed', created: t0 + 6, data: { object: { id: 'cs_test_3', mode: 'payment', payment_status: 'paid', customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
+  check('buying forever on top of a yearly plan stops the yearly plan at its period end', (await ent()).plan === 'lifetime' && stripeCalls.some(c => c.path === '/v1/subscriptions/sub_old' && c.params.cancel_at_period_end === 'true'));
+  await hook({ id: 'evt_refund_part', type: 'charge.refunded', created: t0 + 8, data: { object: { id: 'ch_1', object: 'charge', customer: 'cus_pat', refunded: false } } });
+  check('a partial refund changes nothing', (await ent()).plan === 'lifetime');
+  await hook({ id: 'evt_refund', type: 'charge.refunded', created: t0 + 9, data: { object: { id: 'ch_1', object: 'charge', customer: 'cus_pat', refunded: true } } });
+  check('a forever purchase refunded in full is undone', (await ent()).plan === 'free' && (await ent()).status === 'canceled');
+  /* who may manage billing: the owner, and whoever paid; a helper may buy nothing */
+  await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_pat', paid_by=NULL WHERE household_id=${patState.household.id}`);
+  await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
+  await pb.click('[data-act="invite-helper"]'); await until(pb, () => !!document.querySelector('#inviteUrl'));
+  const sitterUrl = await pb.inputValue('#inviteUrl');
+  const ctxH = await browser.newContext({ viewport:{width:375,height:812} }); const ph = await ctxH.newPage(); ph.on('pageerror', e => errors.push(String(e.message)));
+  await ph.goto(sitterUrl); await ph.waitForLoadState('load'); await until(ph, () => !!document.querySelector('#signinEmail'));
+  await ph.fill('#signinEmail', 'sitter@example.com'); await ph.press('#signinEmail', 'Enter'); await until(ph, () => !!document.querySelector('[data-dev-link]'));
+  await ph.goto(await ph.getAttribute('[data-dev-link]', 'href')); await ph.click('button[type="submit"]'); await ph.waitForURL(/\/app\//); await ph.waitForLoadState('load');
+  await until(ph, () => !!document.querySelector('[data-act="join-accept"]')); await ph.click('[data-act="join-accept"]');
+  await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
+  const helperBuy = await ph.evaluate(() => Promise.all([fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status), fetch('/api/billing/portal', {method:'POST'}).then(r => r.status)]));
+  check('a helper can neither buy nor manage billing, and sees no plan line', helperBuy[0] === 403 && helperBuy[1] === 403 && !/Household plan/.test(await ph.textContent('#view')), helperBuy);
+  await ctxH.close();
+  await pb.click('[data-act="invite"]'); await until(pb, () => /works once, for a week\./.test(document.querySelector('#view').textContent));
+  const adultUrl = await pb.inputValue('#inviteUrl');
+  const ctxA = await browser.newContext({ viewport:{width:375,height:812} }); const pa = await ctxA.newPage(); pa.on('pageerror', e => errors.push(String(e.message)));
+  await pa.goto(adultUrl); await pa.waitForLoadState('load'); await until(pa, () => !!document.querySelector('#signinEmail'));
+  await pa.fill('#signinEmail', 'other@example.com'); await pa.press('#signinEmail', 'Enter'); await until(pa, () => !!document.querySelector('[data-dev-link]'));
+  await pa.goto(await pa.getAttribute('[data-dev-link]', 'href')); await pa.click('button[type="submit"]'); await pa.waitForURL(/\/app\//); await pa.waitForLoadState('load');
+  await until(pa, () => !!document.querySelector('[data-act="join-accept"]')); await pa.click('[data-act="join-accept"]');
+  await until(pa, () => /Household plan/.test(document.querySelector('#view').textContent));
+  const otherPortal = await pa.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
+  check('the other parent sees the plan but cannot open the payer\'s billing', otherPortal === 403 && (await pa.$$eval('[data-act="portal"]', a => a.length)) === 0, otherPortal);
+  await ctxA.close();
+  /* deleting the account stops the money */
+  stripeCalls.length = 0;
+  await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
+  check('the delete warning says the yearly plan stops', /yearly plan stops at once/.test(await pb.textContent('#view')));
+  await pb.click('[data-act="delete-account"]'); await pb.waitForTimeout(150); await pb.click('[data-act="delete-account"]');
+  await until(pb, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));
+  check('deleting the account cancels the subscription at Stripe', stripeCalls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_pat'));
+  const unpaidSession = await hook({ id: 'evt_8', type: 'checkout.session.completed', created: t0 + 7, data: { object: { id: 'cs_test_4', mode: 'subscription', payment_status: 'unpaid', client_reference_id: '999999', metadata: {} } } });
+  check('a session that is not paid yet, or for no household, grants nothing and is still acknowledged', unpaidSession.status === 200);
+  await ctxB.close();
+  for (const k of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_YEAR', 'STRIPE_PRICE_LIFETIME']) delete process.env[k];
+  stripeLib.forgetPrices();
 
   /* ------------------------------------------------------- pwa + offline */
   check('the service worker takes control',
