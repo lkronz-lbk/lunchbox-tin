@@ -87,8 +87,11 @@ forward).
 
 ## Before this goes live
 
-- [ ] Replace the placeholder contact address in `public/privacy.html` (`hello@example.com`).
-- [ ] Point a real domain at the Netlify site and confirm HTTPS.
+- [x] Contact address on the privacy page: hello@lunchsorted.app.
+- [x] Domain: lunchsorted.app (the og:image and canonical URLs point at it).
+- [ ] Import the repo into Netlify, attach the domain, confirm HTTPS; set
+      `STAGING_DATABASE_URL` for branch deploys and previews, `RESEND_API_KEY` and
+      `MAIL_FROM` for sign-in email.
 - [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form.
 - [ ] Run `npm run csp` after any change to `public/app/index.html` (the test suite refuses
       a stale hash), and bump `VERSION` in `public/app/sw.js` when icons, the manifest or the
