@@ -223,7 +223,7 @@ writes the same one.
   deploys and previews read `STAGING_DATABASE_URL` and refuse to run without it, so they
   can never touch production data or migrate it. `RESEND_API_KEY` and `MAIL_FROM` send the
   emails; without a key, production refuses and a deploy with `DEV_LINKS=1` (or the test
-  suite) returns the link and code to the caller instead. `SITE_ENV` is set per context.
+  suite) returns the link and code to the caller instead. `SITE_ENV` is set per context in the Netlify UI (and in `netlify.toml` for the build).
   `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each as the
   build command; every statement is idempotent, so a half-applied file is harmless.
   Housekeeping (expired links, sessions and invites, old rate-limit rows) rides along with
