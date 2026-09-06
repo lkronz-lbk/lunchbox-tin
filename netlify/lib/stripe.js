@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { siteEnv } from './db.js';
 
 /* Stripe over plain fetch: three calls (a Checkout session, a portal session, a
    price lookup) and one signature check do not need the SDK. The key comes from
@@ -10,7 +11,7 @@ const API = 'https://api.stripe.com/v1';
 export function stripeKey() {
   const key = process.env.STRIPE_SECRET_KEY || '';
   if (!key) return '';
-  const env = process.env.SITE_ENV || 'production';
+  const env = siteEnv();
   const live = /^(sk|rk)_live_/.test(key);
   if (env === 'production' && !live) throw new Error('STRIPE_SECRET_KEY in production is not a live key');
   if (env !== 'production' && live) throw new Error(`STRIPE_SECRET_KEY for the ${env} context is a live key; scope a test key to this context`);
@@ -27,7 +28,7 @@ export function billingEnabled() {
   try { return !!(stripeKey() && p.year && p.lifetime); }
   catch (e) { if (!billingEnabled.warned) { billingEnabled.warned = true; console.error('billing off:', e.message); } return false; }
 }
-export function isProduction() { return (process.env.SITE_ENV || 'production') === 'production'; }
+export function isProduction() { return siteEnv() === 'production'; }
 
 /* form encoding, nested the way Stripe reads it: a[b][0][c]=v */
 function encode(params, prefix = '', out = []) {

@@ -5,10 +5,17 @@ import { neon } from '@neondatabase/serverless';
    injects an in-process Postgres through the global hook. Call as
    sql`SELECT ...` or, for a statement built as a string, sql(text). */
 let _client;
+/* Which deploy this is. SITE_ENV is set per context in the Netlify UI; the values in
+   netlify.toml reach the build only, never a running function, so Netlify's own CONTEXT
+   is the fallback, and a branch deploy can never mistake itself for production. */
+const CONTEXTS = { production: 'production', 'branch-deploy': 'staging', 'deploy-preview': 'preview', dev: 'dev' };
+export function siteEnv() {
+  return process.env.SITE_ENV || CONTEXTS[process.env.CONTEXT] || 'production';
+}
 export function databaseUrl() {
   /* production uses the site database; every other context must be given its own,
      so a branch deploy or a preview can never read or migrate production data */
-  const env = process.env.SITE_ENV || 'production';
+  const env = siteEnv();
   if (env === 'production') return process.env.NETLIFY_DATABASE_URL || process.env.NETLIFY_DB_URL || '';
   return process.env.STAGING_DATABASE_URL || process.env.DEV_DB_URL || '';
 }
@@ -16,7 +23,7 @@ export function sql() {
   if (globalThis.__LS_SQL) return globalThis.__LS_SQL;
   if (!_client) {
     const url = databaseUrl();
-    if (!url) throw new Error((process.env.SITE_ENV || 'production') === 'production' ? 'No database URL configured' : 'This deploy context has no database of its own (set STAGING_DATABASE_URL)');
+    if (!url) throw new Error(siteEnv() === 'production' ? 'No database URL configured' : 'This deploy context has no database of its own (set STAGING_DATABASE_URL)');
     const client = neon(url);
     _client = (strings, ...vals) => typeof strings === 'string' ? client.query(strings) : client(strings, ...vals);
   }
@@ -32,7 +39,7 @@ export function siteUrl(req) {
   /* production keeps its canonical URL; branch and preview deploys use their own, so a
      magic link always comes back to the deploy that issued it. Production never takes
      the host from the request. */
-  const env = process.env.SITE_ENV || 'production';
+  const env = siteEnv();
   if (env === 'production') {
     if (!process.env.URL) throw new Error('URL is not set; refusing to build a link from the request host');
     return process.env.URL.replace(/\/$/, '');

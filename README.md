@@ -116,8 +116,11 @@ Work on `dev`, look at the staging URL on a real phone, then open a PR into `mai
 Netlify marks staging and preview deploys `noindex`, so they never compete with the
 live marketing page in search results.
 
-`netlify.toml` carries a per-context environment block that sets only `SITE_ENV`; the
-keys themselves live in the Netlify UI, scoped by deploy context. That is the seam that
+`netlify.toml` carries a per-context environment block that sets `SITE_ENV` for the build;
+Netlify does not pass toml variables to functions, so `SITE_ENV` is also set in the Netlify
+UI per context (`production`, `staging`, `preview`), and the code falls back to Netlify's
+`CONTEXT` variable if it is missing. The keys themselves live in the Netlify UI, scoped by
+deploy context. That is the seam that
 matters: production reads its own database and its live Stripe key, and neither can reach
 a branch deploy or a pull request preview. The build refuses a Stripe key scoped to the
 wrong context.

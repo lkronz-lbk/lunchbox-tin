@@ -1,4 +1,4 @@
-import { sql, json, fail, siteUrl, clientIp, ipKey, throttled } from '../lib/db.js';
+import { sql, json, fail, siteUrl, siteEnv, clientIp, ipKey, throttled } from '../lib/db.js';
 import { normalizeEmail, createMagicLink, peekMagicLink, consumeMagicLink, consumeMagicCode, findOrCreateUser,
          createSession, sessionCookie, currentUser, destroySession, destroyAllSessions,
          verifyNonce, verifyCookie, verifyCookieFrom, sameOrigin } from '../lib/auth.js';
@@ -51,7 +51,7 @@ export default async function handler(req, context) {
       const link = `${siteUrl(req)}/api/auth/verify?t=${token}`;
       const sent = await sendMagicLink(email, link, code);
       /* the link and code come back to the caller only where a deploy has opted in (the test suite) */
-      const show = sent.devLink && (process.env.SITE_ENV === 'test' || process.env.DEV_LINKS === '1');
+      const show = sent.devLink && (siteEnv() === 'test' || process.env.DEV_LINKS === '1');
       return json({ ok: true, ...(show ? { devLink: sent.devLink, devCode: sent.devCode } : {}) });
     }
 

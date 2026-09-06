@@ -950,6 +950,15 @@ try {
   /* the key guard: a live key can never serve a branch, a test key can never serve production */
   const guard = (env, key) => { const was = { e: process.env.SITE_ENV, k: process.env.STRIPE_SECRET_KEY }; process.env.SITE_ENV = env; process.env.STRIPE_SECRET_KEY = key;
     let threw = false; try { stripeLib.stripeKey(); } catch { threw = true; } process.env.SITE_ENV = was.e; process.env.STRIPE_SECRET_KEY = was.k; return threw; };
+  {
+    const { siteEnv } = await import('../netlify/lib/db.js');
+    const was = process.env.SITE_ENV; delete process.env.SITE_ENV;
+    process.env.CONTEXT = 'branch-deploy'; const a = siteEnv();
+    process.env.CONTEXT = 'deploy-preview'; const b = siteEnv();
+    delete process.env.CONTEXT; const c = siteEnv();
+    process.env.SITE_ENV = was;
+    check('without SITE_ENV a function still knows a branch deploy from production, from Netlify\'s CONTEXT', a === 'staging' && b === 'preview' && c === 'production', [a, b, c]);
+  }
   check('a test key in production, or a live key anywhere else, refuses to start', guard('production', 'sk_test_x') && guard('staging', 'sk_live_x') && !guard('production', 'sk_live_x') && !guard('staging', 'sk_test_x'));
   const WH = 'whsec_test_secret';
   const sign = (body, t = Math.floor(Date.now() / 1000), secret = WH) => `t=${t},v1=${crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;

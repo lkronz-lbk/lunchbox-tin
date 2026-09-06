@@ -2,11 +2,12 @@
    production, the link is returned to the caller so a developer or the test
    suite can follow it, and it is logged. Production without a key is an
    error, never a silent no-op. */
+import { siteEnv } from './db.js';
 export async function sendMagicLink(to, link, code) {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.MAIL_FROM || 'Lunch Sorted <hello@lunchsorted.app>';
   if (!key) {
-    if ((process.env.SITE_ENV || 'production') === 'production') throw new Error('RESEND_API_KEY is not set');
+    if (siteEnv() === 'production') throw new Error('RESEND_API_KEY is not set');
     console.log(`[mail] magic link for ${to}: ${link} (code ${code})`);
     return { devLink: link, devCode: code };
   }

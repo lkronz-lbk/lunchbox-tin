@@ -99,12 +99,13 @@
 # Netlify serves branch deploys and previews with X-Robots-Tag: noindex, so a
 # staging copy of the marketing page can't compete with the real one in search.
 #
-# There is no build step yet, so these variables do nothing today. They exist
-# because this is the seam that matters: production reads NETLIFY_DATABASE_URL;
-# every other context reads STAGING_DATABASE_URL and refuses to run without it
-# (netlify/lib/db.js), so a branch deploy or a preview can never touch
-# production data or migrate it. Set STAGING_DATABASE_URL, scoped to branch
-# deploys and deploy previews, in the Netlify UI.
+# SITE_ENV below reaches the BUILD only (the migration). Netlify does not pass
+# toml variables to functions at run time, so SITE_ENV must also be set in the
+# Netlify UI, scoped per context (production / staging / preview); failing that
+# the code falls back to Netlify's own CONTEXT variable (netlify/lib/db.js).
+# Production reads NETLIFY_DATABASE_URL; every other context reads
+# STAGING_DATABASE_URL and refuses to run without it, so a branch deploy or a
+# preview can never touch production data or migrate it.
 # ---------------------------------------------------------------------------
 
 [context.production.environment]
