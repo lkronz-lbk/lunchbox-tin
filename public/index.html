@@ -134,6 +134,20 @@ form.signup input[type=email]{flex:1 1 220px;min-height:48px;padding:0 15px;bord
 form.signup input[type=email]:focus{border-color:var(--accent);outline:none}
 .hp{position:absolute;left:-9999px}
 
+/* two plans, side by side; the paid one is lifted, the free one is not lesser */
+.plans{display:grid;gap:16px}
+@media (min-width:700px){ .plans{grid-template-columns:1fr 1fr;gap:20px} }
+.plan{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:24px 22px}
+.plan.featured{border:1.6px solid var(--accent)}
+.plan .lab{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:10px}
+.plan b{font-family:var(--f-display);font-size:38px;font-weight:700;letter-spacing:-0.03em;line-height:1;display:block}
+.plan b small{font-family:var(--f-body);font-size:15px;font-weight:400;color:var(--ink-2);margin-left:8px;letter-spacing:0}
+.plan .alt{margin:8px 0 0;color:var(--ink-2);font-size:14.5px}
+.plan ul{margin:16px 0 0;padding-left:18px;color:var(--ink-2);font-size:15px}
+.plan li{margin-bottom:6px}
+.plans-cta{margin:20px 0 0}
+.fine{margin:14px 0 0;color:var(--ink-3);font-size:13.5px}
+.fine a{color:var(--ink-2)}
 footer{border-top:1px solid var(--line);padding:30px 0 56px;color:var(--ink-3);font-size:14px}
 footer .row{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center}
 footer a{color:var(--ink-2)}
@@ -246,13 +260,48 @@ footer a{color:var(--ink-2)}
     </div>
   </section>
 
+  <section class="section" id="pricing">
+    <div class="intro">
+      <p class="eyebrow">What it costs</p>
+      <h2>Free to plan. Everything on for your first three weeks.</h2>
+      <p>Every new household gets the whole Household plan for three weeks, with no card and nothing to cancel.
+        After that the planner stays free, and the rest is yours whenever you want it.</p>
+    </div>
+    <div class="plans">
+      <div class="plan">
+        <span class="lab">Free, for good</span>
+        <b>$0</b>
+        <ul>
+          <li>One lunchbox</li>
+          <li>The week planned in a minute, matched so each box goes together</li>
+          <li>The shopping list and the pack list</li>
+          <li>Works offline, on your home screen</li>
+        </ul>
+      </div>
+      <div class="plan featured">
+        <span class="lab">Household plan</span>
+        <b>$29 <small>a year</small></b>
+        <p class="alt">or $3.99 a month, or $79 once, forever</p>
+        <ul>
+          <li>Every lunchbox, each with its own rules</li>
+          <li>Kid&rsquo;s pick, the morning review, a pantry that remembers</li>
+          <li>The other parent&rsquo;s phone, and a helper&rsquo;s pack list</li>
+          <li>Cancel any time; what you added stays</li>
+        </ul>
+      </div>
+    </div>
+    <p class="plans-cta"><a class="btn primary" href="/app/">Start free</a></p>
+    <p class="fine">Prices in US dollars; sales tax added where it applies. Full refund within 14 days, no questions.
+      <a href="/terms.html">Terms</a>.</p>
+  </section>
+
   <section class="section">
     <div class="intro">
       <p class="eyebrow">What's coming</p>
-      <h2>Tell me what would make this worth paying for.</h2>
-      <p>Sync between two parents' phones, a much bigger idea library, and a reminder the night before are
-        what's next. Leave an email if you want to hear when they land — that's the only thing this page collects,
-        and it's used for nothing else.</p>
+      <h2>The iPhone app, and a reminder the night before.</h2>
+      <p>Two parents' phones already share one plan. Next is an app on the App Store with a Home Screen widget
+        and an evening nudge to pack. Leave an email if you want to hear when it lands; that's the only thing this
+        page collects, and it's used for nothing else.</p>
     </div>
     <form class="signup" name="waitlist" method="POST" data-netlify="true" netlify-honeypot="bot-field">
       <input type="hidden" name="form-name" value="waitlist">

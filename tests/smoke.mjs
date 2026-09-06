@@ -21,6 +21,8 @@ import { PGlite } from '@electric-sql/pglite';
 import { migrate } from '../scripts/migrate.mjs';
 process.env.SITE_ENV = 'test'; delete process.env.URL; delete process.env.DEPLOY_PRIME_URL; delete process.env.RESEND_API_KEY;
 const db = new PGlite();
+/* every email the functions send is captured here instead of going to Resend */
+const mails = []; globalThis.__LS_MAIL = mails;
 globalThis.__LS_SQL = async (strings, ...vals) => typeof strings === 'string' ? (await db.query(strings)).rows : (await db.sql(strings, ...vals)).rows;
 await migrate(globalThis.__LS_SQL);
 const { default: authHandler } = await import('../netlify/functions/api-auth.js');
@@ -221,6 +223,11 @@ try {
     && document.querySelector('[data-act="ob-breadth"][data-v="picky"]').getAttribute('aria-pressed') === 'true'));
   await page.click('[data-act="ob-go"]');
   await page.waitForTimeout(400);
+  check('after the questions, one screen asks where to send the sign-in link, with a way past it',
+    (await page.$$eval('#signinEmail', a => a.length)) === 1 && (await page.$$eval('[data-act="ob-later"]', a => a.length)) === 1 && await page.evaluate(() => !(document.activeElement && document.activeElement.id === 'signinEmail')));
+  await page.fill('#signinEmail', 'nope'); await page.click('[data-act="signin-request"]'); await page.waitForTimeout(200);
+  check('a bad address is caught on that screen too, and stays in the field', /does not look like an email/i.test(await page.textContent('#toast')) && await page.$eval('#signinEmail', i => i.value === 'nope'));
+  await page.click('[data-act="ob-later"]'); await page.waitForTimeout(300);
   check('the name typed at onboarding lands on the lunchbox',
     await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].name === 'Nia'));
   check('the week header leads with the date', /^Week of /.test((await page.textContent('.view-title')).trim()));
@@ -841,6 +848,8 @@ try {
   await until(page, () => /Signed in as\s*liz@example\.com/.test(document.querySelector('#view').textContent));
   check('one tap signs in, lands back in the app, and the account card is at the top', page.url().endsWith('/app/') &&
     await page.evaluate(() => { const v = document.querySelector('#view'); return /Signed in as/.test(v.textContent) && v.querySelector('.sect-head h3').textContent === 'Account'; }), page.url());
+  const welcomes = (to) => mails.filter(m => m.to === to && /Everything is on for three weeks/.test(m.subject));
+  check('a first sign-in gets one welcome email, with a way to stop reminders', welcomes('liz@example.com').length === 1 && /\/api\/auth\/mail-stop\?t=[a-f0-9]{32}/.test(welcomes('liz@example.com')[0].text) && /\/app\//.test(welcomes('liz@example.com')[0].text));
   const spent = await page.evaluate(u => fetch(u).then(r => r.status), devLink);
   check('a used link is gone', spent === 410, spent);
   await until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1 && !!j.doc));
@@ -858,6 +867,7 @@ try {
   const p2 = await ctx2.newPage(); p2.on('pageerror', e => errors.push(String(e.message)));
   await p2.goto(BASE+'/app/'); await p2.waitForTimeout(400);
   await p2.fill('#obName', 'Ollie'); await p2.click('[data-act="ob-go"]'); await p2.waitForTimeout(400);   /* Sam has his own lunches already */
+  await p2.click('[data-act="ob-later"]'); await p2.waitForTimeout(200);
   await p2.goto(inviteUrl); await p2.waitForLoadState('load');
   await until(p2, () => /invited you to share/i.test(document.querySelector('#view').textContent));
   check('the invite opens at the top of Setup, naming who sent it', await p2.evaluate(() => { const v = document.querySelector('#view'); return /liz@example\.com|Liz/.test(v.textContent) && /invited you to share/i.test(v.textContent) && !!v.querySelector('#signinEmail'); }), (await p2.textContent('#view')).slice(0, 160));
@@ -988,6 +998,25 @@ try {
   await pb.route('https://billing.stripe.com/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stripe portal</title>' }));
   await pb.goto(BASE+'/app/'); await pb.waitForTimeout(400);
   await pb.fill('#obName', 'Remy'); await pb.click('[data-act="ob-go"]'); await pb.waitForTimeout(400);
+  /* this time the link is asked for from the onboarding screen itself */
+  await pb.fill('#signinEmail', 'remy-parent@example.com'); await pb.press('#signinEmail', 'Enter');
+  await until(pb, () => !!document.querySelector('[data-dev-link]'));
+  check('the onboarding screen sends the link and then offers the code, the week, or another address',
+    /Sent to remy-parent@example\.com/.test(await pb.textContent('#view')) && (await pb.$$eval('#signinCode', a => a.length)) === 1 && (await pb.$$eval('[data-act="ob-resend"]', a => a.length)) === 1);
+  await pb.click('[data-act="ob-resend"]'); await pb.waitForTimeout(200);
+  check('and "wrong address" goes back to the field', (await pb.$$eval('#signinEmail', a => a.length)) === 1);
+  await pb.click('[data-act="ob-later"]'); await pb.waitForTimeout(300);
+  check('skipping lands on the week', await pb.getAttribute('nav.tabs [aria-current="true"]', 'data-tab') === 'week');
+  {
+    const ctxW = await phone(); const pw = await ctxW.newPage(); pw.on('pageerror', e => errors.push(String(e.message)));
+    await pw.goto(BASE+'/app/'); await pw.waitForTimeout(300); await pw.fill('#obName', 'Wren'); await pw.click('[data-act="ob-go"]'); await pw.waitForTimeout(300);
+    await pw.fill('#signinEmail', 'wren-parent@example.com'); await pw.press('#signinEmail', 'Enter'); await until(pw, () => !!document.querySelector('[data-dev-link]'));
+    check('the sent screen names the address and says to tap on this phone', /Sent to wren-parent@example\.com\. Tap the link on this phone/.test(await pw.textContent('#view')));
+    await pw.goto(await pw.getAttribute('[data-dev-link]', 'href')); await pw.click('button[type="submit"]'); await pw.waitForURL(/\/app\//); await pw.waitForLoadState('load');
+    await until(pw, () => document.querySelector('nav.tabs [aria-current="true"]') && document.querySelector('nav.tabs [aria-current="true"]').getAttribute('data-tab') === 'week' && !!document.querySelector('.tin'));
+    check('a parent who taps the link from onboarding lands on the week it promised, signed in', await pw.getAttribute('nav.tabs [aria-current="true"]', 'data-tab') === 'week' && await pw.evaluate(() => fetch('/api/auth/me').then(r => r.json()).then(j => j.user && j.user.email === 'wren-parent@example.com')));
+    await ctxW.close();
+  }
   /* the first three weeks: everything on, the premium pieces wearing a tag */
   const setBorn = (daysAgo) => pb.evaluate(n => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.createdAt = new Date(Date.now() - n * 86400000).toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); }, daysAgo);
   await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
@@ -1038,6 +1067,10 @@ try {
   check('after signing in, the plan sheet comes back on its own for the lunchbox they were adding', resumed);
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
   check('signed in and free, Setup says Free and offers the plan', /Household plan\s*Not on/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 0 && (await pb.$$eval('.chip.lock', a => a.length)) >= 1);
+  await pb.goto(BASE+'/app/?upgrade=1'); await pb.waitForLoadState('load');
+  const viaMail = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetBody').textContent));
+  check('the link in a reminder email opens the plan sheet on arrival', viaMail && !pb.url().includes('upgrade='));
+  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
   const noCustomer = await pb.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
   await until(pb, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1));
@@ -1049,7 +1082,7 @@ try {
   await db.query(`UPDATE households SET doc = jsonb_set(doc, '{createdAt}', to_jsonb(to_char(now() AT TIME ZONE 'UTC' - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))) WHERE id = ${patState.household.id}`);
   check('but allows one while the three weeks are running, by the document\'s own birthday', inviteTrial === 200, inviteTrial);
   {
-    const { trialStart } = await import('../netlify/functions/api-household.js');
+    const { trialStart } = await import('../netlify/lib/trial.js');
     const old = new Date(Date.now() - 40 * 86400000).toISOString(), fresh = new Date().toISOString(), future = '2099-01-01T00:00:00Z';
     const was = process.env.BILLING_SINCE; delete process.env.BILLING_SINCE;
     const a = trialStart({ doc_created: future, created_at: old }), b = trialStart({ doc_created: old, created_at: fresh }), c = trialStart({ doc_created: 'yesterday', created_at: fresh });
@@ -1196,6 +1229,44 @@ try {
   const unpaidSession = await hook({ id: 'evt_8', type: 'checkout.session.completed', created: t0 + 7, data: { object: { id: 'cs_test_4', mode: 'subscription', payment_status: 'unpaid', client_reference_id: '999999', metadata: {} } } });
   check('a session that is not paid yet, or for no household, grants nothing and is still acknowledged', unpaidSession.status === 200);
   await ctxB.close();
+  /* ---- the daily reminder job */
+  {
+    const { run } = await import('../netlify/functions/cron-trial.js');
+    const ago = (d) => new Date(Date.now() - d * 86400000).toISOString();
+    const mk = async (email, daysAgo, opts = {}) => {
+      const [u] = (await db.query(`INSERT INTO users (email, mail_ok) VALUES ('${email}', ${opts.mailOk === false ? 'false' : 'true'}) RETURNING id`)).rows;
+      const [h] = (await db.query(`INSERT INTO households (owner_user_id, created_at, doc) VALUES (${u.id}, '${ago(daysAgo)}', '{"createdAt":"${ago(daysAgo)}"}'::jsonb) RETURNING id`)).rows;
+      await db.query(`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${h.id}, ${u.id}, 'owner', 'mem_x')`);
+      await db.query(`INSERT INTO entitlements (household_id, plan, status) VALUES (${h.id}, '${opts.plan || 'free'}', '${opts.status || 'none'}')`);
+      return { u: u.id, h: h.id };
+    };
+    const ending = await mk('ending@example.com', 18), ended = await mk('ended@example.com', 21.5), young = await mk('young@example.com', 5);
+    const paidOne = await mk('paid@example.com', 18, { plan: 'household', status: 'active' }), quiet = await mk('quiet@example.com', 18, { mailOk: false });
+    const before = mails.length;
+    const first = await run(Date.now(), 'https://test.example');
+    const got = (to) => mails.slice(before).filter(m => m.to === to);
+    check('three days before the end, one email says when; the day after, one says what changed', first.ending === 1 && first.ended === 1 &&
+      got('ending@example.com').length === 1 && /end [A-Z][a-z]+day, [A-Z][a-z]+ \d+$/.test(got('ending@example.com')[0].subject) && /\/app\/\?upgrade=1/.test(got('ending@example.com')[0].text) &&
+      got('ended@example.com').length === 1 && /three weeks are up/i.test(got('ended@example.com')[0].subject), [first, got('ending@example.com').map(m => m.subject)]);
+    check('a young household, a paid one, and someone who stopped reminders get nothing', got('young@example.com').length === 0 && got('paid@example.com').length === 0 && got('quiet@example.com').length === 0 && first.skipped === 1);
+    const second = await run(Date.now(), 'https://test.example');
+    check('running the job again sends nothing twice', second.ending === 0 && second.ended === 0 && mails.length === before + 2);
+    const stopUrl = got('ending@example.com')[0].text.match(/https:\/\/test\.example(\/api\/auth\/mail-stop\?t=[a-f0-9]{32})/)[1];
+    const peek = await fetch(NODE_BASE + stopUrl);
+    const stillOk = (await db.query(`SELECT mail_ok FROM users WHERE id = ${ending.u}`)).rows[0].mail_ok;
+    const token = stopUrl.split('t=')[1];
+    const stopped = await fetch(NODE_BASE + '/api/auth/mail-stop', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 't=' + token });
+    const mailOk = (await db.query(`SELECT mail_ok FROM users WHERE id = ${ending.u}`)).rows[0].mail_ok;
+    const bad = await fetch(NODE_BASE + '/api/auth/mail-stop', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 't=deadbeef' });
+    check('the stop link shows a button rather than acting on sight, the button stops the reminders, and a wrong token is refused',
+      peek.status === 200 && /Stop these reminders/.test(await peek.text()) && stillOk === true && stopped.status === 200 && mailOk === false && bad.status === 410, [peek.status, stillOk, stopped.status, mailOk, bad.status]);
+    {
+      const { default: cronHandler } = await import('../netlify/functions/cron-trial.js');
+      const stray = await cronHandler(new Request('http://x/cron', { method: 'POST', body: '{}' }));
+      check('the job refuses to run for anything but the schedule on the published deploy', stray.status === 404);
+    }
+    void young; void paidOne; void quiet; void ended;
+  }
   for (const k of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_YEAR', 'STRIPE_PRICE_LIFETIME', 'STRIPE_PRICE_MONTH']) delete process.env[k];
   stripeLib.forgetPrices();
 
@@ -1219,7 +1290,8 @@ try {
   await site.waitForTimeout(400);
   check('the landing page never scrolls sideways on a phone',
     !(await site.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)));
-  await site.evaluate(() => window.scrollTo(0, document.body.scrollHeight));   /* wake the lazy ones */
+  /* wake the lazy images the way a reader does: a screen at a time, top to bottom */
+  await site.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 60)); } window.scrollTo(0, document.body.scrollHeight); });
   await site.waitForTimeout(600);
   check('every screenshot on the landing page loads',
     await site.$$eval('img', a => a.length > 0 && a.every(i => i.complete && i.naturalWidth > 0)));
@@ -1230,6 +1302,8 @@ try {
     await site.$eval('input[name="bot-field"]', i => i.closest('[aria-hidden="true"]') !== null && i.getAttribute('tabindex') === '-1'));
   warn('og:image is an absolute URL (set once the domain exists)',
     /^https?:\/\//.test(await site.$eval('meta[property="og:image"]', m => m.content)));
+  check('the landing page says what is free, what the plan costs, and where the terms are',
+    await site.evaluate(() => { const p = document.querySelector('#pricing'); return !!p && /\$29/.test(p.textContent) && /\$3\.99/.test(p.textContent) && /\$79/.test(p.textContent) && /three weeks/.test(p.textContent) && !!p.querySelector('a[href="/terms.html"]') && !!p.querySelector('a[href="/app/"]'); }));
   check('the waitlist form is wired to Netlify',
     await site.$eval('form.signup', f => f.getAttribute('data-netlify') === 'true' &&
       !!f.querySelector('input[name="form-name"]')));

@@ -130,7 +130,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 
 .btn{border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);border-radius:var(--r-md);
   padding:0 16px;min-height:44px;font-family:var(--f-display);font-weight:600;font-size:14.5px;
-  display:inline-flex;align-items:center;justify-content:center;gap:8px}
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
 .btn:active{transform:translateY(1px)}
 .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .btn.ghost{border-color:var(--line);background:transparent;color:var(--ink-2);font-weight:500}
@@ -232,7 +232,7 @@ nav.tabs svg{width:21px;height:21px}
   line-height:1.08;margin:0;text-wrap:balance}
 .ob .lede{font-size:16.5px;color:var(--ink-2);margin:8px 0 0;max-width:38ch}
 .ob .q{display:flex;flex-direction:column;gap:9px}
-.ob .q > span{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.14em;
+.ob .q > span,.ob .q > label{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.14em;
   text-transform:uppercase;color:var(--ink-3)}
 .ob .go{margin-top:4px}
 .ob .skip{background:none;border:0;color:var(--ink-3);font-size:13.5px;text-decoration:underline;
@@ -884,6 +884,7 @@ function resumeAfter(){
   if(gated()){ upgradeSheet(why); return; }
   if(why === 'lunchbox'){ UI.tab = 'setup'; render(); addKidSheet(); }
   else if(why === 'share'){ UI.tab = 'setup'; render(); }
+  else if(why === 'week'){ UI.tab = 'week'; render(); }
 }
 function upgradeSheet(why){
   var pr = (Account.billing && Account.billing.prices) || {}, forever = why === 'forever';
@@ -1006,7 +1007,7 @@ function renderSyncLine(){ var el = document.getElementById('syncLine'); if(el) 
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function now(){ return new Date().toISOString(); }
@@ -1890,6 +1891,28 @@ function obPress(el, exclusive){
   if(exclusive) el.parentNode.querySelectorAll('.tg').forEach(function(b){ b.setAttribute('aria-pressed','false'); });
   el.setAttribute('aria-pressed', exclusive ? 'true' : (el.getAttribute('aria-pressed')==='true' ? 'false' : 'true'));
 }
+/* the week is built; before it is shown, one screen asks where to send the sign-in link.
+   Signing in is what keeps the lunches beyond this phone and lets us say when the three
+   weeks end. It can be skipped, and everything still works. */
+function viewObEmail(){
+  var sent = Account.linkSent;
+  var h = '<div class="ob"><div><div class="oblogo"><i></i><i></i><i></i><i></i></div>';
+  if(!sent){
+    h += '<h1>Your week is ready. Where should we send the sign-in link?</h1>'
+      +  '<p class="lede">So the lunches are safe if this phone is lost, and the other parent can see the same week. No password, ever.</p></div>'
+      +  '<div class="q"><label for="signinEmail">Your email</label><input type="email" id="signinEmail" value="'+esc(UI.obDraft || '')+'" placeholder="you@example.com" autocomplete="email" inputmode="email" enterkeyhint="send"></div>'
+      +  '<button class="btn primary wide go" data-act="signin-request"'+(Account.sending ? ' disabled' : '')+'>'+(Account.sending ? 'Sending\u2026' : 'Email me the link')+'</button>'
+      +  '<button class="skip" data-act="ob-later">Not now \u2014 show me the week</button>';
+  } else {
+    h += '<h1>Check your email.</h1>'
+      +  '<p class="lede">Sent to <b style="overflow-wrap:anywhere">'+esc(sent)+'</b>. Tap the link on this phone, or type the code below. Until then everything here still works'+(Account.devLink ? ' <a href="'+esc(Account.devLink)+'" data-dev-link>Open the link</a> (development only)' : '')+'.</p></div>'
+      +  '<div class="q"><label for="signinCode">The code from the email</label><div class="row" style="gap:8px"><input type="text" id="signinCode" placeholder="ABCD-1234" autocomplete="one-time-code" inputmode="text" enterkeyhint="go" autocapitalize="characters" maxlength="9" style="font-family:var(--f-mono);letter-spacing:.08em">'
+      +  '<button class="btn sm" data-act="signin-code">Sign in</button></div></div>'
+      +  '<button class="btn primary wide go" data-act="ob-later">See the week</button>'
+      +  '<button class="skip" data-act="ob-resend">Wrong address? Try another</button>';
+  }
+  return h + '</div>';
+}
 function viewOnboard(){
   var o = UI.ob;
   var chip = function(act, val, on, label){
@@ -2447,8 +2470,8 @@ function render(){
   document.body.style.overflow = (UI.kid || sheetEl.classList.contains('open')) ? 'hidden' : '';
   if(UI.kid){ kidEl.innerHTML = viewKid(); kidEl.hidden = false; return; }   /* the views beneath wait for the hand-back */
   kidEl.innerHTML = ''; kidEl.hidden = true;
-  if(!S.onboardedAt){
-    document.getElementById('view').innerHTML = viewOnboard();
+  if(!S.onboardedAt || UI.obEmail){
+    document.getElementById('view').innerHTML = S.onboardedAt ? viewObEmail() : viewOnboard();
     document.getElementById('tabs').style.display = 'none';
     document.querySelector('.topbar').style.display = 'none';
     document.getElementById('who').innerHTML = '';
@@ -2544,9 +2567,13 @@ document.addEventListener('click', function(ev){
     seedLibrary(kid, UI.ob.breadth);
     planWeek(kid);
     S.onboardedAt = now(); UI.tab = 'week';
+    UI.obEmail = navigator.onLine && !signedIn();
     save(); render(); window.scrollTo(0,0);
-    toast('Your week is ready'); return;
+    if(!UI.obEmail) toast('Your week is ready');
+    return;
   }
+  if(act==='ob-later'){ UI.obEmail = false; render(); window.scrollTo(0,0); toast(Account.linkSent ? 'Tap the link when it arrives' : 'Your week is ready'); return; }
+  if(act==='ob-resend'){ Account.linkSent = ''; Account.devLink = ''; Account.devCode = ''; render(); return; }
   if(act==='ob-skip'){
     var obn2 = document.getElementById('obName'); if(obn2 && obn2.value.trim()) kid.name = obn2.value.trim().slice(0,40);
     kid.settings.noHeat = !UI.ob.heat;
@@ -2781,12 +2808,13 @@ document.addEventListener('click', function(ev){
   if(act==='signin-request'){
     var inp = document.getElementById('signinEmail'), em = (inp.value || '').trim().toLowerCase();
     if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(em)){ inp.focus(); toast('That does not look like an email address'); return; }
-    Account.sending = true; render();
+    Account.sending = true; UI.obDraft = em; render();
+    if(UI.obEmail) rememberAfter('week');                    /* the link, tapped, lands on the week it promised */
     api('POST', '/api/auth/request', {email:em}).then(function(r){
       Account.sending = false;
       if(r.status !== 200){ render(); toast(r.error || 'Could not send the link'); return; }
-      Account.linkSent = em; Account.devLink = r.devLink || ''; Account.devCode = r.devCode || ''; render(); toast('Check your email');
-      var code = document.getElementById('signinCode'); if(code) code.focus();
+      Account.linkSent = em; Account.devLink = r.devLink || ''; Account.devCode = r.devCode || ''; UI.obDraft = ''; render(); toast('Check your email');
+      if(!UI.obEmail){ var code = document.getElementById('signinCode'); if(code) code.focus(); }
     }).catch(function(){ Account.sending = false; render(); offline(); });
     return;
   }
@@ -2795,7 +2823,7 @@ document.addEventListener('click', function(ev){
     if(code.replace(/[^A-Za-z0-9]/g, '').length < 8){ codeEl.focus(); toast('The code is eight letters and numbers'); return; }
     api('POST', '/api/auth/code', {email:Account.linkSent, code:code}).then(function(r){
       if(r.status !== 200){ toast(r.error || 'That code did not work'); return; }
-      Account.user = r.user; Account.linkSent = ''; Account.devLink = ''; Account.devCode = ''; Account.first = true;
+      Account.user = r.user; Account.linkSent = ''; Account.devLink = ''; Account.devCode = ''; Account.first = true; UI.obEmail = false;
       return Sync.pull().then(function(){ render(); toast('Signed in'); });
     }).catch(offline);
     return;
@@ -2974,14 +3002,19 @@ Store.load().then(function(r){
 
   /* signed in? then the household on the server is part of the picture */
   var qs = new URLSearchParams(location.search);
-  if(qs.get('signed-in')){ UI.tab = 'setup'; Account.first = true; toast('Signed in'); }
+  if(qs.get('signed-in')){
+    var after = ''; try{ after = localStorage.getItem(AFTER_KEY) || ''; }catch(e){}
+    if(after === 'week'){ UI.tab = 'week'; } else { UI.tab = 'setup'; Account.first = true; }
+    toast('Signed in');
+  }
   var joinCode = qs.get('join') || (function(){ try{ return localStorage.getItem('lunchsorted-join') || ''; }catch(e){ return ''; } })();
   if(joinCode){ try{ localStorage.setItem('lunchsorted-join', joinCode); }catch(e){} UI.tab = 'setup'; }
-  var back = qs.get('paid'), portalBack = qs.get('portal');
+  var back = qs.get('paid'), portalBack = qs.get('portal'), wantUpgrade = qs.get('upgrade') === '1';
+  if(wantUpgrade){ UI.tab = 'setup'; Account.first = true; if(S.onboardedAt) toast('Sign in on this phone to keep the Household plan'); }
   if(back === '1'){ UI.tab = 'setup'; Account.first = true; Account.settling = true; toast('Thank you \u2014 switching on the Household plan\u2026'); }
   else if(back === '0'){ UI.tab = 'setup'; Account.first = true; rememberAfter(''); toast('No charge was made'); }
   else if(portalBack){ UI.tab = 'setup'; Account.first = true; }
-  if(qs.get('signed-in') || qs.get('join') || back !== null || portalBack) history.replaceState(null, '', location.pathname);
+  if(qs.get('signed-in') || qs.get('join') || back !== null || portalBack || wantUpgrade) history.replaceState(null, '', location.pathname);
   /* what the plans cost and whether anything is gated at all; cached, and answered from the phone offline */
   loadBilling().then(function(){ if(!signedIn()) render(); });
   var afterMe = function(){
@@ -2996,7 +3029,7 @@ Store.load().then(function(r){
   };
   if(navigator.onLine && !rejected){
     /* one request answers "who am I" and "what does the household hold" together */
-    Sync.pull().then(function(){ if(signedIn() || joinCode) render(); afterMe(); if(qs.get('signed-in')) resumeAfter(); }).catch(function(){});
+    Sync.pull().then(function(){ if(signedIn() || joinCode) render(); afterMe(); if(qs.get('signed-in')) resumeAfter(); if(wantUpgrade && signedIn() && S.onboardedAt && !paid()) upgradeSheet('keep'); }).catch(function(){});
     /* back from Stripe: the webhook usually lands within a second or two of the redirect, so look a few times */
     if(back === '1'){
       var looks = 0, look = function(){

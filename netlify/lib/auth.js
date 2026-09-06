@@ -76,7 +76,7 @@ export async function findOrCreateUser(email) {
   const rows = await sql()`
     INSERT INTO users (email, last_seen_at) VALUES (${email}, now())
     ON CONFLICT (email) DO UPDATE SET last_seen_at = now()
-    RETURNING id, email, name`;
+    RETURNING id, email, name, (xmax = 0) AS created`;
   return rows[0];
 }
 
@@ -145,4 +145,17 @@ export async function peekInvite(code) {
     FROM invites i JOIN households h ON h.id = i.household_id JOIN users u ON u.id = i.created_by
     WHERE i.code_hash = ${hash(code)} AND i.used_at IS NULL AND i.expires_at > now()`;
   return rows[0] || null;
+}
+
+/* the token in a "stop these reminders" link; made the first time it is needed */
+export async function mailStopToken(userId) {
+  const q = sql();
+  const [u] = await q`UPDATE users SET mail_token = replace(gen_random_uuid()::text, '-', '') WHERE id = ${userId} AND mail_token IS NULL RETURNING mail_token`;
+  if (u) return u.mail_token;
+  return (await q`SELECT mail_token FROM users WHERE id = ${userId}`)[0].mail_token;
+}
+export async function stopMail(token) {
+  if (!/^[a-f0-9]{32}$/.test(String(token || ''))) return false;
+  const rows = await sql()`UPDATE users SET mail_ok = false WHERE mail_token = ${token} RETURNING id`;
+  return rows.length > 0;
 }

@@ -1,6 +1,7 @@
 import { sql, json, fail, siteUrl, throttled } from '../lib/db.js';
 import { currentUser, createInvite, consumeInvite, peekInvite } from '../lib/auth.js';
 import { billingEnabled, cancelSubscription } from '../lib/stripe.js';
+import { trialing } from '../lib/trial.js';
 
 /* The household is the unit: one document, one version, everyone signed in
    reads and writes the same one.
@@ -71,23 +72,6 @@ async function state(user) {
 }
 
 const paid = (h) => !!(h.plan && h.plan !== 'free' && (h.status === 'active' || h.status === 'past_due'));
-/* the first three weeks are the whole product. The clock is the earlier of the document's own
-   birthday and this row's, so a phone can shorten its trial by editing the document but never
-   lengthen it, floored at the day billing began (BILLING_SINCE) so a household older than
-   billing gets its three weeks too. The app computes the same from the same two dates. */
-const TRIAL_DAYS = 21;
-const stampOrNull = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d : null; };
-export function trialStart(h) {
-  let born = stampOrNull(h.doc_created); const row = stampOrNull(h.created_at);
-  if (row && (!born || row < born)) born = row;
-  const since = stampOrNull(process.env.BILLING_SINCE);
-  if (!born) return since;
-  return since && since > born ? since : born;
-}
-function trialing(h) {
-  const start = trialStart(h);
-  return !!start && start.getTime() + TRIAL_DAYS * 86400000 > Date.now();
-}
 const entitled = (h) => paid(h) || trialing(h);
 
 function docLooksRight(doc) {

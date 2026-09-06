@@ -1,8 +1,8 @@
 import { sql, json, fail, siteUrl, siteEnv, clientIp, ipKey, throttled } from '../lib/db.js';
 import { normalizeEmail, createMagicLink, peekMagicLink, consumeMagicLink, consumeMagicCode, findOrCreateUser,
          createSession, sessionCookie, currentUser, destroySession, destroyAllSessions,
-         verifyNonce, verifyCookie, verifyCookieFrom, sameOrigin } from '../lib/auth.js';
-import { sendMagicLink } from '../lib/mail.js';
+         verifyNonce, verifyCookie, verifyCookieFrom, sameOrigin, mailStopToken, stopMail } from '../lib/auth.js';
+import { sendMagicLink, sendWelcome } from '../lib/mail.js';
 import { cancelSubscription } from '../lib/stripe.js';
 
 /* Sign-in by email link. No passwords: nothing to forget, nothing to leak.
@@ -33,6 +33,13 @@ a{color:var(--accent)}</style></head><body><div class="card">${body}</div></body
   return new Response(html, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': PAGE_CSP, 'referrer-policy': 'no-referrer', ...headers } });
 }
 
+/* a first sign-in gets one welcome; a failure to send never fails the sign-in */
+async function welcome(user, req) {
+  if (!user.created) return;
+  try { await sendWelcome(user.email, siteUrl(req), `${siteUrl(req)}/api/auth/mail-stop?t=${await mailStopToken(user.id)}`); }
+  catch (e) { console.error('welcome email', e.message); }
+}
+
 export default async function handler(req, context) {
   const url = new URL(req.url);
   const action = url.pathname.split('/').pop();
@@ -60,7 +67,7 @@ export default async function handler(req, context) {
       const email = t && await peekMagicLink(t);
       if (!email) return page('Link expired', `<h1>That link has expired.</h1><p>Sign-in links work once and last fifteen minutes. Ask for a new one from the app.</p><p><a href="/app/">Back to Lunch Sorted</a></p>`, 410);
       const nonce = verifyNonce();
-      return page('Sign in', `<h1>Sign in as ${esc(email)}?</h1><p>One tap and you are back in the app. If you use Lunch Sorted from your home screen, open it there and type the code from the same email instead.</p>
+      return page('Sign in', `<h1>Sign in as ${esc(email)}?</h1><p>One tap and you are signed in on this device. Building the week on your phone? Open the app there and type the code from the same email instead.</p>
 <form method="post" action="/api/auth/verify"><input type="hidden" name="t" value="${esc(t)}"><input type="hidden" name="n" value="${esc(nonce)}"><button type="submit">Continue to Lunch Sorted</button></form>`, 200, verifyCookie(nonce));
     }
 
@@ -84,7 +91,8 @@ export default async function handler(req, context) {
       }
       const user = await findOrCreateUser(email);
       const session = await createSession(user.id, kind);
-      if (kind === 'native') return json({ token: session, user });
+      await welcome(user, req);
+      if (kind === 'native') return json({ token: session, user: { id: user.id, email: user.email, name: user.name } });
       const h = new Headers({ location: '/app/?signed-in=1' });
       h.append('set-cookie', sessionCookie(session)['set-cookie']);
       h.append('set-cookie', verifyCookie('', true)['set-cookie']);
@@ -101,7 +109,23 @@ export default async function handler(req, context) {
       if (!ok) return fail('That code is not right, or it has expired. Codes work once, for fifteen minutes.', 410);
       const user = await findOrCreateUser(email);
       const session = await createSession(user.id, 'web');
-      return json({ ok: true, user }, 200, sessionCookie(session));
+      await welcome(user, req);
+      return json({ ok: true, user: { id: user.id, email: user.email, name: user.name } }, 200, sessionCookie(session));
+    }
+
+    /* the link at the foot of every reminder: a page with one button, so a mail scanner that
+       follows links cannot unsubscribe anyone; the button does it. Sign-in emails still come when asked for. */
+    if (req.method === 'GET' && action === 'mail-stop') {
+      const t = url.searchParams.get('t') || '';
+      return page('Stop reminders', `<h1>Stop the reminder emails?</h1><p>You will not get emails about your three weeks or the Household plan. Sign-in links still arrive when you ask for one.</p>
+<form method="post" action="/api/auth/mail-stop"><input type="hidden" name="t" value="${esc(t)}"><button type="submit">Stop these reminders</button></form><p><a href="/app/">Back to Lunch Sorted</a></p>`);
+    }
+    if (req.method === 'POST' && action === 'mail-stop') {
+      const form = await req.formData().catch(() => null);
+      const ok = await stopMail(form && form.get('t'));
+      return page(ok ? 'Done' : 'That link did not work', ok
+        ? `<h1>No more reminders.</h1><p>You will not get emails about your three weeks or the Household plan. Sign-in links still arrive when you ask for one.</p><p><a href="/app/">Back to Lunch Sorted</a></p>`
+        : `<h1>That link did not work.</h1><p>It may be from an older email. Reply to any of our emails and a person will sort it.</p><p><a href="/app/">Back to Lunch Sorted</a></p>`, ok ? 200 : 410);
     }
 
     if (req.method === 'GET' && action === 'me') {

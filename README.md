@@ -144,8 +144,9 @@ refusing junk, hostile ids and a save it cannot read), the v1 → v2 migration, 
 generated CSP, the service worker, an offline launch, the landing page, accounts and sync
 (below), and billing: the key guard, webhook signatures, a checkout, every webhook event the
 code handles including a redelivery after a failure and one arriving out of order, the
-gates, the plan line, cancellation, forever, a refund, who may manage billing, and a deleted
-account stopping its subscription. The browser never downloads fonts, so a run takes about two minutes. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
+gates, the plan line, cancellation, forever, a refund, who may manage billing, a deleted
+account stopping its subscription, the onboarding email step, the welcome email, the daily
+reminder job and its stop link, and the pricing section on the landing page. The browser never downloads fonts, so a run takes about two minutes. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
 
 Checks that must pass before launch but shouldn't block day-to-day work print as
 `WARN` rather than failing — the placeholder privacy address is currently one.
@@ -294,6 +295,17 @@ member, tick and outcome it has, and cannot add more.
   (the two price ids; test mode and live mode have different ones) and, optionally,
   `STRIPE_PRICE_MONTH`, which adds a monthly button to the sheet when set. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
+- **Email.** Sign-in asks for the address at the end of onboarding, once the week is built
+  (skippable; offline or already signed in, the step does not appear). A first sign-in gets
+  one welcome email. A scheduled function (`cron-trial.js`, 14:00 UTC daily, runs only on the
+  published deploy) emails the owner and adults of a household whose three weeks end in about
+  three days, and again the day after they end: one email per household per kind, claimed in
+  `notices` before sending so a retried run never sends twice; paid households never; anyone
+  who tapped the stop link never (`users.mail_ok`, via a per-user token at
+  `/api/auth/mail-stop?t=`). Sign-in links still come when asked for. Every email carries
+  reply-to hello@lunchsorted.app. The reminder's button opens the app at `/app/?upgrade=1`,
+  which opens the plan sheet on arrival. The suite captures every email through
+  `globalThis.__LS_MAIL`; nothing reaches Resend from a test.
 - **Stripe setup, once per mode:** one product, two prices; Developers → Webhooks → add
   `https://<site>/api/billing/webhook` with the six event types above and paste the
   signing secret; Settings → Billing → Customer portal → save the default configuration
