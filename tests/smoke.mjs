@@ -197,7 +197,10 @@ catch { ({ chromium } = await import('playwright-core')); }
 
 const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
-const ctx = await browser.newContext({ viewport:{width:375,height:812} });
+/* every context is a phone; the browser never fetches Google Fonts, which the suite does not
+   test and which, through a slow proxy, can turn a page load into a thirty-second wait */
+const phone = async () => { const c = await browser.newContext({ viewport:{width:375,height:812} }); await c.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort()); return c; };
+const ctx = await phone();
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', e => errors.push(String(e.message)));
@@ -851,7 +854,7 @@ try {
   await page.click('[data-act="invite"]'); await until(page, () => !!document.querySelector('#inviteUrl'));
   const inviteUrl = await page.inputValue('#inviteUrl');
   check('an invite link is made', /\/app\/\?join=/.test(inviteUrl), inviteUrl);
-  const ctx2 = await browser.newContext({ viewport:{width:375,height:812} });
+  const ctx2 = await phone();
   const p2 = await ctx2.newPage(); p2.on('pageerror', e => errors.push(String(e.message)));
   await p2.goto(BASE+'/app/'); await p2.waitForTimeout(400);
   await p2.fill('#obName', 'Ollie'); await p2.click('[data-act="ob-go"]'); await p2.waitForTimeout(400);   /* Sam has his own lunches already */
@@ -908,7 +911,7 @@ try {
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   await page.click('[data-act="invite-helper"]'); await until(page, () => !!document.querySelector('#inviteUrl'));
   const helperUrl = await page.inputValue('#inviteUrl');
-  const ctx3 = await browser.newContext({ viewport:{width:375,height:812} });
+  const ctx3 = await phone();
   const p3 = await ctx3.newPage(); p3.on('pageerror', e => errors.push(String(e.message)));
   await p3.goto(helperUrl); await p3.waitForLoadState('load');
   await until(p3, () => /help with the lunches/i.test(document.querySelector('#view').textContent));
@@ -979,7 +982,7 @@ try {
     stripeLib.periodEnd({ current_period_end: 1800000000 }) === '2027-01-15T08:00:00.000Z' && stripeLib.periodEnd({ items: { data: [{ current_period_end: 1800000000 }] } }) === '2027-01-15T08:00:00.000Z' && stripeLib.periodEnd({}) === null);
 
   Object.assign(process.env, { STRIPE_SECRET_KEY: 'sk_test_stub', STRIPE_WEBHOOK_SECRET: WH, STRIPE_PRICE_YEAR: 'price_year', STRIPE_PRICE_LIFETIME: 'price_life', STRIPE_PRICE_MONTH: 'price_month' });
-  const ctxB = await browser.newContext({ viewport:{width:375,height:812} });
+  const ctxB = await phone();
   const pb = await ctxB.newPage(); pb.on('pageerror', e => errors.push(String(e.message)));
   await pb.route('https://checkout.stripe.com/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stripe checkout</title>' }));
   await pb.route('https://billing.stripe.com/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stripe portal</title>' }));
@@ -1158,7 +1161,7 @@ try {
   await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
   await pb.click('[data-act="invite-helper"]'); await until(pb, () => !!document.querySelector('#inviteUrl'));
   const sitterUrl = await pb.inputValue('#inviteUrl');
-  const ctxH = await browser.newContext({ viewport:{width:375,height:812} }); const ph = await ctxH.newPage(); ph.on('pageerror', e => errors.push(String(e.message)));
+  const ctxH = await phone(); const ph = await ctxH.newPage(); ph.on('pageerror', e => errors.push(String(e.message)));
   await ph.goto(sitterUrl); await ph.waitForLoadState('load'); await until(ph, () => !!document.querySelector('#signinEmail'));
   await ph.fill('#signinEmail', 'sitter@example.com'); await ph.press('#signinEmail', 'Enter'); await until(ph, () => !!document.querySelector('[data-dev-link]'));
   await ph.goto(await ph.getAttribute('[data-dev-link]', 'href')); await ph.click('button[type="submit"]'); await ph.waitForURL(/\/app\//); await ph.waitForLoadState('load');
@@ -1174,7 +1177,7 @@ try {
   await ctxH.close();
   await pb.click('[data-act="invite"]'); await until(pb, () => /works once, for a week\./.test(document.querySelector('#view').textContent));
   const adultUrl = await pb.inputValue('#inviteUrl');
-  const ctxA = await browser.newContext({ viewport:{width:375,height:812} }); const pa = await ctxA.newPage(); pa.on('pageerror', e => errors.push(String(e.message)));
+  const ctxA = await phone(); const pa = await ctxA.newPage(); pa.on('pageerror', e => errors.push(String(e.message)));
   await pa.goto(adultUrl); await pa.waitForLoadState('load'); await until(pa, () => !!document.querySelector('#signinEmail'));
   await pa.fill('#signinEmail', 'other@example.com'); await pa.press('#signinEmail', 'Enter'); await until(pa, () => !!document.querySelector('[data-dev-link]'));
   await pa.goto(await pa.getAttribute('[data-dev-link]', 'href')); await pa.click('button[type="submit"]'); await pa.waitForURL(/\/app\//); await pa.waitForLoadState('load');
