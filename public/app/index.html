@@ -123,6 +123,10 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
   display:inline-flex;align-items:center;gap:5px}
 .chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .chip.good{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.chip{white-space:nowrap}
+.chip.lock svg{stroke-width:2.2}
+.banner.wrap{flex-wrap:wrap}
+.banner .btn{white-space:nowrap}
 
 .btn{border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);border-radius:var(--r-md);
   padding:0 16px;min-height:44px;font-family:var(--f-display);font-weight:600;font-size:14.5px;
@@ -779,7 +783,7 @@ var Store = {
     }catch(e){ return false; }
   },
   forget:function(){
-    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after'].concat(Store.PRIOR_KEYS, Store.backupKeys())
+    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen'].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
 };
@@ -808,14 +812,60 @@ function signedIn(){ return !!Account.user; }
    parent's phone. When billing is not switched on (no Stripe in this deploy) nothing is gated. */
 var BILLING_KEY = 'lunchsorted-billing';
 function paid(){ var e = Account.entitlement; return !!(e && e.plan !== 'free' && (e.status === 'active' || e.status === 'past_due')); }
-function gated(){ return !!(Account.billing && Account.billing.enabled) && !paid(); }
+function billingOn(){ return !!(Account.billing && Account.billing.enabled) && !isHelper(); }
+/* the first three weeks are the whole product, no card asked: the trial runs from the day the
+   household was made, on this phone or any other, and ends the same day everywhere */
+var TRIAL_DAYS = 21, TRIAL_SEEN_KEY = 'lunchsorted-trial-seen';
+function stampOrNull(v){ var d = v ? new Date(v) : null; return d && !isNaN(d) ? d : null; }
+/* the household's birthday: the earlier of this document's and the server's row, so a phone can
+   shorten its own trial by editing the document but never lengthen it; and no earlier than the
+   day billing began, so a household that predates billing gets its three weeks too */
+function trialStart(){
+  var born = stampOrNull(S && S.createdAt), row = stampOrNull(Account.household && Account.household.createdAt);
+  if(row && (!born || row < born)) born = row;
+  var since = stampOrNull(Account.billing && Account.billing.since);
+  if(!born) return since;
+  return since && since > born ? since : born;
+}
+function trialEnd(){ var b = trialStart(); return b ? new Date(b.getTime() + TRIAL_DAYS * 86400000) : null; }
+function trialDaysLeft(){ var e = trialEnd(); return e ? Math.max(0, Math.ceil((e.getTime() - Date.now()) / 86400000)) : 0; }
+/* the calendar view of the same clock, for words: days between today and the last day */
+function trialCalendarDays(){ var e = trialEnd(); if(!e) return 0; var a = new Date(e); a.setHours(0,0,0,0); var t = today(); return Math.round((a - t) / 86400000); }
+function trialWhen(){ var n = trialCalendarDays(); return n <= 0 ? 'today' : n === 1 ? 'tomorrow' : 'on ' + fmtDay(trialEnd()); }
+function trialing(){ return billingOn() && !paid() && trialDaysLeft() > 0; }
+function entitled(){ return paid() || trialing(); }
+function gated(){ return billingOn() && !entitled(); }
+function fmtDay(d){ return d ? d.toLocaleDateString(undefined, {month:'short', day:'numeric'}) : ''; }
+/* a premium feature wears a small tag, with the days left, while everything is on; a lock once it is not */
+function premiumTag(){
+  if(!billingOn() || paid()) return '';
+  if(!trialing()) return '<span class="chip lock">'+svg('lock',12)+'Household plan</span>';
+  var n = trialCalendarDays();
+  return '<span class="chip good">Household plan \u00b7 '+(n <= 0 ? 'last day' : n === 1 ? '1 day' : n + ' days')+'</span>';
+}
+function trialLine(){
+  var n = trialCalendarDays();
+  return trialing() ? (n <= 0 ? 'Everything is on until tonight' : n === 1 ? 'Everything is on until tomorrow' : 'Everything is on for ' + n + ' more days') : '';
+}
+function trialSeen(){ try{ return localStorage.getItem(TRIAL_SEEN_KEY) || ''; }catch(e){ return ''; } }
+function trialBanner(){
+  if(!billingOn() || paid() || !S.onboardedAt) return '';
+  var left = trialDaysLeft(), seen = trialSeen();
+  if(left > 0 && left <= 3 && seen !== 'soon' && seen !== 'ended')
+    return '<div class="banner wrap"><span>Your three weeks of everything end '+esc(trialWhen())+'. The lunches stay; kid\u2019s pick, the morning review and the pantry pause.</span>'
+      + '<span class="row" style="gap:8px"><button class="btn sm primary" data-act="upgrade" data-why="keep">Keep everything</button><button class="btn sm ghost" data-act="trial-dismiss" data-stage="soon">Later</button></span></div>';
+  if(left === 0 && seen !== 'ended')
+    return '<div class="banner wrap"><span>Your three weeks are up. Lunches and the list stay free; kid\u2019s pick, the review and the pantry are waiting.</span>'
+      + '<span class="row" style="gap:8px"><button class="btn sm primary" data-act="upgrade" data-why="keep">Household plan</button><button class="btn sm ghost" data-act="trial-dismiss" data-stage="ended">OK</button></span></div>';
+  return '';
+}
 function loadBilling(force){
   try{ var c = JSON.parse(localStorage.getItem(BILLING_KEY) || 'null'); if(c && c.enabled !== undefined) Account.billing = c; }catch(e){}
   if(!navigator.onLine) return Promise.resolve();
   /* the answer is cached for an hour; a household whose server disagrees asks past the cache */
   return api('GET', '/api/billing', null, force ? {cache:'reload'} : null).then(function(r){
     if(r.status !== 200) return;
-    Account.billing = {enabled: !!r.enabled, prices: r.prices || null};
+    Account.billing = {enabled: !!r.enabled, prices: r.prices || null, since: r.since || null};
     try{ localStorage.setItem(BILLING_KEY, JSON.stringify(Account.billing)); }catch(e){}
   }).catch(function(){});
 }
@@ -839,9 +889,13 @@ function upgradeSheet(why){
   var pr = (Account.billing && Account.billing.prices) || {}, forever = why === 'forever';
   var h = '<p style="margin:0">'+(why === 'share' ? 'Sharing the lunches with the other parent’s phone, or a helper, is part of the Household plan.'
         : why === 'lunchbox' ? 'A second lunchbox is part of the Household plan. The first is free for as long as you like.'
+        : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
+        : why === 'review' ? 'The morning review — what came home, what to rest — is part of the Household plan.'
+        : why === 'pantry' ? 'A pantry that remembers what you already have is part of the Household plan.'
+        : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.' : 'Planning and the shopping list are free for good. The Household plan is the rest.')
         : forever ? 'You have the yearly plan. Pay once and it never renews: the year you have paid for runs to its end and is not charged again.'
-        : 'The Household plan is every lunchbox, the other parent’s phone, and a helper’s pack list.')+'</p>';
-  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
+        : 'The Household plan is everything the free planner is not.')+'</p>';
+  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Kid’s pick, the morning review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
   if(!signedIn()){
     h += '<p class="hint" style="margin:0">Sign in first — the Household plan belongs to the household, so it works on every phone.</p>'
       +  '<button class="btn primary wide" data-act="go-signin" data-why="'+esc(why || '')+'" data-close="1">Sign in</button>';
@@ -859,7 +913,7 @@ function canWrite(){ return signedIn() && !isHelper(); }
 function firstNameFrom(email){ var p = String(email || '').split('@')[0].split(/[._+-]/)[0]; return p ? p.charAt(0).toUpperCase() + p.slice(1) : 'Me'; }
 function applyState(st){
   Account.user = {id:st.me.userId, email:st.me.email}; Account.me = st.me; Account.members = st.members || [];
-  Account.entitlement = st.entitlement || null; Account.version = st.version || 0;
+  Account.entitlement = st.entitlement || null; Account.version = st.version || 0; Account.household = st.household || null;
   if(typeof st.billing === 'boolean' && (!Account.billing || Account.billing.enabled !== st.billing)) loadBilling(true).then(render);
   /* the person on this phone is the member the server says they are, once the
      household exists there; before the first push it is this phone's own member,
@@ -951,7 +1005,7 @@ function renderSyncLine(){ var el = document.getElementById('syncLine'); if(el) 
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function now(){ return new Date().toISOString(); }
@@ -1866,9 +1920,15 @@ function viewOnboard(){
 /* ------------------------------------------------------------ eat review */
 function reviewCard(kid, d){
   var l = dayLabel(d.d), row = (kid.eaten || {})[d.d] || {};
-  var h = '<div class="card review"><div class="spread" style="align-items:flex-start"><div>'
+  var head = '<div class="spread" style="align-items:flex-start"><div>'
     + '<p class="view-sub" style="margin:0 0 3px">'+esc(l.diff === -1 ? 'Yesterday' : l.full)+' · '+esc(l.date)+'</p>'
-    + '<h3>How did '+(kidRef(kid) ? esc(kidRef(kid))+'&#8217;s' : 'the')+' box go?</h3></div>'
+    + '<h3>How did '+(kidRef(kid) ? esc(kidRef(kid))+'&#8217;s' : 'the')+' box go?</h3>'
+    + (premiumTag() ? '<div style="margin-top:6px">'+premiumTag()+'</div>' : '')+'</div>';
+  if(gated()) return '<div class="card review">'+head+'</div>'
+    + '<p class="hint" style="margin:0">What came home, what to rest, what they always eat: the next draw learns from it.</p>'
+    + '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary sm" data-act="upgrade" data-why="review">Get the Household plan</button>'
+    + '<button class="btn ghost sm" data-act="review-later" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">Not now</button></div></div>';
+  var h = '<div class="card review">'+head
     + '<button class="btn ghost sm" data-act="eat-skip" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">Skip</button></div>';
   ALL_CATS.forEach(function(c){
     var f = foodById(kid, d.slots[c.k]); if(!f) return;
@@ -1939,9 +1999,10 @@ function viewPack(){
     catsFor(e.kid).forEach(function(c){ if(e.day.slots[c.k]){ total++; if(ticked(row, c.k)) done++; } });
   });
 
-  var h = '<div class="stack">' + noticeBanner() + planBanner();
+  var h = '<div class="stack">' + noticeBanner() + trialBanner() + planBanner();
   ks.forEach(function(k){
     var rd = reviewDay(k); if(!rd) return;
+    if(UI.reviewLater[k.id] === rd.d) return;                       /* "Not now" on a locked card: gone for this open, the answers untouched */
     if(!reviewComplete(k, rd) || UI.reviewEdit[k.id] === rd.d) h += (multi ? kidLine(k) : '') + reviewCard(k, rd);
     else if(reviewedToday(k, rd)) h += reviewSummary(k, rd.d);
   });
@@ -1958,8 +2019,9 @@ function viewPack(){
       +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(e.kid, e.day)
       +  (picked ? '<span class="chip good pickchip">'+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'They')+' picked</span>' : '')
       +  (canPick && lab.diff >= 0
-           ? '<button class="btn sm" data-act="kid-start" data-kid="'+esc(e.kid.id)+'" data-day="'+esc(e.day.d)+'" style="margin-left:auto">'
-             + (picked ? 'Pick again' : 'Let '+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'them')+' pick') + '</button>' : '')
+           ? (gated() ? '<button class="btn sm" data-act="upgrade" data-why="kidpick" style="margin-left:auto">'+svg('lock',13)+'Let '+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'them')+' pick</button>'
+             : '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">'+premiumTag()+'<button class="btn sm" data-act="kid-start" data-kid="'+esc(e.kid.id)+'" data-day="'+esc(e.day.d)+'">'
+             + (picked ? 'Pick again' : 'Let '+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'them')+' pick') + '</button></span>') : '')
       +  '</div></div>';
   });
 
@@ -2020,10 +2082,10 @@ function viewShop(){
       + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
 
   var toBuy = rows.filter(function(r){ return !r.have; }).length;
-  h += '<div class="spread"><span class="count">'+toBuy+' to buy · '+(rows.length-toBuy)+' already home</span>'
+  h += '<div class="spread"><span class="count">'+toBuy+' to buy'+(gated() ? '' : ' · '+(rows.length-toBuy)+' already home')+'</span>'
     +  '<button class="btn ghost sm" data-act="copy-list">Copy list</button></div>'
-    +  '<p class="hint">Check off what the pantry already has, then shop the rest.'
-    +  (multi ? (kids().length === 2 ? ' Both' : ' All')+' lunchboxes are in one list.' : '')+'</p>';
+    +  '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>'+(gated() ? 'Ticking off what the pantry already has, and remembering it next week, is part of the Household plan.' : 'Check off what the pantry already has, then shop the rest.')
+    +  (multi ? (kids().length === 2 ? ' Both' : ' All')+' lunchboxes are in one list.' : '')+'</span>'+premiumTag()+'</p>';
   var groups = nullMap();
   rows.forEach(function(r){ (groups[r.aisle] = groups[r.aisle] || []).push(r); });
   AISLES.forEach(function(a){
@@ -2094,7 +2156,7 @@ function viewSetup(){
       +  '<span class="dot" style="background:'+hueVar(k)+'"></span></button>';
   });
   h += '</div><div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">'
-    +  '<button class="btn sm" data-act="add-kid">'+svg('plus',15)+'Add a lunchbox</button>'
+    +  '<button class="btn sm" data-act="add-kid">'+svg('plus',15)+'Add a lunchbox</button>'+(kids().length ? premiumTag() : '')
     +  (kids().length>1 ? '<button class="btn danger sm" data-act="del-kid" data-id="'+esc(kid.id)+'">'
          +(UI.armed==='kid:'+kid.id?'Tap again to remove '+esc(kid.name):'Remove '+esc(kid.name))+'</button>' : '')
     +  '</div></div>';
@@ -2190,6 +2252,8 @@ function accountCard(){
         + '<button class="btn ghost sm" data-act="join-dismiss">Not now</button></div>' : '');
   }
   if(!signedIn()){
+    if(billingOn()) h += '<div class="kv"><span>Household plan</span><span>'+esc(planLabel())+'</span></div>'
+      +  '<div class="row"><button class="btn sm" data-act="upgrade" data-why="keep">'+(trialing() ? 'Keep the Household plan' : 'Get the Household plan')+'</button></div>';
     h += '<p class="hint" style="margin:0">Sign in to keep this on more than one phone and share it with the other parent. No password: we email you a link and a code.</p>'
       +  '<div class="field"><label for="signinEmail">Email</label><input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email" inputmode="email" enterkeyhint="send" value="'+esc(Account.linkSent || '')+'"></div>'
       +  '<button class="btn primary wide" data-act="signin-request"'+(Account.sending ? ' disabled' : '')+'>'+(Account.sending ? 'Sending\u2026' : 'Email me a sign-in link')+'</button>';
@@ -2200,13 +2264,13 @@ function accountCard(){
     return h + '</div></div>';
   }
   h += '<div class="kv"><span>Signed in as</span><span style="overflow-wrap:anywhere;white-space:normal;text-align:right">'+esc(Account.user.email)+'</span></div>'
-    +  (Account.billing && Account.billing.enabled && !isHelper() ? '<div class="kv"><span>Household plan</span><span>'+esc(planLabel())+'</span></div>' : '')
+    +  (billingOn() && !isHelper() ? '<div class="kv"><span>Household plan</span><span>'+esc(planLabel())+'</span></div>' : '')
     +  '<p class="hint" style="margin:0" id="syncLine">'+esc(syncLine())+'</p>';
   if(Account.billing && Account.billing.enabled && !isHelper()){
     var e = Account.entitlement || {}, lapsing = paid() && e.status === 'past_due';
     if(lapsing) h += '<p class="hint" style="margin:0;color:var(--warn)">The last payment did not go through. Update the card in Manage billing'+(planDate() ? ', or the Household plan ends on '+esc(planDate()) : '')+'.</p>';
     h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
-      +  (Account.settling ? '' : paid() ? (e.plan !== 'lifetime' ? '<button class="btn sm" data-act="upgrade" data-why="forever">Switch to forever</button>' : '') : '<button class="btn primary sm" data-act="upgrade">Get the Household plan</button>')
+      +  (Account.settling ? '' : paid() ? (e.plan !== 'lifetime' ? '<button class="btn sm" data-act="upgrade" data-why="forever">Switch to forever</button>' : '') : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
       +  (e.portal ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '')+'</div>';
   }
   if(Account.members.length){
@@ -2221,8 +2285,8 @@ function accountCard(){
         + '</div>'; }).join('') + '</div>';
   }
   if(!isHelper()){
-    h += '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="invite">Invite the other parent</button>'
-      +  '<button class="btn ghost sm" data-act="invite-helper">Invite a helper</button></div>';
+    h += '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn sm" data-act="invite">Invite the other parent</button>'
+      +  '<button class="btn ghost sm" data-act="invite-helper">Invite a helper</button>'+premiumTag()+'</div>';
     if(Account.invite) h += '<div class="field"><label for="inviteUrl">Invite link</label>'
       + '<textarea id="inviteUrl" class="codebox" readonly style="min-height:60px">'+esc(Account.invite)+'</textarea>'
       + '<span class="hint">It works once, for a week'+(Account.inviteRole === 'helper' ? ', and gives them the pack list only' : '')+'.</span>'
@@ -2245,7 +2309,7 @@ function planDate(){
 }
 function planLabel(){
   var e = Account.entitlement;
-  if(!paid()) return Account.settling ? 'Switching on\u2026' : 'Free';
+  if(!paid()){ if(Account.settling) return 'Switching on\u2026'; if(!trialing()) return 'Not on'; var n = trialCalendarDays(); return n <= 0 ? 'On until tonight' : n === 1 ? 'On until tomorrow' : 'On for '+n+' more days'; }
   if(e.plan === 'lifetime') return 'Forever';
   if(e.status === 'past_due') return 'Payment failed';
   var d = planDate();
@@ -2261,7 +2325,7 @@ function kidSheet(){
       +  '<span class="meta">'+foodsOf(k).length+' foods'+(k.week?' · week planned':' · no plan yet')+'</span></span>'
       +  '<span class="dot" style="background:'+hueVar(k)+'"></span></button>';
   });
-  h += '</div><button class="btn wide" data-act="add-kid">'+svg('plus',17)+'Add a lunchbox</button>'
+  h += '</div><button class="btn wide" data-act="add-kid">'+svg('plus',17)+'Add a lunchbox'+(kids().length && premiumTag() ? ' <span style="margin-left:6px">'+premiumTag()+'</span>' : '')+'</button>'
     +  '<p class="hint">Each lunchbox keeps its own foods, school rules and week. '
     +  'The shopping list and the pack checklist cover all of them together.</p>';
   openSheet('Lunchboxes', h);
@@ -2432,6 +2496,7 @@ document.addEventListener('click', function(ev){
   if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='delete-account' && act!=='member-remove' && act!=='disarm' && UI.armed) UI.armed = '';
 
   /* did they eat it? */
+  if((act==='eat-set' || act==='eat-all') && gated()){ upgradeSheet('review'); return; }
   if(act==='eat-set' || act==='eat-all' || act==='eat-skip'){
     var ek = kidById(el.getAttribute('data-kid')), ed = ek && findDay(ek, el.getAttribute('data-day'));
     if(!ek || !ed) return;
@@ -2457,7 +2522,7 @@ document.addEventListener('click', function(ev){
   }
 
   /* kid's pick */
-  if(act==='kid-start'){ startKidPick(el.getAttribute('data-kid'), el.getAttribute('data-day')); window.scrollTo(0,0); return; }
+  if(act==='kid-start'){ if(gated()){ upgradeSheet('kidpick'); return; } startKidPick(el.getAttribute('data-kid'), el.getAttribute('data-day')); window.scrollTo(0,0); return; }
   if(act==='kid-pick'){ kidChoose(el.getAttribute('data-id')); return; }
   if(act==='kid-exit'){ UI.kid = null; render(); toast('Handed back'); return; }
 
@@ -2576,6 +2641,7 @@ document.addEventListener('click', function(ev){
 
   /* shopping */
   if(act==='have'){
+    if(gated()){ upgradeSheet('pantry'); return; }
     var key = el.getAttribute('data-key');
     S.pantry[key] = {have:!(own(S.pantry, key) && S.pantry[key].have), at:now(), by:(deviceMember()||{}).id || null};
     save(); render(); return;
@@ -2800,7 +2866,9 @@ document.addEventListener('click', function(ev){
           kids:S.kids.filter(function(k){ return !k.deletedAt && (foodsOf(k).length || k.week); }),
           members:S.members.filter(function(m){ return m.id === DEVICE.memberId; })
         });
-        S = normalizeAccount(window.LSMerge.merge(mine, theirs, iso(today()))); S.activeKidId = (kids()[0] || {}).id; Store.save(S, DEVICE.memberId);
+        S = normalizeAccount(window.LSMerge.merge(mine, theirs, iso(today()))); S.activeKidId = (kids()[0] || {}).id;
+        if(theirs.createdAt) S.createdAt = theirs.createdAt;      /* their household's birthday, not this phone's: joining never shortens their three weeks */
+        Store.save(S, DEVICE.memberId);
       }
       render(); toast('Joined \u2014 you share their lunches now');
       return Sync.push();
@@ -2812,13 +2880,15 @@ document.addEventListener('click', function(ev){
     if(UI.armed!=='delete-account'){ UI.armed='delete-account'; render(); toast('That deletes the household everywhere'); return; }
     api('POST', '/api/auth/delete', {confirm:'DELETE'}).then(function(r){
       if(r.status !== 200){ toast(r.error || 'Could not delete'); return; }
-      Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; UI.armed = ''; Account.first = false;
+      Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; UI.armed = ''; Account.first = false; Account.household = null;
       Store.forget(); S = newAccount(); DEVICE.memberId = S.members[0].id; UI.tab = 'pack';
       save(); render(); toast('Deleted');
     }).catch(offline);
     return;
   }
   if(act==='notice-dismiss'){ UI.notice=''; render(); return; }
+  if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = el.getAttribute('data-day'); render(); return; }
+  if(act==='trial-dismiss'){ try{ localStorage.setItem(TRIAL_SEEN_KEY, el.getAttribute('data-stage') || 'soon'); }catch(e){} render(); return; }
   if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }
 });
 
@@ -2941,8 +3011,6 @@ Store.load().then(function(r){
   window.addEventListener('offline', function(){ renderSyncLine(); });
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) Sync.resume(); });
 });
-})();
-</script>});
 })();
 </script>
 <script>

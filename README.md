@@ -229,11 +229,19 @@ writes the same one.
 ## Billing
 
 The plan is a row on the household (`entitlements`) that only Stripe's webhook writes.
-Free is one lunchbox for one parent. The **Household** plan is every lunchbox, the other
-parent's phone and a helper's pack list, yearly or once forever. With no `STRIPE_*`
-variables in a deploy nothing is gated and the app is exactly the free one. Nothing is ever
-taken away: a household whose plan ends keeps every lunchbox and member it has and cannot
-add more.
+Free, for good, is one lunchbox, the week's plan, the shopping list and the pack list. The
+**Household** plan (yearly, or once forever) is the part that remembers and shares: kid's
+pick, the morning review and resting, a pantry that carries over, every lunchbox, the other
+parent's phone and a helper's pack list. **Every household gets all of it for its first 21
+days**, no card, counted from the account document's `createdAt` (the same clock on every
+phone and on the server), and then drops to free with the premium pieces locked in place,
+not hidden: the kid's-pick button, the review card and the pantry tick stay on screen with
+a lock and open the plan sheet. During the three weeks the same pieces wear a small
+"Household plan" tag so it is clear what is being tried; three days before the end a banner
+says when, and once after it says what changed, each dismissable once. With no `STRIPE_*`
+variables in a deploy nothing is gated or tagged and the app is exactly the free one.
+Nothing is ever taken away: a household whose plan or trial ends keeps every lunchbox,
+member, tick and outcome it has, and cannot add more.
 
 - **Checkout** (`POST /api/billing/checkout {plan}`) opens Stripe's hosted page for the
   signed-in household (owner or adult; a helper cannot buy). The session carries the
@@ -266,7 +274,10 @@ add more.
   sheet with both prices (read from Stripe, cached an hour, never typed into the app);
   signed out it offers sign-in first, and remembers what you were doing so the sheet, or
   the lunchbox, comes back after the sign-in or the payment. The server refuses an invite
-  from a free household (402) whatever the app shows; the lunchbox gate is the app's alone.
+  from a free household (402) whatever the app shows, honouring the same 21 days from the
+  document's `createdAt`; the lunchbox, kid's-pick, review and pantry gates are the app's
+  alone (a parent who edits their own document's birthday extends their own trial, and
+  nothing more).
   Coming back from Checkout the app pulls up to eight times over about twenty seconds until
   the webhook has landed; a helper sees none of this.
 - **Environment**, per deploy context, test keys everywhere but production:

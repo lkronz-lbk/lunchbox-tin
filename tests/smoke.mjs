@@ -961,6 +961,41 @@ try {
   await pb.route('https://billing.stripe.com/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stripe portal</title>' }));
   await pb.goto(BASE+'/app/'); await pb.waitForTimeout(400);
   await pb.fill('#obName', 'Remy'); await pb.click('[data-act="ob-go"]'); await pb.waitForTimeout(400);
+  /* the first three weeks: everything on, the premium pieces wearing a tag */
+  const setBorn = (daysAgo) => pb.evaluate(n => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.createdAt = new Date(Date.now() - n * 86400000).toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); }, daysAgo);
+  await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
+  check('a new household has everything on for 21 days and Setup says so', /Household plan\s*On for 21 more days/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) === 1);
+  check('the premium pieces wear a tag while they are on', await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length) >= 1 && (await pb.$$eval('.chip.lock', a => a.length)) === 0);
+  await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
+  check('and a second lunchbox just works', (await pb.$$eval('#nkName', a => a.length)) === 1);
+  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  await pb.click('[data-act="tab"][data-tab="pack"]'); await pb.waitForTimeout(250);
+  check('kid\'s pick is on, with the tag beside it', (await pb.$$eval('[data-act="kid-start"]', a => a.length)) === 1 && (await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length)) >= 1);
+  check('no banner nags in week one', (await pb.$$eval('.banner', a => a.filter(b => /three weeks/.test(b.textContent)).length)) === 0);
+  await setBorn(19); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
+  check('with three days left the app says when everything ends, once', /three weeks of everything end on [A-Z][a-z]{2} \d{1,2}/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) >= 1);
+  await pb.click('[data-act="trial-dismiss"]'); await pb.waitForTimeout(200); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
+  check('and Later means later', !/three weeks of everything end/.test(await pb.textContent('#view')));
+  await setBorn(30); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
+  check('when the three weeks are up it says so, once, and the plan sheet is one tap away', /three weeks are up/.test(await pb.textContent('#view')));
+  await pb.click('[data-act="trial-dismiss"]'); await pb.waitForTimeout(200);
+  check('kid\'s pick is now locked in place', (await pb.$$eval('[data-act="kid-start"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="kidpick"]', a => a.length)) === 1);
+  await pb.click('[data-act="upgrade"][data-why="kidpick"]'); await pb.waitForTimeout(300);
+  check('and tapping it explains, in the sheet', /Letting them pick/.test(await pb.textContent('#sheetBody')));
+  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  /* yesterday's box was packed, so this morning asks how it went: locked, with the question still visible */
+  await pb.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);
+    const iso = y.getFullYear()+'-'+String(y.getMonth()+1).padStart(2,'0')+'-'+String(y.getDate()).padStart(2,'0');
+    const slots = {}; for (const c of ['main','side','fruit','sweet']) { const f = k.foods.find(x => x.c === c && !x.deletedAt); if (f) slots[c] = f.id; }
+    k.past = [{d: iso, dow: y.getDay(), slots, lock: {}, kidPick: {}}]; k.packed = k.packed || {}; k.packed[iso] = {main:{at:new Date().toISOString(), by:null}};
+    localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+  await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
+  check('the morning review is locked in place: the question shows, the answers wait for the plan', /How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('.chip.lock', a => a.length)) >= 1);
+  await pb.click('[data-act="tab"][data-tab="shop"]'); await pb.waitForTimeout(250);
+  check('the shopping list is still free, the pantry tick is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
+  await pb.click('[data-act="have"]'); await pb.waitForTimeout(300);
+  check('a pantry tick opens the sheet instead', /pantry that remembers/.test(await pb.textContent('#sheetBody')) && await pb.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('lunchsorted')).pantry).length === 0));
+  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
   const bcfg = await pb.evaluate(() => fetch('/api/billing').then(r => r.json()));
   check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 2900 && bcfg.prices.lifetime.amount === 7900 && bcfg.prices.year.interval === 'year', bcfg);
   await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
@@ -975,13 +1010,28 @@ try {
   const resumed = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /second lunchbox/i.test(document.querySelector('#sheetBody').textContent));
   check('after signing in, the plan sheet comes back on its own for the lunchbox they were adding', resumed);
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
-  check('signed in and free, Setup says Free and offers the plan', /Household plan\s*Free/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 0);
+  check('signed in and free, Setup says Free and offers the plan', /Household plan\s*Not on/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 0 && (await pb.$$eval('.chip.lock', a => a.length)) >= 1);
   const noCustomer = await pb.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
   await until(pb, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1));
   const patState = await pb.evaluate(() => fetch('/api/household').then(r => r.json()));
   const inviteFree = await pb.evaluate(() => fetch('/api/household/invite', {method:'POST', headers:{'content-type':'application/json'}, body:'{}'}).then(r => r.status));
   check('the server refuses an invite from a free household', inviteFree === 402, inviteFree);
+  await db.query(`UPDATE households SET doc = jsonb_set(doc, '{createdAt}', to_jsonb(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))) WHERE id = ${patState.household.id}`);
+  const inviteTrial = await pb.evaluate(() => fetch('/api/household/invite', {method:'POST', headers:{'content-type':'application/json'}, body:'{}'}).then(r => r.status));
+  await db.query(`UPDATE households SET doc = jsonb_set(doc, '{createdAt}', to_jsonb(to_char(now() AT TIME ZONE 'UTC' - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))) WHERE id = ${patState.household.id}`);
+  check('but allows one while the three weeks are running, by the document\'s own birthday', inviteTrial === 200, inviteTrial);
+  {
+    const { trialStart } = await import('../netlify/functions/api-household.js');
+    const old = new Date(Date.now() - 40 * 86400000).toISOString(), fresh = new Date().toISOString(), future = '2099-01-01T00:00:00Z';
+    const was = process.env.BILLING_SINCE; delete process.env.BILLING_SINCE;
+    const a = trialStart({ doc_created: future, created_at: old }), b = trialStart({ doc_created: old, created_at: fresh }), c = trialStart({ doc_created: 'yesterday', created_at: fresh });
+    process.env.BILLING_SINCE = fresh;
+    const d = trialStart({ doc_created: old, created_at: old });
+    if (was === undefined) delete process.env.BILLING_SINCE; else process.env.BILLING_SINCE = was;
+    check('the server takes the earlier of the document\'s birthday and its own row, so a phone can only shorten its trial, and a household older than billing starts its three weeks the day billing began',
+      a.toISOString() === old && b.toISOString() === old && c.toISOString() === fresh && d.toISOString() === fresh, [a, b, c, d]);
+  }
   await pb.click('[data-act="invite"]'); await pb.waitForTimeout(300);
   check('and the app opens the plan sheet instead, with both prices', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$29 a year/.test(await pb.textContent('#sheetBody')) && /\$79, once, forever/.test(await pb.textContent('#sheetBody')));
   check('links in the sheet use the accent, not browser blue', await pb.$eval('#sheetBody a[href="/terms.html"]', a => getComputedStyle(a).color !== 'rgb(0, 0, 238)' && getComputedStyle(a).color !== 'rgb(0, 0, 255)'));
@@ -1053,7 +1103,7 @@ try {
   await hook(subEv('evt_4', 'customer.subscription.deleted', t0 + 3, { status: 'canceled' }));
   check('when the subscription ends the household is free again', (await ent()).plan === 'free' && (await ent()).status === 'canceled' && (await ent()).cust === 'cus_pat');
   await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]');
-  await until(pb, () => /Household plan\s*Free/.test(document.querySelector('#view').textContent));
+  await until(pb, () => /Household plan\s*Not on/.test(document.querySelector('#view').textContent));
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
   await pb.click('#sheetClose'); await pb.waitForTimeout(200);
@@ -1090,6 +1140,11 @@ try {
   await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
   const helperBuy = await ph.evaluate(() => Promise.all([fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status), fetch('/api/billing/portal', {method:'POST'}).then(r => r.status)]));
   check('a helper can neither buy nor manage billing, and sees no plan line', helperBuy[0] === 403 && helperBuy[1] === 403 && !/Household plan/.test(await ph.textContent('#view')), helperBuy);
+  await db.query(`UPDATE entitlements SET plan='free', status='none' WHERE household_id=${patState.household.id}`);
+  await ph.reload(); await ph.waitForLoadState('load'); await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
+  await ph.click('[data-act="tab"][data-tab="pack"]'); await ph.waitForTimeout(250);
+  check('and on a lapsed household a helper sees no locks, tags or banners either', (await ph.$$eval('.chip.lock, .chip.good, [data-act="upgrade"], [data-act="trial-dismiss"]', a => a.filter(x => /Household|three weeks/.test(x.textContent)).length)) === 0);
+  await db.query(`UPDATE entitlements SET plan='household', status='active' WHERE household_id=${patState.household.id}`);
   await ctxH.close();
   await pb.click('[data-act="invite"]'); await until(pb, () => /works once, for a week\./.test(document.querySelector('#view').textContent));
   const adultUrl = await pb.inputValue('#inviteUrl');
@@ -1153,6 +1208,7 @@ try {
   await site.waitForTimeout(250);
   warn('the privacy page has a real contact address, not the placeholder',
     !(await site.content()).includes('hello@example.com'));
+  check('nothing renders as stray code text at the foot of the app', !/\}\);\s*\}\)\(\);/.test(await page.evaluate(() => document.body.innerText)));
   check('no javascript errors anywhere', errors.length === 0 && siteErrors.length === 0,
     errors.concat(siteErrors));
 } finally {

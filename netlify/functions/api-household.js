@@ -18,10 +18,10 @@ const now = () => new Date().toISOString();
 /* the document is only fetched when the caller will use it; a push tests emptiness alone */
 async function membership(userId, withDoc) {
   const rows = withDoc
-    ? await sql()`SELECT h.id, h.name, h.owner_user_id, h.doc, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id
+    ? await sql()`SELECT h.id, h.name, h.owner_user_id, h.doc, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id, h.created_at
                   FROM household_members m JOIN households h ON h.id = m.household_id WHERE m.user_id = ${userId}`
     : await sql()`SELECT h.id, h.name, h.owner_user_id, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id,
-                         e.plan, e.status, e.stripe_subscription_id
+                         e.plan, e.status, e.stripe_subscription_id, h.created_at, h.doc->>'createdAt' AS doc_created
                   FROM household_members m JOIN households h ON h.id = m.household_id LEFT JOIN entitlements e ON e.household_id = h.id
                   WHERE m.user_id = ${userId}`;
   return rows[0] || null;
@@ -31,7 +31,7 @@ async function ensureHousehold(user, withDoc) {
   const have = await membership(user.id, withDoc);
   if (have) return have;
   const q = sql();
-  const [h] = await q`INSERT INTO households (owner_user_id) VALUES (${user.id}) RETURNING id, name, owner_user_id, doc, version`;
+  const [h] = await q`INSERT INTO households (owner_user_id) VALUES (${user.id}) RETURNING id, name, owner_user_id, doc, version, created_at`;
   const memberId = 'mem_' + Math.random().toString(36).slice(2, 10);
   await q`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${h.id}, ${user.id}, 'owner', ${memberId})`;
   await q`INSERT INTO entitlements (household_id) VALUES (${h.id})`;
@@ -61,7 +61,7 @@ async function state(user) {
   const [ent] = await sql()`SELECT plan, source, status, current_period_end AS "currentPeriodEnd", cancel_at_period_end AS "cancelAtPeriodEnd",
     (stripe_customer_id IS NOT NULL AND (${h.owner_user_id} = ${user.id} OR paid_by = ${user.id})) AS portal FROM entitlements WHERE household_id = ${h.id}`;
   return {
-    household: { id: h.id, name: h.name },
+    household: { id: h.id, name: h.name, createdAt: h.created_at },
     me: { userId: user.id, email: user.email, role: h.role, memberId: h.member_id },
     members: helper ? members.map(m => ({ userId: m.userId, role: m.role, memberId: m.memberId, name: m.name || (m.userId === user.id ? m.email : 'A parent') })) : members,
     doc: helper ? helperView(h.doc) : h.doc, version: h.version,
@@ -71,6 +71,24 @@ async function state(user) {
 }
 
 const paid = (h) => !!(h.plan && h.plan !== 'free' && (h.status === 'active' || h.status === 'past_due'));
+/* the first three weeks are the whole product. The clock is the earlier of the document's own
+   birthday and this row's, so a phone can shorten its trial by editing the document but never
+   lengthen it, floored at the day billing began (BILLING_SINCE) so a household older than
+   billing gets its three weeks too. The app computes the same from the same two dates. */
+const TRIAL_DAYS = 21;
+const stampOrNull = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d : null; };
+export function trialStart(h) {
+  let born = stampOrNull(h.doc_created); const row = stampOrNull(h.created_at);
+  if (row && (!born || row < born)) born = row;
+  const since = stampOrNull(process.env.BILLING_SINCE);
+  if (!born) return since;
+  return since && since > born ? since : born;
+}
+function trialing(h) {
+  const start = trialStart(h);
+  return !!start && start.getTime() + TRIAL_DAYS * 86400000 > Date.now();
+}
+const entitled = (h) => paid(h) || trialing(h);
 
 function docLooksRight(doc) {
   return doc && typeof doc === 'object' && !Array.isArray(doc) && Number.isInteger(doc.schema) && doc.schema >= 2 && Array.isArray(doc.kids) && Array.isArray(doc.members);
@@ -122,7 +140,7 @@ export default async function handler(req) {
       const h = await ensureHousehold(user);
       if (h.role === 'helper') return fail('Only an adult can invite', 403);
       /* the second phone is what the Household plan is for; the row says whether this household has one */
-      if (billingEnabled() && !paid(h)) return fail('Sharing the lunches with another phone is part of the Household plan', 402, { upgrade: true });
+      if (billingEnabled() && !entitled(h)) return fail('Sharing the lunches with another phone is part of the Household plan', 402, { upgrade: true });
       const body = await req.json().catch(() => ({}));
       const role = body.role === 'helper' ? 'helper' : 'adult';
       const code = await createInvite(h.id, user.id, role);

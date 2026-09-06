@@ -129,7 +129,7 @@ export default async function handler(req, context) {
       if (!billingEnabled()) return json({ enabled: false }, 200, { 'cache-control': 'public, max-age=300' });
       let p = null; try { p = await priceInfo(); } catch (e) { console.error('billing: prices', e.message); }
       /* without prices the gates still stand and the buttons say "Yearly plan" / "Once, forever"; ask again soon */
-      return json({ enabled: true, prices: p }, 200, { 'cache-control': p ? 'public, max-age=3600' : 'public, max-age=60' });
+      return json({ enabled: true, prices: p, since: process.env.BILLING_SINCE || null }, 200, { 'cache-control': p ? 'public, max-age=3600' : 'public, max-age=60' });
     }
 
     if (req.method === 'POST' && action === 'webhook') {
