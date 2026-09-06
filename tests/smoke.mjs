@@ -1017,6 +1017,28 @@ try {
     check('a parent who taps the link from onboarding lands on the week it promised, signed in', await pw.getAttribute('nav.tabs [aria-current="true"]', 'data-tab') === 'week' && await pw.evaluate(() => fetch('/api/auth/me').then(r => r.json()).then(j => j.user && j.user.email === 'wren-parent@example.com')));
     await ctxW.close();
   }
+  /* the link opened somewhere else: a browser with no lunches must not become the household */
+  {
+    const ctxI = await phone(); const pi = await ctxI.newPage(); pi.on('pageerror', e => errors.push(String(e.message)));
+    await pi.goto(BASE+'/app/'); await pi.waitForTimeout(300); await pi.fill('#obName', 'Ivy'); await pi.click('[data-act="ob-go"]'); await pi.waitForTimeout(300);
+    await pi.fill('#signinEmail', 'ivy-parent@example.com'); await pi.press('#signinEmail', 'Enter'); await until(pi, () => !!document.querySelector('[data-dev-link]'));
+    const link = await pi.getAttribute('[data-dev-link]', 'href');
+    const code = mails.filter(m => m.to === 'ivy-parent@example.com' && /sign-in link/.test(m.subject)).pop().text.match(/\b([A-Z2-9]{4}-[A-Z2-9]{4})\b/)[1];
+    const ctxJ = await phone(); const pj = await ctxJ.newPage(); pj.on('pageerror', e => errors.push(String(e.message)));
+    await pj.goto(link); await pj.click('button[type="submit"]'); await pj.waitForURL(/\/app\//); await pj.waitForLoadState('load');
+    await until(pj, () => /go back there and type the code/.test(document.querySelector('#view').textContent));
+    const stillEmpty = (await db.query(`SELECT h.doc FROM households h JOIN users u ON u.id = h.owner_user_id WHERE u.email = 'ivy-parent@example.com'`)).rows[0];
+    check('a link opened in another browser signs it in, says the lunches are elsewhere, and does not push an empty household', !!stillEmpty && stillEmpty.doc === null && (await pj.$$eval('#obName', a => a.length)) === 1);
+    await pi.fill('#signinCode', code); await pi.click('[data-act="signin-code"]');
+    const codeIn = await until(pi, () => !document.querySelector('#signinCode') && !!document.querySelector('.tin'));
+    const pushed = await until(pi, () => fetch('/api/household').then(r => r.json()).then(j => !!j.doc && j.doc.kids.some(k => k.name === 'Ivy')));
+    check('the code still works after the link was spent elsewhere, and typed where the week was built it makes that copy the household', codeIn && pushed, [codeIn, pushed, await pi.textContent('#toast').catch(() => '')]);
+    await pj.reload(); await pj.waitForLoadState('load');
+    await until(pj, () => !!document.querySelector('.tin') || /Ivy/.test(document.querySelector('#view').textContent));
+    const pjKids = await pj.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.map(k => k.name));
+    check('and the other browser picks the lunches up on its next open', pjKids.includes('Ivy'), pjKids);
+    await ctxI.close(); await ctxJ.close();
+  }
   /* the first three weeks: everything on, the premium pieces wearing a tag */
   const setBorn = (daysAgo) => pb.evaluate(n => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.createdAt = new Date(Date.now() - n * 86400000).toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); }, daysAgo);
   await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);

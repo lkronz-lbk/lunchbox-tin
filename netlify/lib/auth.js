@@ -30,9 +30,10 @@ export async function createMagicLink(email) {
   return { token, code };
 }
 export async function consumeMagicCode(email, code) {
+  /* the code is its own secret: spending the link does not spend it, and the reverse */
   const rows = await sql()`
-    UPDATE magic_links SET used_at = now()
-    WHERE email = ${email} AND code_hash = ${hash(email + ':' + normalizeCode(code))} AND used_at IS NULL AND expires_at > now()
+    UPDATE magic_links SET code_used_at = now()
+    WHERE email = ${email} AND code_hash = ${hash(email + ':' + normalizeCode(code))} AND code_used_at IS NULL AND expires_at > now()
     RETURNING email`;
   return rows[0] ? rows[0].email : null;
 }

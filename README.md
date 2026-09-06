@@ -195,8 +195,10 @@ writes the same one.
   link opens a page with one button, so a mail scanner that follows links cannot spend it;
   the button posts to `/api/auth/verify` with a nonce the page set in a cookie, so a form
   posted from anywhere else is refused. The code (`POST /api/auth/code`) signs in the phone
-  where the app is installed when the link would open in another browser. Both work once,
-  for fifteen minutes. Sessions are HttpOnly cookies for 180 days; links, codes and
+  where the app is installed when the link would open in another browser. Each works once,
+  on its own, for fifteen minutes: a link opened in the wrong browser does not spend the code.
+  A browser the link signs in that has never built a week says so and points back to the
+  code, and never pushes its empty household over the phone that did. Sessions are HttpOnly cookies for 180 days; links, codes and
   sessions are stored as hashes. No passwords anywhere.
 - **Households** (`/api/household`): one document per household with a version number.
   `PUT` with the version you last saw; if the server has moved on you get `409` with its

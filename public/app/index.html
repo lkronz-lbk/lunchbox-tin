@@ -796,7 +796,7 @@ var Store = {
    Signed out, nothing here runs and the app is exactly the phone-only app it
    always was. */
 var Account = {user:null, me:null, members:[], entitlement:null, version:0, status:'idle', syncedAt:null, timer:null, retry:null, tries:0,
-  busy:false, pushing:false, linkSent:'', devLink:'', devCode:'', invite:'', inviteRole:'', join:null, first:false, sending:false, billing:null, buying:false, settling:false};
+  busy:false, pushing:false, linkSent:'', devLink:'', devCode:'', invite:'', inviteRole:'', join:null, first:false, sending:false, billing:null, buying:false, settling:false, elsewhere:false};
 var PUSH_WAIT = 2500, RETRY_WAITS = [15000, 60000, 180000];
 function api(method, path, body, extra){
   var opts = {method:method, credentials:'same-origin', headers:{}};
@@ -940,7 +940,13 @@ var Sync = {
       if(st.status === 401){ Account.user = null; Account.me = null; Account.status = 'idle'; renderSyncLine(); return; }
       if(st.status !== 200){ Account.status = 'error'; renderSyncLine(); return; }
       applyState(st);
-      if(!st.doc){ return Sync.push(true); }                 /* a fresh household: this phone's copy becomes it */
+      if(!st.doc){
+        /* a fresh household: this phone's copy becomes it, unless this phone has nothing yet: a
+           sign-in link opened in a browser that never built a week must not push an empty
+           household over the one waiting on the phone that did */
+        if(!S.onboardedAt){ Account.elsewhere = true; return; }
+        return Sync.push(true);
+      }
       var remote = normalizeAccount(st.doc);                 /* whatever another phone stored is normalised before it is trusted */
       var merged = normalizeAccount(window.LSMerge.merge(S, remote, iso(today())));
       if(!window.LSMerge.same(merged, S)){ S = merged; if(!activeKid() && kids().length) S.activeKidId = kids()[0].id; Store.save(S, DEVICE.memberId); render(); }
@@ -1872,6 +1878,9 @@ function planBanner(){
     + '<button class="btn sm primary" data-act="plan-all">Plan the week</button></div>';
 }
 function noticeBanner(){
+  if(Account.elsewhere && !S.onboardedAt && signedIn())
+    return '<div class="banner wrap"><span>Signed in as '+esc(Account.user.email)+'. If you built the week in the home-screen app or another window, go back there and type the code from the same email; the link only signs in where it opens. Or start fresh here.</span>'
+      + '<span class="row" style="gap:8px"><button class="btn sm ghost" data-act="elsewhere-ok">Start here</button></span></div>';
   var msg = UI.notice || (!Store.ok ? 'This browser is not letting the app save. Changes will be lost when you close it.' : '');
   if(!msg && Account.join && UI.tab !== 'setup')
     return '<div class="banner"><span>'+esc(Account.join.from || 'Someone')+' invited you to share their lunches.</span><button class="btn sm primary" data-act="tab" data-tab="setup">Have a look</button></div>';
@@ -1904,8 +1913,11 @@ function viewObEmail(){
       +  '<button class="btn primary wide go" data-act="signin-request"'+(Account.sending ? ' disabled' : '')+'>'+(Account.sending ? 'Sending\u2026' : 'Email me the link')+'</button>'
       +  '<button class="skip" data-act="ob-later">Not now \u2014 show me the week</button>';
   } else {
+    var standalone = !!(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches));
     h += '<h1>Check your email.</h1>'
-      +  '<p class="lede">Sent to <b style="overflow-wrap:anywhere">'+esc(sent)+'</b>. Tap the link on this phone, or type the code below. Until then everything here still works'+(Account.devLink ? ' <a href="'+esc(Account.devLink)+'" data-dev-link>Open the link</a> (development only)' : '')+'.</p></div>'
+      +  '<p class="lede">Sent to <b style="overflow-wrap:anywhere">'+esc(sent)+'</b>. '
+      +  (standalone ? 'Type the code from it below; a tapped link opens in Safari, not here.' : 'Tap the link on this phone, or type the code below.')
+      +  ' Until then everything here still works'+(Account.devLink ? ' <a href="'+esc(Account.devLink)+'" data-dev-link>Open the link</a> (development only)' : '')+'.</p></div>'
       +  '<div class="q"><label for="signinCode">The code from the email</label><div class="row" style="gap:8px"><input type="text" id="signinCode" placeholder="ABCD-1234" autocomplete="one-time-code" inputmode="text" enterkeyhint="go" autocapitalize="characters" maxlength="9" style="font-family:var(--f-mono);letter-spacing:.08em">'
       +  '<button class="btn sm" data-act="signin-code">Sign in</button></div></div>'
       +  '<button class="btn primary wide go" data-act="ob-later">See the week</button>'
@@ -2568,6 +2580,7 @@ document.addEventListener('click', function(ev){
     planWeek(kid);
     S.onboardedAt = now(); UI.tab = 'week';
     UI.obEmail = navigator.onLine && !signedIn();
+    if(Account.elsewhere){ Account.elsewhere = false; Sync.push(true); }
     save(); render(); window.scrollTo(0,0);
     if(!UI.obEmail) toast('Your week is ready');
     return;
@@ -2580,6 +2593,7 @@ document.addEventListener('click', function(ev){
     kid.settings.avoidAllergens = UI.ob.avoid.slice();
     touch(kid.settings);
     S.onboardedAt = now(); UI.tab = 'foods';
+    if(Account.elsewhere){ Account.elsewhere = false; Sync.push(true); }
     save(); render(); window.scrollTo(0,0); return;
   }
 
@@ -2916,6 +2930,7 @@ document.addEventListener('click', function(ev){
     return;
   }
   if(act==='notice-dismiss'){ UI.notice=''; render(); return; }
+  if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = el.getAttribute('data-day'); render(); return; }
   if(act==='trial-dismiss'){ try{ localStorage.setItem(TRIAL_SEEN_KEY, el.getAttribute('data-stage') || 'soon'); }catch(e){} render(); return; }
   if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }
