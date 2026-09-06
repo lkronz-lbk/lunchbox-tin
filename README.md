@@ -145,7 +145,7 @@ generated CSP, the service worker, an offline launch, the landing page, accounts
 (below), and billing: the key guard, webhook signatures, a checkout, every webhook event the
 code handles including a redelivery after a failure and one arriving out of order, the
 gates, the plan line, cancellation, forever, a refund, who may manage billing, and a deleted
-account stopping its subscription. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
+account stopping its subscription. The browser never downloads fonts, so a run takes about two minutes. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
 
 Checks that must pass before launch but shouldn't block day-to-day work print as
 `WARN` rather than failing — the placeholder privacy address is currently one.
