@@ -89,9 +89,13 @@ forward).
 
 - [x] Contact address on the privacy page: hello@lunchsorted.app.
 - [x] Domain: lunchsorted.app (the og:image and canonical URLs point at it).
-- [ ] Import the repo into Netlify, attach the domain, confirm HTTPS; set
-      `STAGING_DATABASE_URL` for branch deploys and previews, `RESEND_API_KEY` and
-      `MAIL_FROM` for sign-in email, and the `STRIPE_*` variables per context (Billing, below).
+- [x] Import the repo into Netlify, attach the domain; `dev` as a branch deploy, previews on.
+- [x] Neon project with `production` and `staging` branches; `NETLIFY_DATABASE_URL` and
+      `STAGING_DATABASE_URL` scoped to their contexts.
+- [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set.
+- [x] Stripe: product and three prices in test and live mode, a webhook endpoint per mode,
+      keys, secrets and price ids scoped per context (Billing, below).
+- [ ] Confirm HTTPS covers `www.lunchsorted.app` as well as the apex.
 - [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
       `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
       function responses instead, every app open becomes a function call (remove that rule).
