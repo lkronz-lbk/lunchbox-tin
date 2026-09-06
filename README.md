@@ -284,7 +284,8 @@ member, tick and outcome it has, and cannot add more.
   `STRIPE_SECRET_KEY` (production refuses a test key, every other context refuses a live
   one), `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
   production URL each give their own), `STRIPE_PRICE_YEAR` and `STRIPE_PRICE_LIFETIME`
-  (the two price ids; test mode and live mode have different ones). `STRIPE_TAX=0` turns
+  (the two price ids; test mode and live mode have different ones) and, optionally,
+  `STRIPE_PRICE_MONTH`, which adds a monthly button to the sheet when set. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
 - **Stripe setup, once per mode:** one product, two prices; Developers → Webhooks → add
   `https://<site>/api/billing/webhook` with the six event types above and paste the

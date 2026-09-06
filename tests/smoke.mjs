@@ -35,6 +35,7 @@ globalThis.__LS_STRIPE_FETCH = async (url, init) => {
   const reply = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
   if (u.pathname === '/v1/prices/price_year') return reply({ id: 'price_year', unit_amount: 2900, currency: 'usd', recurring: { interval: 'year' } });
   if (u.pathname === '/v1/prices/price_life') return reply({ id: 'price_life', unit_amount: 7900, currency: 'usd' });
+  if (u.pathname === '/v1/prices/price_month') return reply({ id: 'price_month', unit_amount: 399, currency: 'usd', recurring: { interval: 'month' } });
   if (u.pathname === '/v1/checkout/sessions') {
     if (params['automatic_tax[enabled]'] === 'true' && globalThis.__LS_STRIPE_NO_TAX) return reply({ error: { message: 'You must configure Stripe Tax before enabling automatic_tax', code: 'invalid_request_error' } }, 400);
     return reply({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
@@ -958,7 +959,7 @@ try {
   check('the period end is read from either shape of subscription',
     stripeLib.periodEnd({ current_period_end: 1800000000 }) === '2027-01-15T08:00:00.000Z' && stripeLib.periodEnd({ items: { data: [{ current_period_end: 1800000000 }] } }) === '2027-01-15T08:00:00.000Z' && stripeLib.periodEnd({}) === null);
 
-  Object.assign(process.env, { STRIPE_SECRET_KEY: 'sk_test_stub', STRIPE_WEBHOOK_SECRET: WH, STRIPE_PRICE_YEAR: 'price_year', STRIPE_PRICE_LIFETIME: 'price_life' });
+  Object.assign(process.env, { STRIPE_SECRET_KEY: 'sk_test_stub', STRIPE_WEBHOOK_SECRET: WH, STRIPE_PRICE_YEAR: 'price_year', STRIPE_PRICE_LIFETIME: 'price_life', STRIPE_PRICE_MONTH: 'price_month' });
   const ctxB = await browser.newContext({ viewport:{width:375,height:812} });
   const pb = await ctxB.newPage(); pb.on('pageerror', e => errors.push(String(e.message)));
   await pb.route('https://checkout.stripe.com/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stripe checkout</title>' }));
@@ -1037,7 +1038,9 @@ try {
       a.toISOString() === old && b.toISOString() === old && c.toISOString() === fresh && d.toISOString() === fresh, [a, b, c, d]);
   }
   await pb.click('[data-act="invite"]'); await pb.waitForTimeout(300);
-  check('and the app opens the plan sheet instead, with both prices', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$29 a year/.test(await pb.textContent('#sheetBody')) && /\$79, once, forever/.test(await pb.textContent('#sheetBody')));
+  check('and the app opens the plan sheet instead, with all three prices', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$29 a year/.test(await pb.textContent('#sheetBody')) && /\$3\.99 a month/.test(await pb.textContent('#sheetBody')) && /\$79, once, forever/.test(await pb.textContent('#sheetBody')));
+  const monthly = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"month"}'}).then(r => r.json()));
+  check('the monthly price opens a subscription checkout of its own', !!monthly.url && stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params['line_items[0][price]'] === 'price_month' && c.params.mode === 'subscription' && c.params['subscription_data[metadata][plan]'] === 'month'));
   check('links in the sheet use the accent, not browser blue', await pb.$eval('#sheetBody a[href="/terms.html"]', a => getComputedStyle(a).color !== 'rgb(0, 0, 238)' && getComputedStyle(a).color !== 'rgb(0, 0, 255)'));
   const ownerCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
   check('checkout is opened on the server, for this household, on Stripe\'s page', ownerCheckout.url === 'https://checkout.stripe.com/c/pay/cs_test_1' &&
@@ -1171,7 +1174,7 @@ try {
   const unpaidSession = await hook({ id: 'evt_8', type: 'checkout.session.completed', created: t0 + 7, data: { object: { id: 'cs_test_4', mode: 'subscription', payment_status: 'unpaid', client_reference_id: '999999', metadata: {} } } });
   check('a session that is not paid yet, or for no household, grants nothing and is still acknowledged', unpaidSession.status === 200);
   await ctxB.close();
-  for (const k of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_YEAR', 'STRIPE_PRICE_LIFETIME']) delete process.env[k];
+  for (const k of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_YEAR', 'STRIPE_PRICE_LIFETIME', 'STRIPE_PRICE_MONTH']) delete process.env[k];
   stripeLib.forgetPrices();
 
   /* ------------------------------------------------------- pwa + offline */

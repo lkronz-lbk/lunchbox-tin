@@ -903,6 +903,7 @@ function upgradeSheet(why){
     var dis = Account.buying ? ' disabled' : '';
     h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
       +  (forever ? '' : '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>')
+      +  (forever || !pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
       +  '<button class="btn '+(forever ? 'primary ' : '')+'wide" data-act="buy" data-plan="lifetime" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.lifetime ? money(pr.lifetime)+', once, forever' : 'Once, forever')+'</button></div>'
       +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+'Payment is on Stripe’s page; tax is added where it applies. Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
   }
@@ -2813,7 +2814,7 @@ document.addEventListener('click', function(ev){
     Account.buying = true; var was = el.textContent; el.disabled = true; el.textContent = 'Opening Stripe\u2026';
     var undoBtn = function(){ Account.buying = false; el.disabled = false; el.textContent = was; };
     if(act==='buy') rememberAfter(el.getAttribute('data-why'));
-    var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') === 'lifetime' ? 'lifetime' : 'year'}) : api('POST', '/api/billing/portal');
+    var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') || 'year'}) : api('POST', '/api/billing/portal');
     call.then(function(r){
       if(r.status !== 200 || !r.url){ undoBtn(); toast(r.error || (act==='buy' ? 'Could not open the checkout' : 'Could not open billing')); return; }
       location.href = r.url;                                 /* Stripe's page; it sends you back to /app/ */
