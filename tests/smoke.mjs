@@ -959,6 +959,16 @@ try {
     process.env.SITE_ENV = was;
     check('without SITE_ENV a function still knows a branch deploy from production, from Netlify\'s CONTEXT', a === 'staging' && b === 'preview' && c === 'production', [a, b, c]);
   }
+  {
+    const { siteUrl } = await import('../netlify/lib/db.js');
+    const was = { e: process.env.SITE_ENV, u: process.env.URL, d: process.env.DEPLOY_PRIME_URL };
+    process.env.SITE_ENV = 'staging'; process.env.URL = 'https://lunchsorted.app'; process.env.DEPLOY_PRIME_URL = 'https://dev--lunchsorted.netlify.app';
+    const staging = siteUrl(new Request('https://dev--lunchsorted.netlify.app/api/auth/request'));
+    process.env.SITE_ENV = 'production';
+    const prod = siteUrl(new Request('https://evil.example/api/auth/request'));
+    process.env.SITE_ENV = was.e; if (was.u === undefined) delete process.env.URL; else process.env.URL = was.u; if (was.d === undefined) delete process.env.DEPLOY_PRIME_URL; else process.env.DEPLOY_PRIME_URL = was.d;
+    check('a staging link comes back to staging, and a production link never takes its host from the request', staging === 'https://dev--lunchsorted.netlify.app' && prod === 'https://lunchsorted.app', [staging, prod]);
+  }
   check('a test key in production, or a live key anywhere else, refuses to start', guard('production', 'sk_test_x') && guard('staging', 'sk_live_x') && !guard('production', 'sk_live_x') && !guard('staging', 'sk_test_x'));
   const WH = 'whsec_test_secret';
   const sign = (body, t = Math.floor(Date.now() / 1000), secret = WH) => `t=${t},v1=${crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;

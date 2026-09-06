@@ -44,9 +44,13 @@ export function siteUrl(req) {
     if (!process.env.URL) throw new Error('URL is not set; refusing to build a link from the request host');
     return process.env.URL.replace(/\/$/, '');
   }
+  /* a branch deploy or preview answers at its own address, which is where the request came
+     to; Netlify's URL variable names production even here, and DEPLOY_PRIME_URL does not
+     reach a running function, so neither can be trusted for a link that must come back here */
+  const self = req && req.url ? new URL(req.url).origin : '';
+  if (self) return self;
   if (process.env.DEPLOY_PRIME_URL) return process.env.DEPLOY_PRIME_URL.replace(/\/$/, '');
-  if (process.env.URL) return process.env.URL.replace(/\/$/, '');
-  return new URL(req.url).origin;
+  throw new Error('No address to build a link from');
 }
 
 export function clientIp(req, context) {
