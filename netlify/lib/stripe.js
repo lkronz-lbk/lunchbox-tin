@@ -17,7 +17,8 @@ export function stripeKey() {
   return key;
 }
 export function prices() {
-  return { year: process.env.STRIPE_PRICE_YEAR || '', lifetime: process.env.STRIPE_PRICE_LIFETIME || '' };
+  /* yearly and forever are required; a monthly price is optional and appears when set */
+  return { year: process.env.STRIPE_PRICE_YEAR || '', lifetime: process.env.STRIPE_PRICE_LIFETIME || '', month: process.env.STRIPE_PRICE_MONTH || '' };
 }
 /* read on every household request, so a mis-scoped key must disable billing, not sync:
    the build (scripts/migrate.mjs) is where it fails the deploy */
@@ -66,9 +67,9 @@ let priceCache = { at: 0, value: null };
 export async function priceInfo() {
   if (priceCache.value && Date.now() - priceCache.at < 3600 * 1000) return priceCache.value;
   const p = prices();
-  const [year, lifetime] = await Promise.all([stripe('GET', `/prices/${p.year}`), stripe('GET', `/prices/${p.lifetime}`)]);
+  const [year, lifetime, month] = await Promise.all([stripe('GET', `/prices/${p.year}`), stripe('GET', `/prices/${p.lifetime}`), p.month ? stripe('GET', `/prices/${p.month}`) : null]);
   const one = (x) => ({ amount: x.unit_amount, currency: x.currency, interval: x.recurring ? x.recurring.interval : null });
-  priceCache = { at: Date.now(), value: { year: one(year), lifetime: one(lifetime) } };
+  priceCache = { at: Date.now(), value: { year: one(year), lifetime: one(lifetime), month: month ? one(month) : null } };
   return priceCache.value;
 }
 export function forgetPrices() { priceCache = { at: 0, value: null }; }

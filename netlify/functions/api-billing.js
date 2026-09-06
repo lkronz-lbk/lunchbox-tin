@@ -87,7 +87,7 @@ async function applyEvent(ev) {
     let sub = null;
     if (subId) { try { sub = await stripe('GET', `/subscriptions/${subId}`); } catch (e) { console.error('billing: could not read', subId, e.message); } }
     const ok = await write(hid, at, { plan: 'household', source: 'stripe', status: sub ? subscriptionStatus(sub) : 'active', periodEnd: periodEnd(sub),
-      cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices().year, paidBy });
+      cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy });
     /* a second subscription for the same household (a card that failed, then a fresh checkout) replaces the first */
     if (ok && oldSub && subId && oldSub !== subId) await cancelSubscription(oldSub);
     return ok ? 'applied' : 'stale';
@@ -167,10 +167,11 @@ export default async function handler(req, context) {
 
     if (action === 'checkout') {
       const body = await req.json().catch(() => ({}));
-      const plan = body.plan === 'lifetime' ? 'lifetime' : 'year';
+      const plan = body.plan === 'lifetime' ? 'lifetime' : (body.plan === 'month' && prices().month) ? 'month' : 'year';
       if (h.plan === 'lifetime' && h.status === 'active') return fail('This household already has Lunch Sorted forever', 409);
-      if (plan === 'year' && h.plan === 'household' && h.status === 'active') return fail('This household already has the yearly plan', 409);
-      if (plan === 'year' && h.plan === 'household' && h.status === 'past_due') return fail('The yearly plan is waiting on a payment; update the card in Manage billing', 409);
+      /* a monthly or yearly household switches between the two in Manage billing, not with a second subscription */
+      if (plan !== 'lifetime' && h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);
+      if (plan !== 'lifetime' && h.plan === 'household' && h.status === 'past_due') return fail('The Household plan is waiting on a payment; update the card in Manage billing', 409);
       const params = {
         mode: plan === 'lifetime' ? 'payment' : 'subscription',
         line_items: [{ price: prices()[plan], quantity: 1 }],
@@ -182,7 +183,7 @@ export default async function handler(req, context) {
         automatic_tax: { enabled: process.env.STRIPE_TAX !== '0' },
         billing_address_collection: 'auto'
       };
-      if (plan === 'year') params.subscription_data = { metadata: { household_id: String(h.id), plan } };
+      if (plan !== 'lifetime') params.subscription_data = { metadata: { household_id: String(h.id), plan } };
       else params.invoice_creation = { enabled: true };
       if (h.stripe_customer_id) { params.customer = h.stripe_customer_id; params.customer_update = { address: 'auto', name: 'auto' }; }
       else params.customer_email = user.email;
