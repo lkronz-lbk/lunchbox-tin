@@ -133,6 +133,10 @@ const V1_SAVE = {
 
 const { server, port } = await serve();
 const BASE = `http://localhost:${port}`;
+/* the browser resolves localhost to whichever family the server took; Node's fetch may not, so
+   requests made from the test itself go to the address the server actually bound */
+const ADDR = server.address();
+const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '[' + ADDR.address + ']' : ADDR.address) + ':' + port;
 
 /* ------------------------------------------------ merge rules, without a browser */
 {
@@ -1042,11 +1046,11 @@ try {
   await pb.click('[data-act="buy"][data-plan="year"]'); await pb.waitForURL(/checkout\.stripe\.com/); 
   check('when Stripe Tax is not set up yet, the checkout is retried without it and still opens', pb.url().startsWith('https://checkout.stripe.com/') && stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length === 2 && stripeCalls[1].params['automatic_tax[enabled]'] === 'false');
   globalThis.__LS_STRIPE_NO_TAX = false;
-  const anon = await fetch(BASE+'/api/billing/checkout', { method: 'POST', body: '{}' });
+  const anon = await fetch(NODE_BASE+'/api/billing/checkout', { method: 'POST', body: '{}' });
   check('a stranger cannot open a checkout', anon.status === 401);
 
   /* Stripe calls back */
-  const hook = async (ev, opts = {}) => { if (ev.livemode === undefined) ev.livemode = false; const body = JSON.stringify(ev); const r = await fetch(BASE+'/api/billing/webhook', { method:'POST', headers: { 'content-type':'application/json', 'stripe-signature': opts.sig === undefined ? sign(body, opts.t) : opts.sig }, body }); return { status: r.status, body: await r.json().catch(() => ({})) }; };
+  const hook = async (ev, opts = {}) => { if (ev.livemode === undefined) ev.livemode = false; const body = JSON.stringify(ev); const r = await fetch(NODE_BASE+'/api/billing/webhook', { method:'POST', headers: { 'content-type':'application/json', 'stripe-signature': opts.sig === undefined ? sign(body, opts.t) : opts.sig }, body }); return { status: r.status, body: await r.json().catch(() => ({})) }; };
   const ent = async () => (await db.query(`SELECT plan, source, status, cancel_at_period_end AS cape, current_period_end AS pe, stripe_customer_id AS cust, stripe_subscription_id AS sub FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
   const t0 = Math.floor(Date.now() / 1000);
   const completed = { id: 'evt_1', type: 'checkout.session.completed', created: t0, data: { object: { id: 'cs_test_1', mode: 'subscription', payment_status: 'paid', customer: 'cus_pat', subscription: 'sub_pat', client_reference_id: String(patState.household.id), metadata: { household_id: String(patState.household.id), plan: 'year' } } } };
