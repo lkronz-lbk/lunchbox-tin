@@ -45,24 +45,26 @@ await page.click('[data-act="tab"][data-tab="week"]'); await wait(400);
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('week');
 
-/* 2 · the pack list, then the kid's pick from it */
+/* 2 · the lunchbox settings: the kid gets a say, and the school rules are in view */
+await page.click('[data-act="box-settings"]'); await wait(400);
+await page.click('[data-act="kidpick-on"]'); await wait(300);
+await page.evaluate(() => { const h = [...document.querySelectorAll('#view *')].find(e => e.children.length === 0 && /^school rules$/i.test(e.textContent.trim())); if (h) window.scrollTo(0, h.getBoundingClientRect().top + window.scrollY - 10); });
+await wait(300);
+await shot('setup');
+await page.click('[data-act="box-done"]'); await wait(300);
+
+/* 3 · the pack list, then the kid's pick from it */
 await page.click('[data-act="tab"][data-tab="pack"]'); await wait(400);
 if(await page.$('[data-act="kid-start"]')) { await page.click('[data-act="kid-start"]'); await wait(500); await shot('kidpick'); await page.click('[data-act="kid-exit"]', { force: true }); await wait(400); }
 for (let i = 0; i < 2; i++) { await page.locator('.tin [data-act="toggle"]').nth(i).click(); await wait(250); }   /* two things already in the bag; each tick re-renders, so fresh locators */
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('pack');
 
-/* 3 · the shopping list */
+/* 4 · the shopping list */
 await page.click('[data-act="tab"][data-tab="shop"]'); await wait(400);
 for (let i = 0; i < 2; i++) { await page.locator('.list .item[data-act="have"]').nth(i).click(); await wait(250); }   /* two things the pantry already has */
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('shop');
-
-/* 4 · the rules, on Setup */
-await page.click('[data-act="tab"][data-tab="setup"]'); await wait(400);
-await page.evaluate(() => { const h = [...document.querySelectorAll('#view *')].find(e => e.children.length === 0 && /^school rules$/i.test(e.textContent.trim())); if (h) window.scrollTo(0, h.getBoundingClientRect().top + window.scrollY - 10); });
-await wait(300);
-await shot('setup');
 
 /* 5 · the foods */
 await page.click('[data-act="tab"][data-tab="foods"]'); await wait(400);

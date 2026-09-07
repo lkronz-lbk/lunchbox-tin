@@ -243,9 +243,9 @@ try {
     await page.getAttribute('nav.tabs [aria-current="true"]', 'data-tab') === 'week');
   const empties = await page.$$eval('.cmp.empty', a => a.length);
   check('every compartment is filled', empties === 0, empties);
-  const notes = await page.$$eval('.note', a => a.filter(n => n.textContent.trim().length > 10).length);
+  const traitTins = await page.$$eval('.tin', a => a.filter(t => t.querySelectorAll('.tr i:not(.care)').length >= 2).length);
   const planned = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.length);
-  check('each day gets a pairing note', planned >= 2 && notes >= planned, {notes, planned});
+  check('each box shows what its foods bring, as words in the compartments', planned >= 2 && traitTins >= planned && (await page.$$eval('.note', a => a.length)) === 0, {traitTins, planned});
   check('excluded allergens never enter the list', await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
     return !d.kids[0].foods.some(f => (f.al||[]).includes('nuts') || (f.al||[]).includes('dairy'));
@@ -267,28 +267,34 @@ try {
   }));
 
   /* ---------------------------------------------------------- kid's pick */
-  await page.click('[data-act="kid-start"]');
-  await page.waitForTimeout(250);
-  check("kid's pick takes over the screen with two pictures",
-    (await page.$$eval('.kidmode .pick', a => a.length)) === 2);
+  check('nobody is offered the kid\'s pick until the lunchbox says the kid has a say', (await page.$$eval('[data-act="kid-start"]', a => a.length)) === 0);
+  await page.click('[data-act="box-settings"]'); await page.waitForTimeout(250);
+  check('the lunchbox settings open from the gear beside the name, with the rules and the kid\'s say on them', /School rules/.test(await page.textContent('#view')) && (await page.$$eval('[data-act="kidpick-on"]', a => a.length)) === 1 && (await page.$$eval('[data-act="allergen"]', a => a.length)) >= 5);
+  await page.click('[data-act="kidpick-on"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="box-done"]'); await page.waitForTimeout(250);
+  check('Done returns to the tab underneath', (await page.$$eval('[data-act="kid-start"]', a => a.length)) === 1 && !/School rules/.test(await page.textContent('#view')));
+  const weekBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.map(d => ({d: d.d, slots: Object.assign({}, d.slots)})));
+  await page.click('[data-act="kid-start"]'); await page.waitForTimeout(250);
+  const boxCount = await page.$$eval('.kidmode .pickbox', a => a.length);
+  check("kid's pick takes over the screen with the week's boxes to choose from", boxCount === weekBefore.length && boxCount >= 2, boxCount);
   const firstMainLabel = await page.textContent('.kidmode h1');
-  check("the main is asked first, by name, in a child's words", /^Nia, pick your lunch/i.test(firstMainLabel.trim()), firstMainLabel);
+  check("it asks by name, for today's box", /^Nia, pick today’s box/i.test(firstMainLabel.trim()), firstMainLabel);
   check('the exit is worded for the parent', /give the phone back/i.test(await page.textContent('[data-act="kid-exit"]')));
-  check('the eyebrow above it uses the same word', /^lunch/i.test((await page.textContent('.kidmode .catlab')).trim()));
-  const chosenMain = await page.getAttribute('.kidmode .pick >> nth=1', 'data-id');   /* option B, not the draw */
-  await page.click('.kidmode .pick >> nth=1'); await page.waitForTimeout(150);
-  for (let i = 0; i < 3; i++) { await page.click('.kidmode .pick >> nth=0'); await page.waitForTimeout(150); }
-  check('four taps end on the finished box', (await page.$$eval('.kiddone .tin .cmp', a => a.length)) === 4);
+  const chosenDate = await page.getAttribute('.kidmode .pickbox >> nth=1', 'data-d');   /* a later day's box, not today's */
+  const chosenMain = weekBefore.find(d => d.d === chosenDate).slots.main;
+  await page.click('.kidmode .pickbox >> nth=1'); await page.waitForTimeout(200);
+  check('one tap ends on the finished box', (await page.$$eval('.kiddone .tin .cmp', a => a.length)) === 4);
   await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
   const afterPick = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
     const k = d.kids[0], t = new Date(); t.setHours(0,0,0,0);
     const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
-    return {main: day.slots.main, locked: Object.values(day.lock).every(Boolean),
+    return {d: day.d, main: day.slots.main, locked: Object.values(day.lock).every(Boolean), days: k.week.days.map(x => x.slots.main),
       picked: Object.keys(day.kidPick || {}).length,
       by: !!(day.kidPick && day.kidPick.main && d.members.some(m => m.id === day.kidPick.main.by) && day.kidPick.main.picker === 'kid')};
   });
-  check("the kid's choice replaced the draw", afterPick.main === chosenMain, afterPick);
+  check("the box the kid chose is today's now", afterPick.main === chosenMain, afterPick);
+  check("and today's old box moved to that day, so nothing new is bought", afterPick.days.find((m, i) => weekBefore[i].d === chosenDate) === weekBefore[0].slots.main && afterPick.days.filter(Boolean).sort().join() === weekBefore.map(d => d.slots.main).sort().join(), afterPick);
   check('kid-picked compartments are locked and attributed', afterPick.locked && afterPick.picked === 4 && afterPick.by, afterPick);
   check('the pack list says who picked', (await page.textContent('#view')).includes(' picked'));
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200);
@@ -313,7 +319,7 @@ try {
   check('a pantry tick moves an item out of the buy count', head !== await page.textContent('.count'));
 
   /* -------------------------------------------------- second lunchbox */
-  await page.click('[data-act="tab"][data-tab="setup"]');
+  await page.click('[data-act="box-settings"]');
   await page.waitForTimeout(200);
   await page.click('[data-act="add-kid"]');
   await page.waitForTimeout(350);
@@ -322,7 +328,7 @@ try {
   await page.waitForTimeout(350);
   await page.click('[data-act="seed"]');
   await page.waitForTimeout(300);
-  await page.click('[data-act="tab"][data-tab="setup"]');
+  await page.click('[data-act="box-settings"]');
   await page.waitForTimeout(200);
   await page.click('[data-act="allergen"][data-k="gluten"]');
   await page.waitForTimeout(250);
@@ -460,8 +466,13 @@ try {
     a.filter(e => e.checkVisibility()).map(e => ({h: Math.round(e.getBoundingClientRect().height), t: e.textContent.trim().slice(0,20)})).filter(x => x.h < 44));
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   const smallSetup = await small();
+  check('every tappable control on Account is at least 44px tall', smallSetup.length === 0, smallSetup);
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="box-settings"]'); await page.waitForTimeout(250);
   check('the day-of-week chips are named in full for a screen reader', (await page.$$eval('.dow .tg[aria-label]', a => a.length)) === 7);
-  check('every tappable control on Setup is at least 44px tall', smallSetup.length === 0, smallSetup);
+  const smallBox = await small();
+  check('and on the lunchbox settings', smallBox.length === 0, smallBox);
+  await page.click('[data-act="box-done"]'); await page.waitForTimeout(150);
   await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
   const smallFoods = await small();
   check('and on Foods', smallFoods.length === 0, smallFoods);
@@ -500,7 +511,7 @@ try {
     localStorage.setItem('lunchsorted', JSON.stringify(d));
   });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="box-settings"]'); await page.waitForTimeout(200);
   check('seeds & sesame is a keep-out option', (await page.$$eval('[data-act="allergen"][data-k="seeds"]', a => a.length)) === 1);
   await page.click('[data-act="compartment"][data-k="snack"]'); await page.waitForTimeout(250);
   await page.click('[data-act="compartment"][data-k="drink"]'); await page.waitForTimeout(250);
@@ -517,11 +528,13 @@ try {
   check('the tin grows to six compartments', perTin.length > 0 && perTin.every(n => n === 6), perTin);
   await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
   check('drinks land on the shopping list under their own aisle', (await page.textContent('#view')).toLowerCase().includes('drinks'));
+  await page.click('[data-act="box-settings"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="kidpick-on"]'); await page.waitForTimeout(200);          /* this lunchbox's kid gets a say too */
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
-  await page.click('[data-act="kid-start"]'); await page.waitForTimeout(250);
-  check("kid's pick walks all six compartments", (await page.$$eval('.kidmode .dots i', a => a.length)) === 6);
+  await page.click('[data-act="kid-start"] >> nth=-1'); await page.waitForTimeout(250);
+  check("kid's pick shows all six compartments in each box", (await page.$$eval('.kidmode .pickbox >> nth=0 >> .mini .cmp', a => a.length)) === 6);
   await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="box-settings"]'); await page.waitForTimeout(200);
   await page.click('[data-act="rule"][data-k="noChoc"]');
   await page.click('[data-act="rule"][data-k="noIce"]');
   await page.click('[data-act="rule"][data-k="shortWindow"]');
@@ -564,7 +577,7 @@ try {
     localStorage.setItem('lunchsorted', JSON.stringify(d));
   });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="box-settings"]'); await page.waitForTimeout(200);
   await page.click('[data-act="allergen"][data-k="dairy"]'); await page.waitForTimeout(300);
   const afterRule = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
@@ -588,7 +601,7 @@ try {
     return k.settings.avoidText === name && !k.week.days.some(d => { const f = k.foods.find(x => x.id === d.slots.side); return f && f.n === name; }); }, avoidTarget), avoidTarget);
   await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].settings.avoidText = ''; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="box-settings"]'); await page.waitForTimeout(200);
 
   /* switching a compartment off takes it out of the week and off the list */
   if ((await page.getAttribute('[data-act="compartment"][data-k="drink"]', 'aria-pressed')) !== 'true') {
@@ -604,19 +617,18 @@ try {
   const shopText = await page.textContent('#view');
   check('and no drink is left on the shopping list', drinkNames.length > 0 && !drinkNames.some(n => shopText.includes(n)), drinkNames);
 
-  /* stopping the kid's pick midway keeps what was already chosen */
+  /* the kid picks again: the mark is fresh */
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
   await page.click('[data-act="kid-start"]'); await page.waitForTimeout(250);
-  const partial = await page.getAttribute('.kidmode .pick >> nth=1', 'data-id');
-  await page.click('.kidmode .pick >> nth=1'); await page.waitForTimeout(150);
+  await page.click('.kidmode .pickbox >> nth=1'); await page.waitForTimeout(200);
   await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
   const kidKept = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0], t = new Date(); t.setHours(0,0,0,0);
     const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
-    return {main: day.slots.main, locked: day.lock.main, picker: day.kidPick && day.kidPick.main && day.kidPick.main.picker,
+    return {locked: day.lock.main, picker: day.kidPick && day.kidPick.main && day.kidPick.main.picker,
       by: d.members.some(m => m.id === (day.kidPick && day.kidPick.main && day.kidPick.main.by))};
   });
-  check('a choice the kid already made survives Stop', kidKept.main === partial && kidKept.locked && kidKept.picker === 'kid' && kidKept.by, kidKept);
+  check('a box the kid picked is locked and carries who and when', kidKept.locked && kidKept.picker === 'kid' && kidKept.by, kidKept);
 
   /* a manual swap clears the "picked" mark */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
@@ -707,7 +719,7 @@ try {
   }));
 
   /* a lunchbox with no foods is announced, and the title counts what is on screen */
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="box-settings"]'); await page.waitForTimeout(200);
   await page.click('[data-act="add-kid"]'); await page.waitForTimeout(350);
   await page.fill('#nkName', 'Nobody'); await page.click('[data-act="save-kid"]'); await page.waitForTimeout(350);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
@@ -1091,10 +1103,12 @@ try {
   const setBorn = (daysAgo) => pb.evaluate(n => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.createdAt = new Date(Date.now() - n * 86400000).toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); }, daysAgo);
   await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
   check('a new household has everything on for 21 days and Setup says so', /Household plan\s*On for 21 more days/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) === 1);
+  await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   check('the premium pieces wear a tag while they are on', await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length) >= 1 && (await pb.$$eval('.chip.lock', a => a.length)) === 0);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('and a second lunchbox just works', (await pb.$$eval('#nkName', a => a.length)) === 1);
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  await pb.click('[data-act="kidpick-on"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="tab"][data-tab="pack"]'); await pb.waitForTimeout(250);
   check('kid\'s pick is on, with the tag beside it', (await pb.$$eval('[data-act="kid-start"]', a => a.length)) === 1 && (await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length)) >= 1);
   check('no banner nags in week one', (await pb.$$eval('.banner', a => a.filter(b => /three weeks/.test(b.textContent)).length)) === 0);
@@ -1124,7 +1138,7 @@ try {
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
   const bcfg = await pb.evaluate(() => fetch('/api/billing').then(r => r.json()));
   check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 2900 && bcfg.prices.lifetime.amount === 7900 && bcfg.prices.year.interval === 'year', bcfg);
-  await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
+  await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('signed out, a second lunchbox opens the Household plan sheet with a sign-in button', (await pb.$$eval('#nkName', a => a.length)) === 0 && (await pb.$$eval('[data-act="go-signin"]', a => a.length)) === 1 && /second lunchbox/i.test(await pb.textContent('#sheetBody')));
   await pb.click('[data-act="go-signin"]'); await pb.waitForTimeout(300);
@@ -1237,6 +1251,7 @@ try {
   if (!backOk) console.log('  (diag) url=' + pb.url() + ' view=' + (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 400) + ' errors=' + JSON.stringify(errors.slice(-3)));
   check('back from Stripe, the account card is at the top with the renewal date, Manage billing, and no second buy button', backOk && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1 && !pb.url().includes('paid=') &&
     await pb.evaluate(() => document.querySelector('#view .sect-head h3').textContent === 'Account') && (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0, (await pb.textContent('#view')).match(/Household plan[^\n]{0,60}/));
+  await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('a paid household can add a second lunchbox', (await pb.$$eval('#nkName', a => a.length)) === 1);
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
@@ -1264,8 +1279,10 @@ try {
   check('when the subscription ends the household is free again', (await ent()).plan === 'free' && (await ent()).status === 'canceled' && (await ent()).cust === 'cus_pat');
   await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]');
   await until(pb, () => /Household plan\s*Not on/.test(document.querySelector('#view').textContent));
+  const portalStill = (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1;
+  await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
-  check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
+  check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && portalStill);
   await pb.click('#sheetClose'); await pb.waitForTimeout(200);
 
   /* forever */

@@ -92,7 +92,10 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .cmp .lab{font-family:var(--f-mono);font-size:9.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
   display:flex;align-items:center;justify-content:space-between;gap:6px}
 .cmp .nm{font-family:var(--f-display);font-size:15.5px;font-weight:600;line-height:1.22;letter-spacing:-0.01em;color:var(--ink)}
-.cmp .sub{font-family:var(--f-mono);font-size:10px;color:var(--ink-3);letter-spacing:.04em;margin-top:auto}
+.cmp .tr{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto;padding-top:6px}
+.cmp .tr i{font-style:normal;font-family:var(--f-mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;line-height:1;
+  padding:4px 6px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+.cmp .tr i.care{background:transparent;color:var(--ink-3);padding-left:0}
 .cmp.empty .nm{color:var(--ink-3);font-weight:500}
 .c-main .lab{color:var(--c-main)} .c-side .lab{color:var(--c-side)}
 .c-fruit .lab{color:var(--c-fruit)} .c-sweet .lab{color:var(--c-sweet)}
@@ -268,6 +271,14 @@ nav.tabs svg{width:21px;height:21px}
 .pick .ic{font-size:68px;line-height:1;filter:drop-shadow(var(--shadow-lift))}
 .pick .nm{font-family:var(--f-display);font-size:17px;font-weight:600;line-height:1.2;text-align:center;text-wrap:balance}
 .pick.chosen{border-color:var(--accent);background:var(--accent-soft)}
+.boxes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pickbox{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:22px;padding:10px;font:inherit;color:var(--ink);
+  transition:transform .12s ease}
+.pickbox:active{transform:scale(.96)}
+.pickbox .mini{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pickbox .cmp{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:12px;background:var(--surface-2);min-height:84px;justify-content:center}
+.pickbox .ic{font-size:30px;line-height:1}
+.pickbox .nm{font-family:var(--f-display);font-size:12.5px;font-weight:600;line-height:1.15;text-align:center;text-wrap:balance}
 .kiddone{display:flex;flex-direction:column;gap:18px;align-items:stretch}
 .kiddone .big{font-size:64px;line-height:1;text-align:center}
 .kiddone h1{text-align:center}
@@ -293,6 +304,9 @@ nav.tabs svg{width:21px;height:21px}
 .kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);
   border-radius:999px;padding:0 12px;min-height:44px;font-size:13.5px;font-weight:600;color:var(--ink)}
 .kidbtn .dot{width:8px;height:8px}
+.iconbtn{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-2);
+  display:inline-flex;align-items:center;justify-content:center;padding:0}
+.iconbtn[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .kidbtn .caret{font-size:10px;color:var(--ink-3)}
 .kidline{font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
   display:flex;align-items:center;gap:6px;margin:0 0 6px;padding-left:2px}
@@ -460,6 +474,7 @@ var I = {
   shop:'<path d="M4 7h16l-1.3 12.1a2 2 0 0 1-2 1.9H7.3a2 2 0 0 1-2-1.9z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/>',
   foods:'<path d="M12 8.5c1.4-2.2 6-2.6 6 2 0 4-4.3 7.7-6 9.5-1.7-1.8-6-5.5-6-9.5 0-4.6 4.6-4.2 6-2z"/><path d="M12 8.5V5c0-1 .8-2 2-2"/>',
   setup:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/>',
+  account:'<circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6"/>',
   check:'<path d="M4 12.5l5 5L20 6.5"/>',
   lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7a3.5 3.5 0 0 1 7 0v3.5"/>',
   dice:'<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="9" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.3" fill="currentColor" stroke="none"/>',
@@ -886,8 +901,8 @@ function resumeAfter(){
   var why = ''; try{ why = localStorage.getItem(AFTER_KEY) || ''; localStorage.removeItem(AFTER_KEY); }catch(e){}
   if(!why || !signedIn()) return;
   if(gated()){ upgradeSheet(why); return; }
-  if(why === 'lunchbox'){ UI.tab = 'setup'; render(); addKidSheet(); }
-  else if(why === 'share'){ UI.tab = 'setup'; render(); }
+  if(why === 'lunchbox'){ UI.box = true; render(); addKidSheet(); }
+  else if(why === 'share'){ UI.tab = 'setup'; UI.box = false; render(); }
   else if(why === 'week'){ UI.tab = 'week'; render(); }
 }
 function upgradeSheet(why){
@@ -1179,6 +1194,7 @@ function normKid(k, i){
   kid.settings.avoidAllergens = (Array.isArray(st.avoidAllergens) ? st.avoidAllergens : []).filter(function(a){ return ALLERGENS.some(function(y){ return y.k === a; }); });
   kid.settings.avoidText = safeStr(st.avoidText, 500, '');
   var so = plainObj(st.slots); kid.settings.slots = {snack:!!so.snack, drink:!!so.drink};
+  kid.settings.kidPick = !!st.kidPick; kid.settings.kidReminder = st.kidReminder !== false;
   kid.settings.updatedAt = safeStamp(st.updatedAt);
   kid.foods = (Array.isArray(k.foods) ? k.foods : []).slice(0, 500).map(function(f){ return normFood(kid, f); }).filter(Boolean);
   var w = plainObj(k.week);
@@ -1362,33 +1378,6 @@ function pairScore(main, item, cat){
   }
   if(cat==='fruit' && has(item,'juicy') && !has(main,'messy')){ s += 1; why.push({w:1,k:'fresh',n:item.n}); }
   return {s:s, why:why};
-}
-var NOTE = {
-  crunch: function(n){ return '<b>'+esc(n)+'</b> gives it some crunch against a soft main.'; },
-  protein:function(n){ return '<b>'+esc(n)+'</b> carries the protein so the meal holds until 3pm.'; },
-  light:  function(n){ return '<b>'+esc(n)+'</b> keeps it from being too heavy.'; },
-  tangy:  function(n){ return '<b>'+esc(n)+'</b> cuts through the savory main.'; },
-  juicy:  function(n){ return '<b>'+esc(n)+'</b> balances the salt.'; },
-  fresh:  function(n){ return '<b>'+esc(n)+'</b> freshens up the box.'; },
-  finish: function(n){ return '<b>'+esc(n)+'</b> is a light finish after a filling main.'; },
-  drink:  function(n){ return '<b>'+esc(n)+'</b> washes down a salty main.'; }
-};
-function dayNote(kid, day){
-  var main = foodById(kid, day.slots.main);
-  if(!main) return '';
-  var all = [];
-  catsFor(kid).forEach(function(c){
-    if(c.k === 'main') return;
-    all = all.concat(pairScore(main, foodById(kid, day.slots[c.k]), c.k).why);
-  });
-  all.sort(function(a,b){ return b.w-a.w; });
-  var usedKey = nullMap(), usedName = nullMap(), out = [];
-  for(var i=0;i<all.length && out.length<2;i++){
-    if(usedKey[all[i].k] || usedName[all[i].n]) continue;
-    usedKey[all[i].k] = 1; usedName[all[i].n] = 1;
-    out.push(NOTE[all[i].k](all[i].n));
-  }
-  return out.length ? out.join(' ') : 'Straightforward box &mdash; nothing fights, nothing wilts.';
 }
 function dayFlags(kid, day){
   var items = catsFor(kid).map(function(c){ return foodById(kid, day.slots[c.k]); }).filter(Boolean);
@@ -1723,59 +1712,61 @@ function reshuffleSlot(kid, day, cat){
    is what the draw picked, option B is the next-best match against that day's
    main. Main is asked first so the later pairings score against what the kid
    actually chose. Nothing the child can tap has ever been outside the rules. */
-function kidOptions(kid, day, cat, chosen){
-  var pool = eligible(kid, cat);
-  var elsewhere = kid.week.days.filter(function(x){ return x.d!==day.d; }).map(function(x){ return x.slots[cat]; });
-  pool = pool.filter(function(f){ return elsewhere.indexOf(f.id)<0; });
-  if(pool.length < 2) pool = eligible(kid, cat);            /* short list: allow repeats over a gap */
-  var mainId = chosen.main || day.slots.main;
-  var main = foodById(kid, mainId);
-  var planned = pool.filter(function(f){ return f.id === day.slots[cat]; })[0] || null;
-  var rest = awake(kid, pool.filter(function(f){ return !planned || f.id !== planned.id; }));
-  /* option B is deterministic: pairing score, then eat history, then list order */
-  rest = rest.map(function(f, i){
-      var base = cat === 'main' ? 0 : pairScore(main, f, cat).s;
-      return {f:f, s: base + eatStats(kid, f.id).score * 2, i:i};
-    }).sort(function(a,b){ return (b.s-a.s) || (a.i-b.i); }).map(function(x){ return x.f; });
-  var out = planned ? [planned] : [];
-  while(out.length < 2 && rest.length) out.push(rest.shift());
-  return out;
+/* The kid picks which of the week's boxes is next. Every box was planned and shopped
+   for, so whatever they choose is in the house; the box they did not choose keeps its
+   place later in the week. */
+function nextPickDay(kid){
+  if(!kid.week) return null;
+  var t0 = iso(today());
+  return kid.week.days.filter(function(d){
+    if(d.d < t0) return false;
+    var row = kid.packed[d.d] || {};
+    return !catsFor(kid).every(function(c){ return !d.slots[c.k] || ticked(row, c.k); });   /* a box fully in the bag is done */
+  })[0] || null;
 }
-function startKidPick(kidId, dayStr){
+function pickChoices(kid){
+  var target = nextPickDay(kid); if(!target) return [];
+  return kid.week.days.filter(function(d){ return d.d >= target.d && catsFor(kid).some(function(c){ return d.slots[c.k]; }); });
+}
+function startKidPick(kidId){
   var kid = kidById(kidId); if(!kid || !kid.week) return;
-  var day = kid.week.days.filter(function(d){ return d.d===dayStr; })[0]; if(!day) return;
-  UI.kid = {kidId:kidId, d:dayStr, step:0, chosen:{}, options:{}};
-  kidAdvance(kid, day);
-  if(UI.kid.step >= catsFor(kid).length){ UI.kid = null; toast('Nothing to choose from yet'); return; }
+  var target = nextPickDay(kid), choices = pickChoices(kid);
+  if(!target || choices.length < 2){ toast('Nothing to choose from yet'); return; }
+  UI.kid = {kidId:kidId, d:target.d, choices:choices.map(function(d){ return d.d; }), done:false};
   render();
 }
-function kidChoose(foodId){
-  var st = UI.kid; if(!st) return;
-  var kid = kidById(st.kidId), day = kid.week.days.filter(function(d){ return d.d===st.d; })[0];
-  var cats = catsFor(kid), cat = cats[st.step].k;
-  st.chosen[cat] = foodId;
-  if(foodId && foodById(kid, foodId)){
-    /* commit now: a choice already made must survive the parent tapping Stop */
-    day.slots[cat] = foodId;
-    day.lock[cat] = true;                                    /* a choice the kid made survives a shuffle */
-    day.kidPick = day.kidPick || {};
-    day.kidPick[cat] = {at:now(), by:(deviceMember()||{}).id || null, picker:'kid'};
-    touch(kid.week); touch(kid); save();
+function kidChooseBox(dateStr){
+  var st = UI.kid; if(!st || st.done) return;
+  var kid = kidById(st.kidId), days = kid.week.days;
+  var target = days.filter(function(d){ return d.d===st.d; })[0], chosen = days.filter(function(d){ return d.d===dateStr; })[0];
+  if(!target || !chosen || st.choices.indexOf(dateStr) < 0) return;
+  if(chosen !== target){                                    /* the two days trade boxes, locks and all */
+    var sl = target.slots, lk = target.lock, kp = target.kidPick;
+    target.slots = chosen.slots; target.lock = chosen.lock; target.kidPick = chosen.kidPick;
+    chosen.slots = sl; chosen.lock = lk; chosen.kidPick = kp;
   }
-  st.step++;
-  kidAdvance(kid, day);
-  render();
+  target.kidPick = {};
+  catsFor(kid).forEach(function(c){
+    if(!target.slots[c.k]) return;
+    target.lock[c.k] = true;                                 /* a choice the kid made survives a shuffle */
+    target.kidPick[c.k] = {at:now(), by:(deviceMember()||{}).id || null, picker:'kid'};
+  });
+  touch(kid.week); touch(kid); save();
+  st.done = true; render();
 }
-/* move to the next compartment that actually has something to choose; skip the rest */
-function kidAdvance(kid, day){
-  var st = UI.kid, cats = catsFor(kid);
-  while(st.step < cats.length){
-    var next = cats[st.step].k;
-    st.options[next] = kidOptions(kid, day, next, st.chosen);
-    if(st.options[next].length) return;
-    st.chosen[next] = day.slots[next] || null;
-    st.step++;
-  }
+/* the 6pm reminder lives on the phone itself (the iPhone app); the web has no way to schedule one */
+function kidReminderSync(){
+  var ln = nativePlugin('LocalNotifications'); if(!ln || !S) return;
+  var who = kids().filter(function(k){ return k.settings.kidPick && k.settings.kidReminder !== false; });
+  var want = who.length && !gated();
+  if(!want){ ln.cancel({notifications:[{id:1801}]}).catch(function(){}); return; }
+  var names = who.map(kidLabel).filter(Boolean);
+  ln.requestPermissions().then(function(p){
+    if(!p || p.display !== 'granted') return;
+    return ln.schedule({notifications:[{id:1801, title:'Time to pick tomorrow’s box',
+      body:(names.length ? 'Hand '+names.join(' and ')+' the phone.' : 'Hand them the phone.'),
+      schedule:{on:{hour:18, minute:0}, allowWhileIdle:true}}]});
+  }).catch(function(){});
 }
 
 /* --------------------------------------------- household-wide roll-ups */
@@ -1833,6 +1824,9 @@ backEl.addEventListener('click', closeSheet);
 document.getElementById('sheetClose').addEventListener('click', closeSheet);
 
 /* ---------------------------------------------------------- fragments */
+/* what a food brings to the box, in the words the pairing uses; two at most, the ones that matter to a pairing first */
+var TRAITS = ['crunchy','soft','protein','tangy','sweet','salty','juicy','hearty','light'];
+function traitsOf(f){ return TRAITS.filter(function(t){ return has(f, t); }).slice(0, 2); }
 function tinHTML(kid, day, mode){
   var h = '<div class="tin">';
   catsFor(kid).forEach(function(c){
@@ -1840,6 +1834,7 @@ function tinHTML(kid, day, mode){
     var packedRow = kid.packed[day.d] || {};
     var packed = mode==='pack' && ticked(packedRow, c.k);
     var sub = f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '');
+    var tr = f ? traitsOf(f) : [];
     var kidPicked = day.kidPick && day.kidPick[c.k];
     var mark = mode==='pack' ? '<span class="tick">'+svg('check',9)+'</span>'
              : (kidPicked ? '<span title="'+esc(kid.name)+' picked this">★</span>'
@@ -1849,7 +1844,7 @@ function tinHTML(kid, day, mode){
       +  (mode==='pack' ? ' aria-pressed="'+(packed?'true':'false')+'"' : '')+'>'
       +  '<span class="lab">'+c.label+mark+'</span>'
       +  '<span class="nm">'+(f ? esc(f.n) : 'Nothing picked')+'</span>'
-      +  '<span class="sub">'+esc(sub)+'</span></button>';
+      +  '<span class="tr">'+tr.map(function(t){ return '<i class="t-'+t+'">'+t+'</i>'; }).join('')+(sub ? '<i class="care">'+esc(sub)+'</i>' : '')+'</span></button>';
   });
   return h+'</div>';
 }
@@ -1987,7 +1982,7 @@ function reviewCard(kid, d){
     + '<h3>How did '+(kidRef(kid) ? esc(kidRef(kid))+'&#8217;s' : 'the')+' box go?</h3>'
     + (premiumTag() ? '<div style="margin-top:6px">'+premiumTag()+'</div>' : '')+'</div>';
   if(gated()) return '<div class="card review">'+head+'</div>'
-    + '<p class="hint" style="margin:0">What came home, what to rest, what they always eat: the next draw learns from it.</p>'
+    + ''
     + '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary sm" data-act="upgrade" data-why="review">Get the Household plan</button>'
     + '<button class="btn ghost sm" data-act="review-later" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">Not now</button></div></div>';
   var h = '<div class="card review">'+head
@@ -2008,29 +2003,31 @@ function reviewCard(kid, d){
 /* ----------------------------------------------------------- kid's pick */
 function viewKid(){
   var st = UI.kid, kid = kidById(st.kidId), cats = catsFor(kid);
-  var day = kid.week.days.filter(function(d){ return d.d===st.d; })[0];
-  var l = dayLabel(st.d);
-  var dots = '<div class="dots">'+catsFor(kid).map(function(c,i){
-    return '<i class="'+(i<st.step?'did':i===st.step?'on':'')+'"></i>'; }).join('')+'</div>';
-  var h = '<div class="kidmode"><div class="top">'+dots
-    + (st.step < cats.length ? '<button class="btn ghost sm exit" data-act="kid-exit">Give the phone back</button>' : '')+'</div>';
-  if(st.step < cats.length){
-    var c = cats[st.step], opts = st.options[c.k] || [];
+  var days = kid.week.days, target = days.filter(function(d){ return d.d===st.d; })[0];
+  var l = dayLabel(st.d), when = l.rel ? l.rel.toLowerCase()+'’s' : l.full+'’s';
+  var miniTin = function(day){
+    return '<span class="mini">'+cats.map(function(c){
+      var f = foodById(kid, day.slots[c.k]);
+      return '<span class="cmp c-'+c.k+'"><span class="ic">'+(f ? iconFor(f) : '')+'</span><span class="nm">'+(f ? esc(f.n) : '')+'</span></span>';
+    }).join('')+'</span>';
+  };
+  var h = '<div class="kidmode"><div class="top"><span class="catlab" style="color:var(--accent)">'+esc(l.rel || l.full)+'</span>'
+    + (!st.done ? '<button class="btn ghost sm exit" data-act="kid-exit">Give the phone back</button>' : '')+'</div>';
+  if(!st.done){
     h += '<div class="body"><div>'
-      +  '<span class="catlab" style="color:var(--c-'+c.k+')">'+KIDWORD[c.k]+' · '+esc(l.rel || l.full)+'</span>'
-      +  '<h1>'+(kidLabel(kid) ? esc(kidLabel(kid))+', pick' : 'Pick')+' your '+KIDWORD[c.k]+'.</h1>'
-      +  '<p class="hint">'+(opts.length>1 ? 'Tap the one you want.' : 'Only one to choose from today — tap it.')+'</p></div>'
-      +  '<div class="picks'+(opts.length===1?' one':'')+'">'
-      +  opts.map(function(f){
-           return '<button class="pick" data-act="kid-pick" data-id="'+esc(f.id)+'" aria-label="'+esc(f.n)+'">'
-             + '<span class="ic" aria-hidden="true">'+iconFor(f)+'</span><span class="nm">'+esc(f.n)+'</span></button>';
+      +  '<h1>'+(kidLabel(kid) ? esc(kidLabel(kid))+', pick' : 'Pick')+' '+esc(when)+' box.</h1>'
+      +  '<p class="hint">Tap the one you want.</p></div>'
+      +  '<div class="boxes">'
+      +  st.choices.map(function(dstr){
+           var day = days.filter(function(d){ return d.d===dstr; })[0];
+           return '<button class="pickbox" data-act="kid-pick" data-d="'+esc(dstr)+'" aria-label="'+esc(cats.map(function(c){ var f = foodById(kid, day.slots[c.k]); return f ? f.n : ''; }).filter(Boolean).join(', '))+'">'+miniTin(day)+'</button>';
          }).join('')
       +  '</div></div>';
   } else {
     h += '<div class="body kiddone"><div class="big">🎉</div>'
-      +  '<h1>'+(kidLabel(kid) ? 'All packed, '+esc(kidLabel(kid))+'!' : 'All packed!')+'</h1>'
-      +  '<div class="tin">'+catsFor(kid).map(function(c){
-           var f = foodById(kid, day.slots[c.k]);
+      +  '<h1>'+(kidLabel(kid) ? 'That’s the one, '+esc(kidLabel(kid))+'!' : 'That’s the one!')+'</h1>'
+      +  '<div class="tin">'+cats.map(function(c){
+           var f = foodById(kid, target.slots[c.k]);
            return '<div class="cmp c-'+c.k+(c.minor?' minor':'')+'"><span class="lab">'+KIDWORD[c.k]+'</span>'
              + '<span class="ic">'+iconFor(f)+'</span><span class="nm">'+(f?esc(f.n):'')+'</span></div>';
          }).join('')+'</div>'
@@ -2075,14 +2072,14 @@ function viewPack(){
 
   slot.entries.forEach(function(e){
     var picked = e.day.kidPick && Object.keys(e.day.kidPick).length;
-    var canPick = catsFor(e.kid).some(function(c){ return eligible(e.kid, c.k).length > 0; });
+    var canPick = e.kid.settings.kidPick && pickChoices(e.kid).length > 1;
     h += '<div class="kidgroup">' + (multi ? kidLine(e.kid) : '')
       +  tinHTML(e.kid, e.day, 'pack')
       +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(e.kid, e.day)
       +  (picked ? '<span class="chip good pickchip">'+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'They')+' picked</span>' : '')
       +  (canPick && lab.diff >= 0
            ? (gated() ? '<button class="btn sm" data-act="upgrade" data-why="kidpick" style="margin-left:auto">'+svg('lock',13)+'Let '+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'them')+' pick</button>'
-             : '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">'+premiumTag()+'<button class="btn sm" data-act="kid-start" data-kid="'+esc(e.kid.id)+'" data-day="'+esc(e.day.d)+'">'
+             : '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">'+premiumTag()+'<button class="btn sm" data-act="kid-start" data-kid="'+esc(e.kid.id)+'">'
              + (picked ? 'Pick again' : 'Let '+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'them')+' pick') + '</button></span>') : '')
       +  '</div></div>';
   });
@@ -2091,7 +2088,6 @@ function viewPack(){
     +  '<div class="spread"><span class="count">'+done+' of '+total+' in the bag</span>'
     +  (total && done===total ? '<span class="chip good">Ready</span>' : '')+'</div></div>';
 
-  if(!multi && slot.entries[0]) h += '<p class="note">'+dayNote(slot.entries[0].kid, slot.entries[0].day)+'</p>';
 
   var rest = dates.filter(function(x){ return x.date > slot.date; });
   if(rest.length){
@@ -2131,9 +2127,9 @@ function viewWeek(){
       +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):(l.diff<0?' · gone':''))+'</em></div>'
       +  (l.diff < 0 ? '' : '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'">'
       +  svg('dice',15)+'Re-draw</button>')+'</div>'
-      +  tinHTML(kid, day, 'week') + '<p class="note">'+dayNote(kid, day)+'</p>' + chipsHTML(kid, day) + '</div>';
+      +  tinHTML(kid, day, 'week') + chipsHTML(kid, day) + '</div>';
   });
-  return h + '<p class="hint">Tap a compartment to swap it, keep it, or re-draw just that one.</p></div>';
+  return h + '</div>';
 }
 
 function viewShop(){
@@ -2146,8 +2142,7 @@ function viewShop(){
   var toBuy = rows.filter(function(r){ return !r.have; }).length;
   h += '<div class="spread"><span class="count">'+toBuy+' to buy'+(gated() ? '' : ' · '+(rows.length-toBuy)+' already home')+'</span>'
     +  '<button class="btn ghost sm" data-act="copy-list">Copy list</button></div>'
-    +  '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>'+(gated() ? 'Ticking off what the pantry already has, and remembering it next week, is part of the Household plan.' : 'Check off what the pantry already has, then shop the rest.')
-    +  (multi ? (kids().length === 2 ? ' Both' : ' All')+' lunchboxes are in one list.' : '')+'</span>'+premiumTag()+'</p>';
+    +  (gated() || premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>'+(gated() ? 'A pantry that remembers is part of the Household plan.' : 'Tick what is already home.')+'</span>'+premiumTag()+'</p>' : '');
   var groups = nullMap();
   rows.forEach(function(r){ (groups[r.aisle] = groups[r.aisle] || []).push(r); });
   AISLES.forEach(function(a){
@@ -2204,10 +2199,10 @@ function viewFoods(){
   return h + '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button></div>';
 }
 
-function viewSetup(){
-  var kid = activeKid(), s = kid.settings, me = deviceMember();
-  var h = '<div class="stack"><div><p class="view-sub">Setup</p><h2 class="view-title">Lunchboxes &amp; rules</h2></div>';
-  if(accountFirst()) h += accountCard();
+function viewBox(){
+  var kid = activeKid(), s = kid.settings;
+  var h = '<div class="stack"><div class="spread"><div><p class="view-sub">Lunchbox settings</p><h2 class="view-title">'+esc(kid.name)+'</h2></div>'
+    +  '<button class="btn sm" data-act="box-done">Done</button></div>';
 
   /* lunchbox profiles */
   h += '<div><div class="sect-head"><h3>Lunchboxes</h3><span class="count">'+kids().length+'</span></div><div class="list">';
@@ -2223,7 +2218,7 @@ function viewSetup(){
          +(UI.armed==='kid:'+kid.id?'Tap again to remove '+esc(kid.name):'Remove '+esc(kid.name))+'</button>' : '')
     +  '</div></div>';
 
-  /* per-lunchbox rules */
+  /* this lunchbox */
   h += '<div class="card stack" style="gap:14px">'
     +  '<div class="field"><label for="kidName">Name on this lunchbox</label>'
     +  '<input type="text" id="kidName" value="'+esc(kid.name)+'" placeholder="Whose lunch" maxlength="40"></div>'
@@ -2232,27 +2227,21 @@ function viewSetup(){
          return '<button class="tg" data-act="day" data-d="'+d+'" aria-pressed="'+(s.days.indexOf(d)>-1)+'" aria-label="'+DOWFULL[d]+'">'+DOW[d][0]+'</button>';
        }).join('')+'</div></div></div>';
 
+  var sw = function(act, k, t, on, d){
+    return '<div class="switch"><div><div class="t">'+t+'</div>'+(d ? '<div class="d">'+d+'</div>' : '')+'</div>'
+      + '<button class="sw" data-act="'+act+'"'+(k ? ' data-k="'+k+'"' : '')+' aria-pressed="'+(!!on)+'" aria-label="'+esc(t)+'"></button></div>';
+  };
   var slotsOn = s.slots || {};
   h += '<div><div class="sect-head"><h3>In '+kidPoss(kid)+' box</h3></div><div class="card">'
-    +  '<div class="switch"><div><div class="t">A snack, too</div>'
-    +  '<div class="d">A fifth compartment for recess or morning tea. Turning it on adds a few to the food list.</div></div>'
-    +  '<button class="sw" data-act="compartment" data-k="snack" aria-pressed="'+(!!slotsOn.snack)+'" aria-label="A snack, too"></button></div>'
-    +  '<div class="switch"><div><div class="t">A drink</div>'
-    +  '<div class="d">Water, milk or juice, planned and on the shopping list like everything else.</div></div>'
-    +  '<button class="sw" data-act="compartment" data-k="drink" aria-pressed="'+(!!slotsOn.drink)+'" aria-label="A drink"></button></div>'
+    +  sw('compartment', 'snack', 'A snack, too', slotsOn.snack)
+    +  sw('compartment', 'drink', 'A drink', slotsOn.drink)
     +  '</div></div>';
 
-  var rule = function(k, t, d){
-    return '<div class="switch"><div><div class="t">'+t+'</div><div class="d">'+d+'</div></div>'
-      + '<button class="sw" data-act="rule" data-k="'+k+'" aria-pressed="'+(!!s[k])+'" aria-label="'+esc(t)+'"></button></div>';
-  };
   h += '<div><div class="sect-head"><h3>School rules</h3></div><div class="card">'
-    +  '<div class="switch"><div><div class="t">Cold lunches only</div>'
-    +  '<div class="d">No microwave at school, so anything needing heat stays out of the draw.</div></div>'
-    +  '<button class="sw" data-act="noheat" aria-pressed="'+s.noHeat+'" aria-label="Cold lunches only"></button></div>'
-    +  rule('noIce', 'No ice pack', 'Nothing that has to stay cold until lunch.')
-    +  rule('shortWindow', 'Short eating time', 'Ten minutes to eat: nothing fiddly, nothing that needs a spoon.')
-    +  rule('noChoc', 'No chocolate or candy', 'Goes by the name: chocolate, candy, gummies, marshmallows, fudge and the like.')
+    +  sw('noheat', '', 'Cold lunches only', s.noHeat)
+    +  sw('rule', 'noIce', 'No ice pack', s.noIce)
+    +  sw('rule', 'shortWindow', 'Short eating time', s.shortWindow)
+    +  sw('rule', 'noChoc', 'No chocolate or candy', s.noChoc)
     +  '</div></div>';
 
   h += '<div><div class="sect-head"><h3>Keep out of '+kidPoss(kid)+' box</h3></div><div class="card">'
@@ -2260,20 +2249,28 @@ function viewSetup(){
     +  ALLERGENS.map(function(a){
          return '<button class="tg" data-act="allergen" data-k="'+a.k+'" aria-pressed="'
            +(s.avoidAllergens.indexOf(a.k)>-1)+'">'+esc(a.label)+'</button>'; }).join('')
-    +  '</div><div class="field" style="margin-top:14px"><label for="avoidText">Anything else</label>'
-    +  '<textarea id="avoidText" placeholder="salami, kiwi, sesame" maxlength="500">'+esc(s.avoidText)+'</textarea>'
-    +  '<span class="hint">Comma separated. Matching foods are skipped and flagged, never deleted.</span></div></div></div>';
+    +  '</div><div class="field" style="margin-top:14px"><label for="avoidText">Anything else, comma separated</label>'
+    +  '<textarea id="avoidText" placeholder="salami, kiwi, sesame" maxlength="500">'+esc(s.avoidText)+'</textarea></div></div></div>';
 
-  /* who is on this device */
-  if(!accountFirst()) h += accountCard();
+  /* the kid's say */
+  var poss = kidPoss(kid);
+  h += '<div><div class="sect-head"><h3>'+poss.charAt(0).toUpperCase()+poss.slice(1)+' say</h3>'+(premiumTag() ? '<span>'+premiumTag()+'</span>' : '')+'</div><div class="card">'
+    +  sw('kidpick-on', '', 'They pick their box each day', s.kidPick, 'From the week already planned and shopped for.')
+    +  (s.kidPick && native() ? sw('kid-reminder', '', 'Remind us at 6pm', s.kidReminder !== false) : '')
+    +  '</div></div>';
+  return h+'</div>';
+}
+
+function viewSetup(){
+  var me = deviceMember();
+  var h = '<div class="stack"><div><p class="view-sub">Account</p><h2 class="view-title">'+(signedIn() ? 'Your household' : 'This phone')+'</h2></div>';
+  h += accountCard();
   h += '<div><div class="sect-head"><h3>This phone</h3></div><div class="card stack" style="gap:12px">'
     +  '<div class="field"><label for="memberName">Your name</label>'
-    +  '<input type="text" id="memberName" value="'+esc(me?me.name:'')+'" placeholder="So the app knows who packed" maxlength="60"></div></div></div>';
+    +  '<input type="text" id="memberName" value="'+esc(me?me.name:'')+'" placeholder="Who packed" maxlength="60"></div></div></div>';
 
   /* transfer */
   h += '<div><div class="sect-head"><h3>'+(signedIn() ? 'Backup' : 'Move to another phone')+'</h3></div><div class="card stack" style="gap:12px">'
-    +  '<p class="hint" style="margin:0">Copy everything here, then paste it into the app on the other phone. '
-    +  'The two phones stay separate until you paste again.</p>'
     +  '<div class="row" style="gap:8px;flex-wrap:wrap">'
     +  '<button class="btn sm" data-act="copy-data">Copy your lunches</button>'
     +  (Downloads ? '<button class="btn sm" data-act="save-file">'+svg('save',15)+'Save a backup file</button>' : '')
@@ -2284,12 +2281,9 @@ function viewSetup(){
     +  '<div class="kv"><span>Last change</span><span>'+esc(whenLabel(S.updatedAt))+'</span></div>'
     +  '</div></div>';
 
-  h += '<div class="card stack" style="gap:10px"><h3>'+(signedIn() ? 'On this phone and in your household' : 'On this phone only')+'</h3>'
-    +  '<p class="hint" style="margin:0">'+(signedIn()
-        ? 'The lunches are stored '+(native() ? 'on this phone' : 'in this browser')+' and synced to your account, so everyone in the household above sees them. '
-        : 'Everything is stored '+(native() ? 'on this phone' : 'in this browser')+'. Nothing is uploaded and no one else can see it. ')
-    +  (native() ? '' : 'Use Share &rarr; <b>Add to Home Screen</b> to open it full-screen like an app.')
-    +  (Store.ok ? '' : ' <b>Storage is blocked '+(native() ? 'on this phone' : 'in this browser')+', so changes will not survive a reload.</b>')+'</p>'
+  h += '<div class="card stack" style="gap:10px"><h3>'+(signedIn() ? 'Stored here and in your household' : 'Stored on this '+(native() ? 'phone' : 'browser')+' only')+'</h3>'
+    +  (native() || signedIn() ? '' : '<p class="hint" style="margin:0">Share &rarr; <b>Add to Home Screen</b> opens it like an app.</p>')
+    +  (Store.ok ? '' : '<p class="hint" style="margin:0"><b>Storage is blocked '+(native() ? 'on this phone' : 'in this browser')+', so changes will not survive a reload.</b></p>')
     +  '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:4px">'
     +  '<button class="btn ghost sm" data-act="clear-week">'+(UI.armed==='week'?'Tap again to clear':'Clear the plans')+'</button>'
     +  '<button class="btn danger sm" data-act="clear-all">'+(UI.armed==='all'?'Tap again to erase':'Erase everything')+'</button>'
@@ -2316,10 +2310,10 @@ function accountCard(){
   if(!signedIn()){
     if(billingOn()) h += '<div class="kv"><span>Household plan</span><span>'+esc(planLabel())+'</span></div>'
       +  '<div class="row"><button class="btn sm" data-act="upgrade" data-why="keep">'+(trialing() ? 'Keep the Household plan' : 'Get the Household plan')+'</button></div>';
-    h += '<p class="hint" style="margin:0">Sign in to keep this on more than one phone and share it with the other parent. No password: we email you a link and a code.</p>'
+    h += '<p class="hint" style="margin:0">The same lunches on every phone. No password: we email a link and a code.</p>'
       +  '<div class="field"><label for="signinEmail">Email</label><input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email" inputmode="email" enterkeyhint="send" value="'+esc(Account.linkSent || '')+'"></div>'
       +  '<button class="btn primary wide" data-act="signin-request"'+(Account.sending ? ' disabled' : '')+'>'+(Account.sending ? 'Sending\u2026' : 'Email me a sign-in link')+'</button>';
-    if(Account.linkSent) h += '<p class="hint" style="margin:0">Sent to <b>'+esc(Account.linkSent)+'</b>. Tap the link in the email, or type the code from it here. Both work once, for fifteen minutes.'
+    if(Account.linkSent) h += '<p class="hint" style="margin:0">Sent to <b>'+esc(Account.linkSent)+'</b>. Tap the link, or type the code here.'
       + (Account.devLink ? ' <a href="'+esc(Account.devLink)+'" data-dev-link>Open the link</a> (development only)' : '')+'</p>'
       + '<div class="field"><label for="signinCode">Code from the email</label><div class="row" style="gap:8px"><input type="text" id="signinCode" placeholder="ABCD-1234" autocomplete="one-time-code" inputmode="text" enterkeyhint="go" autocapitalize="characters" maxlength="9" style="font-family:var(--f-mono);letter-spacing:.08em">'
       + '<button class="btn sm" data-act="signin-code">Sign in</button></div></div>';
@@ -2388,8 +2382,7 @@ function kidSheet(){
       +  '<span class="dot" style="background:'+hueVar(k)+'"></span></button>';
   });
   h += '</div><button class="btn wide" data-act="add-kid">'+svg('plus',17)+'Add a lunchbox'+(kids().length && premiumTag() ? ' <span style="margin-left:6px">'+premiumTag()+'</span>' : '')+'</button>'
-    +  '<p class="hint">Each lunchbox keeps its own foods, school rules and week. '
-    +  'The shopping list and the pack checklist cover all of them together.</p>';
+    +  '';
   openSheet('Lunchboxes', h);
 }
 function slotSheet(kidId, dayStr, cat){
@@ -2454,7 +2447,7 @@ function addOwnSheet(){
     + TAG_FIRST.map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="false">'+TAG_LABEL[t]+'</button>'; }).join('')
     + '</div><details class="more"><summary>More</summary><div class="toggles" style="margin-top:8px">'
     + TAGS.filter(function(t){ return TAG_FIRST.indexOf(t) < 0; }).map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="false">'+TAG_LABEL[t]+'</button>'; }).join('')
-    + '</div></details></div><span class="hint">Tap what fits. It helps the app pair things and know when an ice pack is needed.</span></div>'
+    + '</div></details></div><span class="hint">Tap what fits.</span></div>'
     + '<div class="field"><label>Contains</label><div class="toggles" id="nfAl">'
     + ALLERGENS.map(function(a){ return '<button class="tg" data-nf="al" data-v="'+a.k+'" aria-pressed="false">'+a.label+'</button>'; }).join('')
     + '</div></div><button class="btn primary wide" data-act="save-own">Add to the list</button>';
@@ -2465,8 +2458,6 @@ function addKidSheet(){
   if(gated() && kids().length >= 1){ upgradeSheet('lunchbox'); return; }
   var h = '<div class="field"><label for="nkName">Name on the lunchbox</label>'
     + '<input type="text" id="nkName" placeholder="Sam" autocomplete="off" maxlength="40"></div>'
-    + '<p class="hint" style="margin:0">A new lunchbox starts empty with its own school rules &mdash; different school, '
-    + 'different allergies, different days are all fine.</p>'
     + '<button class="btn primary wide" data-act="save-kid">Add lunchbox</button>';
   openSheet('Add a lunchbox', h);
   setTimeout(function(){ var el = document.getElementById('nkName'); if(el) el.focus(); }, 220);
@@ -2499,7 +2490,7 @@ function exportText(){
 var TABS = [
   {k:'pack', label:'Pack', icon:'pack'}, {k:'week', label:'Week', icon:'week'},
   {k:'shop', label:'Shop', icon:'shop'}, {k:'foods',label:'Foods',icon:'foods'},
-  {k:'setup',label:'Setup',icon:'setup'}
+  {k:'setup',label:'Account',icon:'account'}
 ];
 function render(){
   if(!S) return;
@@ -2518,7 +2509,8 @@ function render(){
   document.getElementById('tabs').style.display = '';
   document.querySelector('.topbar').style.display = '';
   document.getElementById('view').innerHTML =
-      UI.tab==='pack'  ? viewPack()
+      UI.box           ? viewBox()
+    : UI.tab==='pack'  ? viewPack()
     : UI.tab==='week'  ? viewWeek()
     : UI.tab==='shop'  ? viewShop()
     : UI.tab==='foods' ? viewFoods()
@@ -2528,12 +2520,14 @@ function render(){
       + svg(t.icon)+'<span>'+t.label+'</span></button>'; }).join('');
   /* Pack and Shop cover the whole household, so the per-lunchbox switcher
      only belongs on the views it actually steers. */
-  var householdView = kids().length>1 && (UI.tab==='pack' || UI.tab==='shop');
+  var householdView = kids().length>1 && (UI.tab==='pack' || UI.tab==='shop') && !UI.box;
+  if(UI.box && !kid) UI.box = false;
+  var gear = isHelper() ? '' : '<button class="iconbtn" data-act="box-settings" aria-label="Lunchbox settings" aria-pressed="'+(!!UI.box)+'">'+svg('setup',18)+'</button>';
   document.getElementById('who').innerHTML = !kid ? ''
-    : householdView
+    : (householdView
       ? '<button class="kidbtn" data-act="kidsheet">'+kids().length+' lunchboxes<span class="caret">&#9662;</span></button>'
       : '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)+'"></span>'
-        + esc(kid.name)+'<span class="caret">&#9662;</span></button>';
+        + esc(kid.name)+'<span class="caret">&#9662;</span></button>') + (UI.tab === 'setup' ? '' : gear);
 }
 
 /* ---------------------------------------------------------------- events */
@@ -2584,8 +2578,13 @@ document.addEventListener('click', function(ev){
   }
 
   /* kid's pick */
-  if(act==='kid-start'){ if(gated()){ upgradeSheet('kidpick'); return; } startKidPick(el.getAttribute('data-kid'), el.getAttribute('data-day')); window.scrollTo(0,0); return; }
-  if(act==='kid-pick'){ kidChoose(el.getAttribute('data-id')); return; }
+  if(act==='kid-start'){ if(gated()){ upgradeSheet('kidpick'); return; } startKidPick(el.getAttribute('data-kid')); window.scrollTo(0,0); return; }
+  if(act==='kid-pick'){ kidChooseBox(el.getAttribute('data-d')); return; }
+  if(act==='kidpick-on'){
+    if(!kid.settings.kidPick && gated()){ upgradeSheet('kidpick'); return; }
+    kid.settings.kidPick = !kid.settings.kidPick; touch(kid.settings); touch(kid); save(); render(); kidReminderSync(); return;
+  }
+  if(act==='kid-reminder'){ kid.settings.kidReminder = kid.settings.kidReminder === false; touch(kid.settings); touch(kid); save(); render(); kidReminderSync(); return; }
   if(act==='kid-exit'){ UI.kid = null; render(); toast('Handed back'); return; }
 
   /* first run */
@@ -2625,10 +2624,12 @@ document.addEventListener('click', function(ev){
   }
 
   /* navigation */
-  if(act==='tab'){ UI.tab = el.getAttribute('data-tab'); render(); window.scrollTo(0,0); return; }
-  if(act==='go-foods'){ UI.tab='foods'; render(); window.scrollTo(0,0); return; }
-  if(act==='go-kid-foods'){ S.activeKidId = el.getAttribute('data-id'); UI.tab='foods'; save(); render(); window.scrollTo(0,0); return; }
-  if(act==='go-week'){ UI.tab='week'; render(); window.scrollTo(0,0); return; }
+  if(act==='tab'){ UI.tab = el.getAttribute('data-tab'); UI.box = false; render(); window.scrollTo(0,0); return; }
+  if(act==='box-settings'){ UI.box = !UI.box; render(); window.scrollTo(0,0); return; }
+  if(act==='box-done'){ UI.box = false; render(); window.scrollTo(0,0); return; }
+  if(act==='go-foods'){ UI.tab='foods'; UI.box = false; render(); window.scrollTo(0,0); return; }
+  if(act==='go-kid-foods'){ S.activeKidId = el.getAttribute('data-id'); UI.tab='foods'; UI.box = false; save(); render(); window.scrollTo(0,0); return; }
+  if(act==='go-week'){ UI.tab='week'; UI.box = false; render(); window.scrollTo(0,0); return; }
   if(act==='kidsheet'){ kidSheet(); return; }
 
   /* lunchbox profiles */
@@ -2643,7 +2644,7 @@ document.addEventListener('click', function(ev){
     var name = (nk.value||'').trim().slice(0,40);
     if(!name){ nk.focus(); toast('Give the lunchbox a name'); return; }
     var k = newKid(name, S.kids.length % KID_HUES.length);
-    S.kids.push(k); S.activeKidId = k.id; UI.tab='foods';
+    S.kids.push(k); S.activeKidId = k.id; UI.tab='foods'; UI.box = false;   /* a new lunchbox starts on its foods */
     save(); closeSheet(); render(); toast(name+' added'); return;
   }
   if(act==='del-kid'){
@@ -2882,7 +2883,7 @@ document.addEventListener('click', function(ev){
     return;
   }
   if(act==='upgrade'){ upgradeSheet(el.getAttribute('data-why') || ''); return; }
-  if(act==='go-signin'){ rememberAfter(el.getAttribute('data-why')); UI.tab = 'setup'; render(); setTimeout(function(){ var el = document.getElementById('signinEmail'); if(el) el.focus(); }, 120); return; }
+  if(act==='go-signin'){ rememberAfter(el.getAttribute('data-why')); UI.tab = 'setup'; UI.box = false; render(); setTimeout(function(){ var el = document.getElementById('signinEmail'); if(el) el.focus(); }, 120); return; }
   if(act==='buy' || act==='portal'){
     if(Account.buying) return;
     Account.buying = true; var was = el.textContent; el.disabled = true; el.textContent = 'Opening Stripe\u2026';
@@ -3072,7 +3073,7 @@ Store.load().then(function(r){
   else if(portalBack){ UI.tab = 'setup'; Account.first = true; }
   if(qs.get('signed-in') || qs.get('join') || back !== null || portalBack || wantUpgrade) history.replaceState(null, '', location.pathname);
   /* what the plans cost and whether anything is gated at all; cached, and answered from the phone offline */
-  loadBilling().then(function(){ if(!signedIn()) render(); });
+  loadBilling().then(function(){ if(!signedIn()) render(); kidReminderSync(); });
   var afterMe = function(){
     if(!joinCode) return;
     api('GET', '/api/household/invite?code='+encodeURIComponent(joinCode)).then(function(r){
