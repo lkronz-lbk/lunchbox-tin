@@ -1282,27 +1282,32 @@ function touch(rec){ rec.updatedAt = now(); }
    bytes, and they work offline. First keyword match wins, so dish words come
    before ingredient words ("chocolate chip cookies" is a cookie, not chocolate). */
 var ICONS = [
-  ['water bottle','💧'],['flavoured water','💧'],['flavored water','💧'],['coconut water','🥥'],['juice','🧃'],
+  ['fruit cup','🍇'],                                     /* before the drinks: "fruit cup in juice" is fruit */
+  /* drinks */
+  ['water bottle','💧'],['flavoured water','💧'],['flavored water','💧'],['coconut water','🥥'],['juice box','🧃'],['juice','🧃'],
   ['smoothie','🥤'],['yogurt drink','🥤'],['milk','🥛'],
-  ['sushi','🍣'],['pizza','🍕'],['bagel','🥯'],['sandwich','🥪'],['sub roll','🥖'],['burrito','🌯'],['wrap','🌯'],
-  ['roll-up','🌯'],['pinwheel','🌯'],['pita','🥙'],['quesadilla','🫓'],['tortellini','🍝'],['pasta','🍝'],
-  ['mac & cheese','🧀'],['noodle','🍜'],['soup','🍲'],['chili','🍲'],['skewer','🍢'],['nugget','🍗'],
-  ['parfait','🍨'],['quinoa','🥗'],['salad','🥗'],['bowl','🍚'],['rice cake','🍘'],['rice','🍚'],
-  ['cookie','🍪'],['brownie','🍫'],['muffin','🧁'],['cupcake','🧁'],['donut','🍩'],['pudding','🍮'],['jello','🍮'],
-  ['marshmallow','🍡'],['graham','🍪'],['wafer','🍪'],['leather','🍬'],['gummy','🍬'],['candy','🍬'],['licorice','🍬'],
-  ['fruit snack','🍬'],['crispy treat','🍚'],['macaroon','🥥'],['meringue','🍥'],['caramel','🍿'],['lemon','🍋'],
-  ['blondie','🍰'],['cake','🍰'],['bread','🍞'],['cereal bar','🥣'],['granola','🥣'],['trail mix','🥜'],['bar','🍫'],
-  ['applesauce','🍎'],['apple','🍎'],['grape','🍇'],['strawberr','🍓'],['blueberr','🫐'],['raspberr','🍓'],
-  ['blackberr','🫐'],['cranberr','🍒'],['clementine','🍊'],['mandarin','🍊'],['tangerine','🍊'],['orange','🍊'],
-  ['banana','🍌'],['watermelon','🍉'],['cantaloupe','🍈'],['honeydew','🍈'],['melon','🍈'],['pineapple','🍍'],
-  ['peach','🍑'],['nectarine','🍑'],['apricot','🍑'],['mango','🥭'],['kiwi','🥝'],['pear','🍐'],['plum','🍑'],
-  ['cherr','🍒'],['pomegranate','🍎'],['raisin','🍇'],['fruit','🍇'],
-  ['carrot','🥕'],['cucumber','🥒'],['pickle','🥒'],['tomato','🍅'],['snap pea','🫛'],['edamame','🫛'],['pea','🫛'],
-  ['celery','🥬'],['pepper','🫑'],['broccoli','🥦'],['olive','🫒'],['corn','🌽'],['seaweed','🌿'],['avocado','🥑'],
-  ['guacamole','🥑'],['salsa','🍅'],['hummus','🫘'],['chickpea','🫘'],['bean','🫘'],['seed','🌻'],['nut','🥜'],
-  ['pretzel','🥨'],['popcorn','🍿'],['goldfish','🐟'],['cracker','🍘'],['chip','🍟'],['crisp','🍟'],['straw','🥕'],
-  ['breadstick','🥖'],['yogurt','🥛'],['cottage','🥣'],['babybel','🧀'],['cheese','🧀'],['egg','🥚'],['tuna','🐟'],
-  ['salmon','🐟'],['chicken','🍗'],['turkey','🦃'],['ham','🍖'],['salami','🥓'],['pepperoni','🍕'],['bacon','🥓'],
+  /* named dishes first: the longer, more specific name wins */
+  ['egg & cheese muffin','🥪'],['grilled cheese','🥪'],['sandwich cookie','🍪'],['sushi','🍣'],['pizza','🍕'],['bagel','🥯'],
+  ['sandwich','🥪'],['sub roll','🥖'],['burrito','🌯'],['wrap','🌯'],['roll-up','🌯'],['pinwheel','🌯'],['quesadilla','🫓'],
+  ['pita chip','🍟'],['pita','🥙'],['tortellini','🍝'],['pasta','🍝'],['mac & cheese','🧀'],['noodle','🍜'],['soup','🍲'],
+  ['chili','🍲'],['skewer','🍢'],['nugget','🍗'],['parfait','🥣'],['quinoa','🥗'],['tuna','🐟'],['salmon','🐟'],['salad','🥗'],
+  ['bowl','🍚'],['rice cake','🍘'],['rice pudding','🍮'],['crispy treat','🍚'],['licorice','🍬'],['rice','🍚'],
+  /* sweets */
+  ['animal cracker','🍪'],['animal cookie','🍪'],['cookie','🍪'],['brownie','🍫'],['muffin','🧁'],['cupcake','🧁'],['donut','🍩'],
+  ['pudding','🍮'],['jello','🍮'],['marshmallow','🍡'],['graham','🍪'],['wafer','🍪'],['leather','🍬'],['gummy','🍬'],['candy','🍬'],
+  ['fruit snack','🍬'],['macaroon','🥥'],['meringue','🍥'],['caramel corn','🍿'],['caramel','🍬'],['lemon bar','🍋'],['lemon','🍋'],
+  ['blondie','🍰'],['cake','🍰'],['breadstick','🥖'],['bread','🍞'],['cereal bar','🥣'],['cereal','🥣'],['granola','🥣'],['trail mix','🥜'],['bar','🍫'],
+  /* fruit: pineapple before apple, cranberries before cherries */
+  ['applesauce','🍎'],['pineapple','🍍'],['apple','🍎'],['grape','🍇'],['strawberr','🍓'],['blueberr','🫐'],['raspberr','🍓'],
+  ['blackberr','🫐'],['cranberr','🍒'],['cherry tomato','🍅'],['cherr','🍒'],['clementine','🍊'],['mandarin','🍊'],['tangerine','🍊'],['orange','🍊'],
+  ['banana','🍌'],['watermelon','🍉'],['cantaloupe','🍈'],['honeydew','🍈'],['melon','🍈'],['peach','🍑'],['nectarine','🍑'],
+  ['apricot','🍑'],['mango','🥭'],['kiwi','🥝'],['pickle','🥒'],['pear','🍐'],['plum','🍑'],['pomegranate','🍎'],['raisin','🍇'],['fruit','🍇'],
+  /* sides: pepperoni before pepper, chickpeas before peas, popcorn before corn */
+  ['carrot','🥕'],['cucumber','🥒'],['tomato','🍅'],['snap pea','🫛'],['edamame','🫛'],['chickpea','🫘'],['pea','🫛'],
+  ['celery','🥬'],['pepperoni','🍕'],['pepper','🫑'],['broccoli','🥦'],['olive','🫒'],['popcorn','🍿'],['corn','🌽'],['seaweed','🌿'],
+  ['avocado','🥑'],['guacamole','🥑'],['salsa','🍅'],['hummus','🫘'],['bean','🫘'],['seed','🌻'],['nut','🥜'],
+  ['pretzel','🥨'],['goldfish','🐟'],['cracker','🍘'],['chip','🍟'],['crisp','🍟'],['straw','🥕'],['yogurt','🥛'],['cottage','🥣'],
+  ['babybel','🧀'],['cheese','🧀'],['egg','🥚'],['chicken','🍗'],['turkey','🦃'],['ham','🍖'],['salami','🥓'],['bacon','🥓'],
   ['blt','🥓'],['dip','🥣'],['ranch','🥣'],['chocolate','🍫'],['coconut','🥥']
 ];
 var CAT_ICON = {main:'🍱', side:'🥕', fruit:'🍎', sweet:'🍪', snack:'🍘', drink:'🥤'};
@@ -2119,6 +2124,16 @@ function viewKid(){
 }
 
 /* ---------------------------------------------------------------- views */
+/* "Let Emma pick", only on the box the pick would change: the next one with nothing in the bag */
+function pickButton(kid, day){
+  if(!kid.settings.kidPick) return '';
+  var target = nextPickDay(kid);
+  if(!target || target.d !== day.d || pickChoices(kid).length < 2) return '';
+  var who = kidRef(kid) ? esc(kidRef(kid)) : 'them', picked = day.kidPick && Object.keys(day.kidPick).length;
+  if(gated()) return '<button class="btn sm" data-act="upgrade" data-why="kidpick" style="margin-left:auto">'+svg('lock',13)+'Let '+who+' pick</button>';
+  return '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">'+premiumTag()
+    + '<button class="btn sm" data-act="kid-start" data-kid="'+esc(kid.id)+'">'+(picked ? 'Pick again' : 'Let '+who+' pick')+'</button></span>';
+}
 function viewPack(){
   var ks = kids(), multi = ks.length>1;
   if(!ks.some(function(k){ return foodsOf(k).length; }))
@@ -2152,17 +2167,9 @@ function viewPack(){
     + (slot.entries.length > 1 ? 'es' : '') + '</h2></div>';
 
   slot.entries.forEach(function(e){
-    var picked = e.day.kidPick && Object.keys(e.day.kidPick).length;
-    var canPick = e.kid.settings.kidPick && pickChoices(e.kid).length > 1;
     h += '<div class="kidgroup">' + (multi ? kidLine(e.kid) : '')
       +  tinHTML(e.kid, e.day, 'pack')
-      +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(e.kid, e.day)
-      +  (picked ? '<span class="chip good pickchip">'+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'They')+' picked</span>' : '')
-      +  (canPick && lab.diff >= 0
-           ? (gated() ? '<button class="btn sm" data-act="upgrade" data-why="kidpick" style="margin-left:auto">'+svg('lock',13)+'Let '+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'them')+' pick</button>'
-             : '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">'+premiumTag()+'<button class="btn sm" data-act="kid-start" data-kid="'+esc(e.kid.id)+'">'
-             + (picked ? 'Pick again' : 'Let '+(kidRef(e.kid) ? esc(kidRef(e.kid)) : 'them')+' pick') + '</button></span>') : '')
-      +  '</div></div>';
+      +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(e.kid, e.day) + pickButton(e.kid, e.day) + '</div></div>';
   });
 
   h += '<div class="stack" style="gap:8px"><div class="meter"><i style="width:'+(total?done/total*100:0)+'%"></i></div>'
@@ -2178,9 +2185,13 @@ function viewPack(){
       var who = multi ? x.entries.map(function(e){ return e.kid.name; }).join(', ')
         : catsFor(x.entries[0].kid).map(function(c){ var f = foodById(x.entries[0].kid, x.entries[0].day.slots[c.k]); return f?f.n:null; })
               .filter(Boolean).join(' · ');
-      h += '<button class="item" data-act="go-week"><span class="grow"><span class="nm">'+esc(l.full)+'</span>'
+      var picks = x.entries.map(function(e){ return pickButton(e.kid, e.day); }).join('');
+      var pickedBy = x.entries.filter(function(e){ return e.day.kidPick && Object.keys(e.day.kidPick).length; }).map(function(e){ return (kidRef(e.kid) || 'They')+' picked'; }).join(', ');
+      /* the day the kid's pick would change carries the button, so the pick lands where it is seen */
+      h += '<'+(picks ? 'div' : 'button')+' class="item"'+(picks ? '' : ' data-act="go-week"')+'><span class="grow"><span class="nm">'+esc(l.full)+(pickedBy ? ' <span class="chip pick">'+esc(pickedBy)+'</span>' : '')+'</span>'
         +  '<span class="meta">'+esc(who || 'nothing picked')+'</span></span>'
-        +  '<span class="qty">'+esc(l.date)+'</span></button>';
+        +  (picks ? '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">'+picks+'</span>' : '<span class="qty">'+esc(l.date)+'</span>')
+        +  '</'+(picks ? 'div' : 'button')+'>';
     });
     h += '</div></div>';
   }
@@ -2207,7 +2218,7 @@ function viewWeek(){
       +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):(l.diff<0?' · gone':''))+'</em></div>'
       +  (l.diff < 0 ? '' : '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'">'
       +  svg('dice',15)+'Re-draw</button>')+'</div>'
-      +  tinHTML(kid, day, 'week') + chipsHTML(kid, day) + '</div>';
+      +  tinHTML(kid, day, 'week') + '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day) + pickButton(kid, day) + '</div></div>';
   });
   return h + '</div>';
 }
