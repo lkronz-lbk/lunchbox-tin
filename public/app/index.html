@@ -126,7 +126,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
   display:inline-flex;align-items:center;gap:5px}
 .chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .chip.good{background:var(--accent-soft);color:var(--accent);border-color:transparent}
-.chip.pick{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.chip.picked{background:var(--accent-soft);color:var(--accent);border-color:transparent;margin-left:6px;vertical-align:middle}
 .chip{white-space:nowrap}
 .chip.lock svg{stroke-width:2.2}
 .banner.wrap{flex-wrap:wrap}
@@ -1395,7 +1395,7 @@ function dayFlags(kid, day){
   if(items.some(function(i){ return has(i,'ice'); })) f.push({t:'Ice pack', cls:''});
   if(items.some(function(i){ return has(i,'messy'); })) f.push({t:'Sealed container', cls:''});
   if(items.length && !items.some(function(i){ return has(i,'protein'); })) f.push({t:'No protein', cls:'warn'});
-  if(day.kidPick && Object.keys(day.kidPick).length) f.push({t:(kidLabel(kid) || 'They')+' picked', cls:'pick'});
+  if(day.kidPick && Object.keys(day.kidPick).length) f.push({t:kidLabel(kid) ? kidLabel(kid)+' picked' : 'Picked', cls:'picked'});
   return f;
 }
 
@@ -2186,9 +2186,9 @@ function viewPack(){
         : catsFor(x.entries[0].kid).map(function(c){ var f = foodById(x.entries[0].kid, x.entries[0].day.slots[c.k]); return f?f.n:null; })
               .filter(Boolean).join(' · ');
       var picks = x.entries.map(function(e){ return pickButton(e.kid, e.day); }).join('');
-      var pickedBy = x.entries.filter(function(e){ return e.day.kidPick && Object.keys(e.day.kidPick).length; }).map(function(e){ return (kidRef(e.kid) || 'They')+' picked'; }).join(', ');
+      var pickedBy = x.entries.filter(function(e){ return e.day.kidPick && Object.keys(e.day.kidPick).length; }).map(function(e){ return kidLabel(e.kid) ? kidLabel(e.kid)+' picked' : 'Picked'; }).join(', ');
       /* the day the kid's pick would change carries the button, so the pick lands where it is seen */
-      h += '<'+(picks ? 'div' : 'button')+' class="item"'+(picks ? '' : ' data-act="go-week"')+'><span class="grow"><span class="nm">'+esc(l.full)+(pickedBy ? ' <span class="chip pick">'+esc(pickedBy)+'</span>' : '')+'</span>'
+      h += '<'+(picks ? 'div' : 'button')+' class="item"'+(picks ? '' : ' data-act="go-week"')+'><span class="grow"><span class="nm">'+esc(l.full)+(pickedBy ? ' <span class="chip picked">'+esc(pickedBy)+'</span>' : '')+'</span>'
         +  '<span class="meta">'+esc(who || 'nothing picked')+'</span></span>'
         +  (picks ? '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">'+picks+'</span>' : '<span class="qty">'+esc(l.date)+'</span>')
         +  '</'+(picks ? 'div' : 'button')+'>';

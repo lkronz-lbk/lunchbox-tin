@@ -301,7 +301,7 @@ try {
   check("and tomorrow's old main moved to that day, so nothing new is bought", afterPick.days.find(x => x.d === chosenDate).main === targetMain && afterPick.all === weekBefore.flatMap(d => Object.values(d.slots)).filter(Boolean).sort().join(), afterPick);
   check('kid-picked compartments are locked and attributed, on that day alone', afterPick.locked && afterPick.picked === 4 && afterPick.by && afterPick.days.filter(x => x.marks).length === 1, afterPick);
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200);
-  check('the week says who picked, once, on that day', (await page.$$eval('.chip.pick', a => a.map(c => c.textContent))).join() === 'Nia picked');
+  check('the week says who picked, once, on that day', (await page.$$eval('.chip.picked', a => a.map(c => c.textContent))).join() === 'Nia picked');
   await page.click('[data-act="shuffle-day"][data-day="'+targetDate+'"]'); await page.waitForTimeout(300);
   const stillMain = await page.evaluate((td) => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.find(x => x.d === td).slots.main, targetDate);
   check("a re-draw does not overwrite what the kid chose", stillMain === chosenMain);
