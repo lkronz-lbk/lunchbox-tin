@@ -34,8 +34,8 @@ food list from a 200-item library and produce a planned week immediately. From t
   no-protein flags. **Kid's pick** lives here, behind the lunchbox's "They pick their box
   each day" switch (Household plan), for the next box not yet in the bag. Two ways, chosen
   under "How they pick" and both trading within the week already shopped for, so nothing
-  is drawn and the shopping list never changes: **Each part** (the default) asks for the
-  main, side, fruit and sweet in turn, this day's food against the same part of a later
+  is drawn and the shopping list never changes: **Each part** (the default) asks for each
+  compartment in turn (main, side, fruit, sweet, and snack or drink if the box has them), this day's food against the same part of a later
   box, and choosing the other trades those two parts between the days; each choice is
   saved as it is made, so stopping early keeps it. **Whole box** shows this day's box
   against the next one, and choosing the other trades the whole days. A box with anything
