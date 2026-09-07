@@ -47,6 +47,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>WKAppBoundDomains</key>
+	<array>
+		<string>lunchsorted.app</string>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UISupportedInterfaceOrientations~ipad</key>

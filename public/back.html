@@ -5,24 +5,31 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>Back to Lunch Sorted</title>
-<meta http-equiv="refresh" content="0;url=lunchsorted://back">
 <style>
 :root{--ground:#E9EEE6;--ink:#16241E;--ink-2:#4A5C53;--accent:#2E5A48;--accent-fg:#FBFCF9}
 @media (prefers-color-scheme:dark){:root{--ground:#0E1815;--ink:#E6EEE7;--ink-2:#A6BAAE;--accent:#79C8A2;--accent-fg:#0E1815}}
-body{margin:0;min-height:100svh;display:grid;place-items:center;background:var(--ground);color:var(--ink);font-family:"Karla","Helvetica Neue",sans-serif;text-align:center;padding:24px}
+body{box-sizing:border-box;margin:0;min-height:100svh;display:grid;place-items:center;background:var(--ground);color:var(--ink);font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;text-align:center;padding:24px}
 h1{font-size:24px;margin:0 0 8px}p{color:var(--ink-2);margin:0 0 20px}
 a{display:inline-block;min-height:44px;line-height:44px;padding:0 22px;border-radius:12px;background:var(--accent);color:var(--accent-fg);text-decoration:none;font-weight:600}
 </style>
 </head>
 <body>
 <div>
-<h1>All done.</h1>
-<p>Back to the app for the rest.</p>
+<h1 id="h">All done.</h1>
+<p id="p">Back to the app for the rest.</p>
 <a id="back" href="lunchsorted://back">Open Lunch Sorted</a>
 </div>
 <script>
-/* carry ?paid=1 / ?paid=0 / ?portal=1 through to the app */
-(function(){ var q = location.search.slice(1); if(q){ var u = 'lunchsorted://back?' + q; document.getElementById('back').href = u; location.replace(u); } })();
+/* Stripe sends the iPhone app's parent here in Safari; this hands the result to the app */
+(function(){
+  var q = new URLSearchParams(location.search), h = document.getElementById('h'), p = document.getElementById('p');
+  if(q.get('paid') === '1'){ h.textContent = 'Paid — thank you.'; p.textContent = 'Back to the app to finish switching it on.'; }
+  else if(q.get('paid') === '0'){ h.textContent = 'Nothing was charged.'; p.textContent = 'Back to the app whenever you like.'; }
+  else if(q.get('portal')){ h.textContent = 'Billing updated.'; p.textContent = 'Back to the app for the rest.'; }
+  var u = 'lunchsorted://back' + (location.search || '');
+  document.getElementById('back').href = u;
+  location.replace(u);
+})();
 </script>
 </body>
 </html>

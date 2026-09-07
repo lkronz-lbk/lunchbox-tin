@@ -1162,7 +1162,14 @@ try {
   const iosCall = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop();
   check('from the iPhone app, Stripe sends the parent back through the hand-off page', !!iosCheckout.url && iosCall && /\/back\.html\?paid=1$/.test(iosCall.params.success_url) && /\/back\.html\?paid=0$/.test(iosCall.params.cancel_url), iosCall && iosCall.params);
   const backPage = await pb.evaluate(() => fetch('/back.html?paid=1').then(r => r.text().then(t => ({status: r.status, csp: r.headers.get('content-security-policy'), text: t}))));
-  check('and that page carries the result into the app under its own policy', backPage.status === 200 && /lunchsorted:\/\/back/.test(backPage.text) && /default-src 'none'/.test(backPage.csp) && /sha256-/.test(backPage.csp));
+  check('and that page carries the result into the app under its own policy', backPage.status === 200 && /lunchsorted:\/\/back/.test(backPage.text) && /default-src 'none'/.test(backPage.csp) && /sha256-/.test(backPage.csp) && !/http-equiv="refresh"/.test(backPage.text));
+  {
+    const pback = await ctx.newPage(); const handoffs = [];
+    await pback.route(/^lunchsorted:\/\//, r => { handoffs.push(r.request().url()); r.abort(); });
+    await pback.goto(BASE+'/back.html?paid=0', {waitUntil:'commit'}).catch(() => {}); await pback.waitForTimeout(400);   /* the page hands off at once, so "load" never fires */
+    check('backing out of Stripe on the phone says nothing was charged, and the hand-off carries the result', /Nothing was charged/.test(await pback.textContent('h1')) && (await pback.getAttribute('#back', 'href')) === 'lunchsorted://back?paid=0', {handoffs, href: await pback.getAttribute('#back', 'href')});
+    await pback.close();
+  }
   {
     const ctxApp = await browser.newContext({ viewport:{width:375,height:812}, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LunchSortedApp/1' });
     await ctxApp.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort());

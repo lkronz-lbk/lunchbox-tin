@@ -146,7 +146,10 @@ generated CSP, the service worker, an offline launch, the landing page, accounts
 code handles including a redelivery after a failure and one arriving out of order, the
 gates, the plan line, cancellation, forever, a refund, who may manage billing, a deleted
 account stopping its subscription, the onboarding email step, the welcome email, the daily
-reminder job and its stop link, and the pricing section on the landing page. The browser never downloads fonts, so a run takes about two minutes. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
+reminder job and its stop link, the pricing section on the landing page, and the iPhone
+app's paths: a checkout that returns through `/back.html`, that page under its own policy,
+and a phone that identifies as the app leading with the code and never being told to add
+itself to the Home Screen. The browser never downloads fonts, so a run takes about two minutes. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
 
 Checks that must pass before launch but shouldn't block day-to-day work print as
 `WARN` rather than failing — the placeholder privacy address is currently one.
@@ -166,10 +169,10 @@ the visual identity.
    mail sender in the Netlify environment.
 3. **Built, behind the same switch** — Stripe Checkout on the web (below). Needs the four
    `STRIPE_*` variables per context and a webhook endpoint registered in Stripe.
-4. **Built** — the Capacitor iOS shell (`ios/`, `ios/README.md`): it loads the web app,
-   opens Stripe in Safari and takes the parent back through `/back.html`, builds on CI
-   without a Mac. Next for it: TestFlight, then the night-before reminder, share sheet and
-   a Home Screen widget; payments stay on the web.
+4. **Built** — the Capacitor iOS shell (`ios/`, `ios/README.md`) for the US storefront: it
+   loads the web app, opens Stripe in Safari and takes the parent back through `/back.html`,
+   builds on CI without a Mac. Next for it: TestFlight, then the night-before reminder, share
+   sheet and a Home Screen widget; payments stay on the web.
 
 ### Backlog (ideas to revisit, not scheduled)
 
@@ -255,9 +258,11 @@ variables in a deploy nothing is gated or tagged and the app is exactly the free
 Nothing is ever taken away: a household whose plan or trial ends keeps every lunchbox,
 member, tick and outcome it has, and cannot add more.
 
-- **Checkout** (`POST /api/billing/checkout {plan}`) opens Stripe's hosted page for the
+- **Checkout** (`POST /api/billing/checkout {plan, client?}`) opens Stripe's hosted page for the
   signed-in household (owner or adult; a helper cannot buy). The session carries the
-  household id, comes back to `/app/?paid=1` or `/app/?paid=0`, allows promotion codes,
+  household id, comes back to `/app/?paid=1` or `/app/?paid=0` (to `/back.html?paid=…` when
+  `client` is `ios`: the iPhone app opens Stripe in Safari, and that page hands the parent
+  back to the app through the `lunchsorted://` scheme), allows promotion codes,
   and asks Stripe Tax to add tax where it applies (if Tax is not finished in the
   dashboard the session is retried without it and the error logged). A household that
   already has the plan is not sold it again (409).
@@ -276,7 +281,8 @@ member, tick and outcome it has, and cannot add more.
   cancelling the subscription in the dashboard). Deleting the account, or an owner folding
   their household into another, cancels its subscription first.
 - **Portal** (`POST /api/billing/portal`) opens Stripe's customer portal for the card,
-  invoices and cancellation, and comes back to `/app/?portal=1`. It is for the owner and
+  invoices and cancellation, and comes back to `/app/?portal=1` (`/back.html?portal=1` for
+  the iPhone app). It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
   available after a plan ends, for the invoices.
 - **In the app**, Setup's account card has a "Household plan" line (Free, Renews DATE,

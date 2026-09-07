@@ -12,6 +12,9 @@ on:
     paths: ['ios/**', 'capacitor.config.json', 'ios-www/**', 'package.json', 'package-lock.json', '.github/workflows/ios.yml']
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ios-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
@@ -20,7 +23,7 @@ jobs:
   build:
     name: Simulator build
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 

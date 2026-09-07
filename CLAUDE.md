@@ -5,8 +5,8 @@
 **Lunch Sorted** (lunchsorted.app, a Lila Bloom Enterprises product): a school-lunch planner for
 parents. Plans a week of packed lunches from foods the kid will eat, pairs them, enforces the
 school's rules, builds the shopping list, tracks what came home, lets the kid pick between two
-pictures. Phone-first PWA today; accounts and sync built; Stripe on the web and a Capacitor iOS
-shell next. It was briefly "Five Boxes" and before that "Lunchbox Tin", which the repository is
+pictures. Phone-first PWA; accounts, sync, Stripe on the web and a Capacitor iOS shell built;
+TestFlight next. It was briefly "Five Boxes" and before that "Lunchbox Tin", which the repository is
 still named after.
 
 This is its own product with its own repo. It shares nothing with Royalty Ink except the

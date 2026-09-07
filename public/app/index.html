@@ -1904,7 +1904,7 @@ function noticeBanner(){
     if(Account.status === 'syncing' || Account.busy) return '<div class="banner"><span>Getting your lunches back\u2026</span></div>';
     if(Account.status === 'error') return '<div class="banner"><span>Could not reach your lunches.</span><button class="btn sm primary" data-act="sync-now">Try again</button></div>';
   }
-  var msg = UI.notice || (!Store.ok ? 'This browser is not letting the app save. Changes will be lost when you close it.' : '');
+  var msg = UI.notice || (!Store.ok ? (native() ? 'This phone' : 'This browser')+' is not letting the app save. Changes will be lost when you close it.' : '');
   if(!msg && Account.join && UI.tab !== 'setup')
     return '<div class="banner"><span>'+esc(Account.join.from || 'Someone')+' invited you to share their lunches.</span><button class="btn sm primary" data-act="tab" data-tab="setup">Have a look</button></div>';
   if(!msg && signedIn() && Account.status === 'error' && Account.tries >= RETRY_WAITS.length && UI.tab !== 'setup')
@@ -2289,7 +2289,7 @@ function viewSetup(){
         ? 'The lunches are stored '+(native() ? 'on this phone' : 'in this browser')+' and synced to your account, so everyone in the household above sees them. '
         : 'Everything is stored '+(native() ? 'on this phone' : 'in this browser')+'. Nothing is uploaded and no one else can see it. ')
     +  (native() ? '' : 'Use Share &rarr; <b>Add to Home Screen</b> to open it full-screen like an app.')
-    +  (Store.ok ? '' : ' <b>Storage is blocked in this browser, so changes will not survive a reload.</b>')+'</p>'
+    +  (Store.ok ? '' : ' <b>Storage is blocked '+(native() ? 'on this phone' : 'in this browser')+', so changes will not survive a reload.</b>')+'</p>'
     +  '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:4px">'
     +  '<button class="btn ghost sm" data-act="clear-week">'+(UI.armed==='week'?'Tap again to clear':'Clear the plans')+'</button>'
     +  '<button class="btn danger sm" data-act="clear-all">'+(UI.armed==='all'?'Tap again to erase':'Erase everything')+'</button>'
@@ -3010,8 +3010,8 @@ document.addEventListener('input', function(ev){
 function copy(text, okMsg){
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(function(){ toast(okMsg); },
-      function(){ toast('Copy blocked by the browser'); });
-  } else toast('Copy blocked by the browser');
+      function(){ toast(native() ? 'Copy blocked' : 'Copy blocked by the browser'); });
+  } else toast(native() ? 'Copy blocked' : 'Copy blocked by the browser');
 }
 
 /* -------------------------------------------------- optional capability */
@@ -3090,9 +3090,11 @@ Store.load().then(function(r){
     if(back === '1') settle();
   }
   function settle(){
+    if(settle.on) return;                                    /* the hand-back can arrive more than once; one poll is enough */
+    settle.on = true;
     var looks = 0, look = function(){
-      if(paid()){ Account.settling = false; render(); toast('Welcome to the Household plan'); resumeAfter(); return; }
-      if(++looks > 8){ Account.settling = false; render(); toast('Paid \u2014 it can take a minute to show up here'); return; }
+      if(paid()){ settle.on = false; Account.settling = false; render(); toast('Welcome to the Household plan'); resumeAfter(); return; }
+      if(++looks > 8){ settle.on = false; Account.settling = false; render(); toast('Paid \u2014 it can take a minute to show up here'); return; }
       setTimeout(function(){ Sync.pull().then(look).catch(look); }, looks < 3 ? 1500 : 3000);
     };
     setTimeout(look, 1200);
@@ -3103,9 +3105,9 @@ Store.load().then(function(r){
     app.addListener('appUrlOpen', function(ev){
       var u = String(ev && ev.url || '');
       var browser = nativePlugin('Browser'); if(browser) browser.close().catch(function(){});
-      var m = /^lunchsorted:\/\/back\/?\?(.*)$/.exec(u);
+      var m = /^lunchsorted:\/\/back\/?(?:\?(.*))?$/.exec(u);
       if(m){
-        var q = new URLSearchParams(m[1]);
+        var q = new URLSearchParams(m[1] || '');
         UI.tab = 'setup'; Account.first = true;
         if(q.get('paid') === '1'){ Account.settling = true; render(); toast('Thank you \u2014 switching on the Household plan\u2026'); settle(); }
         else if(q.get('paid') === '0'){ rememberAfter(''); render(); toast('No charge was made'); }
@@ -3113,6 +3115,15 @@ Store.load().then(function(r){
         return;
       }
       if(/^https:\/\/([a-z0-9-]+\.)?lunchsorted\.app\//.test(u)) location.href = u;   /* a universal link, such as the sign-in link in the email */
+    });
+  }
+  /* Safari closed on the Done button instead of the hand-off: look once anyway, so a payment made that way still shows */
+  var nb = nativePlugin('Browser');
+  if(nb && nb.addListener){
+    nb.addListener('browserFinished', function(){
+      if(!signedIn() || settle.on) return;
+      var wasPaid = paid();
+      Sync.pull().then(function(){ if(!wasPaid && paid()){ render(); toast('Welcome to the Household plan'); resumeAfter(); } else render(); }).catch(function(){});
     });
   }
   window.addEventListener('online', function(){ if(signedIn()) Sync.resume(); else render(); });

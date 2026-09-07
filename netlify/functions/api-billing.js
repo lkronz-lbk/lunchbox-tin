@@ -198,7 +198,7 @@ export default async function handler(req, context) {
         params.automatic_tax = { enabled: false };
         session = await stripe('POST', '/checkout/sessions', params);
       }
-      console.log(`billing: checkout household=${h.id} plan=${plan} tax=${params.automatic_tax.enabled}`);
+      console.log(`billing: checkout household=${h.id} plan=${plan} tax=${params.automatic_tax.enabled} client=${body.client === 'ios' ? 'ios' : 'web'}`);
       return json({ url: session.url });
     }
 

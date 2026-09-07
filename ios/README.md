@@ -18,7 +18,13 @@ What the shell adds, and where:
   never touch StoreKit.
 - **Icon and launch screen.** `App/App/Assets.xcassets`: the 1024 icon from
   `public/icons`, and a light and a dark launch image on the app's ground colours.
+- **Offline.** `WKAppBoundDomains` in `Info.plist` and `limitsNavigationsToAppBoundDomains`
+  in the config: that is what lets a remote page register its service worker in a
+  WKWebView, so the app opens without a network once it has loaded once. Verify on a
+  phone in airplane mode.
 - iPhone only, portrait only, no export-compliance prompt (`ITSAppUsesNonExemptEncryption`).
+- The shell always loads production. To point a build at staging, change `server.url`
+  in `capacitor.config.json` locally and never commit it.
 
 ## Building
 
@@ -44,7 +50,9 @@ by `cap sync` and not committed.
 ## TestFlight
 
 1. App Store Connect → Apps → New app: bundle id `app.lunchsorted`, name
-   Lunch Sorted, primary language English (U.S.), SKU `lunchsorted`.
+   Lunch Sorted, primary language English (U.S.), SKU `lunchsorted`. Then
+   Pricing and Availability → United States only: linking out to Stripe is what
+   the US storefront permits, and the product rule depends on it.
 2. Xcode → Product → Archive → Distribute App → App Store Connect → Upload.
 3. App Store Connect → TestFlight → the build → add internal testers (yourself),
    then an external group once the build clears beta review.
@@ -66,11 +74,13 @@ So the sign-in link in the email opens the app rather than Safari:
    `application/json`:
 
    ```json
-   {"applinks":{"details":[{"appIDs":["TEAMID.app.lunchsorted"],"components":[{"/":"/auth/*"},{"/":"/app/*"}]}]}}
+   {"applinks":{"details":[{"appIDs":["TEAMID.app.lunchsorted"],"components":[{"/":"/api/auth/verify*"}]}]}}
    ```
 
    with the real Team ID, plus a `[[headers]]` block in `netlify.toml` for that
-   path with `Content-Type = "application/json"`.
+   path with `Content-Type = "application/json"`. Only the sign-in link: claiming
+   `/app/*` too would pull every `/app/?join=`, `?upgrade=1` and Stripe return on a
+   phone with the app installed out of Safari and the home-screen web app.
 3. Nothing to change in the app: `appUrlOpen` already loads any
    `https://lunchsorted.app/...` URL it is handed.
 
