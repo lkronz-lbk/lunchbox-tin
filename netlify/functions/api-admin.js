@@ -2,39 +2,21 @@ import { sql, siteEnv } from '../lib/db.js';
 import { currentUser } from '../lib/auth.js';
 import { prices } from '../lib/stripe.js';
 import { trialEnd } from '../lib/trial.js';
+import { page as shell, esc, isAdmin } from '../lib/page.js';
 
 /* The numbers, for the people named in ADMIN_EMAILS and nobody else: households,
    trials, plans, sign-ins, emails sent. Counts from the database, rendered as a
    page with no script, so there is nothing to hash and nothing to leak. */
-const PAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'";
-const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-function admins() {
-  return (process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-}
-
-function page(title, body, status = 200) {
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>${esc(title)} · Lunch Sorted</title>
-<meta name="color-scheme" content="light dark">
-<style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--ink:#16241E;--ink-2:#4A5C53;--ink-3:#6E7F75;--accent:#2E5A48}
-@media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--ink:#E6EEE7;--ink-2:#A6BAAE;--ink-3:#7A8E84;--accent:#79C8A2}}
-body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.5 Karla,"Helvetica Neue",sans-serif;padding:28px 18px 60px}
-.wrap{max-width:760px;margin:0 auto}
-h1{font:700 28px/1.1 "Familjen Grotesk","Trebuchet MS",sans-serif;letter-spacing:-.02em;margin:0 0 4px}
-.sub{color:var(--ink-3);font-size:13px;margin:0 0 22px}
-h2{font:600 11px ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin:26px 0 8px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+const CSS = `.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
 .tile b{display:block;font:700 26px/1.1 "Familjen Grotesk","Trebuchet MS",sans-serif;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .tile span{font-size:12.5px;color:var(--ink-2)}
 .tile small{display:block;font-size:12px;color:var(--ink-3);margin-top:2px}
 table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 td{padding:8px 12px;border-top:1px solid var(--line)} tr:first-child td{border-top:0}
-td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-family:ui-monospace,monospace;font-size:13px}
-p{color:var(--ink-2)} a{color:var(--accent)}</style></head><body><div class="wrap">${body}</div></body></html>`;
-  return new Response(html, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': PAGE_CSP, 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex' } });
-}
+td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-family:ui-monospace,monospace;font-size:13px}`;
+
+const page = (title, body, status = 200) => shell(title, body, { status, css: CSS });
 
 const tile = (n, label, note) => `<div class="tile"><b>${esc(n)}</b><span>${esc(label)}</span>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
 const row = (label, n) => `<tr><td>${esc(label)}</td><td>${esc(n)}</td></tr>`;
@@ -78,7 +60,7 @@ export default async function handler(req) {
   try {
     const user = await currentUser(req);
     if (!user) return page('Sign in first', `<h1>Sign in first.</h1><p>Open <a href="/app/">the planner</a>, sign in from Setup, then come back to this page.</p>`, 401);
-    if (!admins().includes(user.email.toLowerCase())) return page('Not found', `<h1>Not found.</h1><p><a href="/app/">Back to Lunch Sorted</a></p>`, 404);
+    if (!isAdmin(user)) return page('Not found', `<h1>Not found.</h1><p><a href="/app/">Back to Lunch Sorted</a></p>`, 404);
     const t = await stats();
     const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     const body = `<h1>Lunch Sorted, by the numbers</h1><p class="sub">${esc(siteEnv())} · ${esc(when)} ET · counts from the database</p>
@@ -92,7 +74,7 @@ ${row('Trial-ended emails, all time / this week', `${(t.emails.trial_ended || {}
 ${row('Invites used / open', `${t.invites.used} / ${t.invites.open}`)}
 ${row('Stripe events this week', t.stripeEventsWeek)}
 </table>
-<p style="font-size:13px;color:var(--ink-3);margin-top:22px">Stripe holds the money side: <a href="https://dashboard.stripe.com/">dashboard.stripe.com</a>. This page is for the people in ADMIN_EMAILS only.</p>`;
+<p style="font-size:13px;color:var(--ink-3);margin-top:22px"><a href="/admin/copy">The words on the home page</a> · Stripe holds the money side: <a href="https://dashboard.stripe.com/">dashboard.stripe.com</a>. This page is for the people in ADMIN_EMAILS only.</p>`;
     return page('By the numbers', body);
   } catch (e) {
     console.error('api-admin', e);

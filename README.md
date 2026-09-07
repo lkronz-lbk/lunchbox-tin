@@ -343,6 +343,28 @@ member, tick and outcome it has, and cannot add more.
   else: households, on trial, lapsed, paying by plan, sign-ins, reminder emails sent, invites.
   Counts from the database, rendered as a page with no script; a stranger is asked to sign
   in, a signed-in parent who is not listed gets not-found.
+- **The words on the home page**, at `/admin/copy`, for the same people and nobody else:
+  every string on the marketing page in reading order, with what it is for, and a way to
+  put the committed wording back. Wording only — the layout, the colours and the
+  screenshots are not editable there, and the planner is not editable at all.
+  How an edit reaches the site: it is saved as a row in `site_copy`, then the
+  `NETLIFY_BUILD_HOOK` is pinged; the build runs `node scripts/copy.mjs --apply`, which
+  folds the saved words into `public/index.html` before publishing. The live site stays
+  plain static HTML — no script on the page, no function in front of it, nothing to pay
+  per visitor, and a search engine reads what a parent reads. The wording committed in git
+  is always the fallback: no database, an unreachable one, or a deleted row and the
+  original comes back on the next deploy. Saved values are cleaned to text plus `<b>`,
+  `<i>`, `<em>`, `<strong>`, `<small>`, `<br>` and safe links, so nothing typed there can
+  become markup on the page. **Netlify setup, once:** Site configuration → Build & deploy
+  → Build hooks → add one named "copy", and set its URL as `NETLIFY_BUILD_HOOK` (scoped to
+  production). Without it an edit simply waits for the next deploy, and the editor says so.
+  Editable strings are named with `data-copy`, `data-copy-label` and an optional
+  `data-copy-note` in `public/index.html`; add or rename one and run `npm run copy`, which
+  rewrites the generated list the editor ships with (`npm test` refuses a stale one, the
+  way it refuses a stale CSP hash). A row whose name has left the page stops doing
+  anything, and the editor offers to clear it out. Saving and publishing are two separate
+  buttons on purpose: a save is a database row and costs nothing, and publishing is what
+  spends a build.
 - **Stripe setup, once per mode:** one product, two prices; Developers → Webhooks → add
   `https://<site>/api/billing/webhook` with the six event types above and paste the
   signing secret; Settings → Billing → Customer portal → save the default configuration

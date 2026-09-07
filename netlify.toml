@@ -1,8 +1,11 @@
 [build]
   publish = "public"
-  # the only build step: apply any new database migration before the deploy
-  # goes live (skips quietly on a deploy that has no database URL)
-  command = "node scripts/migrate.mjs"
+  # two build steps: apply any new database migration, then fold the words saved
+  # at /admin/copy into the marketing page. Both skip quietly on a deploy with no
+  # database URL; the copy step additionally cannot fail a build, so a wording
+  # edit can never take the site down. (The migration still can, on purpose: a
+  # Stripe key scoped to the wrong context stops the deploy there.)
+  command = "node scripts/migrate.mjs && node scripts/copy.mjs --apply"
   # the test-only dependencies are never installed on Netlify
   [build.environment]
     NPM_FLAGS = "--omit=dev"
@@ -95,7 +98,8 @@
   to = "/app/"
   status = 301
 
-# the numbers page is a function; the short address is the one to remember
+# the numbers page is a function; the short address is the one to remember.
+# (/admin/copy, the wording editor, is a function path of its own.)
 [[redirects]]
   from = "/admin"
   to = "/api/admin"

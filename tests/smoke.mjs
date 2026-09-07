@@ -19,7 +19,7 @@ const POLICIES = readPolicies(fs.readFileSync(path.join(ROOT, '..', 'netlify.tom
    handlers Netlify deploys, so sign-in, sync and invites are tested for real. */
 import { PGlite } from '@electric-sql/pglite';
 import { migrate } from '../scripts/migrate.mjs';
-process.env.SITE_ENV = 'test'; delete process.env.URL; delete process.env.DEPLOY_PRIME_URL; delete process.env.RESEND_API_KEY;
+process.env.SITE_ENV = 'test'; delete process.env.URL; delete process.env.DEPLOY_PRIME_URL; delete process.env.RESEND_API_KEY; delete process.env.NETLIFY_BUILD_HOOK;
 const db = new PGlite();
 /* every email the functions send is captured here instead of going to Resend */
 const mails = []; globalThis.__LS_MAIL = mails;
@@ -29,6 +29,8 @@ const { default: authHandler } = await import('../netlify/functions/api-auth.js'
 const { default: householdHandler } = await import('../netlify/functions/api-household.js');
 const { default: billingHandler } = await import('../netlify/functions/api-billing.js');
 const { default: adminHandler } = await import('../netlify/functions/api-admin.js');
+const { default: copyHandler } = await import('../netlify/functions/api-copy.js');
+const { applyCopy, stripMarks } = await import('../netlify/lib/copy.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
 process.env.REVIEW_EMAIL = 'review@example.com'; process.env.REVIEW_CODE = 'REVU-2468';
 const stripeLib = await import('../netlify/lib/stripe.js');
@@ -60,7 +62,8 @@ async function apiProxy(req, res){
   const method = req.method;
   const request = new Request(`http://${req.headers.host}${req.url}`, {method, headers,
     body: (method === 'GET' || method === 'HEAD') ? undefined : Buffer.concat(chunks), duplex: 'half'});
-  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : householdHandler;
+  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler
+    : (req.url.startsWith('/api/copy') || req.url.startsWith('/admin/copy')) ? copyHandler : householdHandler;
   let resp;
   try { resp = await handler(request, {ip: '127.0.0.1'}); }
   catch (e) { res.writeHead(500); return res.end(String(e)); }
@@ -87,7 +90,7 @@ const TYPES = {'.html':'text/html','.js':'text/javascript','.png':'image/png','.
 function serve(){
   const server = http.createServer((req, res) => {
     let p = decodeURIComponent(req.url.split('?')[0]);
-    if(p.startsWith('/api/')) return apiProxy(req, res);
+    if(p.startsWith('/api/') || p.startsWith('/admin/copy')) return apiProxy(req, res);
     if(p.endsWith('/')) p += 'index.html';
     const file = path.join(ROOT, p);
     if(!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()){
@@ -875,6 +878,60 @@ try {
     check('the numbers page asks a stranger to sign in, and shows the person in ADMIN_EMAILS real counts with no script allowed',
       anonAdmin.status === 401 && adminPage.status === 200 && /by the numbers/i.test(adminPage.text) && /households/.test(adminPage.text) && /default-src 'none'/.test(adminPage.csp) && !/<script/.test(adminPage.text), [anonAdmin.status, adminPage.status]);
   }
+  {
+    /* the wording editor: admin only, no script, and nothing it saves can become markup on the page */
+    const anonCopy = await fetch(NODE_BASE + '/api/copy');
+    const editor = await page.evaluate(() => fetch('/admin/copy').then(r => r.text().then(t => ({ status: r.status, text: t, csp: r.headers.get('content-security-policy') }))));
+    check('the wording editor asks a stranger to sign in, and gives the admin a form with no script in it',
+      anonCopy.status === 401 && editor.status === 200 && /name="f:home\.hero\.title"/.test(editor.text) && /name="f:home\.price\.paid-amount"/.test(editor.text) &&
+      /default-src 'none'/.test(editor.csp) && !/script-src/.test(editor.csp) && /form-action 'self'/.test(editor.csp) && !/<script/.test(editor.text), [anonCopy.status, editor.status]);
+    check('every string is named in words a parent would use, not by the name in the page',
+      /The headline/.test(editor.text) && /The green button<\/label>|The green button<span/.test(editor.text) && !/Home\.hero/.test(editor.text));
+
+    /* posted from node with the admin's own cookie: a browser hides the redirect
+       a manual fetch returns, and the redirect is the thing being tested */
+    const adminCookie = (await page.context().cookies()).find(c => c.name === 'ls_session').value;
+    const post = async (body) => {
+      const r = await fetch(NODE_BASE + '/admin/copy', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: 'ls_session=' + adminCookie }, body, redirect: 'manual' });
+      return { status: r.status, to: r.headers.get('location'), text: await r.text() };
+    };
+    const saved = await post(new URLSearchParams({ 'f:home.hero.title': 'Lunch, sorted. <script>alert(1)</script>', 'f:not.a.name': 'nonsense', 'f:__proto__': 'nonsense' }).toString());
+    let rows = (await db.query('SELECT key, value FROM site_copy')).rows;
+    check('an edit is saved under its own name; a name the page does not carry, and a name from the prototype, are ignored',
+      saved.status === 303 && rows.length === 1 && rows[0].key === 'home.hero.title', [saved.status, rows.map(r => r.key)]);
+    check('a save answers with a redirect back to the field, so a reload never saves twice',
+      saved.to === '/admin/copy?saved=1#home.hero.title', saved.to);
+
+    const applied = stripMarks(applyCopy(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), Object.fromEntries(rows.map(r => [r.key, r.value]))));
+    check('the build folds the saved words into the page, escapes anything that looks like markup, and leaves none of the editing names behind',
+      /<h1>Lunch, sorted\. &lt;script&gt;alert\(1\)&lt;\/script&gt;<\/h1>/.test(applied) && !/<script>alert/.test(applied) && !/data-copy/.test(applied));
+
+    const loose = stripMarks(applyCopy(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'),
+      { 'home.hero.lede': 'A <b>bold start that never ends', 'home.hero.cta': 'Plan this week</a> free', 'home.price.free-one': 'One <a href="//evil.example/x">lunchbox</a>' }));
+    check('wording cannot break the layout: an unclosed tag is closed, a stray close is dropped, a link out is not a link',
+      /A <b>bold start that never ends<\/b><\/p>/.test(loose) && /<a class="btn primary" href="\/app\/">Plan this week free<\/a>/.test(loose) && !/evil\.example/.test(loose), loose.includes('evil.example'));
+
+    const empty = await post(new URLSearchParams({ 'f:home.hero.lede': '<b></b>' }).toString());
+    const long = await post(new URLSearchParams({ 'f:home.hero.lede': 'x'.repeat(1400) }).toString());
+    rows = (await db.query('SELECT key FROM site_copy')).rows;
+    check('a string cannot be emptied, with or without markup, and cannot be pasted over the limit',
+      empty.status === 400 && long.status === 400 && rows.length === 1, [empty.status, long.status, rows.length]);
+    check('the words already saved come back escaped, not as markup, when the form is drawn again',
+      /&lt;script&gt;alert\(1\)&lt;\/script&gt;<\/textarea>/.test(empty.text) && !/<script/.test(empty.text));
+
+    await db.query(`INSERT INTO site_copy (key, value) VALUES ('home.gone.away', 'left over')`);
+    const tidied = await post(new URLSearchParams({ tidy: '1' }).toString());
+    rows = (await db.query('SELECT key FROM site_copy')).rows;
+    check('a saved string whose name has left the page can be seen and cleared out',
+      tidied.status === 303 && rows.length === 1 && rows[0].key === 'home.hero.title', [tidied.status, rows.map(r => r.key)]);
+
+    const put = await post(new URLSearchParams({ 'f:home.hero.title': 'anything at all', 'r:home.hero.title': '1' }).toString());
+    rows = (await db.query('SELECT key FROM site_copy')).rows;
+    check('restoring a string puts the wording committed in git back and drops the row', put.status === 303 && rows.length === 0, [put.status, rows.length]);
+
+    const forgedCopy = await fetch(NODE_BASE + '/admin/copy', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: 'ls_session=' + adminCookie, origin: 'https://not-us.example', 'sec-fetch-site': 'cross-site' }, body: 'f:home.hero.title=from+elsewhere', redirect: 'manual' });
+    check('a form posted from another site is refused even with a valid session', forgedCopy.status === 403, forgedCopy.status);
+  }
   const spent = await page.evaluate(u => fetch(u).then(r => r.status), devLink);
   check('a used link is gone', spent === 410, spent);
   await until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1 && !!j.doc));
@@ -1158,7 +1215,10 @@ try {
   const viaMail = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetBody').textContent));
   check('the link in a reminder email opens the plan sheet on arrival', viaMail && !pb.url().includes('upgrade='));
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
-  check('a signed-in parent who is not in ADMIN_EMAILS gets not-found from the numbers page', (await pb.evaluate(() => fetch('/api/admin').then(r => r.status))) === 404);
+  check('a signed-in parent who is not in ADMIN_EMAILS gets not-found from the numbers page and from the wording editor',
+    (await pb.evaluate(() => fetch('/api/admin').then(r => r.status))) === 404 &&
+    (await pb.evaluate(() => fetch('/admin/copy').then(r => r.status))) === 404 &&
+    (await pb.evaluate(() => fetch('/admin/copy', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'f:home.hero.title=nope' }).then(r => r.status))) === 404);
   const noCustomer = await pb.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
   await until(pb, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1));
