@@ -32,16 +32,21 @@ food list from a 200-item library and produce a planned week immediately. From t
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes.
 - **Pack** — the next school day as a checklist, with ice-pack, sealed-container and
   no-protein flags. **Kid's pick** lives here, behind the lunchbox's "They pick their box
-  each day" switch (Household plan): the parent taps "Let Emma pick", the child sees the
-  week's remaining boxes from the next unpacked day onward, taps one, and hands the phone
-  back. That day and the chosen day trade boxes (slots, locks and marks), so nothing is
-  drawn and the shopping list does not change; a box with anything already in the bag is
-  never traded. The chosen box locks every compartment against a re-draw and is marked
-  `picker: 'kid'` with the adult who handed the phone over; the box the kid passed on loses
-  its mark. A manual swap or re-draw clears the mark. In the iPhone app a "Remind us at 6pm"
-  switch (on by default beside the kid's say, a household setting) schedules a local
-  notification only for evenings that have a box to pick tomorrow. Every food has an
-  emoji icon derived from its name, so custom foods get a picture too.
+  each day" switch (Household plan), for the next box not yet in the bag. Two ways, chosen
+  under "How they pick" and both trading within the week already shopped for, so nothing
+  is drawn and the shopping list never changes: **Each part** (the default) asks for the
+  main, side, fruit and sweet in turn, this day's food against the same part of a later
+  box, and choosing the other trades those two parts between the days; each choice is
+  saved as it is made, so stopping early keeps it. **Whole box** shows this day's box
+  against the next one, and choosing the other trades the whole days. A box with anything
+  already in the bag is never offered or traded. What the kid chose locks against a re-draw
+  and is marked `picker: 'kid'` with the adult who handed the phone over; the part or box
+  the kid passed on loses its mark. A manual swap or re-draw clears the mark. Both ways are
+  in for the beta testers to compare; one may go. In the iPhone app a "Remind us the night
+  before" switch with a time (on by default at 6pm beside the kid's say, household settings)
+  schedules a local notification only on evenings before one of that lunchbox's pack days
+  that still has a box to pick. Every food has an emoji icon derived from its name, so
+  custom foods get a picture too.
 - **Did they eat it?** — the morning after a pack day, the Pack view asks about
   yesterday's box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
   stored against the food, so they survive re-plans. The draw leans toward foods that get
@@ -191,6 +196,15 @@ the visual identity.
 - **Rated products.** Pull in product ratings (Yuka or similar) so the packaged suggestions
   above lean toward well-rated items, and flag a poorly rated pantry staple with an
   alternative.
+- **A quality score, and macros.** Two ideas that need research before design. A per-box
+  quality score the draw could aim for, without brand names or a barcode scanner (bloat
+  we do not need at launch): whole foods against processed ones, or a healthy spread of
+  macros for the child's age range, shown as one mark a parent can switch off. And the
+  Yuka-style approach of scoring named products from Open Food Facts, which needs the
+  scanner and real brands, so later if at all. Questions to settle first: what a
+  defensible score is for a child's lunch (age bands, the school-day share of daily
+  intake), whether the 200-food library can carry a whole/processed flag honestly, and
+  how not to become "not medical advice" territory.
 - **Macros and medical diets.** Per-kid targets (carbs, protein, calories, sodium) and a
   per-day tally, for children with diabetes, allergies beyond avoidance, or a prescribed
   diet. Needs nutrition data per food, portion sizes, and a clear "not medical advice"

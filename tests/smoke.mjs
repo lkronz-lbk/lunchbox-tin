@@ -276,26 +276,29 @@ try {
   /* today's box already has two things in the bag (ticked above), so it is not on offer: what was packed stays as it was */
   const weekBefore = await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return k.week.days.map(d => ({d: d.d, slots: Object.assign({}, d.slots), touched: Object.keys(k.packed[d.d] || {}).length > 0})); });
   const offered = weekBefore.filter(d => !d.touched);
+  /* "each part": the main first, this day's against a later day's; the kid's pick trades the two */
   await page.click('[data-act="kid-start"]'); await page.waitForTimeout(250);
-  const boxDates = await page.$$eval('.kidmode .pickbox', a => a.map(b => b.getAttribute('data-d')));
-  check("kid's pick takes over the screen with the week's boxes to choose from, never one with anything in the bag", boxDates.length >= 2 && boxDates.join() === offered.map(d => d.d).join() && weekBefore[0].touched, {boxDates, offered});
+  const targetDate = offered[0].d;
+  const partOpts = await page.$$eval('.kidmode .pick', a => a.map(b => ({d: b.getAttribute('data-d'), id: b.getAttribute('data-id')})));
+  check("kid's pick takes over the screen with two pictures: tomorrow's main and a later day's, never one from a box with anything in the bag", partOpts.length === 2 && partOpts[0].d === targetDate && offered.some(o => o.d === partOpts[1].d) && partOpts[1].d !== targetDate && weekBefore[0].touched, {partOpts, offered});
   const firstMainLabel = await page.textContent('.kidmode h1');
-  check("it asks by name, for tomorrow's box", /^Nia, pick tomorrow’s box/i.test(firstMainLabel.trim()), firstMainLabel);
+  check("it asks by name, in a child's words, the main first", /^Nia, pick your lunch/i.test(firstMainLabel.trim()), firstMainLabel);
   check('the exit is worded for the parent', /give the phone back/i.test(await page.textContent('[data-act="kid-exit"]')));
-  const targetDate = boxDates[0], chosenDate = boxDates[1];                          /* a later day's box, not the next one's */
-  const chosenMain = weekBefore.find(d => d.d === chosenDate).slots.main, targetMain = weekBefore.find(d => d.d === targetDate).slots.main;
-  await page.click('.kidmode .pickbox >> nth=1'); await page.waitForTimeout(200);
-  check('one tap ends on the finished box', (await page.$$eval('.kiddone .tin .cmp', a => a.length)) === 4);
+  const chosenDate = partOpts[1].d, chosenMain = partOpts[1].id, targetMain = partOpts[0].id;
+  await page.click('.kidmode .pick >> nth=1'); await page.waitForTimeout(200);
+  let steps = 1; while (steps < 8 && await page.$('.kidmode .pick')) { await page.click('.kidmode .pick >> nth=0'); await page.waitForTimeout(150); steps++; }
+  check('the taps end on the finished box', (await page.$$eval('.kiddone .tin .cmp', a => a.length)) === 4, steps);
   await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
   const afterPick = await page.evaluate((td) => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
     const k = d.kids[0], day = k.week.days.find(x => x.d === td);
     return {d: day.d, main: day.slots.main, locked: Object.values(day.lock).every(Boolean), days: k.week.days.map(x => ({d: x.d, main: x.slots.main, marks: Object.keys(x.kidPick || {}).length})),
+      all: k.week.days.flatMap(x => Object.values(x.slots)).filter(Boolean).sort().join(),
       picked: Object.keys(day.kidPick || {}).length,
       by: !!(day.kidPick && day.kidPick.main && d.members.some(m => m.id === day.kidPick.main.by) && day.kidPick.main.picker === 'kid')};
   }, targetDate);
-  check("the box the kid chose is tomorrow's now", afterPick.main === chosenMain, afterPick);
-  check("and tomorrow's old box moved to that day, so nothing new is bought", afterPick.days.find(x => x.d === chosenDate).main === targetMain && afterPick.days.map(x => x.main).filter(Boolean).sort().join() === weekBefore.map(d => d.slots.main).sort().join(), afterPick);
+  check("the main the kid chose is tomorrow's now", afterPick.main === chosenMain, afterPick);
+  check("and tomorrow's old main moved to that day, so nothing new is bought", afterPick.days.find(x => x.d === chosenDate).main === targetMain && afterPick.all === weekBefore.flatMap(d => Object.values(d.slots)).filter(Boolean).sort().join(), afterPick);
   check('kid-picked compartments are locked and attributed, on that day alone', afterPick.locked && afterPick.picked === 4 && afterPick.by && afterPick.days.filter(x => x.marks).length === 1, afterPick);
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200);
   check('the week says who picked, once, on that day', (await page.$$eval('.chip.pick', a => a.map(c => c.textContent))).join() === 'Nia picked');
@@ -525,10 +528,11 @@ try {
   await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
   check('drinks land on the shopping list under their own aisle', (await page.textContent('#view')).toLowerCase().includes('drinks'));
   await page.click('[data-act="box-settings"]'); await page.waitForTimeout(200);
-  await page.click('[data-act="kidpick-on"]'); await page.waitForTimeout(200);          /* this lunchbox's kid gets a say too */
+  await page.click('[data-act="kidpick-on"]'); await page.waitForTimeout(200);          /* this lunchbox's kid gets a say too, the whole box at a time */
+  await page.click('[data-act="kidpick-mode"][data-v="boxes"]'); await page.waitForTimeout(200);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
   await page.click('[data-act="kid-start"] >> nth=-1'); await page.waitForTimeout(250);
-  check("kid's pick shows all six compartments in each box", (await page.$$eval('.kidmode .pickbox >> nth=0 >> .mini .cmp', a => a.length)) === 6);
+  check("whole-box picking offers two boxes, each with all six compartments", (await page.$$eval('.kidmode .pickbox', a => a.length)) === 2 && (await page.$$eval('.kidmode .pickbox >> nth=0 >> .mini .cmp', a => a.length)) === 6);
   await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
   await page.click('[data-act="box-settings"]'); await page.waitForTimeout(200);
   await page.click('[data-act="rule"][data-k="noChoc"]');
@@ -613,19 +617,21 @@ try {
   const shopText = await page.textContent('#view');
   check('and no drink is left on the shopping list', drinkNames.length > 0 && !drinkNames.some(n => shopText.includes(n)), drinkNames);
 
-  /* the kid picks again: the mark is fresh */
+  /* the kid picks again, part by part this time: the mark is fresh, and stopping early keeps the one choice made */
+  await page.click('[data-act="box-settings"]'); await page.waitForTimeout(200);
+  await page.click('[data-act="kidpick-mode"][data-v="parts"]'); await page.waitForTimeout(200);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
   await page.click('[data-act="kid-start"]'); await page.waitForTimeout(250);
-  await page.click('.kidmode .pickbox >> nth=1'); await page.waitForTimeout(200);
-  await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);
+  await page.click('.kidmode .pick >> nth=1'); await page.waitForTimeout(200);
+  await page.click('[data-act="kid-exit"]'); await page.waitForTimeout(250);          /* stopping early keeps the one choice made */
   const kidKept = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0];
     const day = k.week.days.find(x => x.kidPick && Object.keys(x.kidPick).length) || k.week.days[0];
     return {locked: day.lock.main, picker: day.kidPick && day.kidPick.main && day.kidPick.main.picker,
       by: d.members.some(m => m.id === (day.kidPick && day.kidPick.main && day.kidPick.main.by))};
   });
-  check('a box the kid picked is locked and carries who and when', kidKept.locked && kidKept.picker === 'kid' && kidKept.by, kidKept);
-  check('and the box the kid passed on lost its mark and its hold', await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return k.week.days.filter(x => x.kidPick && Object.keys(x.kidPick).length).length === 1; }));
+  check('a choice the kid already made survives Stop, locked and attributed', kidKept.locked && kidKept.picker === 'kid' && kidKept.by, kidKept);
+  check('and only that day carries a mark', await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return k.week.days.filter(x => x.kidPick && Object.keys(x.kidPick).length).length === 1; }));
 
   /* a manual swap clears the "picked" mark */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);

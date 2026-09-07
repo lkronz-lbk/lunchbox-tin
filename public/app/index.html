@@ -260,6 +260,16 @@ nav.tabs svg{width:21px;height:21px}
 .kidmode h1{font-family:var(--f-display);font-size:clamp(28px,8vw,38px);font-weight:700;letter-spacing:-0.025em;
   line-height:1.08;margin:0;text-wrap:balance}
 .kidmode .hint{font-size:16px;color:var(--ink-2);margin:0}
+.dots{display:flex;gap:7px}
+.dots i{width:9px;height:9px;border-radius:50%;background:var(--line-strong);opacity:.35;display:block}
+.dots i.on{background:var(--accent);opacity:1} .dots i.did{background:var(--accent);opacity:.45}
+.picks{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.pick{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:24px;min-height:210px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px 12px;
+  font:inherit;color:var(--ink);transition:transform .12s ease,background .12s ease}
+.pick:active{transform:scale(.96)}
+.pick .ic{font-size:68px;line-height:1;filter:drop-shadow(var(--shadow-lift))}
+.pick .nm{font-family:var(--f-display);font-size:17px;font-weight:600;line-height:1.2;text-align:center;text-wrap:balance;overflow-wrap:break-word;hyphens:auto}
 .boxes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
 .boxes.tall{grid-template-columns:minmax(0,1fr);max-width:340px;width:100%;margin:0 auto}
 .pickbox{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:22px;padding:10px;font:inherit;color:var(--ink);
@@ -287,6 +297,7 @@ nav.tabs svg{width:21px;height:21px}
 .seg button{border:0;background:var(--surface);min-height:44px;font-size:13px;font-weight:500;color:var(--ink-2);border-left:1.5px solid var(--line-strong)}
 .seg button:first-child{border-left:0}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.switch .seg{grid-column:auto;grid-template-columns:1fr 1fr;flex:0 0 auto;width:190px}
 .review .btn.wide{margin-top:12px}
 
 /* --- multi-profile chrome --- */
@@ -1186,6 +1197,8 @@ function normKid(k, i){
   kid.settings.avoidText = safeStr(st.avoidText, 500, '');
   var so = plainObj(st.slots); kid.settings.slots = {snack:!!so.snack, drink:!!so.drink};
   kid.settings.kidPick = !!st.kidPick; kid.settings.kidReminder = st.kidReminder !== false;
+  kid.settings.kidPickMode = st.kidPickMode === 'boxes' ? 'boxes' : 'parts';
+  kid.settings.kidReminderAt = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(st.kidReminderAt || '')) ? st.kidReminderAt : '18:00';
   kid.settings.updatedAt = safeStamp(st.updatedAt);
   kid.foods = (Array.isArray(k.foods) ? k.foods : []).slice(0, 500).map(function(f){ return normFood(kid, f); }).filter(Boolean);
   var w = plainObj(k.week);
@@ -1716,19 +1729,62 @@ function pickChoices(kid){
   var target = nextPickDay(kid); if(!target) return [];
   return kid.week.days.filter(function(d){ return d.d >= target.d && untouched(kid, d) && catsFor(kid).some(function(c){ return d.slots[c.k]; }); });
 }
+/* Two ways to pick, both from the week already planned and shopped for, so nothing new
+   is bought. "Each part": for the main, the side, the fruit and the sweet in turn, this
+   day's food against the same part of a later box; choosing the other trades those two
+   parts between the days. "Whole box": this day's box against the next one; choosing the
+   other trades the whole days. */
+function partOptions(kid, target, cat){
+  var mine = target.slots[cat]; if(!mine) return [];
+  var other = pickChoices(kid).filter(function(d){ return d !== target && d.slots[cat] && d.slots[cat] !== mine && !(d.kidPick && d.kidPick[cat]); })[0];
+  return other ? [{d:target.d, id:mine}, {d:other.d, id:other.slots[cat]}] : [{d:target.d, id:mine}];
+}
 function startKidPick(kidId){
   var kid = kidById(kidId); if(!kid || !kid.week) return;
   var target = nextPickDay(kid), choices = pickChoices(kid);
   if(!target || choices.length < 2){ toast('Nothing to choose from yet'); return; }
-  UI.kid = {kidId:kidId, d:target.d, choices:choices.map(function(d){ return d.d; }), done:false};
+  if(kid.settings.kidPickMode === 'boxes'){
+    UI.kid = {kidId:kidId, d:target.d, mode:'boxes', choices:choices.slice(0, 2).map(function(d){ return d.d; }), done:false};
+  } else {
+    var cats = catsFor(kid).filter(function(c){ return partOptions(kid, target, c.k).length > 1; }).map(function(c){ return c.k; });
+    if(!cats.length){ toast('Nothing to choose from yet'); return; }
+    UI.kid = {kidId:kidId, d:target.d, mode:'parts', cats:cats, step:0, done:false};
+  }
+  render();
+}
+function pickStillLive(st, kid){
+  var live = nextPickDay(kid);
+  return !!(live && live.d === st.d);
+}
+function markPicked(kid, target, cat){
+  target.lock[cat] = true;                                   /* a choice the kid made survives a shuffle */
+  target.kidPick = target.kidPick || {};
+  target.kidPick[cat] = {at:now(), by:(deviceMember()||{}).id || null, picker:'kid'};
+}
+function kidChoosePart(dateStr, foodId){
+  var st = UI.kid; if(!st || st.done || st.mode !== 'parts') return;
+  var kid = kidById(st.kidId), days = kid.week ? kid.week.days : [], cat = st.cats[st.step];
+  var target = days.filter(function(d){ return d.d===st.d; })[0], other = days.filter(function(d){ return d.d===dateStr; })[0];
+  var opts = target ? partOptions(kid, target, cat) : [];
+  if(!target || !other || !pickStillLive(st, kid) || !opts.some(function(o){ return o.d === dateStr && o.id === foodId; })){
+    UI.kid = null; render(); toast('That box has moved on — try again'); return;
+  }
+  if(other !== target){                                     /* the two days trade this one part */
+    var mine = target.slots[cat];
+    target.slots[cat] = other.slots[cat]; other.slots[cat] = mine;
+    other.lock[cat] = false; if(other.kidPick) delete other.kidPick[cat];
+  }
+  markPicked(kid, target, cat);
+  touch(kid.week); touch(kid); save();                     /* saved now: stopping early keeps what was chosen */
+  st.step++;
+  if(st.step >= st.cats.length) st.done = true;
   render();
 }
 function kidChooseBox(dateStr){
-  var st = UI.kid; if(!st || st.done) return;
+  var st = UI.kid; if(!st || st.done || st.mode !== 'boxes') return;
   var kid = kidById(st.kidId), days = kid.week ? kid.week.days : [];
   var target = days.filter(function(d){ return d.d===st.d; })[0], chosen = days.filter(function(d){ return d.d===dateStr; })[0];
-  var live = nextPickDay(kid);                               /* midnight, or the other phone, may have moved on since the screen opened */
-  if(!target || !chosen || st.choices.indexOf(dateStr) < 0 || !live || live.d !== st.d || !untouched(kid, chosen)){
+  if(!target || !chosen || st.choices.indexOf(dateStr) < 0 || !pickStillLive(st, kid) || !untouched(kid, chosen)){
     UI.kid = null; render(); toast('That box has moved on — try again'); return;
   }
   if(chosen !== target){                                    /* the two days trade boxes, locks and all */
@@ -1740,11 +1796,7 @@ function kidChooseBox(dateStr){
     chosen.kidPick = {};
   }
   target.kidPick = {};
-  catsFor(kid).forEach(function(c){
-    if(!target.slots[c.k]) return;
-    target.lock[c.k] = true;                                 /* a choice the kid made survives a shuffle */
-    target.kidPick[c.k] = {at:now(), by:(deviceMember()||{}).id || null, picker:'kid'};
-  });
+  catsFor(kid).forEach(function(c){ if(target.slots[c.k]) markPicked(kid, target, c.k); });
   touch(kid.week); touch(kid); save();
   st.done = true; render();
 }
@@ -1752,19 +1804,22 @@ function kidChooseBox(dateStr){
    schedule one. One notification per evening that has a box to pick tomorrow: a pack
    day for a lunchbox whose kid has a say, not yet picked, with more than one box left.
    Never on a Friday with nothing behind it. */
-var REMINDER_IDS = [1801,1802,1803,1804,1805,1806,1807];
+var REMINDER_IDS = []; for(var ri = 1800; ri < 2000; ri++) REMINDER_IDS.push(ri);
 function reminderEvenings(){
-  var out = [], t0 = today();
-  for(var i = 0; i < 7; i++){
-    var eve = new Date(t0.getTime() + i * 86400000), next = iso(new Date(eve.getTime() + 86400000));
-    var names = kids().filter(function(k){
-      if(!k.settings.kidPick || k.settings.kidReminder === false || !k.week) return false;
-      var day = k.week.days.filter(function(d){ return d.d === next; })[0];
-      if(!day || !untouched(k, day) || (day.kidPick && Object.keys(day.kidPick).length)) return false;
-      return k.week.days.filter(function(d){ return d.d >= next && untouched(k, d) && catsFor(k).some(function(c){ return d.slots[c.k]; }); }).length > 1;
-    }).map(kidLabel).filter(Boolean);
-    if(names.length && !(i === 0 && new Date().getHours() >= 18)) out.push({at:new Date(eve.getFullYear(), eve.getMonth(), eve.getDate(), 18, 0, 0), names:names});
-  }
+  var out = [], t0 = today(), nowMs = Date.now();
+  kids().forEach(function(k, ki){
+    if(!k.settings.kidPick || k.settings.kidReminder === false || !k.week) return;
+    var hm = (k.settings.kidReminderAt || '18:00').split(':');
+    for(var i = 0; i < 7; i++){
+      var eve = new Date(t0.getTime() + i * 86400000), next = iso(new Date(eve.getTime() + 86400000));
+      var day = k.week.days.filter(function(d){ return d.d === next; })[0];      /* the week holds pack days only: no box tomorrow, no reminder tonight */
+      if(!day || !untouched(k, day) || (day.kidPick && Object.keys(day.kidPick).length)) continue;
+      if(k.week.days.filter(function(d){ return d.d >= next && untouched(k, d) && catsFor(k).some(function(c){ return d.slots[c.k]; }); }).length < 2) continue;
+      var at = new Date(eve.getFullYear(), eve.getMonth(), eve.getDate(), +hm[0], +hm[1], 0);
+      if(at.getTime() <= nowMs) continue;
+      out.push({id:1800 + ki * 7 + i, at:at, name:kidLabel(k) || 'them'});
+    }
+  });
   return out;
 }
 var reminderTimer = null;
@@ -1778,9 +1833,8 @@ function kidReminderSync(ask){
     var perm = ask ? ln.requestPermissions() : ln.checkPermissions();   /* the dialog follows the parent's tap, never a launch */
     Promise.all([cancel, perm]).then(function(r){
       var p = r[1]; if(!p || p.display !== 'granted') return;
-      return ln.schedule({notifications:eves.map(function(e, i){
-        return {id:REMINDER_IDS[i], title:'Time to pick tomorrow’s box',
-          body:'Hand '+e.names.join(' and ')+' the phone.', schedule:{at:e.at, allowWhileIdle:true}};
+      return ln.schedule({notifications:eves.map(function(e){
+        return {id:e.id, title:'Time for '+e.name+' to pick tomorrow’s box', body:'Hand them the phone.', schedule:{at:e.at, allowWhileIdle:true}};
       })});
     }).catch(function(){});
   }, 400);
@@ -2026,9 +2080,21 @@ function viewKid(){
       return '<span class="cmp c-'+c.k+'"><span class="ic">'+(f ? iconFor(f) : '')+'</span><span class="nm">'+(f ? esc(f.n) : '')+'</span></span>';
     }).join('')+'</span>';
   };
-  var h = '<div class="kidmode"><div class="top"><span class="catlab" style="color:var(--accent)">'+esc(l.rel || l.full)+'</span>'
+  var h = '<div class="kidmode"><div class="top">'
+    + (!st.done && st.mode === 'parts'
+        ? '<span class="dots">'+st.cats.map(function(c, i){ return '<i class="'+(i < st.step ? 'did' : i === st.step ? 'on' : '')+'"></i>'; }).join('')+'</span>'
+        : '<span class="catlab" style="color:var(--accent)">'+esc(l.rel || l.full)+'</span>')
     + (!st.done ? '<button class="btn ghost sm exit" data-act="kid-exit">Give the phone back</button>' : '')+'</div>';
-  if(!st.done){
+  if(!st.done && st.mode === 'parts'){
+    var cat = st.cats[st.step], opts = partOptions(kid, target, cat);
+    h += '<div class="body"><div><p class="catlab">'+esc(KIDWORD[cat])+' · '+esc(l.rel || l.full)+'</p>'
+      +  '<h1>'+(kidLabel(kid) ? esc(kidLabel(kid))+', pick your '+esc(KIDWORD[cat]) : 'Pick your '+esc(KIDWORD[cat]))+'.</h1>'
+      +  '<p class="hint">Tap the one you want.</p></div>'
+      +  '<div class="picks">'+opts.map(function(o){
+           var f = foodById(kid, o.id);
+           return '<button class="pick" data-act="kid-pick" data-d="'+esc(o.d)+'" data-id="'+esc(o.id)+'"><span class="ic">'+iconFor(f)+'</span><span class="nm">'+esc(f ? f.n : '')+'</span></button>';
+         }).join('')+'</div></div>';
+  } else if(!st.done){
     h += '<div class="body"><div>'
       +  '<h1>'+(kidLabel(kid) ? esc(kidLabel(kid))+', pick' : 'Pick')+' '+esc(when)+' box.</h1>'
       +  '<p class="hint">Tap the one you want.</p></div>'
@@ -2269,7 +2335,11 @@ function viewBox(){
   /* the kid's say */
   h += '<div><div class="sect-head"><h3>'+(kidLabel(kid) ? esc(kidLabel(kid))+'&#8217;s say' : 'Their say')+'</h3>'+(premiumTag() ? '<span>'+premiumTag()+'</span>' : '')+'</div><div class="card">'
     +  sw('kidpick-on', '', 'They pick their box each day', s.kidPick, 'From the week already planned and shopped for.')
-    +  (s.kidPick && native() ? sw('kid-reminder', '', 'Remind us at 6pm', s.kidReminder !== false) : '')
+    +  (s.kidPick ? '<div class="switch"><div><div class="t">How they pick</div></div>'
+         + '<div class="seg two"><button data-act="kidpick-mode" data-v="parts" aria-pressed="'+(s.kidPickMode !== 'boxes')+'">Each part</button>'
+         + '<button data-act="kidpick-mode" data-v="boxes" aria-pressed="'+(s.kidPickMode === 'boxes')+'">Whole box</button></div></div>' : '')
+    +  (s.kidPick && native() ? sw('kid-reminder', '', 'Remind us the night before', s.kidReminder !== false)
+         + (s.kidReminder !== false ? '<div class="switch"><div><div class="t">At</div></div><input type="time" id="kidReminderAt" value="'+esc(s.kidReminderAt || '18:00')+'" style="width:auto;min-height:44px"></div>' : '') : '')
     +  '</div></div>';
   return h+'</div>';
 }
@@ -2362,7 +2432,7 @@ function accountCard(){
       + '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px">'+(navigator.share ? '<button class="btn primary sm" data-act="invite-share">Send the link</button>' : '')
       + '<button class="btn sm" data-act="invite-copy">Copy the link</button></div></div>';
   }
-  h += '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px"><button class="btn ghost sm" data-act="signout">Sign out and clear this phone</button>'
+  h += '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px"><button class="btn ghost sm" data-act="signout">Sign out</button>'
     +  (Account.me && Account.me.role !== 'owner' ? '<button class="btn danger sm" data-act="leave">Leave this household</button>' : '')+'</div>';
   if(Account.me && Account.me.role === 'owner'){
     h += '<p class="hint" style="margin:0">Deleting removes the household from our servers, from this phone'
@@ -2592,12 +2662,13 @@ document.addEventListener('click', function(ev){
 
   /* kid's pick */
   if(act==='kid-start'){ if(gated()){ upgradeSheet('kidpick'); return; } startKidPick(el.getAttribute('data-kid')); window.scrollTo(0,0); return; }
-  if(act==='kid-pick'){ kidChooseBox(el.getAttribute('data-d')); return; }
+  if(act==='kid-pick'){ if(UI.kid && UI.kid.mode === 'parts') kidChoosePart(el.getAttribute('data-d'), el.getAttribute('data-id')); else kidChooseBox(el.getAttribute('data-d')); return; }
   if(act==='kidpick-on'){
     if(!kid.settings.kidPick && gated()){ upgradeSheet('kidpick'); return; }
     kid.settings.kidPick = !kid.settings.kidPick; touch(kid.settings); touch(kid); save(); render(); kidReminderSync(true); return;
   }
   if(act==='kid-reminder'){ kid.settings.kidReminder = kid.settings.kidReminder === false; touch(kid.settings); touch(kid); save(); render(); kidReminderSync(true); return; }
+  if(act==='kidpick-mode'){ kid.settings.kidPickMode = el.getAttribute('data-v') === 'boxes' ? 'boxes' : 'parts'; touch(kid.settings); touch(kid); save(); render(); return; }
   if(act==='kid-exit'){ UI.kid = null; render(); toast('Handed back'); return; }
 
   /* first run */
@@ -2992,6 +3063,11 @@ document.addEventListener('click', function(ev){
 
 document.addEventListener('change', function(ev){
   if(!S) return;
+  if(ev.target.id==='kidReminderAt'){
+    var at = String(ev.target.value || '');
+    if(/^([01]\d|2[0-3]):[0-5]\d$/.test(at)){ kid.settings.kidReminderAt = at; touch(kid.settings); touch(kid); save(); kidReminderSync(true); }
+    return;
+  }
   if(ev.target.id==='kidName' || ev.target.id==='avoidText'){
     if(ev.target.id==='avoidText'){ rulesChanged(activeKid()); save(); }
     render();

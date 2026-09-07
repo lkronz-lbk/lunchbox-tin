@@ -51,7 +51,7 @@ and App Store Connect scales them for the smaller phones.
 > The next school day as a checklist, with a flag when the box needs an ice pack, a sealed container, or is missing any protein.
 >
 > KID'S PICK
-> Switch on "They pick their box each day", then the night before hand them the phone. They see the week's boxes, tap the one they want for tomorrow, and the two days swap: nothing new to buy. On iPhone, an optional 6pm reminder. A lunch they chose tends to come home emptier.
+> Switch on "They pick their box each day", then the night before hand them the phone. Part by part, two pictures at a time, or the whole box against the next one: either way the choice comes from the week you already shopped for, so there is nothing new to buy. On iPhone, an optional reminder at the time you choose. A lunch they chose tends to come home emptier.
 >
 > WHAT CAME HOME
 > Tell it what was eaten, what came home, and what to rest. Next week's draw leans toward what actually gets eaten.
