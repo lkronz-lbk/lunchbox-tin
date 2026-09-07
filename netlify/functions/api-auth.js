@@ -1,5 +1,5 @@
 import { sql, json, fail, siteUrl, siteEnv, clientIp, ipKey, throttled } from '../lib/db.js';
-import { normalizeEmail, createMagicLink, peekMagicLink, consumeMagicLink, consumeMagicCode, findOrCreateUser,
+import { normalizeEmail, normalizeCode, createMagicLink, peekMagicLink, consumeMagicLink, consumeMagicCode, findOrCreateUser,
          createSession, sessionCookie, currentUser, destroySession, destroyAllSessions,
          verifyNonce, verifyCookie, verifyCookieFrom, sameOrigin, mailStopToken, stopMail } from '../lib/auth.js';
 import { sendMagicLink, sendWelcome } from '../lib/mail.js';
@@ -40,6 +40,12 @@ async function welcome(user, req) {
   catch (e) { console.error('welcome email', e.message); }
 }
 
+/* REVIEW_EMAIL + REVIEW_CODE: the address App Review signs in with, and its standing code. Empty means no such account. */
+function reviewAccount(email) {
+  const who = normalizeEmail(process.env.REVIEW_EMAIL || ''), code = normalizeCode(process.env.REVIEW_CODE || '');
+  return who && code.length >= 8 && email === who ? code : '';
+}
+
 export default async function handler(req, context) {
   const url = new URL(req.url);
   const action = url.pathname.split('/').pop();
@@ -54,9 +60,12 @@ export default async function handler(req, context) {
       if (ip && await throttled('link-ip:' + ip, 20, 60 * 60)) return fail('Too many sign-in requests from here; try again in an hour.', 429);
       if (await throttled('link:' + email, 3, 15 * 60)) return fail('A link was sent recently. Check your inbox, or try again in a few minutes.', 429);
       if (await throttled('link:all', 2000, 24 * 60 * 60)) return fail('Sign-in is busy right now; try again later.', 503);
-      const { token, code } = await createMagicLink(email);
+      /* App Review's tester has no inbox of ours: one address, named in the environment, signs in with a
+         fixed code and gets no email. The code is still only accepted for that address, still expires. */
+      const review = reviewAccount(email);
+      const { token, code } = await createMagicLink(email, review || undefined);
       const link = `${siteUrl(req)}/api/auth/verify?t=${token}`;
-      const sent = await sendMagicLink(email, link, code);
+      const sent = review ? { ok: true } : await sendMagicLink(email, link, code);
       /* the link and code come back to the caller only where a deploy has opted in (the test suite) */
       const show = sent.devLink && (siteEnv() === 'test' || process.env.DEV_LINKS === '1');
       return json({ ok: true, ...(show ? { devLink: sent.devLink, devCode: sent.devCode } : {}) });

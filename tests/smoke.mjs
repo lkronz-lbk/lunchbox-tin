@@ -30,6 +30,7 @@ const { default: householdHandler } = await import('../netlify/functions/api-hou
 const { default: billingHandler } = await import('../netlify/functions/api-billing.js');
 const { default: adminHandler } = await import('../netlify/functions/api-admin.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
+process.env.REVIEW_EMAIL = 'review@example.com'; process.env.REVIEW_CODE = 'REVU-2468';
 const stripeLib = await import('../netlify/lib/stripe.js');
 /* Stripe itself is a stub: it answers the four calls the code makes and records what it was asked */
 const stripeCalls = [];
@@ -886,6 +887,19 @@ try {
   await p2.fill('#signinCode', devCode.toLowerCase()); await p2.press('#signinCode', 'Enter');
   await until(p2, () => /Join their household/.test(document.querySelector('#view').textContent));
   check('the code from the email signs in without leaving the app, and offers the household', /Join their household/.test(await p2.textContent('#view')) && await p2.evaluate(() => fetch('/api/household').then(r => r.status)) === 200);
+  /* App Review's account: a standing code, no email, and the code is no good for anyone else */
+  {
+    const before = mails.length;
+    const r1 = await p2.evaluate(() => fetch('/api/auth/request', {method:'POST', headers:{'content-type':'application/json'}, body:'{"email":"review@example.com"}'}).then(r => r.json()));
+    const wrongAddress = await p2.evaluate(() => fetch('/api/auth/code', {method:'POST', headers:{'content-type':'application/json'}, body:'{"email":"sam@example.com","code":"REVU-2468"}'}).then(r => r.status));
+    const ctxRv = await phone(); const prv = await ctxRv.newPage();
+    await prv.goto(BASE+'/app/');
+    const signedIn = await prv.evaluate(() => fetch('/api/auth/code', {method:'POST', headers:{'content-type':'application/json'}, body:'{"email":"review@example.com","code":"revu 2468"}'}).then(r => r.status));
+    const who = await prv.evaluate(() => fetch('/api/auth/me').then(r => r.json()));
+    const linkMails = mails.slice(before).filter(m => m.to === 'review@example.com' && /sign-in link/.test(m.subject));   /* the welcome email on first sign-in is fine; the link email is not */
+    check('the review account signs in with its standing code, gets no sign-in email, and the code opens nothing else', r1.ok && !r1.devLink && linkMails.length === 0 && wrongAddress !== 200 && signedIn === 200 && who.user && who.user.email === 'review@example.com', {r1, wrongAddress, signedIn, who, linkMails: linkMails.length});
+    await ctxRv.close();
+  }
   const codeAgain = await p2.evaluate(c => fetch('/api/auth/code', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({email:'sam@example.com', code:c})}).then(r => r.status), devCode);
   check('a code works once', codeAgain === 410, codeAgain);
   await p2.click('[data-act="join-accept"]');

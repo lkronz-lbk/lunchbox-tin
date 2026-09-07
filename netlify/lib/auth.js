@@ -23,8 +23,8 @@ function shortCode() {
   return out.slice(0, 4) + '-' + out.slice(4);
 }
 export function normalizeCode(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
-export async function createMagicLink(email) {
-  const token = secret(), code = shortCode();
+export async function createMagicLink(email, fixedCode) {
+  const token = secret(), code = fixedCode || shortCode();
   const expires = new Date(Date.now() + LINK_MINUTES * 60 * 1000).toISOString();
   await sql()`INSERT INTO magic_links (token_hash, code_hash, email, expires_at) VALUES (${hash(token)}, ${hash(email + ':' + normalizeCode(code))}, ${email}, ${expires})`;
   return { token, code };

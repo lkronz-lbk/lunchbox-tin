@@ -232,6 +232,9 @@ writes the same one.
   can never touch production data or migrate it. `RESEND_API_KEY` and `MAIL_FROM` send the
   emails; without a key, production refuses and a deploy with `DEV_LINKS=1` (or the test
   suite) returns the link and code to the caller instead. `SITE_ENV` is set per context in the Netlify UI (and in `netlify.toml` for the build).
+  `REVIEW_EMAIL` and `REVIEW_CODE` (production only, for App Review): that one address signs
+  in with that standing code and is sent no email; eight or more letters and digits, and
+  nothing else about it is special.
   `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each as the
   build command; every statement is idempotent, so a half-applied file is harmless.
   Housekeeping (expired links, sessions and invites, old rate-limit rows) rides along with

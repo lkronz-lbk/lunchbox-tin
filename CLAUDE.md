@@ -57,6 +57,9 @@ Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
   points it at the live app; `ios-www/` is the placeholder web directory Capacitor insists on;
   `public/back.html` hands a parent back from Stripe in Safari. `ios/README.md` has the build,
   TestFlight and universal-link steps. `.github/workflows/ios.yml` compiles it on a macOS runner.
+- `store/`: the App Store listing (`listing.md`: every field, the privacy answers, the review
+  notes) and its screenshots, made by `scripts/store-shots.mjs` + `scripts/store-compose.py`
+  with the two brand fonts checked in beside them (both SIL Open Font License).
 - `tests/smoke.mjs`: one file, one command, real browser, real functions against PGlite.
 - `scripts/csp.mjs`: generates and checks the Content-Security-Policy in `netlify.toml`.
 
