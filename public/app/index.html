@@ -2329,7 +2329,7 @@ function accountCard(){
       + '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px">'+(navigator.share ? '<button class="btn primary sm" data-act="invite-share">Send the link</button>' : '')
       + '<button class="btn sm" data-act="invite-copy">Copy the link</button></div></div>';
   }
-  h += '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px"><button class="btn ghost sm" data-act="signout">Sign out on this phone</button>'
+  h += '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px"><button class="btn ghost sm" data-act="signout">Sign out and clear this phone</button>'
     +  (Account.me && Account.me.role !== 'owner' ? '<button class="btn danger sm" data-act="leave">Leave this household</button>' : '')+'</div>';
   if(Account.me && Account.me.role === 'owner'){
     h += '<p class="hint" style="margin:0">Deleting removes the household from our servers, from this phone'
@@ -2843,9 +2843,14 @@ document.addEventListener('click', function(ev){
     return;
   }
   if(act==='signout'){
-    api('POST', '/api/auth/logout').then(function(){
-      Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; Account.linkSent = ''; Account.status = 'idle'; Account.first = false; Account.elsewhere = false;
-      render(); toast(S.onboardedAt ? 'Signed out \u2014 your lunches stay on this phone' : 'Signed out');
+    /* the household lives on the server; signing out sends anything unsent, then leaves this
+       phone blank, the way a signed-out app should be. Signing in again brings it all back. */
+    clearTimeout(Account.timer);
+    var flush = (canWrite() && S.onboardedAt) ? Sync.push() : Promise.resolve();
+    flush.then(function(){ return api('POST', '/api/auth/logout'); }).then(function(){
+      Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; Account.linkSent = ''; Account.status = 'idle'; Account.first = false; Account.elsewhere = false; Account.entitlement = null; Account.household = null;
+      Store.forget(); S = newAccount(); DEVICE.memberId = S.members[0].id; UI.tab = 'pack'; UI.obEmail = false;
+      save(); render(); window.scrollTo(0,0); toast('Signed out \u2014 this phone is clear. Sign in again to get the lunches back.');
     }).catch(offline);
     return;
   }

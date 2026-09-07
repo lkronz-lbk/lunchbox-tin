@@ -940,10 +940,14 @@ try {
   check('and the app says so instead of pretending', /Only a parent can change the plan/.test(await p3.textContent('#toast')));
   await ctx3.close();
 
-  /* sign out keeps the phone's copy; delete removes the household everywhere */
+  /* sign out clears the phone and sends anything unsent first; delete removes the household everywhere */
   await p2.click('[data-act="tab"][data-tab="setup"]'); await p2.waitForTimeout(250);
-  await p2.click('[data-act="signout"]'); await until(p2, () => !!document.querySelector('#signinEmail'));
-  check('signing out keeps the lunches on that phone', await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length)));
+  await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].name = 'Ollie Unsent'; d.kids[0].updatedAt = new Date().toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+  await p2.reload(); await p2.waitForLoadState('load'); await p2.click('[data-act="tab"][data-tab="setup"]'); await until(p2, () => !!document.querySelector('[data-act="signout"]'));
+  await p2.click('[data-act="signout"]'); await until(p2, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));
+  const cleared = await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return !d.onboardedAt && !d.kids.some(k => k.foods.length) && !d.kids.some(k => k.name === 'Ollie'); });
+  const onServer = (await db.query(`SELECT h.doc FROM households h JOIN household_members m ON m.household_id = h.id JOIN users u ON u.id = m.user_id WHERE u.email = 'sam@example.com'`)).rows[0];
+  check('signing out sends the last change, then leaves the phone blank at onboarding', cleared && !!onServer && onServer.doc.kids.some(k => k.name === 'Ollie Unsent'), [cleared, onServer && onServer.doc.kids.map(k => k.name)]);
   await ctx2.close();
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   await page.click('[data-act="delete-account"]'); await page.waitForTimeout(150);
