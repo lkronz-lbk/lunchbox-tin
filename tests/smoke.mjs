@@ -950,6 +950,10 @@ try {
 
   /* a returning parent on a fresh phone signs in from the first screen and gets the lunches back */
   {
+    /* what the household calls Sam before he signs in anywhere new: the name must survive, not become "Sam" from the address */
+    const samId = await p2.evaluate(() => localStorage.getItem('lunchsorted-device'));
+    await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); const me = d.members.find(m => m.id === localStorage.getItem('lunchsorted-device')); me.name = 'Dad'; me.updatedAt = new Date().toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+    await p2.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return fetch('/api/household', {method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify({doc:d, version:j.version})}); }));
     const ctxR = await phone(); const pr = await ctxR.newPage(); pr.on('pageerror', e => errors.push(String(e.message)));
     await pr.goto(BASE+'/app/'); await pr.waitForTimeout(300);
     check('the first screen offers sign-in to someone who already has an account', (await pr.$$eval('[data-act="ob-signin"]', a => a.length)) === 1);
@@ -959,6 +963,8 @@ try {
     check('after sending, a returning parent is not offered a week that does not exist yet', (await pr.$$eval('[data-act="ob-later"]', a => a.filter(b => /See the week/.test(b.textContent)).length)) === 0);
     await pr.goto(await pr.getAttribute('[data-dev-link]', 'href')); await pr.click('button[type="submit"]'); await pr.waitForURL(/\/app\//); await pr.waitForLoadState('load');
     const backWith = await until(pr, () => !!document.querySelector('.tin') && JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length));
+    check('the fresh phone shows the household\'s own lunchbox, not its empty placeholder', backWith && await pr.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); const live = d.kids.filter(k => !k.deletedAt); return live.length === 2 && live.some(k => k.id === d.activeKidId && k.foods.length > 0); }), await pr.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.map(k => [k.name, k.foods.length, !!k.deletedAt])));
+    check('and the household still calls him what it called him', await pr.evaluate(id => { const d = JSON.parse(localStorage.getItem('lunchsorted')); const me = d.members.find(m => m.id === id); return !!me && me.name === 'Dad' && localStorage.getItem('lunchsorted-device') === id && d.members.filter(m => !m.deletedAt).length === 2; }, samId), await pr.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).members.map(m => [m.id, m.name, !!m.deletedAt])));
     check('the link brings the household back onto the fresh phone', backWith, backWith ? '' : await pr.evaluate(() => ({ kids: JSON.parse(localStorage.getItem('lunchsorted')).kids.map(k => [k.name, k.foods.length]), ob: !!JSON.parse(localStorage.getItem('lunchsorted')).onboardedAt, view: document.querySelector('#view').textContent.replace(/\s+/g, ' ').slice(0, 120) })));
     await ctxR.close();
   }

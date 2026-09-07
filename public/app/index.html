@@ -237,6 +237,7 @@ nav.tabs svg{width:21px;height:21px}
 .ob .go{margin-top:4px}
 .ob .skip{background:none;border:0;color:var(--ink-3);font-size:13.5px;text-decoration:underline;
   text-underline-offset:3px;min-height:44px}
+.ob .skip.top{align-self:flex-start;padding:0;margin-top:-6px}
 .oblogo{display:grid;grid-template-columns:1fr 1fr;gap:2px;width:64px;height:64px;border-radius:14px;
   border:2px solid var(--line-strong);background:var(--line-strong);overflow:hidden;margin-bottom:4px}
 .oblogo i:nth-child(1){background:var(--c-main)} .oblogo i:nth-child(2){background:var(--c-side)}
@@ -921,7 +922,8 @@ function applyState(st){
      household exists there; before the first push it is this phone's own member,
      and the first push names it */
   if(st.doc && safeIdOrNull(st.me.memberId)){
-    if(!memberById(st.me.memberId)){
+    var known = (plainObj(st.doc).members || []).some(function(m){ return m && m.id === st.me.memberId; });   /* the household already knows this parent by name: the merge brings that record */
+    if(!memberById(st.me.memberId) && !known){
       var nm = newMember(firstNameFrom(st.me.email), st.me.role === 'owner' ? 'owner' : 'adult');
       nm.id = st.me.memberId; S.members.push(nm);
     }
@@ -1020,7 +1022,10 @@ function syncLine(){
   if(Account.syncedAt){ var m = Math.round((Date.now() - Account.syncedAt) / 60000); return 'Synced ' + (m < 1 ? 'just now' : m === 1 ? 'a minute ago' : m + ' minutes ago'); }
   return 'Signed in';
 }
-function renderSyncLine(){ var el = document.getElementById('syncLine'); if(el) el.textContent = syncLine(); }
+function renderSyncLine(){
+  var el = document.getElementById('syncLine'); if(el) el.textContent = syncLine();
+  if(S && !S.onboardedAt && !UI.obEmail && signedIn()) render();      /* the questions screen shows the fetch as a banner */
+}
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
@@ -1892,6 +1897,10 @@ function noticeBanner(){
   if(Account.elsewhere && !S.onboardedAt && signedIn())
     return '<div class="banner wrap"><span>Signed in as '+esc(Account.user.email)+'. If you built the week in the home-screen app or another window, go back there and type the code from the same email; the link only signs in where it opens. Or start fresh here.</span>'
       + '<span class="row" style="gap:8px"><button class="btn sm ghost" data-act="elsewhere-ok">Start here</button><button class="btn sm ghost" data-act="signout">Sign out</button></span></div>';
+  if(signedIn() && !S.onboardedAt && !UI.obEmail){
+    if(Account.status === 'syncing' || Account.busy) return '<div class="banner"><span>Getting your lunches back\u2026</span></div>';
+    if(Account.status === 'error') return '<div class="banner"><span>Could not reach your lunches.</span><button class="btn sm primary" data-act="sync-now">Try again</button></div>';
+  }
   var msg = UI.notice || (!Store.ok ? 'This browser is not letting the app save. Changes will be lost when you close it.' : '');
   if(!msg && Account.join && UI.tab !== 'setup')
     return '<div class="banner"><span>'+esc(Account.join.from || 'Someone')+' invited you to share their lunches.</span><button class="btn sm primary" data-act="tab" data-tab="setup">Have a look</button></div>';
@@ -1929,11 +1938,12 @@ function viewObEmail(){
     h += '<h1>Check your email.</h1>'
       +  '<p class="lede">Sent to <b style="overflow-wrap:anywhere">'+esc(sent)+'</b>. '
       +  (standalone ? 'Type the code from it below; a tapped link opens in Safari, not here.' : 'Tap the link on this phone, or type the code below.')
-      +  ' Until then everything here still works'+(Account.devLink ? ' <a href="'+esc(Account.devLink)+'" data-dev-link>Open the link</a> (development only)' : '')+'.</p></div>'
+      +  (back ? '' : ' Until then everything here still works')+(Account.devLink ? ' <a href="'+esc(Account.devLink)+'" data-dev-link>Open the link</a> (development only)' : '')+'.</p></div>'
       +  '<div class="q"><label for="signinCode">The code from the email</label><div class="row" style="gap:8px"><input type="text" id="signinCode" placeholder="ABCD-1234" autocomplete="one-time-code" inputmode="text" enterkeyhint="go" autocapitalize="characters" maxlength="9" style="font-family:var(--f-mono);letter-spacing:.08em">'
       +  '<button class="btn sm" data-act="signin-code">Sign in</button></div></div>'
       +  (back ? '' : '<button class="btn primary wide go" data-act="ob-later">See the week</button>')
-      +  '<button class="skip" data-act="ob-resend">Wrong address? Try another</button>';
+      +  '<button class="skip" data-act="ob-resend">Wrong address? Try another</button>'
+      +  (back ? '<button class="skip" data-act="ob-later">Not now \u2014 set up from scratch</button>' : '');
   }
   return h + '</div>';
 }
@@ -1946,7 +1956,8 @@ function viewOnboard(){
     + '<div><div class="oblogo"><i></i><i></i><i></i><i></i></div>'
     + '<h1>A week of packed lunches, in about a minute.</h1>'
     + '<p class="lede">Answer a few things and we&#8217;ll build the week, match what goes with what, '
-    + 'and hand you the shopping list. You can change any of it after.</p></div>'
+    + 'and hand you the shopping list. You can change any of it after.</p>'
+    + '<button class="skip top" data-act="ob-signin">Already signed up? Sign in</button></div>'
     + '<div class="q"><span>Whose lunch is this?</span>'
     + '<input type="text" id="obName" value="'+esc(o.name)+'" placeholder="Their name, or leave it blank" autocomplete="off" maxlength="40"></div>'
     + '<div class="q"><span>What can go in the box?</span><div class="toggles">'
@@ -1962,7 +1973,6 @@ function viewOnboard(){
     + '</div></div>'
     + '<button class="btn primary wide go" data-act="ob-go">'+svg('dice',18)+'Build this week&#8217;s lunches</button>'
     + '<button class="skip" data-act="ob-skip">Skip &mdash; I&#8217;d rather start from an empty list</button>'
-    + '<button class="skip" data-act="ob-signin">Already signed up? Sign in</button>'
     + '</div>';
 }
 
@@ -2950,6 +2960,7 @@ document.addEventListener('click', function(ev){
   }
   if(act==='notice-dismiss'){ UI.notice=''; render(); return; }
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
+  if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = el.getAttribute('data-day'); render(); return; }
   if(act==='trial-dismiss'){ try{ localStorage.setItem(TRIAL_SEEN_KEY, el.getAttribute('data-stage') || 'soon'); }catch(e){} render(); return; }
   if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }
@@ -2978,6 +2989,7 @@ document.addEventListener('input', function(ev){
       + '"></span>'+esc(kid.name || 'Lunchbox')+'<span class="caret">&#9662;</span></button>';
   }
   if(ev.target.id==='obName'){ UI.ob.name = ev.target.value; }
+  if(ev.target.id==='signinEmail'){ UI.obDraft = ev.target.value; }
   if(ev.target.id==='avoidText'){ kid.settings.avoidText = ev.target.value.slice(0,500); touch(kid.settings); touch(kid); save(); }
   if(ev.target.id==='memberName'){
     var me = deviceMember(); if(!me) return;
