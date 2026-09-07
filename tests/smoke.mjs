@@ -948,6 +948,21 @@ try {
   check('and the app says so instead of pretending', /Only a parent can change the plan/.test(await p3.textContent('#toast')));
   await ctx3.close();
 
+  /* a returning parent on a fresh phone signs in from the first screen and gets the lunches back */
+  {
+    const ctxR = await phone(); const pr = await ctxR.newPage(); pr.on('pageerror', e => errors.push(String(e.message)));
+    await pr.goto(BASE+'/app/'); await pr.waitForTimeout(300);
+    check('the first screen offers sign-in to someone who already has an account', (await pr.$$eval('[data-act="ob-signin"]', a => a.length)) === 1);
+    await pr.click('[data-act="ob-signin"]'); await pr.waitForTimeout(200);
+    check('and that screen says welcome back, with a way back to the questions', /Welcome back/.test(await pr.textContent('#view')) && /set up from scratch/.test(await pr.textContent('#view')));
+    await pr.fill('#signinEmail', 'sam@example.com'); await pr.press('#signinEmail', 'Enter'); await until(pr, () => !!document.querySelector('[data-dev-link]'));
+    check('after sending, a returning parent is not offered a week that does not exist yet', (await pr.$$eval('[data-act="ob-later"]', a => a.filter(b => /See the week/.test(b.textContent)).length)) === 0);
+    await pr.goto(await pr.getAttribute('[data-dev-link]', 'href')); await pr.click('button[type="submit"]'); await pr.waitForURL(/\/app\//); await pr.waitForLoadState('load');
+    const backWith = await until(pr, () => !!document.querySelector('.tin') && JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length));
+    check('the link brings the household back onto the fresh phone', backWith, backWith ? '' : await pr.evaluate(() => ({ kids: JSON.parse(localStorage.getItem('lunchsorted')).kids.map(k => [k.name, k.foods.length]), ob: !!JSON.parse(localStorage.getItem('lunchsorted')).onboardedAt, view: document.querySelector('#view').textContent.replace(/\s+/g, ' ').slice(0, 120) })));
+    await ctxR.close();
+  }
+
   /* sign out clears the phone and sends anything unsent first; delete removes the household everywhere */
   await p2.click('[data-act="tab"][data-tab="setup"]'); await p2.waitForTimeout(250);
   await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].name = 'Ollie Unsent'; d.kids[0].updatedAt = new Date().toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); });
