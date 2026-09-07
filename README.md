@@ -25,20 +25,23 @@ food list from a 200-item library and produce a planned week immediately. From t
 
 - **Week** — draws a main, side, fruit and sweet per pack day and *assigns* them to days
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
-  balance, tangy against savory), then explains each day's box in a sentence. Keep a
+  balance, tangy against savory); each compartment carries the words the pairing used
+  (crunchy, soft, protein, tangy, sweet, salty, juicy, hearty, light), two at most. Keep a
   compartment and it survives the next shuffle; re-drawing that one compartment on purpose
   un-keeps it.
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes.
 - **Pack** — the next school day as a checklist, with ice-pack, sealed-container and
-  no-protein flags. **Kid's pick** lives here: the parent taps "Let Emma pick", the child
-  sees two parent-approved pictures per compartment (the draw's choice, and the next-best
-  by pairing score then eat history — for the main, by eat history alone; no randomness,
-  and never a food that is resting), taps one, and
-  hands the phone back. Each choice is saved the moment it is made, so stopping early
-  keeps what was chosen. Chosen compartments lock so a re-draw can't undo them; the day
-  records the adult who handed the phone over, marked `picker: 'kid'`. A manual swap or
-  re-draw clears the mark. Every food has an emoji icon derived
-  from its name, so custom foods get a picture too.
+  no-protein flags. **Kid's pick** lives here, behind the lunchbox's "They pick their box
+  each day" switch (Household plan): the parent taps "Let Emma pick", the child sees the
+  week's remaining boxes from the next unpacked day onward, taps one, and hands the phone
+  back. That day and the chosen day trade boxes (slots, locks and marks), so nothing is
+  drawn and the shopping list does not change; a box with anything already in the bag is
+  never traded. The chosen box locks every compartment against a re-draw and is marked
+  `picker: 'kid'` with the adult who handed the phone over; the box the kid passed on loses
+  its mark. A manual swap or re-draw clears the mark. In the iPhone app a "Remind us at 6pm"
+  switch (on by default beside the kid's say, a household setting) schedules a local
+  notification only for evenings that have a box to pick tomorrow. Every food has an
+  emoji icon derived from its name, so custom foods get a picture too.
 - **Did they eat it?** — the morning after a pack day, the Pack view asks about
   yesterday's box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
   stored against the food, so they survive re-plans. The draw leans toward foods that get
@@ -58,11 +61,14 @@ food list from a 200-item library and produce a planned week immediately. From t
   a day that has already gone: what was packed stays exactly as it was, for the review and the
   pack ticks. The shopping list likewise skips days already gone. The morning review only asks about a
   day the plan already existed on, or that had something ticked into the bag.
-- **Setup** — lunchboxes, pack days, and per-lunchbox school rules: cold-only, no ice pack,
-  short eating time, no chocolate or candy, allergen exclusions (including seeds & sesame),
-  and a free-text avoid list. Optional **snack** and **drink** compartments per lunchbox:
-  switching one on seeds a few foods and fills the current week, so the tin never grows an
-  empty cell. Copy-out/paste-in transfer between phones lives here too.
+- **Lunchbox settings** — the gear beside the lunchbox name on Week, Pack, Shop and Foods:
+  lunchboxes, name, pack days, per-lunchbox school rules (cold-only, no ice pack, short
+  eating time, no chocolate or candy), allergen exclusions (including seeds & sesame), a
+  free-text avoid list, the kid's say. Optional **snack** and **drink** compartments per
+  lunchbox: switching one on seeds a few foods and fills the current week, so the tin never
+  grows an empty cell.
+- **Account** — the fifth tab: sign-in, the Household plan, the people, your name, backup
+  and copy-out/paste-in transfer between phones, clear and erase.
 
 ## Data model
 
@@ -137,7 +143,7 @@ npm test
 ```
 
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
-onboarding, the week draw and its pairing notes, packing, the kid's pick, the morning review
+onboarding, the week draw and its trait words, packing, the kid's pick, the morning review
 and resting, the school rules re-checking a live plan, compartments switching on and off,
 anchoring, the shopping list, a second lunchbox with its own rules, export/import (including
 refusing junk, hostile ids and a save it cannot read), the v1 → v2 migration, pruning, the
@@ -171,7 +177,7 @@ the visual identity.
    `STRIPE_*` variables per context and a webhook endpoint registered in Stripe.
 4. **Built** — the Capacitor iOS shell (`ios/`, `ios/README.md`) for the US storefront: it
    loads the web app, opens Stripe in Safari and takes the parent back through `/back.html`,
-   builds on CI without a Mac. Next for it: TestFlight, then the night-before reminder, share
+   builds on CI without a Mac, with the 6pm kid's-pick reminder. Next for it: TestFlight, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
 ### Backlog (ideas to revisit, not scheduled)
@@ -217,7 +223,7 @@ writes the same one.
   that fails is retried three times with growing waits, then waits for the next change;
   returning to the app pulls if the last sync is more than thirty seconds old.
 - **Members**: owner, parent (adult), helper. An invite (`POST /api/household/invite`) is a
-  link that works once, for a week; opening it lands at the top of Setup with the sign-in
+  link that works once, for a week; opening it lands at the top of the Account tab with the sign-in
   card and the inviter's name. A phone that already has lunches brings them into the
   household when it joins, and keeps the member it already was. A helper receives only the
   plan, the foods in it and the ticks (no rules, allergens, history or addresses), cannot
@@ -288,7 +294,7 @@ member, tick and outcome it has, and cannot add more.
   the iPhone app). It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
   available after a plan ends, for the invoices.
-- **In the app**, Setup's account card has a "Household plan" line (Free, Renews DATE,
+- **In the app**, the Account tab's card has a "Household plan" line (Free, Renews DATE,
   Ends DATE, Payment failed, Forever, or Switching on… while the webhook lands), "Get the
   Household plan" or "Switch to forever", and "Manage billing" (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan

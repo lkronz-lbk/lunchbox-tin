@@ -71,7 +71,7 @@ button{cursor:pointer}
 
 .app{max-width:600px;margin:0 auto;padding:18px 16px calc(96px + env(safe-area-inset-bottom))}
 .topbar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px}
-.brand{font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:-0.01em}
+.brand{font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:-0.01em;white-space:nowrap}
 .brand span{color:var(--c-side)}
 .kid{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
 h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-height:1.15;letter-spacing:-0.02em;margin:0;text-wrap:balance}
@@ -126,6 +126,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
   display:inline-flex;align-items:center;gap:5px}
 .chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .chip.good{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.chip.pick{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 .chip{white-space:nowrap}
 .chip.lock svg{stroke-width:2.2}
 .banner.wrap{flex-wrap:wrap}
@@ -246,39 +247,28 @@ nav.tabs svg{width:21px;height:21px}
 .oblogo i:nth-child(1){background:var(--c-main)} .oblogo i:nth-child(2){background:var(--c-side)}
 .oblogo i:nth-child(3){background:var(--c-fruit)} .oblogo i:nth-child(4){background:var(--c-sweet)}
 
-/* --- kid's pick: bounded choice, two pictures per compartment --- */
+/* --- kid's pick: which of the week's boxes is next --- */
 .kidmode{position:fixed;inset:0;z-index:60;background:var(--ground);display:flex;flex-direction:column;
-  overflow-y:auto;-webkit-overflow-scrolling:touch}
+  overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .kidmode .top .exit{margin-left:auto}
 .more summary{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);cursor:pointer;min-height:44px;display:flex;align-items:center}
 .kidmode .top{display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:calc(12px + env(safe-area-inset-top)) 16px 6px}
-.dots{display:flex;gap:7px}
-.dots i{width:9px;height:9px;border-radius:50%;background:var(--line-strong);opacity:.35;display:block}
-.dots i.on{background:var(--accent);opacity:1} .dots i.did{background:var(--accent);opacity:.45}
 .kidmode .body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;
   padding:8px 20px calc(28px + env(safe-area-inset-bottom));max-width:600px;width:100%;margin:0 auto}
 .kidmode .catlab{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase}
 .kidmode h1{font-family:var(--f-display);font-size:clamp(28px,8vw,38px);font-weight:700;letter-spacing:-0.025em;
   line-height:1.08;margin:0;text-wrap:balance}
 .kidmode .hint{font-size:16px;color:var(--ink-2);margin:0}
-.picks{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.picks.one{grid-template-columns:1fr;max-width:260px}
-.pick{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:24px;min-height:210px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px 12px;
-  font:inherit;color:var(--ink);transition:transform .12s ease,background .12s ease}
-.pick:active{transform:scale(.96)}
-.pick .ic{font-size:68px;line-height:1;filter:drop-shadow(var(--shadow-lift))}
-.pick .nm{font-family:var(--f-display);font-size:17px;font-weight:600;line-height:1.2;text-align:center;text-wrap:balance}
-.pick.chosen{border-color:var(--accent);background:var(--accent-soft)}
-.boxes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.boxes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.boxes.tall{grid-template-columns:minmax(0,1fr);max-width:340px;width:100%;margin:0 auto}
 .pickbox{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:22px;padding:10px;font:inherit;color:var(--ink);
   transition:transform .12s ease}
 .pickbox:active{transform:scale(.96)}
-.pickbox .mini{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pickbox .mini{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}
 .pickbox .cmp{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:12px;background:var(--surface-2);min-height:84px;justify-content:center}
 .pickbox .ic{font-size:30px;line-height:1}
-.pickbox .nm{font-family:var(--f-display);font-size:12.5px;font-weight:600;line-height:1.15;text-align:center;text-wrap:balance}
+.pickbox .nm{font-family:var(--f-display);font-size:12px;font-weight:600;line-height:1.15;text-align:center;text-wrap:balance;overflow-wrap:break-word;hyphens:auto}
 .kiddone{display:flex;flex-direction:column;gap:18px;align-items:stretch}
 .kiddone .big{font-size:64px;line-height:1;text-align:center}
 .kiddone h1{text-align:center}
@@ -301,7 +291,8 @@ nav.tabs svg{width:21px;height:21px}
 
 /* --- multi-profile chrome --- */
 .topbar .who{display:flex;align-items:center;gap:8px}
-.kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);
+.kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);max-width:min(46vw,190px);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
   border-radius:999px;padding:0 12px;min-height:44px;font-size:13.5px;font-weight:600;color:var(--ink)}
 .kidbtn .dot{width:8px;height:8px}
 .iconbtn{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-2);
@@ -901,7 +892,7 @@ function resumeAfter(){
   var why = ''; try{ why = localStorage.getItem(AFTER_KEY) || ''; localStorage.removeItem(AFTER_KEY); }catch(e){}
   if(!why || !signedIn()) return;
   if(gated()){ upgradeSheet(why); return; }
-  if(why === 'lunchbox'){ UI.box = true; render(); addKidSheet(); }
+  if(why === 'lunchbox'){ if(UI.tab === 'setup') UI.tab = 'week'; UI.box = true; render(); addKidSheet(); }
   else if(why === 'share'){ UI.tab = 'setup'; UI.box = false; render(); }
   else if(why === 'week'){ UI.tab = 'week'; render(); }
 }
@@ -980,7 +971,7 @@ var Sync = {
         });
       }
       var merged = normalizeAccount(window.LSMerge.merge(mine, remote, iso(today())));
-      if(!window.LSMerge.same(merged, S)){ S = merged; if(!activeKid() && kids().length) S.activeKidId = kids()[0].id; Store.save(S, DEVICE.memberId); render(); }
+      if(!window.LSMerge.same(merged, S)){ S = merged; if(!activeKid() && kids().length) S.activeKidId = kids()[0].id; Store.save(S, DEVICE.memberId); render(); kidReminderSync(); }
       Account.status = 'ok'; Account.syncedAt = Date.now(); Account.tries = 0; renderSyncLine();
       if(!isHelper() && !window.LSMerge.same(merged, remote)) return Sync.push();
     }).catch(function(){ Account.busy = false; Account.status = 'error'; renderSyncLine(); Sync.later(); });
@@ -1245,6 +1236,7 @@ function save(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(function(){ Store.save(S, DEVICE.memberId); }, 120);
   Sync.schedule();
+  kidReminderSync();
 }
 
 /* ------------------------------------------------------------- accessors */
@@ -1385,6 +1377,7 @@ function dayFlags(kid, day){
   if(items.some(function(i){ return has(i,'ice'); })) f.push({t:'Ice pack', cls:''});
   if(items.some(function(i){ return has(i,'messy'); })) f.push({t:'Sealed container', cls:''});
   if(items.length && !items.some(function(i){ return has(i,'protein'); })) f.push({t:'No protein', cls:'warn'});
+  if(day.kidPick && Object.keys(day.kidPick).length) f.push({t:(kidLabel(kid) || 'They')+' picked', cls:'pick'});
   return f;
 }
 
@@ -1706,27 +1699,22 @@ function reshuffleSlot(kid, day, cat){
   return true;
 }
 
-/* ------------------------------------------------------------ kid's pick
-   Bounded choice: the parent has already set the rules and drawn the box; the
-   child sees two parent-approved options per compartment and taps one. Option A
-   is what the draw picked, option B is the next-best match against that day's
-   main. Main is asked first so the later pairings score against what the kid
-   actually chose. Nothing the child can tap has ever been outside the rules. */
+/* ------------------------------------------------------------ kid's pick */
 /* The kid picks which of the week's boxes is next. Every box was planned and shopped
    for, so whatever they choose is in the house; the box they did not choose keeps its
    place later in the week. */
+function untouched(kid, d){                                   /* nothing of this day is in the bag yet: what was packed stays as it was */
+  var row = kid.packed[d.d] || {};
+  return !catsFor(kid).some(function(c){ return ticked(row, c.k); });
+}
 function nextPickDay(kid){
   if(!kid.week) return null;
   var t0 = iso(today());
-  return kid.week.days.filter(function(d){
-    if(d.d < t0) return false;
-    var row = kid.packed[d.d] || {};
-    return !catsFor(kid).every(function(c){ return !d.slots[c.k] || ticked(row, c.k); });   /* a box fully in the bag is done */
-  })[0] || null;
+  return kid.week.days.filter(function(d){ return d.d >= t0 && untouched(kid, d) && catsFor(kid).some(function(c){ return d.slots[c.k]; }); })[0] || null;
 }
 function pickChoices(kid){
   var target = nextPickDay(kid); if(!target) return [];
-  return kid.week.days.filter(function(d){ return d.d >= target.d && catsFor(kid).some(function(c){ return d.slots[c.k]; }); });
+  return kid.week.days.filter(function(d){ return d.d >= target.d && untouched(kid, d) && catsFor(kid).some(function(c){ return d.slots[c.k]; }); });
 }
 function startKidPick(kidId){
   var kid = kidById(kidId); if(!kid || !kid.week) return;
@@ -1737,13 +1725,19 @@ function startKidPick(kidId){
 }
 function kidChooseBox(dateStr){
   var st = UI.kid; if(!st || st.done) return;
-  var kid = kidById(st.kidId), days = kid.week.days;
+  var kid = kidById(st.kidId), days = kid.week ? kid.week.days : [];
   var target = days.filter(function(d){ return d.d===st.d; })[0], chosen = days.filter(function(d){ return d.d===dateStr; })[0];
-  if(!target || !chosen || st.choices.indexOf(dateStr) < 0) return;
+  var live = nextPickDay(kid);                               /* midnight, or the other phone, may have moved on since the screen opened */
+  if(!target || !chosen || st.choices.indexOf(dateStr) < 0 || !live || live.d !== st.d || !untouched(kid, chosen)){
+    UI.kid = null; render(); toast('That box has moved on — try again'); return;
+  }
   if(chosen !== target){                                    /* the two days trade boxes, locks and all */
     var sl = target.slots, lk = target.lock, kp = target.kidPick;
     target.slots = chosen.slots; target.lock = chosen.lock; target.kidPick = chosen.kidPick;
     chosen.slots = sl; chosen.lock = lk; chosen.kidPick = kp;
+    /* the box the kid passed on is no longer "picked", and no longer held by that pick */
+    Object.keys(chosen.kidPick || {}).forEach(function(c){ chosen.lock[c] = false; });
+    chosen.kidPick = {};
   }
   target.kidPick = {};
   catsFor(kid).forEach(function(c){
@@ -1754,19 +1748,42 @@ function kidChooseBox(dateStr){
   touch(kid.week); touch(kid); save();
   st.done = true; render();
 }
-/* the 6pm reminder lives on the phone itself (the iPhone app); the web has no way to schedule one */
-function kidReminderSync(){
+/* The 6pm reminder lives on the phone itself (the iPhone app); the web has no way to
+   schedule one. One notification per evening that has a box to pick tomorrow: a pack
+   day for a lunchbox whose kid has a say, not yet picked, with more than one box left.
+   Never on a Friday with nothing behind it. */
+var REMINDER_IDS = [1801,1802,1803,1804,1805,1806,1807];
+function reminderEvenings(){
+  var out = [], t0 = today();
+  for(var i = 0; i < 7; i++){
+    var eve = new Date(t0.getTime() + i * 86400000), next = iso(new Date(eve.getTime() + 86400000));
+    var names = kids().filter(function(k){
+      if(!k.settings.kidPick || k.settings.kidReminder === false || !k.week) return false;
+      var day = k.week.days.filter(function(d){ return d.d === next; })[0];
+      if(!day || !untouched(k, day) || (day.kidPick && Object.keys(day.kidPick).length)) return false;
+      return k.week.days.filter(function(d){ return d.d >= next && untouched(k, d) && catsFor(k).some(function(c){ return d.slots[c.k]; }); }).length > 1;
+    }).map(kidLabel).filter(Boolean);
+    if(names.length && !(i === 0 && new Date().getHours() >= 18)) out.push({at:new Date(eve.getFullYear(), eve.getMonth(), eve.getDate(), 18, 0, 0), names:names});
+  }
+  return out;
+}
+var reminderTimer = null;
+function kidReminderSync(ask){
   var ln = nativePlugin('LocalNotifications'); if(!ln || !S) return;
-  var who = kids().filter(function(k){ return k.settings.kidPick && k.settings.kidReminder !== false; });
-  var want = who.length && !gated();
-  if(!want){ ln.cancel({notifications:[{id:1801}]}).catch(function(){}); return; }
-  var names = who.map(kidLabel).filter(Boolean);
-  ln.requestPermissions().then(function(p){
-    if(!p || p.display !== 'granted') return;
-    return ln.schedule({notifications:[{id:1801, title:'Time to pick tomorrow’s box',
-      body:(names.length ? 'Hand '+names.join(' and ')+' the phone.' : 'Hand them the phone.'),
-      schedule:{on:{hour:18, minute:0}, allowWhileIdle:true}}]});
-  }).catch(function(){});
+  clearTimeout(reminderTimer);
+  reminderTimer = setTimeout(function(){
+    var eves = gated() ? [] : reminderEvenings();
+    var cancel = ln.cancel({notifications:REMINDER_IDS.map(function(id){ return {id:id}; })}).catch(function(){});
+    if(!eves.length) return;
+    var perm = ask ? ln.requestPermissions() : ln.checkPermissions();   /* the dialog follows the parent's tap, never a launch */
+    Promise.all([cancel, perm]).then(function(r){
+      var p = r[1]; if(!p || p.display !== 'granted') return;
+      return ln.schedule({notifications:eves.map(function(e, i){
+        return {id:REMINDER_IDS[i], title:'Time to pick tomorrow’s box',
+          body:'Hand '+e.names.join(' and ')+' the phone.', schedule:{at:e.at, allowWhileIdle:true}};
+      })});
+    }).catch(function(){});
+  }, 400);
 }
 
 /* --------------------------------------------- household-wide roll-ups */
@@ -1835,16 +1852,14 @@ function tinHTML(kid, day, mode){
     var packed = mode==='pack' && ticked(packedRow, c.k);
     var sub = f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '');
     var tr = f ? traitsOf(f) : [];
-    var kidPicked = day.kidPick && day.kidPick[c.k];
     var mark = mode==='pack' ? '<span class="tick">'+svg('check',9)+'</span>'
-             : (kidPicked ? '<span title="'+esc(kid.name)+' picked this">★</span>'
-               : day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>' : '');
+             : (day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>' : '');
     h += '<button class="cmp c-'+c.k+(f?'':' empty')+(c.minor?' minor':'')+'" data-act="'+(mode==='pack'?'toggle':'slot')+'"'
       +  ' data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'"'
       +  (mode==='pack' ? ' aria-pressed="'+(packed?'true':'false')+'"' : '')+'>'
       +  '<span class="lab">'+c.label+mark+'</span>'
       +  '<span class="nm">'+(f ? esc(f.n) : 'Nothing picked')+'</span>'
-      +  '<span class="tr">'+tr.map(function(t){ return '<i class="t-'+t+'">'+t+'</i>'; }).join('')+(sub ? '<i class="care">'+esc(sub)+'</i>' : '')+'</span></button>';
+      +  '<span class="tr">'+(sub ? '<i class="care">'+esc(sub)+'</i>' : '')+tr.map(function(t){ return '<i class="t-'+t+'">'+t+'</i>'; }).join('')+'</span></button>';
   });
   return h+'</div>';
 }
@@ -2017,7 +2032,7 @@ function viewKid(){
     h += '<div class="body"><div>'
       +  '<h1>'+(kidLabel(kid) ? esc(kidLabel(kid))+', pick' : 'Pick')+' '+esc(when)+' box.</h1>'
       +  '<p class="hint">Tap the one you want.</p></div>'
-      +  '<div class="boxes">'
+      +  '<div class="boxes'+(cats.length > 4 ? ' tall' : '')+'">'
       +  st.choices.map(function(dstr){
            var day = days.filter(function(d){ return d.d===dstr; })[0];
            return '<button class="pickbox" data-act="kid-pick" data-d="'+esc(dstr)+'" aria-label="'+esc(cats.map(function(c){ var f = foodById(kid, day.slots[c.k]); return f ? f.n : ''; }).filter(Boolean).join(', '))+'">'+miniTin(day)+'</button>';
@@ -2118,8 +2133,7 @@ function viewWeek(){
     + '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+'Shuffle</button></div>'
     + planBanner();
   if(!kid.week)
-    return h + '<div class="empty"><p>Shuffle draws a '+esc(catsFor(kid).map(function(c){ return c.label.toLowerCase(); }).join(', ').replace(/, ([^,]*)$/, ' and $1'))
-      + ' for every pack day, then arranges them so each box goes together.</p></div></div>';
+    return h + '<div class="empty"><p>Shuffle draws the week.</p></div></div>';
 
   kid.week.days.forEach(function(day){
     var l = dayLabel(day.d);
@@ -2253,8 +2267,7 @@ function viewBox(){
     +  '<textarea id="avoidText" placeholder="salami, kiwi, sesame" maxlength="500">'+esc(s.avoidText)+'</textarea></div></div></div>';
 
   /* the kid's say */
-  var poss = kidPoss(kid);
-  h += '<div><div class="sect-head"><h3>'+poss.charAt(0).toUpperCase()+poss.slice(1)+' say</h3>'+(premiumTag() ? '<span>'+premiumTag()+'</span>' : '')+'</div><div class="card">'
+  h += '<div><div class="sect-head"><h3>'+(kidLabel(kid) ? esc(kidLabel(kid))+'&#8217;s say' : 'Their say')+'</h3>'+(premiumTag() ? '<span>'+premiumTag()+'</span>' : '')+'</div><div class="card">'
     +  sw('kidpick-on', '', 'They pick their box each day', s.kidPick, 'From the week already planned and shopped for.')
     +  (s.kidPick && native() ? sw('kid-reminder', '', 'Remind us at 6pm', s.kidReminder !== false) : '')
     +  '</div></div>';
@@ -2508,6 +2521,7 @@ function render(){
   }
   document.getElementById('tabs').style.display = '';
   document.querySelector('.topbar').style.display = '';
+  if(UI.box && (UI.tab === 'setup' || !kid)) UI.box = false;   /* the settings belong to a lunchbox tab; Account has no gear */
   document.getElementById('view').innerHTML =
       UI.box           ? viewBox()
     : UI.tab==='pack'  ? viewPack()
@@ -2521,7 +2535,6 @@ function render(){
   /* Pack and Shop cover the whole household, so the per-lunchbox switcher
      only belongs on the views it actually steers. */
   var householdView = kids().length>1 && (UI.tab==='pack' || UI.tab==='shop') && !UI.box;
-  if(UI.box && !kid) UI.box = false;
   var gear = isHelper() ? '' : '<button class="iconbtn" data-act="box-settings" aria-label="Lunchbox settings" aria-pressed="'+(!!UI.box)+'">'+svg('setup',18)+'</button>';
   document.getElementById('who').innerHTML = !kid ? ''
     : (householdView
@@ -2582,9 +2595,9 @@ document.addEventListener('click', function(ev){
   if(act==='kid-pick'){ kidChooseBox(el.getAttribute('data-d')); return; }
   if(act==='kidpick-on'){
     if(!kid.settings.kidPick && gated()){ upgradeSheet('kidpick'); return; }
-    kid.settings.kidPick = !kid.settings.kidPick; touch(kid.settings); touch(kid); save(); render(); kidReminderSync(); return;
+    kid.settings.kidPick = !kid.settings.kidPick; touch(kid.settings); touch(kid); save(); render(); kidReminderSync(true); return;
   }
-  if(act==='kid-reminder'){ kid.settings.kidReminder = kid.settings.kidReminder === false; touch(kid.settings); touch(kid); save(); render(); kidReminderSync(); return; }
+  if(act==='kid-reminder'){ kid.settings.kidReminder = kid.settings.kidReminder === false; touch(kid.settings); touch(kid); save(); render(); kidReminderSync(true); return; }
   if(act==='kid-exit'){ UI.kid = null; render(); toast('Handed back'); return; }
 
   /* first run */
@@ -2625,8 +2638,8 @@ document.addEventListener('click', function(ev){
 
   /* navigation */
   if(act==='tab'){ UI.tab = el.getAttribute('data-tab'); UI.box = false; render(); window.scrollTo(0,0); return; }
-  if(act==='box-settings'){ UI.box = !UI.box; render(); window.scrollTo(0,0); return; }
-  if(act==='box-done'){ UI.box = false; render(); window.scrollTo(0,0); return; }
+  if(act==='box-settings'){ if(!UI.box) UI.boxScroll = window.scrollY; UI.box = !UI.box; render(); window.scrollTo(0, UI.box ? 0 : (UI.boxScroll || 0)); return; }
+  if(act==='box-done'){ UI.box = false; render(); window.scrollTo(0, UI.boxScroll || 0); return; }
   if(act==='go-foods'){ UI.tab='foods'; UI.box = false; render(); window.scrollTo(0,0); return; }
   if(act==='go-kid-foods'){ S.activeKidId = el.getAttribute('data-id'); UI.tab='foods'; UI.box = false; save(); render(); window.scrollTo(0,0); return; }
   if(act==='go-week'){ UI.tab='week'; UI.box = false; render(); window.scrollTo(0,0); return; }
