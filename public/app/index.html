@@ -425,7 +425,7 @@ window.LSMerge = (function(){
       createdAt:(a.createdAt || '') < (b.createdAt || '') ? a.createdAt : b.createdAt,
       updatedAt:stamp(a) > stamp(b) ? a.updatedAt : b.updatedAt,
       onboardedAt:a.onboardedAt || b.onboardedAt || null,
-      tz:a.tz || b.tz || null,                               /* the household's zone is whoever set it first; a joining phone does not move it */
+      tz:b.tz || a.tz || null,                               /* the copy already on the server (b) set it first; a joining phone (a) never moves it */
       members:unionById(a.members, b.members, newer),
       kids:unionById(a.kids, b.kids, function(x, y){ return mergeKid(x, y, today); }),
       activeKidId:a.activeKidId || b.activeKidId,

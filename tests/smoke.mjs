@@ -165,6 +165,9 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
   a = clone(); b = clone(); b.kids[0].foods[0].deletedAt = t2; b.kids[0].foods[0].updatedAt = t2; a.kids[0].foods[0].n = 'Red apple';
   m = M.merge(a, b);
   check('merge: a newer deletion beats an older rename', m.kids[0].foods[0].deletedAt === t2);
+  a = clone(); b = clone(); a.tz = 'Pacific/Honolulu'; b.tz = 'America/New_York';
+  check("merge: the household's zone is the server copy's; a joining phone never moves it, and a phone that has one fills a household that does not",
+    M.merge(a, b).tz === 'America/New_York' && M.merge(a, Object.assign(clone(), {tz: null})).tz === 'Pacific/Honolulu');
   a = clone(); b = clone();
   a.kids[0].packed['2026-09-01'] = {main:{at:t1, by:'mem_a'}}; b.kids[0].packed['2026-09-01'] = {side:{at:t2, by:'mem_b'}};
   a.pantry['apples'] = {have:true, at:t1}; b.pantry['bread'] = {have:true, at:t2};
@@ -1370,7 +1373,9 @@ try {
       const east = end.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' });
       const hawaii = end.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Pacific/Honolulu' });
       check("the end date in the email is the household's own day, and a zone the server does not know falls back to the East Coast",
-        got('west@example.com').length === 1 && got('west@example.com')[0].subject.endsWith(hawaii) && got('odd@example.com').length === 1 && got('odd@example.com')[0].subject.endsWith(east) && dateWords(end, 'Pacific/Honolulu') === hawaii && dateWords(end, 'Not/AZone') === east,
+        got('west@example.com').length === 1 && got('west@example.com')[0].subject.endsWith(hawaii) && got('odd@example.com').length === 1 && got('odd@example.com')[0].subject.endsWith(east) && dateWords(end, 'Pacific/Honolulu') === hawaii && dateWords(end, 'Not/AZone') === east
+        && dateWords(end, null) === east && dateWords(end, '') === east
+        && dateWords(new Date('2026-09-10T06:00:00Z'), 'Pacific/Honolulu') === 'Wednesday, September 9' && dateWords(new Date('2026-09-10T06:00:00Z'), 'America/New_York') === 'Thursday, September 10',
         [got('west@example.com').map(m => m.subject), got('odd@example.com').map(m => m.subject), hawaii, east]);
     }
     check('three days before the end, one email says when; the day after, one says what changed', first.ending === 3 && first.ended === 1 &&

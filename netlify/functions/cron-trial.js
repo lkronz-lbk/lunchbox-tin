@@ -46,7 +46,8 @@ export async function run(now = Date.now(), siteOverride = '') {
         if (!token) { const [u] = await q`UPDATE users SET mail_token = replace(gen_random_uuid()::text, '-', '') WHERE id = ${p.id} AND mail_token IS NULL RETURNING mail_token`; token = u ? u.mail_token : (await q`SELECT mail_token FROM users WHERE id = ${p.id}`)[0].mail_token; }
         const stop = `${site}/api/auth/mail-stop?t=${token}`;
         try {
-          if (kind === 'trial_ending') await sendTrialEnding(p.email, site, end, stop, h.tz); else await sendTrialEnded(p.email, site, stop);
+          const tz = typeof h.tz === 'string' && h.tz.length <= 64 && /^[A-Za-z_]+(\/[A-Za-z0-9_+\-]+)*$/.test(h.tz) ? h.tz : null;   /* the document is the phone's word; only a zone-shaped one is tried */
+          if (kind === 'trial_ending') await sendTrialEnding(p.email, site, end, stop, tz); else await sendTrialEnded(p.email, site, stop);
           any = true; sent++;
         } catch (e) { console.error('cron-trial: could not send to', p.id, e.message); }
       }

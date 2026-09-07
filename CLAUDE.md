@@ -56,7 +56,7 @@ Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
 - `ios/`: the Capacitor iPhone shell (Swift Package Manager, no CocoaPods); `capacitor.config.json`
   points it at the live app; `ios-www/` is the placeholder web directory Capacitor insists on;
   `public/back.html` hands a parent back from Stripe in Safari. `ios/README.md` has the build,
-  TestFlight and universal-link steps. `.github/workflows/ios.yml` compiles it on a macOS runner.
+  TestFlight and universal-link steps. `.github/workflows/ios.yml` compiles it on a macOS runner; `testflight.yml` archives, signs and uploads it.
 - `store/`: the App Store listing (`listing.md`: every field, the privacy answers, the review
   notes) and its screenshots, made by `scripts/store-shots.mjs` + `scripts/store-compose.py`
   with the two brand fonts checked in beside them (both SIL Open Font License).

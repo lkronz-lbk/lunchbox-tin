@@ -2,8 +2,7 @@ name: iOS
 
 # Builds the iPhone shell on Apple's runner so the Xcode project is proven to
 # compile on every change to it, with no Mac in the loop. Unsigned: a
-# simulator build. Signing and TestFlight upload come when the App Store
-# Connect key and the certificate exist as repository secrets (see ios/README.md).
+# simulator build. Signing and TestFlight upload are testflight.yml.
 on:
   push:
     branches: [main, dev]

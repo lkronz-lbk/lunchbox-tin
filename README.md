@@ -90,6 +90,7 @@ The account carries `tz`, the IANA zone of the phone that made it (a joining pho
 moves it), so the server's emails say dates in the household's own day; a household from
 before the zone was kept learns it from its next change, and one that never says is read
 as the East Coast.
+
 Every entity (account, member, lunchbox, food, week) carries `id`/`createdAt`/`updatedAt`;
 event rows (packed ticks, pantry ticks, eat answers, kid picks) carry `at`/`by`. Deletion is a
 `deletedAt` tombstone (kept for ninety days; `prune()` also drops packed ticks from before the
@@ -186,7 +187,8 @@ the visual identity.
    `STRIPE_*` variables per context and a webhook endpoint registered in Stripe.
 4. **Built** — the Capacitor iOS shell (`ios/`, `ios/README.md`) for the US storefront: it
    loads the web app, opens Stripe in Safari and takes the parent back through `/back.html`,
-   builds on CI without a Mac, with the 6pm kid's-pick reminder. Next for it: TestFlight, then the share
+   builds on CI without a Mac, with the night-before kid's-pick reminder (6pm by default), and
+   `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
 ### Backlog (ideas to revisit, not scheduled)

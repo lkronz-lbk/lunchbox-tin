@@ -60,7 +60,8 @@ export function sendWelcome(to, site, stopUrl) {
    the function runs in UTC, and a household that never said falls back to the East Coast */
 export const dateWords = (d, tz) => {
   for (const zone of [tz, 'America/New_York']) {
-    try { return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: zone || undefined }); } catch { /* not a zone the runtime knows */ }
+    if (!zone) continue;                                       /* a household that never said is read as the East Coast, not as the server's clock */
+    try { return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: zone }); } catch { /* not a zone the runtime knows */ }
   }
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 };

@@ -123,15 +123,21 @@ jobs:
           grep -q 'EXPORT SUCCEEDED' export.log
           echo "Build ${{ steps.v.outputs.marketing }} (${{ steps.v.outputs.build }}) is on its way to TestFlight; App Store Connect processes it in a few minutes."
 
-      - name: Keep the logs
+      - name: Keep the logs, without the identifiers
         if: always()
-        uses: actions/upload-artifact@v4
+        run: |
+          for f in archive.log export.log; do
+            [ -f "$f" ] && sed -i '' -e "s/${APPSTORE_KEY_ID}/KEY_ID/g" -e "s/${APPSTORE_ISSUER_ID}/ISSUER_ID/g" -e "s/${APPLE_TEAM_ID}/TEAM_ID/g" "$f" || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: testflight-logs
           path: |
             archive.log
             export.log
           if-no-files-found: ignore
+          retention-days: 5
 
       - name: Remove the key from the runner
         if: always()
