@@ -28,6 +28,18 @@ export const APP_CSP = [
   "form-action 'self'"
 ].join('; ');
 
+/* /back.html is where Stripe sends the iPhone app's parent; its one script carries the query into the app */
+const backHtml = fs.readFileSync('public/back.html', 'utf8');
+const backTags = [...backHtml.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)];
+export const BACK_CSP = [
+  "default-src 'none'",
+  "script-src " + backTags.map(m => "'sha256-" + crypto.createHash('sha256').update(m[1], 'utf8').digest('base64') + "'").join(' '),
+  "style-src 'unsafe-inline'",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+  "form-action 'none'"
+].join('; ');
+
 export const SITE_CSP = [
   "default-src 'self'",
   "script-src 'none'",
@@ -53,7 +65,7 @@ if (process.argv[1] && process.argv[1].endsWith('csp.mjs')) {
   let toml = fs.readFileSync('netlify.toml', 'utf8');
   if (process.argv.includes('--check')) {
     const have = readPolicies(toml);
-    const want = {'/app/*': APP_CSP, '/': SITE_CSP, '/index.html': SITE_CSP, '/privacy.html': SITE_CSP, '/terms.html': SITE_CSP};
+    const want = {'/app/*': APP_CSP, '/': SITE_CSP, '/index.html': SITE_CSP, '/privacy.html': SITE_CSP, '/terms.html': SITE_CSP, '/back.html': BACK_CSP};
     const stale = Object.keys(want).filter(p => have[p] !== want[p]);
     if (stale.length) { console.error('netlify.toml CSP is stale for ' + stale.join(', ') + ' — run `npm run csp`'); process.exit(1); }
     console.log('CSP up to date'); process.exit(0);
@@ -65,7 +77,8 @@ if (process.argv[1] && process.argv[1].endsWith('csp.mjs')) {
     toml = toml.replace(re, '$1' + value + '$2');
   };
   put('/app/*', APP_CSP);
-  ['/', '/index.html', '/privacy.html'].forEach(p => put(p, SITE_CSP));
+  ['/', '/index.html', '/privacy.html', '/terms.html'].forEach(p => put(p, SITE_CSP));
+  put('/back.html', BACK_CSP);
   fs.writeFileSync('netlify.toml', toml);
   console.log('CSP written:', hashes.length, 'script hash(es)');
 }

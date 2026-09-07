@@ -1,0 +1,15 @@
+{
+  "appId": "app.lunchsorted",
+  "appName": "Lunch Sorted",
+  "webDir": "ios-www",
+  "server": {
+    "url": "https://lunchsorted.app/app/",
+    "allowNavigation": ["lunchsorted.app", "*.lunchsorted.app"]
+  },
+  "ios": {
+    "contentInset": "never",
+    "appendUserAgent": "LunchSortedApp/1",
+    "backgroundColor": "#E9EEE6",
+    "scheme": "Lunch Sorted"
+  }
+}

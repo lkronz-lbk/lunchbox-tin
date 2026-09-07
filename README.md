@@ -166,8 +166,10 @@ the visual identity.
    mail sender in the Netlify environment.
 3. **Built, behind the same switch** — Stripe Checkout on the web (below). Needs the four
    `STRIPE_*` variables per context and a webhook endpoint registered in Stripe.
-4. **Then** — a Capacitor iOS shell on the US storefront, with the night-before reminder,
-   share sheet and a Home Screen widget; payments stay on the web.
+4. **Built** — the Capacitor iOS shell (`ios/`, `ios/README.md`): it loads the web app,
+   opens Stripe in Safari and takes the parent back through `/back.html`, builds on CI
+   without a Mac. Next for it: TestFlight, then the night-before reminder, share sheet and
+   a Home Screen widget; payments stay on the web.
 
 ### Backlog (ideas to revisit, not scheduled)
 

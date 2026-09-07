@@ -76,6 +76,7 @@ async function apiProxy(req, res){
 }
 function cspFor(p){
   if(p.startsWith('/app/')) return POLICIES['/app/*'];
+  if(p === '/back.html') return POLICIES['/back.html'];
   if(p === '/' || p === '/index.html') return POLICIES['/index.html'];
   return POLICIES[p] || null;
 }
@@ -1156,6 +1157,26 @@ try {
   const ownerCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
   check('checkout is opened on the server, for this household, on Stripe\'s page', ownerCheckout.url === 'https://checkout.stripe.com/c/pay/cs_test_1' &&
     stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params.client_reference_id === String(patState.household.id) && c.params.mode === 'subscription' && c.params['line_items[0][price]'] === 'price_year' && c.params.customer_email === 'pat@example.com' && /\/app\/\?paid=1$/.test(c.params.success_url) && c.params['automatic_tax[enabled]'] === 'true' && c.auth === 'Bearer sk_test_stub'), stripeCalls.slice(-1));
+  /* the iPhone app: Stripe opens in Safari and comes back through a page that hands off to the app */
+  const iosCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year","client":"ios"}'}).then(r => r.json()));
+  const iosCall = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop();
+  check('from the iPhone app, Stripe sends the parent back through the hand-off page', !!iosCheckout.url && iosCall && /\/back\.html\?paid=1$/.test(iosCall.params.success_url) && /\/back\.html\?paid=0$/.test(iosCall.params.cancel_url), iosCall && iosCall.params);
+  const backPage = await pb.evaluate(() => fetch('/back.html?paid=1').then(r => r.text().then(t => ({status: r.status, csp: r.headers.get('content-security-policy'), text: t}))));
+  check('and that page carries the result into the app under its own policy', backPage.status === 200 && /lunchsorted:\/\/back/.test(backPage.text) && /default-src 'none'/.test(backPage.csp) && /sha256-/.test(backPage.csp));
+  {
+    const ctxApp = await browser.newContext({ viewport:{width:375,height:812}, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LunchSortedApp/1' });
+    await ctxApp.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort());
+    const pa = await ctxApp.newPage(); pa.on('pageerror', e => errors.push(String(e.message)));
+    await pa.goto(BASE+'/app/'); await pa.waitForTimeout(300);
+    await pa.click('[data-act="ob-signin"]'); await pa.waitForTimeout(200);
+    await pa.fill('#signinEmail', 'app@example.com'); await pa.press('#signinEmail', 'Enter'); await until(pa, () => !!document.querySelector('[data-dev-link]'));
+    check('inside the iPhone app, the email step leads with the code, since a tapped link opens Safari', /Type the code/.test(await pa.textContent('#view')));
+    await pa.click('[data-act="ob-later"]'); await pa.waitForTimeout(200);
+    await pa.click('[data-act="ob-skip"]'); await pa.waitForTimeout(300);
+    await pa.click('[data-act="tab"][data-tab="setup"]'); await pa.waitForTimeout(250);
+    check('and Setup does not tell an app to add itself to the Home Screen', !/Add to Home Screen/.test(await pa.textContent('#view')) && /on this phone/.test(await pa.textContent('#view')));
+    await ctxApp.close();
+  }
   stripeCalls.length = 0; globalThis.__LS_STRIPE_NO_TAX = true;
   await pb.click('[data-act="buy"][data-plan="year"]'); await pb.waitForURL(/checkout\.stripe\.com/); 
   check('when Stripe Tax is not set up yet, the checkout is retried without it and still opens', pb.url().startsWith('https://checkout.stripe.com/') && stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length === 2 && stripeCalls[1].params['automatic_tax[enabled]'] === 'false');

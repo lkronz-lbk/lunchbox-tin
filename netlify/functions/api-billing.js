@@ -168,6 +168,8 @@ export default async function handler(req, context) {
     if (action === 'checkout') {
       const body = await req.json().catch(() => ({}));
       const plan = body.plan === 'lifetime' ? 'lifetime' : (body.plan === 'month' && prices().month) ? 'month' : 'year';
+      /* the iPhone app opens Stripe in Safari, so Stripe sends the parent back through a page that hands off to the app */
+      const back = body.client === 'ios' ? `${site}/back.html` : `${site}/app/`;
       if (h.plan === 'lifetime' && h.status === 'active') return fail('This household already has Lunch Sorted forever', 409);
       /* a monthly or yearly household switches between the two in Manage billing, not with a second subscription */
       if (plan !== 'lifetime' && h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);
@@ -177,8 +179,8 @@ export default async function handler(req, context) {
         line_items: [{ price: prices()[plan], quantity: 1 }],
         client_reference_id: String(h.id),
         metadata: { household_id: String(h.id), plan, user_id: String(user.id) },
-        success_url: `${site}/app/?paid=1`,
-        cancel_url: `${site}/app/?paid=0`,
+        success_url: `${back}?paid=1`,
+        cancel_url: `${back}?paid=0`,
         allow_promotion_codes: true,
         automatic_tax: { enabled: process.env.STRIPE_TAX !== '0' },
         billing_address_collection: 'auto'
@@ -204,7 +206,8 @@ export default async function handler(req, context) {
       if (!h.stripe_customer_id) return fail('Nothing has been bought for this household yet', 404);
       /* the portal shows the card and the invoices: the owner's business, and the payer's */
       if (h.owner_user_id !== user.id && h.paid_by !== user.id) return fail('Only the owner, or whoever paid, can manage billing', 403);
-      const ps = await stripe('POST', '/billing_portal/sessions', { customer: h.stripe_customer_id, return_url: `${site}/app/?portal=1` });
+      const body = await req.json().catch(() => ({}));
+      const ps = await stripe('POST', '/billing_portal/sessions', { customer: h.stripe_customer_id, return_url: `${body.client === 'ios' ? `${site}/back.html` : `${site}/app/`}?portal=1` });
       return json({ url: ps.url });
     }
     return fail('Not found', 404);

@@ -808,6 +808,9 @@ function api(method, path, body, extra){
   });
 }
 function signedIn(){ return !!Account.user; }
+/* inside the iPhone app (a Capacitor shell that loads this page): links and Stripe open in Safari, so the app leads with codes and hands off */
+function native(){ return /LunchSortedApp/.test(navigator.userAgent) || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+function nativePlugin(name){ try{ return native() && window.Capacitor.Plugins && window.Capacitor.Plugins[name] || null; }catch(e){ return null; } }
 /* ---- billing: the plan is a row on the household that only Stripe's webhook writes.
    Free is one lunchbox on one phone; the Household plan is every lunchbox and the other
    parent's phone. When billing is not switched on (no Stripe in this deploy) nothing is gated. */
@@ -1934,7 +1937,7 @@ function viewObEmail(){
       +  '<button class="btn primary wide go" data-act="signin-request"'+(Account.sending ? ' disabled' : '')+'>'+(Account.sending ? 'Sending\u2026' : 'Email me the link')+'</button>'
       +  '<button class="skip" data-act="ob-later">'+(back ? 'Not now \u2014 set up from scratch' : 'Not now \u2014 show me the week')+'</button>';
   } else {
-    var standalone = !!(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches));
+    var standalone = native() || !!(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches));
     h += '<h1>Check your email.</h1>'
       +  '<p class="lede">Sent to <b style="overflow-wrap:anywhere">'+esc(sent)+'</b>. '
       +  (standalone ? 'Type the code from it below; a tapped link opens in Safari, not here.' : 'Tap the link on this phone, or type the code below.')
@@ -2283,9 +2286,9 @@ function viewSetup(){
 
   h += '<div class="card stack" style="gap:10px"><h3>'+(signedIn() ? 'On this phone and in your household' : 'On this phone only')+'</h3>'
     +  '<p class="hint" style="margin:0">'+(signedIn()
-        ? 'The lunches are stored in this browser and synced to your account, so everyone in the household above sees them. '
-        : 'Everything is stored in this browser. Nothing is uploaded and no one else can see it. ')
-    +  'Use Share &rarr; <b>Add to Home Screen</b> to open it full-screen like an app.'
+        ? 'The lunches are stored '+(native() ? 'on this phone' : 'in this browser')+' and synced to your account, so everyone in the household above sees them. '
+        : 'Everything is stored '+(native() ? 'on this phone' : 'in this browser')+'. Nothing is uploaded and no one else can see it. ')
+    +  (native() ? '' : 'Use Share &rarr; <b>Add to Home Screen</b> to open it full-screen like an app.')
     +  (Store.ok ? '' : ' <b>Storage is blocked in this browser, so changes will not survive a reload.</b>')+'</p>'
     +  '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:4px">'
     +  '<button class="btn ghost sm" data-act="clear-week">'+(UI.armed==='week'?'Tap again to clear':'Clear the plans')+'</button>'
@@ -2885,9 +2888,16 @@ document.addEventListener('click', function(ev){
     Account.buying = true; var was = el.textContent; el.disabled = true; el.textContent = 'Opening Stripe\u2026';
     var undoBtn = function(){ Account.buying = false; el.disabled = false; el.textContent = was; };
     if(act==='buy') rememberAfter(el.getAttribute('data-why'));
-    var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') || 'year'}) : api('POST', '/api/billing/portal');
+    var client = native() ? 'ios' : undefined;
+    var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') || 'year', client: client}) : api('POST', '/api/billing/portal', {client: client});
     call.then(function(r){
       if(r.status !== 200 || !r.url){ undoBtn(); toast(r.error || (act==='buy' ? 'Could not open the checkout' : 'Could not open billing')); return; }
+      var browser = nativePlugin('Browser');
+      if(browser){                                           /* the iPhone app: Stripe opens in Safari, and back.html hands the parent back to the app */
+        undoBtn(); closeSheet();
+        browser.open({url: r.url}).catch(function(){ location.href = r.url; });
+        return;
+      }
       location.href = r.url;                                 /* Stripe's page; it sends you back to /app/ */
     }).catch(function(){ undoBtn(); offline(); });
     return;
@@ -3077,14 +3087,33 @@ Store.load().then(function(r){
     /* one request answers "who am I" and "what does the household hold" together */
     Sync.pull().then(function(){ if(signedIn() || joinCode) render(); afterMe(); if(qs.get('signed-in')) resumeAfter(); if(wantUpgrade && signedIn() && S.onboardedAt && !paid()) upgradeSheet('keep'); }).catch(function(){});
     /* back from Stripe: the webhook usually lands within a second or two of the redirect, so look a few times */
-    if(back === '1'){
-      var looks = 0, look = function(){
-        if(paid()){ Account.settling = false; render(); toast('Welcome to the Household plan'); resumeAfter(); return; }
-        if(++looks > 8){ Account.settling = false; render(); toast('Paid \u2014 it can take a minute to show up here'); return; }
-        setTimeout(function(){ Sync.pull().then(look).catch(look); }, looks < 3 ? 1500 : 3000);
-      };
-      setTimeout(look, 1200);
-    }
+    if(back === '1') settle();
+  }
+  function settle(){
+    var looks = 0, look = function(){
+      if(paid()){ Account.settling = false; render(); toast('Welcome to the Household plan'); resumeAfter(); return; }
+      if(++looks > 8){ Account.settling = false; render(); toast('Paid \u2014 it can take a minute to show up here'); return; }
+      setTimeout(function(){ Sync.pull().then(look).catch(look); }, looks < 3 ? 1500 : 3000);
+    };
+    setTimeout(look, 1200);
+  }
+  /* the iPhone app: a sign-in link or back.html opening the app lands here, with the url */
+  var app = nativePlugin('App');
+  if(app && app.addListener){
+    app.addListener('appUrlOpen', function(ev){
+      var u = String(ev && ev.url || '');
+      var browser = nativePlugin('Browser'); if(browser) browser.close().catch(function(){});
+      var m = /^lunchsorted:\/\/back\/?\?(.*)$/.exec(u);
+      if(m){
+        var q = new URLSearchParams(m[1]);
+        UI.tab = 'setup'; Account.first = true;
+        if(q.get('paid') === '1'){ Account.settling = true; render(); toast('Thank you \u2014 switching on the Household plan\u2026'); settle(); }
+        else if(q.get('paid') === '0'){ rememberAfter(''); render(); toast('No charge was made'); }
+        else { render(); Sync.pull(); }
+        return;
+      }
+      if(/^https:\/\/([a-z0-9-]+\.)?lunchsorted\.app\//.test(u)) location.href = u;   /* a universal link, such as the sign-in link in the email */
+    });
   }
   window.addEventListener('online', function(){ if(signedIn()) Sync.resume(); else render(); });
   window.addEventListener('pageshow', function(e){ if(e.persisted && Account.buying){ Account.buying = false; closeSheet(); render(); } });

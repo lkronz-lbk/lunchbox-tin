@@ -61,7 +61,7 @@
 [[headers]]
   for = "/app/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-J8EepnZSn25JkLazuXYQapqy5FVJVfr2TOXQRP8UZEk=' 'sha256-/ZkGkU2snnem9uMDHmCLXwa6Z9LCrjisQ0s3nxFXugE=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-J8EepnZSn25JkLazuXYQapqy5FVJVfr2TOXQRP8UZEk=' 'sha256-6R08Gdnu/J7cjs1jtRBgxIivakBA0yH4VsnzjECHHlM=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 [[headers]]
   for = "/"
@@ -82,6 +82,12 @@
   for = "/terms.html"
   [headers.values]
     Content-Security-Policy = "default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+
+[[headers]]
+  for = "/back.html"
+  [headers.values]
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-Za3P9vlB2a9DmjZDQuva/IOnWBFk5hBUrmPxkjGe3d4='; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 # /app and /app/ both open the planner
 [[redirects]]

@@ -53,6 +53,10 @@ Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
   (the numbers page at `/admin`, for `ADMIN_EMAILS`).
   `netlify/lib/`: `db.js`, `auth.js`, `mail.js`, `stripe.js`, `trial.js`.
 - `netlify/database/migrations/`: numbered SQL, applied by `scripts/migrate.mjs` at build.
+- `ios/`: the Capacitor iPhone shell (Swift Package Manager, no CocoaPods); `capacitor.config.json`
+  points it at the live app; `ios-www/` is the placeholder web directory Capacitor insists on;
+  `public/back.html` hands a parent back from Stripe in Safari. `ios/README.md` has the build,
+  TestFlight and universal-link steps. `.github/workflows/ios.yml` compiles it on a macOS runner.
 - `tests/smoke.mjs`: one file, one command, real browser, real functions against PGlite.
 - `scripts/csp.mjs`: generates and checks the Content-Security-Policy in `netlify.toml`.
 
