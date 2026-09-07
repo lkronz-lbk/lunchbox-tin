@@ -42,8 +42,15 @@ async function welcome(user, req) {
 
 /* REVIEW_EMAIL + REVIEW_CODE: the address App Review signs in with, and its standing code. Empty means no such account. */
 function reviewAccount(email) {
-  const who = normalizeEmail(process.env.REVIEW_EMAIL || ''), code = normalizeCode(process.env.REVIEW_CODE || '');
-  return who && code.length >= 8 && email === who ? code : '';
+  const raw = process.env.REVIEW_EMAIL || '';
+  if (!raw) return '';
+  const who = normalizeEmail(raw), code = normalizeCode(process.env.REVIEW_CODE || '');
+  const admins = (process.env.ADMIN_EMAILS || '').split(',').map(normalizeEmail).filter(Boolean);
+  /* a misconfiguration must show in the logs the first time it is tried, not as a surprise from Apple */
+  if (!who) { console.error('REVIEW_EMAIL is not an email address; the review account is off'); return ''; }
+  if (code.length < 8) { console.error('REVIEW_CODE needs eight or more letters and digits; the review account is off'); return ''; }
+  if (admins.includes(who)) { console.error('REVIEW_EMAIL is in ADMIN_EMAILS; a standing code must not open /admin, so the review account is off'); return ''; }
+  return email === who ? code : '';
 }
 
 export default async function handler(req, context) {

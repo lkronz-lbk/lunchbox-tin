@@ -123,14 +123,23 @@ not target children. The one screen a child touches (kid's pick) asks nothing of
 | | |
 |---|---|
 | User name | the address in `REVIEW_EMAIL` (production scope) |
-| Password | the code in `REVIEW_CODE`, e.g. `ABCD-2345` |
+| Password | the code in `REVIEW_CODE` |
 
 Set both in Netlify (Site configuration → Environment variables, Production scope only) before
-submitting. The reviewer enters the email on the sign-in screen, taps "Email me the link",
+submitting. Generate the code rather than choosing one, since it stands until you change it:
+
+```
+node -e "const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',b=require('crypto').randomBytes(8);console.log([...b].map(x=>a[x%32]).join('').replace(/(.{4})/,'\$1-'))"
+```
+
+The address must not be one of `ADMIN_EMAILS`; if it is, the account switches itself off and
+says so in the function log. Clear or change both variables once the app is approved. The reviewer enters the email on the sign-in screen, taps "Email me the link",
 then types the code on the same screen; that address gets no email and its code stands until
 you change the variable. Sign in once yourself with it first, answer the three questions and
 build a week, so the reviewer lands on a planned household rather than an empty one. Nothing
-else about that account is special.
+else about that account is special: it gets the same three weeks of everything as any new
+household, so do this within a few days of submitting, and if review drags past the three
+weeks the reviewer will see the free tier with the plan's pieces locked, which is also fine.
 
 **Contact information:** your name, phone, hello@lunchsorted.app.
 
@@ -140,7 +149,7 @@ else about that account is special.
 >
 > How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle or re-draw a day. Pack: tick compartments, tap "Let … pick" for the kid's-pick screen. Shop: the aisle-grouped list. Setup: the school rules, allergens, the second lunchbox, the other parent's invite.
 >
-> Payments: the Household plan is sold on our website (lunchsorted.app) and not in the app. The app does not use in-app purchase. Where the app mentions the plan, it opens Safari to our site; the app itself takes no payment and the review account already has the plan. This is a US-only listing.
+> Payments: the Household plan is sold on our website (lunchsorted.app) and not in the app. The app does not use in-app purchase. Where the app mentions the plan, it opens Safari to our site; the app itself takes no payment. The review account is inside its free three weeks, so everything is on. This is a US-only listing.
 >
 > Offline: the app works without a network once opened once; airplane mode shows the same week.
 >
@@ -150,7 +159,8 @@ else about that account is special.
 
 ## Before you press Submit
 
-- [ ] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope; signed in with them once and a week built.
+- [ ] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated; signed in with them once and a week built, within a few days of submitting.
+- [ ] After approval: clear both variables.
 - [ ] Availability set to United States only.
 - [ ] Privacy policy URL loads and matches the App Privacy answers above.
 - [ ] Build uploaded from Xcode (Product → Archive) and attached to the version.
