@@ -1028,7 +1028,7 @@ try {
     await pj.goto(link); await pj.click('button[type="submit"]'); await pj.waitForURL(/\/app\//); await pj.waitForLoadState('load');
     await until(pj, () => /go back there and type the code/.test(document.querySelector('#view').textContent));
     const stillEmpty = (await db.query(`SELECT h.doc FROM households h JOIN users u ON u.id = h.owner_user_id WHERE u.email = 'ivy-parent@example.com'`)).rows[0];
-    check('a link opened in another browser signs it in, says the lunches are elsewhere, and does not push an empty household', !!stillEmpty && stillEmpty.doc === null && (await pj.$$eval('#obName', a => a.length)) === 1);
+    check('a link opened in another browser signs it in, says the lunches are elsewhere, offers sign-out, and does not push an empty household', !!stillEmpty && stillEmpty.doc === null && (await pj.$$eval('#obName', a => a.length)) === 1 && (await pj.$$eval('[data-act="signout"]', a => a.length)) === 1);
     await pi.fill('#signinCode', code); await pi.click('[data-act="signin-code"]');
     const codeIn = await until(pi, () => !document.querySelector('#signinCode') && !!document.querySelector('.tin'));
     const pushed = await until(pi, () => fetch('/api/household').then(r => r.json()).then(j => !!j.doc && j.doc.kids.some(k => k.name === 'Ivy')));

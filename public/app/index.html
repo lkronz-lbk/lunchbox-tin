@@ -1880,7 +1880,7 @@ function planBanner(){
 function noticeBanner(){
   if(Account.elsewhere && !S.onboardedAt && signedIn())
     return '<div class="banner wrap"><span>Signed in as '+esc(Account.user.email)+'. If you built the week in the home-screen app or another window, go back there and type the code from the same email; the link only signs in where it opens. Or start fresh here.</span>'
-      + '<span class="row" style="gap:8px"><button class="btn sm ghost" data-act="elsewhere-ok">Start here</button></span></div>';
+      + '<span class="row" style="gap:8px"><button class="btn sm ghost" data-act="elsewhere-ok">Start here</button><button class="btn sm ghost" data-act="signout">Sign out</button></span></div>';
   var msg = UI.notice || (!Store.ok ? 'This browser is not letting the app save. Changes will be lost when you close it.' : '');
   if(!msg && Account.join && UI.tab !== 'setup')
     return '<div class="banner"><span>'+esc(Account.join.from || 'Someone')+' invited you to share their lunches.</span><button class="btn sm primary" data-act="tab" data-tab="setup">Have a look</button></div>';
@@ -2844,8 +2844,8 @@ document.addEventListener('click', function(ev){
   }
   if(act==='signout'){
     api('POST', '/api/auth/logout').then(function(){
-      Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; Account.linkSent = ''; Account.status = 'idle'; Account.first = false;
-      render(); toast('Signed out \u2014 your lunches stay on this phone');
+      Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; Account.linkSent = ''; Account.status = 'idle'; Account.first = false; Account.elsewhere = false;
+      render(); toast(S.onboardedAt ? 'Signed out \u2014 your lunches stay on this phone' : 'Signed out');
     }).catch(offline);
     return;
   }
