@@ -308,6 +308,10 @@ member, tick and outcome it has, and cannot add more.
   reply-to hello@lunchsorted.app. The reminder's button opens the app at `/app/?upgrade=1`,
   which opens the plan sheet on arrival. The suite captures every email through
   `globalThis.__LS_MAIL`; nothing reaches Resend from a test.
+- **The numbers**, at `/admin`, for the emails in `ADMIN_EMAILS` (comma-separated) and nobody
+  else: households, on trial, lapsed, paying by plan, sign-ins, reminder emails sent, invites.
+  Counts from the database, rendered as a page with no script; a stranger is asked to sign
+  in, a signed-in parent who is not listed gets not-found.
 - **Stripe setup, once per mode:** one product, two prices; Developers → Webhooks → add
   `https://<site>/api/billing/webhook` with the six event types above and paste the
   signing secret; Settings → Billing → Customer portal → save the default configuration

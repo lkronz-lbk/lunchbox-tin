@@ -89,6 +89,12 @@
   to = "/app/"
   status = 301
 
+# the numbers page is a function; the short address is the one to remember
+[[redirects]]
+  from = "/admin"
+  to = "/api/admin"
+  status = 200
+
 # ---------------------------------------------------------------------------
 # Deploy contexts.
 #

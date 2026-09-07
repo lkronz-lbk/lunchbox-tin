@@ -28,6 +28,8 @@ await migrate(globalThis.__LS_SQL);
 const { default: authHandler } = await import('../netlify/functions/api-auth.js');
 const { default: householdHandler } = await import('../netlify/functions/api-household.js');
 const { default: billingHandler } = await import('../netlify/functions/api-billing.js');
+const { default: adminHandler } = await import('../netlify/functions/api-admin.js');
+process.env.ADMIN_EMAILS = 'liz@example.com';
 const stripeLib = await import('../netlify/lib/stripe.js');
 /* Stripe itself is a stub: it answers the four calls the code makes and records what it was asked */
 const stripeCalls = [];
@@ -57,7 +59,7 @@ async function apiProxy(req, res){
   const method = req.method;
   const request = new Request(`http://${req.headers.host}${req.url}`, {method, headers,
     body: (method === 'GET' || method === 'HEAD') ? undefined : Buffer.concat(chunks), duplex: 'half'});
-  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : householdHandler;
+  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : householdHandler;
   let resp;
   try { resp = await handler(request, {ip: '127.0.0.1'}); }
   catch (e) { res.writeHead(500); return res.end(String(e)); }
@@ -850,6 +852,12 @@ try {
     await page.evaluate(() => { const v = document.querySelector('#view'); return /Signed in as/.test(v.textContent) && v.querySelector('.sect-head h3').textContent === 'Account'; }), page.url());
   const welcomes = (to) => mails.filter(m => m.to === to && /Everything is on for three weeks/.test(m.subject));
   check('a first sign-in gets one welcome email, with a way to stop reminders', welcomes('liz@example.com').length === 1 && /\/api\/auth\/mail-stop\?t=[a-f0-9]{32}/.test(welcomes('liz@example.com')[0].text) && /\/app\//.test(welcomes('liz@example.com')[0].text));
+  {
+    const anonAdmin = await fetch(NODE_BASE + '/api/admin');
+    const adminPage = await page.evaluate(() => fetch('/api/admin').then(r => r.text().then(t => ({ status: r.status, text: t, csp: r.headers.get('content-security-policy') }))));
+    check('the numbers page asks a stranger to sign in, and shows the person in ADMIN_EMAILS real counts with no script allowed',
+      anonAdmin.status === 401 && adminPage.status === 200 && /by the numbers/i.test(adminPage.text) && /households/.test(adminPage.text) && /default-src 'none'/.test(adminPage.csp) && !/<script/.test(adminPage.text), [anonAdmin.status, adminPage.status]);
+  }
   const spent = await page.evaluate(u => fetch(u).then(r => r.status), devLink);
   check('a used link is gone', spent === 410, spent);
   await until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1 && !!j.doc));
@@ -1097,6 +1105,7 @@ try {
   const viaMail = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetBody').textContent));
   check('the link in a reminder email opens the plan sheet on arrival', viaMail && !pb.url().includes('upgrade='));
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  check('a signed-in parent who is not in ADMIN_EMAILS gets not-found from the numbers page', (await pb.evaluate(() => fetch('/api/admin').then(r => r.status))) === 404);
   const noCustomer = await pb.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
   await until(pb, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1));

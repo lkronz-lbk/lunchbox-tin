@@ -49,7 +49,8 @@ Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
   screenshots carry the product name; regenerate them on a rename.
 - `netlify/functions/`: `api-auth.js` (magic links, sessions, delete), `api-household.js`
   (document sync, invites, members), `api-billing.js` (Stripe checkout, portal, webhook),
-  `cron-trial.js` (the daily reminder emails, scheduled, production only).
+  `cron-trial.js` (the daily reminder emails, scheduled, production only), `api-admin.js`
+  (the numbers page at `/admin`, for `ADMIN_EMAILS`).
   `netlify/lib/`: `db.js`, `auth.js`, `mail.js`, `stripe.js`, `trial.js`.
 - `netlify/database/migrations/`: numbered SQL, applied by `scripts/migrate.mjs` at build.
 - `tests/smoke.mjs`: one file, one command, real browser, real functions against PGlite.
