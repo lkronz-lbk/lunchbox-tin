@@ -86,6 +86,10 @@ account            one household — a server only ever has to filter by account
 └── pantry{}       household-wide, keyed by normalized food name
 ```
 
+The account carries `tz`, the IANA zone of the phone that made it (a joining phone never
+moves it), so the server's emails say dates in the household's own day; a household from
+before the zone was kept learns it from its next change, and one that never says is read
+as the East Coast.
 Every entity (account, member, lunchbox, food, week) carries `id`/`createdAt`/`updatedAt`;
 event rows (packed ticks, pantry ticks, eat answers, kid picks) carry `at`/`by`. Deletion is a
 `deletedAt` tombstone (kept for ninety days; `prune()` also drops packed ticks from before the

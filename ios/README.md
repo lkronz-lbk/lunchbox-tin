@@ -57,12 +57,29 @@ by `cap sync` and not committed.
 3. App Store Connect → TestFlight → the build → add internal testers (yourself),
    then an external group once the build clears beta review.
 
-To upload from CI instead of a Mac, add these repository secrets and a signing
-job to `ios.yml`: `APPSTORE_KEY_ID`, `APPSTORE_ISSUER_ID`, `APPSTORE_KEY_P8`
-(an App Store Connect API key with the App Manager role),
-`IOS_CERT_P12_BASE64` and `IOS_CERT_PASSWORD` (an Apple Distribution
-certificate), and `IOS_PROFILE_BASE64` (an App Store provisioning profile for
-`app.lunchsorted`). Never put any of these in the repository or in a chat.
+## TestFlight from CI
+
+`.github/workflows/testflight.yml` archives, signs and uploads a build with no Mac,
+no certificate file and no provisioning profile: Xcode's cloud-managed signing makes
+and keeps those against an App Store Connect API key. Run it from GitHub → Actions →
+TestFlight → Run workflow, or push a tag such as `ios-v1.0.1`. The build number is the
+run number; the version is `package.json`'s.
+
+It needs four repository secrets (GitHub → Settings → Secrets and variables →
+Actions → New repository secret). Never put any of them in the repository, a chat,
+or a document.
+
+| Secret | Where it comes from |
+|---|---|
+| `APPLE_TEAM_ID` | developer.apple.com → Account → Membership details → Team ID (ten characters) |
+| `APPSTORE_KEY_ID` | App Store Connect → Users and Access → Integrations → App Store Connect API → Team Keys → Generate API Key, name it "GitHub TestFlight", access **Admin** (cloud signing needs Admin to create the certificate). The Key ID is shown in the list. |
+| `APPSTORE_ISSUER_ID` | the Issuer ID at the top of that same page |
+| `APPSTORE_KEY_P8` | the contents of the `AuthKey_<KEY_ID>.p8` file that page lets you download once: open it in a text editor and paste the whole thing, `-----BEGIN PRIVATE KEY-----` to `-----END PRIVATE KEY-----` |
+
+The app record must exist first (step 1 above). The first run registers the bundle id
+and creates the distribution certificate; if it fails on signing, the key's role is
+the first thing to check. Each run leaves its logs as a workflow artifact and deletes
+the key from the runner.
 
 ## Universal links (after the Team ID exists)
 

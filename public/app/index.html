@@ -425,6 +425,7 @@ window.LSMerge = (function(){
       createdAt:(a.createdAt || '') < (b.createdAt || '') ? a.createdAt : b.createdAt,
       updatedAt:stamp(a) > stamp(b) ? a.updatedAt : b.updatedAt,
       onboardedAt:a.onboardedAt || b.onboardedAt || null,
+      tz:a.tz || b.tz || null,                               /* the household's zone is whoever set it first; a joining phone does not move it */
       members:unionById(a.members, b.members, newer),
       kids:unionById(a.kids, b.kids, function(x, y){ return mergeKid(x, y, today); }),
       activeKidId:a.activeKidId || b.activeKidId,
@@ -1066,11 +1067,17 @@ function newFood(kid, o){
   return {id:uid('food'), kidId:kid.id, n:o.n, c:o.c, t:(o.t||[]).slice(), a:o.a||'other',
     al:(o.al||[]).slice(), createdAt:now(), updatedAt:now(), deletedAt:null};
 }
+/* the phone's IANA zone (America/New_York), or null where the browser will not say */
+function phoneTz(){ try{ return validTz(Intl.DateTimeFormat().resolvedOptions().timeZone); }catch(e){ return null; } }
+function validTz(v){
+  if(typeof v !== 'string' || !v || v.length > 64 || !/^[A-Za-z_]+(\/[A-Za-z0-9_+\-]+)*$/.test(v)) return null;
+  try{ new Intl.DateTimeFormat('en-US', {timeZone:v}); return v; }catch(e){ return null; }
+}
 function newAccount(){
   var owner = newMember('Me','owner');
   var kid = newKid('Lunchbox', 0);
   return {schema:SCHEMA, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-    members:[owner], kids:[kid], activeKidId:kid.id, pantry:nullMap()};
+    members:[owner], kids:[kid], activeKidId:kid.id, pantry:nullMap(), tz:phoneTz()};
 }
 
 /* migrations: keyed by the schema they upgrade FROM */
@@ -1226,7 +1233,7 @@ function normalizeAccount(doc){
   var acct = {schema:SCHEMA, id:safeId(doc.id,'acc'), name:safeStr(doc.name, 60, 'My household'),
     createdAt:safeStamp(doc.createdAt), updatedAt:safeStamp(doc.updatedAt),
     members:doc.members.slice(0, 50).map(normMember), kids:doc.kids.slice(0, 20).map(normKid),
-    activeKidId:null, pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null};
+    activeKidId:null, pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
   if(!acct.members.length) acct.members = [newMember('Me','owner')];
   if(!acct.members.some(function(m){ return m.role === 'owner' && !m.deletedAt; })) acct.members[0].role = 'owner';
   var live = acct.kids.filter(function(k){ return !k.deletedAt; });
@@ -1244,6 +1251,7 @@ var saveTimer = null;
 function save(){
   if(!S) return;
   EAT_IDX = nullMap();
+  if(!S.tz) S.tz = phoneTz();                                /* a household from before the zone was kept learns it from the next change */
   S.updatedAt = now();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(function(){ Store.save(S, DEVICE.memberId); }, 120);

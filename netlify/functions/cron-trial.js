@@ -19,8 +19,8 @@ export async function run(now = Date.now(), siteOverride = '') {
      floor is recent enough that an old household's three weeks are still running */
   const since = stampOrNull(process.env.BILLING_SINCE);
   const rows = since && now - since.getTime() < 25 * DAY
-    ? await q`SELECT h.id, h.created_at, h.doc->>'createdAt' AS doc_created, e.plan, e.status FROM households h LEFT JOIN entitlements e ON e.household_id = h.id ORDER BY h.id LIMIT 5000`
-    : await q`SELECT h.id, h.created_at, h.doc->>'createdAt' AS doc_created, e.plan, e.status FROM households h LEFT JOIN entitlements e ON e.household_id = h.id WHERE h.created_at > now() - interval '40 days' ORDER BY h.id LIMIT 5000`;
+    ? await q`SELECT h.id, h.created_at, h.doc->>'createdAt' AS doc_created, h.doc->>'tz' AS tz, e.plan, e.status FROM households h LEFT JOIN entitlements e ON e.household_id = h.id ORDER BY h.id LIMIT 5000`
+    : await q`SELECT h.id, h.created_at, h.doc->>'createdAt' AS doc_created, h.doc->>'tz' AS tz, e.plan, e.status FROM households h LEFT JOIN entitlements e ON e.household_id = h.id WHERE h.created_at > now() - interval '40 days' ORDER BY h.id LIMIT 5000`;
   let sent = 0;
   for (const h of rows) {
     if (sent >= PER_RUN) break;
@@ -46,7 +46,7 @@ export async function run(now = Date.now(), siteOverride = '') {
         if (!token) { const [u] = await q`UPDATE users SET mail_token = replace(gen_random_uuid()::text, '-', '') WHERE id = ${p.id} AND mail_token IS NULL RETURNING mail_token`; token = u ? u.mail_token : (await q`SELECT mail_token FROM users WHERE id = ${p.id}`)[0].mail_token; }
         const stop = `${site}/api/auth/mail-stop?t=${token}`;
         try {
-          if (kind === 'trial_ending') await sendTrialEnding(p.email, site, end, stop); else await sendTrialEnded(p.email, site, stop);
+          if (kind === 'trial_ending') await sendTrialEnding(p.email, site, end, stop, h.tz); else await sendTrialEnded(p.email, site, stop);
           any = true; sent++;
         } catch (e) { console.error('cron-trial: could not send to', p.id, e.message); }
       }

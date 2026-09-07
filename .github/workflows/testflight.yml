@@ -1,0 +1,138 @@
+name: TestFlight
+
+# Archives the iPhone shell, signs it with Xcode's cloud-managed signing from an
+# App Store Connect API key, and uploads it to TestFlight. No Mac, no certificate
+# file, no provisioning profile: Xcode creates and keeps those against the key.
+#
+# Run it from the Actions tab (Run workflow), or push a tag like ios-v1.0.1.
+# It needs four repository secrets (see ios/README.md, "TestFlight from CI"):
+#   APPSTORE_KEY_ID      the key's ID, ten characters
+#   APPSTORE_ISSUER_ID   the issuer ID from the same page, a UUID
+#   APPSTORE_KEY_P8      the whole contents of the downloaded AuthKey_….p8 file
+#   APPLE_TEAM_ID        the ten-character Team ID from the developer account
+# The build number is this run's number, so every upload is newer than the last;
+# the version is the one in package.json.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['ios-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Archive, sign and upload
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+      APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Check the secrets are there
+        env:
+          APPSTORE_KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
+        run: |
+          missing=""
+          for v in APPSTORE_KEY_ID APPSTORE_ISSUER_ID APPSTORE_KEY_P8 APPLE_TEAM_ID; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing. See ios/README.md, TestFlight from CI."
+            exit 1
+          fi
+          echo "All four secrets present."
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Sync the Capacitor project
+        run: npx cap sync ios
+
+      - name: Put the App Store Connect key where xcodebuild looks
+        env:
+          APPSTORE_KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
+        run: |
+          mkdir -p ~/private_keys
+          printf '%s\n' "$APPSTORE_KEY_P8" > ~/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8
+          chmod 600 ~/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8
+
+      - name: Versions
+        id: v
+        run: |
+          echo "marketing=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "build=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Archive, signed against the key
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/LunchSorted.xcarchive" \
+            -skipPackagePluginValidation \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8 \
+            -authenticationKeyID "$APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            MARKETING_VERSION="${{ steps.v.outputs.marketing }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.v.outputs.build }}" \
+            | tee archive.log | grep -E 'error:|warning: .*App/|ARCHIVE (SUCCEEDED|FAILED)' || true
+          grep -q 'ARCHIVE SUCCEEDED' archive.log
+
+      - name: Export and upload to App Store Connect
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/LunchSorted.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8 \
+            -authenticationKeyID "$APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
+            | tee export.log | grep -E 'error:|Upload succeeded|EXPORT (SUCCEEDED|FAILED)' || true
+          grep -q 'EXPORT SUCCEEDED' export.log
+          echo "Build ${{ steps.v.outputs.marketing }} (${{ steps.v.outputs.build }}) is on its way to TestFlight; App Store Connect processes it in a few minutes."
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-logs
+          path: |
+            archive.log
+            export.log
+          if-no-files-found: ignore
+
+      - name: Remove the key from the runner
+        if: always()
+        run: rm -rf ~/private_keys

@@ -56,11 +56,17 @@ export function sendWelcome(to, site, stopUrl) {
   });
 }
 
-/* the date as a US parent reads it; the function runs in UTC, and the storefront is US-only for now */
-const dateWords = (d) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' });
+/* the date as the parent reads it, in the household's own zone (the document carries the phone's);
+   the function runs in UTC, and a household that never said falls back to the East Coast */
+export const dateWords = (d, tz) => {
+  for (const zone of [tz, 'America/New_York']) {
+    try { return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: zone || undefined }); } catch { /* not a zone the runtime knows */ }
+  }
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+};
 
-export function sendTrialEnding(to, site, end, stopUrl) {
-  const keep = `${site}/app/?upgrade=1`, when = dateWords(end);
+export function sendTrialEnding(to, site, end, stopUrl, tz) {
+  const keep = `${site}/app/?upgrade=1`, when = dateWords(end, tz);
   return send({
     to,
     subject: `Your three weeks of everything end ${when}`,

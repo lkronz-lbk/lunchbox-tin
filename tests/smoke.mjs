@@ -1353,22 +1353,32 @@ try {
     const ago = (d) => new Date(Date.now() - d * 86400000).toISOString();
     const mk = async (email, daysAgo, opts = {}) => {
       const [u] = (await db.query(`INSERT INTO users (email, mail_ok) VALUES ('${email}', ${opts.mailOk === false ? 'false' : 'true'}) RETURNING id`)).rows;
-      const [h] = (await db.query(`INSERT INTO households (owner_user_id, created_at, doc) VALUES (${u.id}, '${ago(daysAgo)}', '{"createdAt":"${ago(daysAgo)}"}'::jsonb) RETURNING id`)).rows;
+      const [h] = (await db.query(`INSERT INTO households (owner_user_id, created_at, doc) VALUES (${u.id}, '${ago(daysAgo)}', '{"createdAt":"${ago(daysAgo)}"${opts.tz ? `,"tz":"${opts.tz}"` : ''}}'::jsonb) RETURNING id`)).rows;
       await db.query(`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${h.id}, ${u.id}, 'owner', 'mem_x')`);
       await db.query(`INSERT INTO entitlements (household_id, plan, status) VALUES (${h.id}, '${opts.plan || 'free'}', '${opts.status || 'none'}')`);
       return { u: u.id, h: h.id };
     };
     const ending = await mk('ending@example.com', 18), ended = await mk('ended@example.com', 21.5), young = await mk('young@example.com', 5);
     const paidOne = await mk('paid@example.com', 18, { plan: 'household', status: 'active' }), quiet = await mk('quiet@example.com', 18, { mailOk: false });
+    const west = await mk('west@example.com', 18, { tz: 'Pacific/Honolulu' }), odd = await mk('odd@example.com', 18, { tz: 'Not/AZone' });
     const before = mails.length;
     const first = await run(Date.now(), 'https://test.example');
     const got = (to) => mails.slice(before).filter(m => m.to === to);
-    check('three days before the end, one email says when; the day after, one says what changed', first.ending === 1 && first.ended === 1 &&
+    {
+      const { dateWords } = await import('../netlify/lib/mail.js');
+      const end = new Date(Date.now() + 3 * 86400000);
+      const east = end.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' });
+      const hawaii = end.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Pacific/Honolulu' });
+      check("the end date in the email is the household's own day, and a zone the server does not know falls back to the East Coast",
+        got('west@example.com').length === 1 && got('west@example.com')[0].subject.endsWith(hawaii) && got('odd@example.com').length === 1 && got('odd@example.com')[0].subject.endsWith(east) && dateWords(end, 'Pacific/Honolulu') === hawaii && dateWords(end, 'Not/AZone') === east,
+        [got('west@example.com').map(m => m.subject), got('odd@example.com').map(m => m.subject), hawaii, east]);
+    }
+    check('three days before the end, one email says when; the day after, one says what changed', first.ending === 3 && first.ended === 1 &&
       got('ending@example.com').length === 1 && /end [A-Z][a-z]+day, [A-Z][a-z]+ \d+$/.test(got('ending@example.com')[0].subject) && /\/app\/\?upgrade=1/.test(got('ending@example.com')[0].text) &&
       got('ended@example.com').length === 1 && /three weeks are up/i.test(got('ended@example.com')[0].subject), [first, got('ending@example.com').map(m => m.subject)]);
     check('a young household, a paid one, and someone who stopped reminders get nothing', got('young@example.com').length === 0 && got('paid@example.com').length === 0 && got('quiet@example.com').length === 0 && first.skipped === 1);
     const second = await run(Date.now(), 'https://test.example');
-    check('running the job again sends nothing twice', second.ending === 0 && second.ended === 0 && mails.length === before + 2);
+    check('running the job again sends nothing twice', second.ending === 0 && second.ended === 0 && mails.length === before + 4);
     const stopUrl = got('ending@example.com')[0].text.match(/https:\/\/test\.example(\/api\/auth\/mail-stop\?t=[a-f0-9]{32})/)[1];
     const peek = await fetch(NODE_BASE + stopUrl);
     const stillOk = (await db.query(`SELECT mail_ok FROM users WHERE id = ${ending.u}`)).rows[0].mail_ok;
@@ -1383,7 +1393,7 @@ try {
       const stray = await cronHandler(new Request('http://x/cron', { method: 'POST', body: '{}' }));
       check('the job refuses to run for anything but the schedule on the published deploy', stray.status === 404);
     }
-    void young; void paidOne; void quiet; void ended;
+    void young; void paidOne; void quiet; void ended; void west; void odd;
   }
   for (const k of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_YEAR', 'STRIPE_PRICE_LIFETIME', 'STRIPE_PRICE_MONTH']) delete process.env[k];
   stripeLib.forgetPrices();
