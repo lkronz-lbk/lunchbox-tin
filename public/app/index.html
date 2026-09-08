@@ -492,6 +492,7 @@ var I = {
   check:'<path d="M4 12.5l5 5L20 6.5"/>',
   swap:'<path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/>',
   share:'<path d="M12 3v12"/><path d="M7.5 7.5L12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
+  help:'<circle cx="12" cy="12" r="9"/><path d="M9.4 9.6a2.6 2.6 0 1 1 3.7 2.4c-.7.4-1.1.9-1.1 1.7"/><circle cx="12" cy="16.8" r=".7" fill="currentColor" stroke="none"/>',
   lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7a3.5 3.5 0 0 1 7 0v3.5"/>',
   dice:'<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="9" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.3" fill="currentColor" stroke="none"/>',
   trash:'<path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M7 7l1 12.2A1.8 1.8 0 0 0 9.8 21h4.4a1.8 1.8 0 0 0 1.8-1.8L17 7"/>',
@@ -2695,6 +2696,21 @@ function addOwnSheet(){
   openSheet('Add your own', h);
   setTimeout(function(){ var el = document.getElementById('nfName'); if(el) el.focus(); }, 220);
 }
+function helpSheet(){
+  var qa = [
+    ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle a day, or tap a compartment to change one thing.'],
+    ['Why did a food stop showing up?', 'A school rule or allergen under the gear beside the lunchbox name. Foods it skips are marked on the Foods tab.'],
+    ['Where does the shopping list come from?', 'Every planned box, as what to buy. Tick what is home. Copy it, or send it to Notes.'],
+    ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
+    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the morning review, more lunchboxes and sharing are the Household plan, free for three weeks.']
+  ];
+  var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
+    return '<details class="more"><summary>'+esc(q[0])+'</summary><p class="hint" style="margin:0 0 10px">'+esc(q[1])+'</p></details>';
+  }).join('') + '</div>'
+    + '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:14px"><a class="btn primary" href="'+esc(feedbackMail())+'" data-feedback>Ask a question</a>'
+    + '<a class="btn" href="/help.html" target="_blank" rel="noopener">More answers</a></div>';
+  openSheet('Help', h);
+}
 function addKidSheet(){
   if(gated() && kids().length >= 1){ upgradeSheet('lunchbox'); return; }
   var h = '<div class="field"><label for="nkName">Name on the lunchbox</label>'
@@ -2765,15 +2781,16 @@ function render(){
      only belongs on the views it actually steers. */
   var householdView = kids().length>1 && (UI.tab==='pack' || UI.tab==='shop') && !UI.box;
   var gear = isHelper() ? '' : '<button class="iconbtn" data-act="box-settings" aria-label="Lunchbox settings" aria-pressed="'+(!!UI.box)+'">'+svg('setup',18)+'</button>';
-  document.getElementById('who').innerHTML = !kid ? ''
+  var help = '<button class="iconbtn" data-act="help" aria-label="Help">'+svg('help',19)+'</button>';
+  document.getElementById('who').innerHTML = (!kid ? ''
     : (householdView
       ? '<button class="kidbtn" data-act="kidsheet">'+kids().length+' lunchboxes<span class="caret">&#9662;</span></button>'
       : '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)+'"></span>'
-        + esc(kid.name)+'<span class="caret">&#9662;</span></button>') + (UI.tab === 'setup' ? '' : gear);
+        + esc(kid.name)+'<span class="caret">&#9662;</span></button>') + (UI.tab === 'setup' ? '' : gear)) + help;
 }
 
 /* ---------------------------------------------------------------- events */
-var HELPER_OK = ['tab','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
+var HELPER_OK = ['tab','help','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
   'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit'];
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
@@ -2980,6 +2997,7 @@ document.addEventListener('click', function(ev){
 
   /* foods */
   if(act==='ideas'){ ideasSheet(); return; }
+  if(act==='help'){ helpSheet(); return; }
   if(act==='add-idea'){
     var b = BANK.filter(function(x){ return x.n===el.getAttribute('data-name'); })[0];
     if(!b) return;
