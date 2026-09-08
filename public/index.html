@@ -45,7 +45,7 @@
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.6}
-img{max-width:100%;display:block}
+img{max-width:100%;height:auto;display:block}   /* height:auto, or the width/height attributes stretch a shot that is narrower than 375px */
 a{color:var(--accent)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -152,6 +152,7 @@ footer{border-top:1px solid var(--line);padding:30px 0 56px;color:var(--ink-3);f
 footer .row{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center}
 footer a{color:var(--ink-2)}
 </style>
+<script src="/ga.js" defer></script>
 </head>
 <body>
 
@@ -194,7 +195,7 @@ footer a{color:var(--ink-2)}
         <p>A main, side, fruit and sweet for every pack day, arranged so each box actually works together.</p></div>
       <div class="step"><div class="n">03</div>
         <h3>Shop, then pack</h3>
-        <p>One shopping list grouped by aisle. Each morning, a checklist of exactly what goes in the bag.</p></div>
+        <p>One shopping list grouped by aisle. Each morning, the box to pack and one tick when it is.</p></div>
     </div>
   </section>
 
