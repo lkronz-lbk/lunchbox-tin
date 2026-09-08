@@ -95,6 +95,12 @@
     Cache-Control = "public, max-age=0, must-revalidate"
 
 # /app and /app/ both open the planner
+# short links for posts; the tags let GA4 tell the sources apart
+[[redirects]]
+  from = "/ig"
+  to = "/?utm_source=instagram&utm_medium=reel&utm_campaign=lunch_haters"
+  status = 302
+
 [[redirects]]
   from = "/app"
   to = "/app/"
