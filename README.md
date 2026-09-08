@@ -37,8 +37,11 @@ food list from a 200-item library and produce a planned week immediately. From t
   **Copy** puts the list on the clipboard grouped by aisle; the share button opens the phone’s share
   sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
   Share plugin in the iPhone app.
-- **Pack** — the next school day as a checklist, with ice-pack, sealed-container and
-  no-protein flags. **Kid's pick** lives here, behind the lunchbox's "They pick their box
+- **Pack** — the next school day's box with ice-pack, sealed-container and no-protein
+  flags, and one **Packed** tick per box that fills every compartment's tick at once (the
+  ticks stay per compartment underneath, so sync and the other phone are unchanged). The
+  compartments there are not buttons: only Week changes a box, and only Week shows the swap
+  arrows. **Kid's pick** lives here, behind the lunchbox's "They pick their box
   each day" switch (Household plan), for the next box not yet in the bag. Two ways, chosen
   under "How they pick" and both trading within the week already shopped for, so nothing
   is drawn and the shopping list never changes: **Each part** (the default) asks for each

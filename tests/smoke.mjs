@@ -257,11 +257,19 @@ try {
   /* ------------------------------------------------------------ packing */
   await page.click('[data-act="tab"][data-tab="pack"]');
   await page.waitForTimeout(200);
-  const before = await page.textContent('.count');
-  await page.click('.cmp[data-act="toggle"]');
+  check('a compartment on the Pack screen is not a button', (await page.$$eval('.tin .cmp', a => a.filter(c => c.tagName === 'BUTTON' || c.getAttribute('data-act')).length)) === 0 && (await page.$$eval('.tin .cmp', a => a.length)) > 0);
+  await page.click('[data-act="pack-all"]'); await page.waitForTimeout(200);
+  check('one Packed tick fills every compartment with a food in it, and dims the box', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const d = k.week.days.find(x => k.packed[x.d]); if(!d) return false;
+    const row = k.packed[d.d]; return Object.keys(d.slots).filter(c => d.slots[c]).every(c => row[c] && !row[c].off) && !!document.querySelector('.tin.packed') && document.querySelector('[data-act="pack-all"]').getAttribute('aria-pressed') === 'true';
+  }));
+  await page.click('[data-act="pack-all"]'); await page.waitForTimeout(200);
+  check('a second tap un-ticks them all, as rows the other phone will see', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const d = k.week.days.find(x => k.packed[x.d]);
+    return Object.values(k.packed[d.d]).every(r => r.off === true) && !document.querySelector('.tin.packed');
+  }));
+  await page.click('[data-act="pack-all"]');
   await page.waitForTimeout(200);
-  check('ticking a compartment moves the progress count',
-    before !== await page.textContent('.count'));
   check('packing records who and when', await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
     for(const k of d.kids) for(const dt in k.packed) for(const c in k.packed[dt])
@@ -276,7 +284,7 @@ try {
   await page.click('[data-act="kidpick-on"]'); await page.waitForTimeout(250);
   await page.click('[data-act="box-done"]'); await page.waitForTimeout(250);
   check('Done returns to the tab underneath', (await page.$$eval('[data-act="kid-start"]', a => a.length)) === 1 && !/School rules/.test(await page.textContent('#view')));
-  /* today's box already has two things in the bag (ticked above), so it is not on offer: what was packed stays as it was */
+  /* today's box is packed (ticked above), so it is not on offer: what was packed stays as it was */
   const weekBefore = await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return k.week.days.map(d => ({d: d.d, slots: Object.assign({}, d.slots), touched: Object.keys(k.packed[d.d] || {}).length > 0})); });
   const offered = weekBefore.filter(d => !d.touched);
   /* "each part": the main first, this day's against a later day's; the kid's pick trades the two */

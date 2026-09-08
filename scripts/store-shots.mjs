@@ -56,7 +56,6 @@ await page.click('[data-act="box-done"]'); await wait(300);
 /* 3 · the pack list, then the kid's pick from it */
 await page.click('[data-act="tab"][data-tab="pack"]'); await wait(400);
 if(await page.$('[data-act="kid-start"]')) { await page.click('[data-act="kid-start"]'); await wait(500); await shot('kidpick'); await page.click('[data-act="kid-exit"]', { force: true }); await wait(400); }
-for (let i = 0; i < 2; i++) { await page.locator('.tin [data-act="toggle"]').nth(i).click(); await wait(250); }   /* two things already in the bag; each tick re-renders, so fresh locators */
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('pack');
 
