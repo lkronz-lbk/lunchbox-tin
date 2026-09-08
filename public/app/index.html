@@ -269,13 +269,13 @@ nav.tabs svg{width:21px;height:21px}
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px 12px;
   font:inherit;color:var(--ink);transition:transform .12s ease,background .12s ease}
 .pick:active{transform:scale(.96)}
-.pick .ic{font-size:68px;line-height:1;filter:drop-shadow(var(--shadow-lift))}
+.pick .ic{font-size:84px;line-height:1;filter:drop-shadow(var(--shadow-lift))}
 .pic{display:block;object-fit:cover;background:var(--surface-2)}
-.pick .pic{width:104px;height:104px;border-radius:18px}
+.pick .pic{width:104px;height:104px;border-radius:18px;filter:drop-shadow(var(--shadow-lift))}
 .pickbox .pic{width:44px;height:44px;border-radius:10px}
-.kiddone .pic{width:44px;height:44px;border-radius:10px;margin:0 auto}
-.pic.big{width:160px;height:160px;border-radius:20px;margin:0 auto}
-.thumb{width:44px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface-2);padding:0;overflow:hidden;
+.kiddone .pic{width:44px;height:44px;border-radius:10px}
+.pic.big{width:104px;height:104px;border-radius:18px;margin:0 auto}
+.thumb{width:44px;height:44px;border-radius:var(--r-md);border:1.5px solid var(--line);background:var(--surface-2);padding:0;overflow:hidden;
   display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;font:inherit}
 .thumb .ic{font-size:22px;line-height:1}
 .thumb .pic{width:100%;height:100%}
@@ -287,13 +287,13 @@ nav.tabs svg{width:21px;height:21px}
 .pickbox:active{transform:scale(.96)}
 .pickbox .mini{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}
 .pickbox .cmp{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:12px;background:var(--surface-2);min-height:84px;justify-content:center}
-.pickbox .ic{font-size:30px;line-height:1}
+.pickbox .ic{font-size:38px;line-height:1}
 .pickbox .nm{font-family:var(--f-display);font-size:12px;font-weight:600;line-height:1.15;text-align:center;text-wrap:balance;overflow-wrap:break-word;hyphens:auto}
 .kiddone{display:flex;flex-direction:column;gap:18px;align-items:stretch}
 .kiddone .big{font-size:64px;line-height:1;text-align:center}
 .kiddone h1{text-align:center}
 .kiddone .tin .cmp{min-height:112px}
-.kiddone .tin .ic{font-size:26px;line-height:1;margin-bottom:2px}
+.kiddone .tin .ic{font-size:40px;line-height:44px;margin-bottom:2px}
 @media (prefers-reduced-motion:reduce){.pick:active{transform:none}}
 
 /* --- "did they eat it?" review --- */
@@ -1047,7 +1047,7 @@ function syncLine(){
   if(isHelper()) return 'Read-only on this phone \u2014 ticks stay here';
   if(!navigator.onLine) return 'Offline \u2014 changes are saved on this phone and sent when you are back';
   if(Account.status === 'syncing') return 'Syncing\u2026';
-  if(Account.status === 'big') return 'This household is too large to send \u2014 remove some old lunchboxes or foods';
+  if(Account.status === 'big') return 'This household is too large to send \u2014 remove some photos, foods or old lunchboxes';
   if(Account.status === 'error') return Account.tries < RETRY_WAITS.length ? 'Could not reach the server \u2014 trying again shortly' : 'Not sent to the other phone yet \u2014 it goes with your next change';
   if(Account.syncedAt){ var m = Math.round((Date.now() - Account.syncedAt) / 60000); return 'Synced ' + (m < 1 ? 'just now' : m === 1 ? 'a minute ago' : m + ' minutes ago'); }
   return 'Signed in';
@@ -1334,7 +1334,7 @@ var KIDWORD = {main:'lunch', side:'side', fruit:'fruit', sweet:'treat', snack:'s
 /* A photo of the real thing, for the kid who cannot read yet: taken once on the Foods tab,
    shrunk on the phone to a thumbnail a few kilobytes big, stored with the food so it
    travels with the household. Where there is no photo, the emoji stands in. */
-var PHOTO_PX = 192, PHOTO_MAX = 16000;
+var PHOTO_PX = 160, PHOTO_MAX = 16000;
 function picHTML(food, cls){
   if(food && food.img) return '<img class="pic '+(cls||'')+'" src="'+food.img+'" alt="">';
   return '<span class="ic '+(cls||'')+'">'+iconFor(food)+'</span>';
@@ -1351,10 +1351,10 @@ function shrinkPhoto(file){
   return decode.then(function(src){
     var side = Math.min(src.w, src.h); if(!side) throw new Error('empty');
     var c = document.createElement('canvas'); c.width = c.height = PHOTO_PX;
-    var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, PHOTO_PX, PHOTO_PX);
+    var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, PHOTO_PX, PHOTO_PX);   /* a JPEG has no alpha: white under a transparent source, in every theme */
     g.drawImage(src.im, (src.w - side) / 2, (src.h - side) / 2, side, side, 0, 0, PHOTO_PX, PHOTO_PX);   /* the middle square */
     if(src.im.close) src.im.close();
-    var q = 0.72, out = c.toDataURL('image/jpeg', q);
+    var q = 0.66, out = c.toDataURL('image/jpeg', q);
     while(out.length > PHOTO_MAX && q > 0.3){ q -= 0.1; out = c.toDataURL('image/jpeg', q); }
     if(out.length > PHOTO_MAX) throw new Error('big');
     return out;
@@ -2304,6 +2304,8 @@ function viewFoods(){
     + '<p class="view-sub">Food list'+(multi ? ' · '+esc(kid.name) : '')+'</p>'
     + '<h2 class="view-title">What they&#8217;ll eat</h2></div>'
     + '<button class="btn sm" data-act="ideas">'+svg('plus',15)+'Ideas</button></div>';
+  if(foodsOf(kid).length && !foodsOf(kid).some(function(f){ return f.img; }))
+    h += '<p class="hint" style="margin:0">Tap the picture beside a food to add a photo of the real thing, for the kid\u2019s pick.</p>';
   if(!foodsOf(kid).length)
     h += '<div class="empty"><p>Start from a set of cold-lunch staples, then add the things only '
       + (kidLabel(kid) ? esc(kidLabel(kid)) : 'your kid')+' would ask for.</p><button class="btn primary" data-act="seed">Fill the list for me</button>'
@@ -2447,7 +2449,7 @@ function feedbackMail(){
     'Signed in: '+(signedIn() ? 'yes' : 'no')+(Account.household && Account.household.id ? ', household '+Account.household.id : ''),
     'Lunchboxes: '+kids().length+' \u00b7 foods: '+kids().reduce(function(a,k){ return a+foodsOf(k).length; },0)+' \u00b7 weeks planned: '+kids().filter(function(k){ return k.week; }).length,
     'Kid\u2019s pick: '+kids().map(function(k){ return k.settings.kidPick ? (k.settings.kidPickMode === 'boxes' ? 'whole box' : 'each part') : 'off'; }).join(', '),
-    'Where: '+(UI.box ? 'lunchbox settings' : UI.tab)+' \u00b7 plan: '+planLabel()+' \u00b7 zone: '+(S.tz || '?'),
+    'Came from: '+(UI.lastTab || 'the start')+' \u00b7 plan: '+planLabel()+' \u00b7 zone: '+(S.tz || '?'),
     'Storage: '+(Store.ok ? 'ok' : 'blocked')+' \u00b7 online: '+(navigator.onLine ? 'yes' : 'no')
   ];
   return 'mailto:hello@lunchsorted.app?subject='+encodeURIComponent('Lunch Sorted: something wrong')+'&body='+encodeURIComponent(lines.join('\n'));
@@ -2455,18 +2457,29 @@ function feedbackMail(){
 
 /* the camera or the roll, then the thumbnail onto the food */
 function pickPhoto(foodId){
+  if(JSON.stringify(S).length + PHOTO_MAX > 1900000){ toast('No room for more photos \u2014 remove a few first'); return; }
   var inp = document.getElementById('photoIn');
-  if(!inp){ inp = document.createElement('input'); inp.type = 'file'; inp.id = 'photoIn'; inp.accept = 'image/*'; inp.setAttribute('capture', 'environment'); inp.hidden = true; document.body.appendChild(inp); }
+  if(!inp){ inp = document.createElement('input'); inp.type = 'file'; inp.id = 'photoIn'; inp.accept = 'image/*'; inp.hidden = true; document.body.appendChild(inp); }   /* no capture attribute: the camera or the roll, the phone asks */
   inp.value = ''; inp.setAttribute('data-food', foodId);
   inp.onchange = function(){
     var file = inp.files && inp.files[0]; if(!file) return;
-    var kid = activeKid(), f = foodById(kid, inp.getAttribute('data-food')); if(!f) return;
+    toast('Adding the photo\u2026');
     shrinkPhoto(file).then(function(dataUrl){
+      inp.value = '';                                        /* the full-size original is not kept a moment longer */
+      var f = foodById(activeKid(), inp.getAttribute('data-food'));
+      if(!f){ toast('That food is gone'); return; }
       f.img = dataUrl; touch(f); save(); render(); toast('Photo added');
-    }).catch(function(){ toast('Could not use that photo'); });
+    }).catch(function(){ inp.value = ''; toast('Could not use that photo'); });
   };
   inp.click();
 }
+/* a photo another phone stored that will not decode falls back to the emoji rather than a blank tile */
+document.addEventListener('error', function(e){
+  var t = e.target; if(!t || !t.classList || !t.classList.contains('pic')) return;
+  var host = t.closest('[data-id]'), f = host && S ? foodById(activeKid(), host.getAttribute('data-id')) : null;
+  var span = document.createElement('span'); span.className = 'ic'; span.textContent = f ? iconFor(f) : '🍱';
+  t.replaceWith(span);
+}, true);
 
 /* -------------------------------------------------------------- account */
 function accountFirst(){ return !!(Account.join || Account.linkSent || Account.first); }
@@ -2801,7 +2814,7 @@ document.addEventListener('click', function(ev){
   }
 
   /* navigation */
-  if(act==='tab'){ UI.tab = el.getAttribute('data-tab'); UI.box = false; render(); window.scrollTo(0,0); return; }
+  if(act==='tab'){ if(UI.tab !== 'setup') UI.lastTab = UI.box ? 'lunchbox settings' : UI.tab; UI.tab = el.getAttribute('data-tab'); UI.box = false; render(); window.scrollTo(0,0); return; }
   if(act==='box-settings'){ if(!UI.box) UI.boxScroll = window.scrollY; UI.box = !UI.box; render(); window.scrollTo(0, UI.box ? 0 : (UI.boxScroll || 0)); return; }
   if(act==='box-done'){ UI.box = false; render(); window.scrollTo(0, UI.boxScroll || 0); return; }
   if(act==='go-foods'){ UI.tab='foods'; UI.box = false; render(); window.scrollTo(0,0); return; }
@@ -2939,7 +2952,8 @@ document.addEventListener('click', function(ev){
   if(act==='food-photo-pick'){ closeSheet(); pickPhoto(el.getAttribute('data-id')); return; }
   if(act==='food-photo-clear'){
     var cf = foodById(kid, el.getAttribute('data-id')); if(!cf) return;
-    cf.img = null; touch(cf); save(); closeSheet(); render(); toast('Photo removed'); return;
+    var prevImg = cf.img; cf.img = null; touch(cf); save(); closeSheet(); render();
+    toast('Photo removed', function(){ cf.img = prevImg; touch(cf); save(); render(); toast('Put back'); }); return;
   }
   if(act==='del-food'){
     var f = foodById(kid, el.getAttribute('data-id')); if(!f) return;
