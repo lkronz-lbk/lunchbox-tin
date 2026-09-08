@@ -14,6 +14,11 @@ for (const [, attrs] of tags) {
 }
 const hashes = tags.map(m => "'sha256-" + crypto.createHash('sha256').update(m[2], 'utf8').digest('base64') + "'");
 
+/* the app names its build in APP_BUILD; the worker names it in VERSION; a deploy where they differ is a deploy that lies about itself */
+const appBuild = (html.match(/var APP_BUILD = '([^']+)'/) || [])[1];
+const swVersion = (fs.readFileSync('public/app/sw.js', 'utf8').match(/var VERSION = '([^']+)'/) || [])[1];
+if (!appBuild || appBuild !== swVersion) throw new Error(`APP_BUILD in public/app/index.html (${appBuild}) must equal VERSION in public/app/sw.js (${swVersion})`);
+
 export const APP_CSP = [
   "default-src 'none'",
   "script-src " + hashes.join(' '),

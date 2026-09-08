@@ -136,6 +136,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
   padding:0 16px;min-height:44px;font-family:var(--f-display);font-weight:600;font-size:14.5px;
   display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
 .btn:active{transform:translateY(1px)}
+a.btn{text-decoration:none}
 .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .btn.ghost{border-color:var(--line);background:transparent;color:var(--ink-2);font-weight:500}
 .btn.wide{width:100%}
@@ -1049,6 +1050,7 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
+var APP_BUILD = 'lunchsorted-v6';      /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -2390,7 +2392,26 @@ function viewSetup(){
     +  '<button class="btn danger sm" data-act="clear-all">'+(UI.armed==='all'?'Tap again to erase':'Erase everything')+'</button>'
     +  (UI.armed==='all' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : '')
     +  '</div></div>';
+  h += '<div class="card stack" style="gap:10px"><h3>Something wrong?</h3>'
+    +  '<div class="row" style="flex-wrap:wrap;gap:8px"><a class="btn sm" href="'+esc(feedbackMail())+'" data-feedback>Tell us</a>'
+    +  '<span class="hint">Opens an email to hello@lunchsorted.app with the details we need already in it.</span></div></div>';
   return h+'</div>';
+}
+/* what a bug report needs and a parent should not have to type: the build, the phone, the shape of the household; never a food or a name */
+function feedbackMail(){
+  var lines = [
+    '', '', 'What happened:', '', '', 'What I expected:', '', '',
+    '\u2014\u2014 the app filled this in \u2014\u2014',
+    'Build: '+APP_BUILD+(native() ? ' (iPhone app)' : ' (web)'),
+    'Phone: '+navigator.userAgent,
+    'Screen: '+window.innerWidth+'\u00d7'+window.innerHeight+(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? ', dark' : ', light'),
+    'Signed in: '+(signedIn() ? 'yes' : 'no')+(Account.household && Account.household.id ? ', household '+Account.household.id : ''),
+    'Lunchboxes: '+kids().length+' \u00b7 foods: '+kids().reduce(function(a,k){ return a+foodsOf(k).length; },0)+' \u00b7 weeks planned: '+kids().filter(function(k){ return k.week; }).length,
+    'Kid\u2019s pick: '+kids().map(function(k){ return k.settings.kidPick ? (k.settings.kidPickMode === 'boxes' ? 'whole box' : 'each part') : 'off'; }).join(', '),
+    'Where: '+(UI.box ? 'lunchbox settings' : UI.tab)+' \u00b7 plan: '+planLabel()+' \u00b7 zone: '+(S.tz || '?'),
+    'Storage: '+(Store.ok ? 'ok' : 'blocked')+' \u00b7 online: '+(navigator.onLine ? 'yes' : 'no')
+  ];
+  return 'mailto:hello@lunchsorted.app?subject='+encodeURIComponent('Lunch Sorted: something wrong')+'&body='+encodeURIComponent(lines.join('\n'));
 }
 
 /* -------------------------------------------------------------- account */

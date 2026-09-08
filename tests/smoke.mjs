@@ -808,6 +808,12 @@ try {
   /* erase really erases, old names included */
   await page.evaluate(() => { localStorage.setItem('lunchbox-tin', localStorage.getItem('lunchsorted')); localStorage.setItem('lunchbox-tin-v1', '{"foods":[],"settings":{}}'); localStorage.setItem('fiveboxes-backup-1', '{"old":1}'); localStorage.setItem('lunchsorted-backup-2', '{"old":2}'); });
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  {
+    const href = await page.getAttribute('[data-feedback]', 'href');
+    const body = decodeURIComponent((href.split('body=')[1] || ''));
+    check('the Account tab has a "tell us" link that opens an email with the build, the phone and the household shape filled in, and never a food name',
+      /^mailto:hello@lunchsorted\.app\?subject=/.test(href) && /Build: lunchsorted-v\d+ \(web\)/.test(body) && /Phone: Mozilla/.test(body) && /Lunchboxes: \d+ · foods: \d+/.test(body) && /What happened:/.test(body) && !/grape|banana|cracker|yogurt/i.test(body.replace(/^Phone:.*$/m, '')), body.slice(0, 300));
+  }
   await page.click('[data-act="clear-all"]'); await page.waitForTimeout(150);
   await page.click('[data-act="clear-all"]'); await page.waitForTimeout(300);
   check('"Erase everything" also removes the copies saved under the old name, and the backups',
