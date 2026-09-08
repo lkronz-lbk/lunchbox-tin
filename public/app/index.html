@@ -831,7 +831,7 @@ var Store = {
     }catch(e){ return false; }
   },
   forget:function(){
-    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen'].concat(Store.PRIOR_KEYS, Store.backupKeys())
+    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', SEEN_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
 };
@@ -1079,7 +1079,17 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v9';      /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v10';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+/* one sentence shown once, on the first open after an update, to a phone that already had the app;
+   npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
+var WHATS_NEW = {build:'lunchsorted-v10', text:'New: the shopping list shows what to buy, and one tick packs a box.'};
+var SEEN_KEY = 'lunchsorted-seen';
+function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
+function whatsNew(){
+  var seen = ''; try{ seen = localStorage.getItem(SEEN_KEY) || ''; }catch(e){}
+  if(!seen && !S.onboardedAt){ markSeen(); return; }                 /* a phone new to the app has nothing to be told */
+  if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text && !UI.notice) UI.notice = WHATS_NEW.text;
+}
 var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -2743,10 +2753,11 @@ function render(){
   document.getElementById('view').innerHTML =
       UI.box           ? viewBox()
     : UI.tab==='pack'  ? viewPack()
-    : UI.tab==='week'  ? viewWeek()
+    : (UI.notice ? '<div class="stack">'+noticeBanner()+'</div>' : '') + (   /* a notice is read on whichever tab the app opened on; Pack draws its own */
+      UI.tab==='week'  ? viewWeek()
     : UI.tab==='shop'  ? viewShop()
     : UI.tab==='foods' ? viewFoods()
-    : viewSetup();
+    : viewSetup());
   document.getElementById('tabs').innerHTML = TABS.map(function(t){
     return '<button data-act="tab" data-tab="'+t.k+'" aria-current="'+(UI.tab===t.k)+'">'
       + svg(t.icon)+'<span>'+t.label+'</span></button>'; }).join('');
@@ -3230,7 +3241,7 @@ document.addEventListener('click', function(ev){
     }).catch(offline);
     return;
   }
-  if(act==='notice-dismiss'){ UI.notice=''; render(); return; }
+  if(act==='notice-dismiss'){ UI.notice=''; markSeen(); render(); return; }
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = el.getAttribute('data-day'); render(); return; }
@@ -3329,6 +3340,7 @@ Store.load().then(function(r){
   DEVICE.memberId = (r.device && memberById(r.device)) ? r.device : members()[0].id;
   /* anyone who already has a list has effectively finished onboarding */
   if(!S.onboardedAt && kids().some(function(k){ return foodsOf(k).length; })) S.onboardedAt = now();
+  whatsNew();
   try{ render(); }
   catch(e){
     /* the last line of defence: a document that renders badly must not become
