@@ -45,7 +45,12 @@ food list from a 200-item library and produce a planned week immediately. From t
   in for the beta testers to compare; one may go. In the iPhone app a "Remind us the night
   before" switch with a time (on by default at 6pm beside the kid's say, household settings)
   schedules a local notification only on evenings before one of that lunchbox's pack days
-  that still has a box to pick. Every food has an emoji icon derived from its name, so
+  that still has a box to pick. A food can carry a **photo** of the real thing, for the
+  kid who cannot read yet: the thumbnail on the Foods tab opens the camera or the roll, the
+  phone shrinks the picture to a 192-pixel square JPEG under 16 KB (`food.img`, a data URL,
+  re-checked on every import and merge), and the kid's-pick screens and the Foods list show
+  it in place of the emoji; tapping it again offers "Take another" or "Remove the photo".
+  Every food has an emoji icon derived from its name, so
   custom foods get a picture too.
 - **Did they eat it?** — the morning after a pack day, the Pack view asks about
   yesterday's box: ate it / some / came home, per compartment, or "All eaten". Outcomes are

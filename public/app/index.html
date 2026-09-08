@@ -270,6 +270,15 @@ nav.tabs svg{width:21px;height:21px}
   font:inherit;color:var(--ink);transition:transform .12s ease,background .12s ease}
 .pick:active{transform:scale(.96)}
 .pick .ic{font-size:68px;line-height:1;filter:drop-shadow(var(--shadow-lift))}
+.pic{display:block;object-fit:cover;background:var(--surface-2)}
+.pick .pic{width:104px;height:104px;border-radius:18px}
+.pickbox .pic{width:44px;height:44px;border-radius:10px}
+.kiddone .pic{width:44px;height:44px;border-radius:10px;margin:0 auto}
+.pic.big{width:160px;height:160px;border-radius:20px;margin:0 auto}
+.thumb{width:44px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface-2);padding:0;overflow:hidden;
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;font:inherit}
+.thumb .ic{font-size:22px;line-height:1}
+.thumb .pic{width:100%;height:100%}
 .pick .nm{font-family:var(--f-display);font-size:17px;font-weight:600;line-height:1.2;text-align:center;text-wrap:balance;overflow-wrap:break-word;hyphens:auto}
 .boxes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
 .boxes.tall{grid-template-columns:minmax(0,1fr);max-width:340px;width:100%;margin:0 auto}
@@ -1050,7 +1059,7 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v6';      /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v7';      /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -1161,6 +1170,7 @@ function normFood(kid, f){
     t:(Array.isArray(f.t) ? f.t : []).filter(function(x){ return TAGS.indexOf(x) > -1; }),
     a: AISLES.indexOf(f.a) > -1 ? f.a : 'other',
     al:(Array.isArray(f.al) ? f.al : []).filter(function(x){ return ALLERGENS.some(function(y){ return y.k === x; }); }),
+    img:(typeof f.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
     createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt), deletedAt: f.deletedAt ? safeStamp(f.deletedAt) : null};
 }
 function normStamped(v){
@@ -1321,6 +1331,35 @@ var ICONS = [
 ];
 var CAT_ICON = {main:'🍱', side:'🥕', fruit:'🍎', sweet:'🍪', snack:'🍘', drink:'🥤'};
 var KIDWORD = {main:'lunch', side:'side', fruit:'fruit', sweet:'treat', snack:'snack', drink:'drink'};   /* what a six-year-old calls it */
+/* A photo of the real thing, for the kid who cannot read yet: taken once on the Foods tab,
+   shrunk on the phone to a thumbnail a few kilobytes big, stored with the food so it
+   travels with the household. Where there is no photo, the emoji stands in. */
+var PHOTO_PX = 192, PHOTO_MAX = 16000;
+function picHTML(food, cls){
+  if(food && food.img) return '<img class="pic '+(cls||'')+'" src="'+food.img+'" alt="">';
+  return '<span class="ic '+(cls||'')+'">'+iconFor(food)+'</span>';
+}
+function shrinkPhoto(file){
+  var decode = window.createImageBitmap
+    ? createImageBitmap(file).then(function(bm){ return {im:bm, w:bm.width, h:bm.height}; })
+    : new Promise(function(resolve, reject){                 /* older WebKit: through a blob URL, which the policy allows for images */
+        var url = URL.createObjectURL(file), im = new Image();
+        im.onload = function(){ URL.revokeObjectURL(url); resolve({im:im, w:im.naturalWidth, h:im.naturalHeight}); };
+        im.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('unreadable')); };
+        im.src = url;
+      });
+  return decode.then(function(src){
+    var side = Math.min(src.w, src.h); if(!side) throw new Error('empty');
+    var c = document.createElement('canvas'); c.width = c.height = PHOTO_PX;
+    var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, PHOTO_PX, PHOTO_PX);
+    g.drawImage(src.im, (src.w - side) / 2, (src.h - side) / 2, side, side, 0, 0, PHOTO_PX, PHOTO_PX);   /* the middle square */
+    if(src.im.close) src.im.close();
+    var q = 0.72, out = c.toDataURL('image/jpeg', q);
+    while(out.length > PHOTO_MAX && q > 0.3){ q -= 0.1; out = c.toDataURL('image/jpeg', q); }
+    if(out.length > PHOTO_MAX) throw new Error('big');
+    return out;
+  });
+}
 function iconFor(food){
   if(!food) return '';
   var n = String(food.n).toLowerCase();
@@ -2091,7 +2130,7 @@ function viewKid(){
   var miniTin = function(day){
     return '<span class="mini">'+cats.map(function(c){
       var f = foodById(kid, day.slots[c.k]);
-      return '<span class="cmp c-'+c.k+'"><span class="ic">'+(f ? iconFor(f) : '')+'</span><span class="nm">'+(f ? esc(f.n) : '')+'</span></span>';
+      return '<span class="cmp c-'+c.k+'">'+(f ? picHTML(f) : '<span class="ic"></span>')+'<span class="nm">'+(f ? esc(f.n) : '')+'</span></span>';
     }).join('')+'</span>';
   };
   var h = '<div class="kidmode"><div class="top">'
@@ -2106,7 +2145,7 @@ function viewKid(){
       +  '<p class="hint">Tap the one you want.</p></div>'
       +  '<div class="picks">'+opts.map(function(o){
            var f = foodById(kid, o.id);
-           return '<button class="pick" data-act="kid-pick" data-d="'+esc(o.d)+'" data-id="'+esc(o.id)+'"><span class="ic">'+iconFor(f)+'</span><span class="nm">'+esc(f ? f.n : '')+'</span></button>';
+           return '<button class="pick" data-act="kid-pick" data-d="'+esc(o.d)+'" data-id="'+esc(o.id)+'">'+picHTML(f)+'<span class="nm">'+esc(f ? f.n : '')+'</span></button>';
          }).join('')+'</div></div>';
   } else if(!st.done){
     h += '<div class="body"><div>'
@@ -2124,7 +2163,7 @@ function viewKid(){
       +  '<div class="tin">'+cats.map(function(c){
            var f = foodById(kid, target.slots[c.k]);
            return '<div class="cmp c-'+c.k+(c.minor?' minor':'')+'"><span class="lab">'+KIDWORD[c.k]+'</span>'
-             + '<span class="ic">'+iconFor(f)+'</span><span class="nm">'+(f?esc(f.n):'')+'</span></div>';
+             + picHTML(f)+'<span class="nm">'+(f?esc(f.n):'')+'</span></div>';
          }).join('')+'</div>'
       +  '<p class="hint" style="text-align:center">Now hand the phone back.</p>'
       +  '<button class="btn primary wide" data-act="kid-exit">Done</button></div>';
@@ -2280,7 +2319,7 @@ function viewFoods(){
     h += '<div class="list">';
     mine.forEach(function(f){
       var v = violation(kid, f);
-      h += '<div class="item"><span class="dot" style="background:var(--c-'+c.k+')"></span>'
+      h += '<div class="item"><button class="thumb" data-act="food-photo" data-id="'+esc(f.id)+'" aria-label="'+(f.img ? 'Change the photo of ' : 'Add a photo of ')+esc(f.n)+'" style="border-color:var(--c-'+c.k+')">'+picHTML(f)+'</button>'
         +  '<span class="grow"><span class="nm">'+esc(f.n)+'</span>'
         +  (v ? '<span class="meta" style="color:var(--warn)">skipped &mdash; '+esc(v)+'</span>'
              : '<span class="meta"'+(eatStats(kid,f.id).resting ? ' style="color:var(--warn)"' : '')+'>'
@@ -2412,6 +2451,21 @@ function feedbackMail(){
     'Storage: '+(Store.ok ? 'ok' : 'blocked')+' \u00b7 online: '+(navigator.onLine ? 'yes' : 'no')
   ];
   return 'mailto:hello@lunchsorted.app?subject='+encodeURIComponent('Lunch Sorted: something wrong')+'&body='+encodeURIComponent(lines.join('\n'));
+}
+
+/* the camera or the roll, then the thumbnail onto the food */
+function pickPhoto(foodId){
+  var inp = document.getElementById('photoIn');
+  if(!inp){ inp = document.createElement('input'); inp.type = 'file'; inp.id = 'photoIn'; inp.accept = 'image/*'; inp.setAttribute('capture', 'environment'); inp.hidden = true; document.body.appendChild(inp); }
+  inp.value = ''; inp.setAttribute('data-food', foodId);
+  inp.onchange = function(){
+    var file = inp.files && inp.files[0]; if(!file) return;
+    var kid = activeKid(), f = foodById(kid, inp.getAttribute('data-food')); if(!f) return;
+    shrinkPhoto(file).then(function(dataUrl){
+      f.img = dataUrl; touch(f); save(); render(); toast('Photo added');
+    }).catch(function(){ toast('Could not use that photo'); });
+  };
+  inp.click();
 }
 
 /* -------------------------------------------------------------- account */
@@ -2871,6 +2925,21 @@ document.addEventListener('click', function(ev){
       al:[].slice.call(document.querySelectorAll('#nfAl .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); })
     }));
     touch(kid); save(); closeSheet(); render(); toast(n+' added'); return;
+  }
+  if(act==='food-photo'){
+    var pf = foodById(kid, el.getAttribute('data-id')); if(!pf) return;
+    if(pf.img){
+      openSheet(esc(pf.n), '<div class="stack" style="gap:10px"><img class="pic big" src="'+pf.img+'" alt="">'
+        + '<button class="btn primary wide" data-act="food-photo-pick" data-id="'+esc(pf.id)+'">Take another</button>'
+        + '<button class="btn ghost wide" data-act="food-photo-clear" data-id="'+esc(pf.id)+'">Remove the photo</button></div>');
+      return;
+    }
+    pickPhoto(pf.id); return;
+  }
+  if(act==='food-photo-pick'){ closeSheet(); pickPhoto(el.getAttribute('data-id')); return; }
+  if(act==='food-photo-clear'){
+    var cf = foodById(kid, el.getAttribute('data-id')); if(!cf) return;
+    cf.img = null; touch(cf); save(); closeSheet(); render(); toast('Photo removed'); return;
   }
   if(act==='del-food'){
     var f = foodById(kid, el.getAttribute('data-id')); if(!f) return;

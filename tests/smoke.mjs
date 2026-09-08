@@ -320,6 +320,34 @@ try {
   await page.waitForTimeout(200);
   check('a pantry tick moves an item out of the buy count', head !== await page.textContent('.count'));
 
+  /* -------------------------------------------------- a photo on a food */
+  {
+    await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+    const target = await page.getAttribute('[data-act="food-photo"] >> nth=0', 'data-id');
+    check('every food on the list has a thumbnail to tap, an emoji until there is a photo', (await page.$$eval('[data-act="food-photo"]', a => a.length)) > 10 && (await page.$$eval('[data-act="food-photo"] .ic', a => a.length)) > 10);
+    /* the parent taps the thumbnail; the picker is a file input, fed a 600×400 picture drawn here */
+    await page.click('[data-act="food-photo"] >> nth=0'); await page.waitForTimeout(200);
+    await page.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 600; c.height = 400; const g = c.getContext('2d');
+      g.fillStyle = '#c33'; g.fillRect(0, 0, 600, 400); g.fillStyle = '#fc0'; g.fillRect(200, 100, 200, 200);
+      const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+      const dt = new DataTransfer(); dt.items.add(new File([blob], 'lunch.png', { type: 'image/png' }));
+      const inp = document.getElementById('photoIn'); inp.files = dt.files; inp.dispatchEvent(new Event('change'));
+    });
+    await until(page, id => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const f = k.foods.find(x => x.id === id); return !!(f && f.img); }, target);
+    const stored = await page.evaluate(id => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const f = k.foods.find(x => x.id === id); return { len: f.img.length, head: f.img.slice(0, 23) }; }, target);
+    check('the photo is shrunk on the phone to a small JPEG stored with the food', stored.head === 'data:image/jpeg;base64,' && stored.len < 16000 && stored.len > 500, stored);
+    check('and the Foods list shows it in place of the emoji', (await page.$$eval('[data-act="food-photo"] img.pic', a => a.length)) === 1);
+    await page.click('[data-act="food-photo"][data-id="' + target + '"]'); await page.waitForTimeout(300);
+    check('tapping it again offers another shot or removal', /Take another/.test(await page.textContent('#sheetBody')) && /Remove the photo/.test(await page.textContent('#sheetBody')));
+    await page.click('[data-act="food-photo-clear"]'); await page.waitForTimeout(300);
+    check('removing it puts the emoji back', (await page.$$eval('[data-act="food-photo"] img.pic', a => a.length)) === 0 && await page.evaluate(id => !JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.find(x => x.id === id).img, target));
+    /* a hostile photo never survives normalisation */
+    await page.evaluate(id => { const d = JSON.parse(localStorage.getItem('lunchsorted')); const f = d.kids[0].foods.find(x => x.id === id); f.img = 'data:text/html;base64,PHNjcmlwdD4='; localStorage.setItem('lunchsorted', JSON.stringify(d)); }, target);
+    await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+    check('a photo that is not a JPEG data URL is dropped on load', await page.evaluate(id => !JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.find(x => x.id === id).img, target));
+  }
+
   /* -------------------------------------------------- second lunchbox */
   await page.click('[data-act="box-settings"]');
   await page.waitForTimeout(200);
