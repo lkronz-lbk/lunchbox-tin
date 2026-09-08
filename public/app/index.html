@@ -110,6 +110,8 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .tick svg{width:9px;height:9px;opacity:0}
 .cmp[aria-pressed="true"] .tick svg{opacity:1}
 .lock{opacity:.85}
+.swap{color:var(--ink-3);opacity:.9}
+.cmp:active .swap{opacity:1}
 
 .daycard{display:flex;flex-direction:column;gap:9px}
 .daycard.past{opacity:.55}
@@ -488,6 +490,8 @@ var I = {
   setup:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/>',
   account:'<circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6"/>',
   check:'<path d="M4 12.5l5 5L20 6.5"/>',
+  swap:'<path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/>',
+  share:'<path d="M12 3v12"/><path d="M7.5 7.5L12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
   lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7a3.5 3.5 0 0 1 7 0v3.5"/>',
   dice:'<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="9" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.3" fill="currentColor" stroke="none"/>',
   trash:'<path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M7 7l1 12.2A1.8 1.8 0 0 0 9.8 21h4.4a1.8 1.8 0 0 0 1.8-1.8L17 7"/>',
@@ -538,67 +542,83 @@ var DOWFULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Satu
 var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var NUMWORD = ['No','One','Two','Three','Four','Five','Six','Seven'];
 
-function F(n,c,t,a,al,s,e){ return {n:n,c:c,t:t,a:a,al:al||[],s:!!s,e:!!e}; }
+/* the aisle each thing to buy lives in; anything not here goes under the dish's own aisle */
+var ING_AISLE = nullMap();
+[['produce','cucumber,bananas,avocado,romaine lettuce,lettuce,tomatoes,cherry tomatoes,shredded carrots,carrots,baby carrots,broccoli,bell peppers,celery,apples,watermelon,pineapple,cantaloupe,peaches,mango,honeydew,kiwis,pears,oranges,nectarines,grapes,blueberries,strawberries,melon,berries'],
+ ['deli','deli turkey,sliced ham,salami,chicken salad,cooked chicken,chicken breast,smoked salmon,hummus,olives,feta cheese,mozzarella balls,bacon'],
+ ['dairy','cheese slices,cheese block,shredded cheese,cream cheese,string cheese,yogurt,cottage cheese,eggs,butter,whipped cream,cheese tortellini'],
+ ['bakery','tortillas,sandwich bread,bagels,mini bagels,pita bread,english muffins,sub rolls'],
+ ['pantry','sunflower butter,peanut butter,jelly,honey,pasta,italian dressing,caesar dressing,ranch dressing,mayonnaise,canned tuna,refried beans,black beans,rice,sushi rice,nori sheets,quinoa,pizza sauce,salsa,pesto,lentil soup,turkey chili,chicken noodle soup,cinnamon,dill pickles,skewers,mac & cheese'],
+ ['snacks','crackers,granola,tortilla chips,pretzel bites'],
+ ['frozen','chicken nuggets']
+].forEach(function(p){ p[1].split(',').forEach(function(w){ ING_AISLE[w] = p[0]; }); });
+/* b: what goes on the shopping list for a dish, "Deli turkey|Cheese slices|Tortillas"; absent, the dish itself */
+function F(n,c,t,a,al,s,e,b){ return {n:n,c:c,t:t,a:a,al:al||[],s:!!s,e:!!e,buy:b ? b.split('|') : null}; }
+var BANK_BY_KEY = null;                               /* built once, on first use: BANK is declared below */
+function bankByName(n){
+  if(!BANK_BY_KEY){ BANK_BY_KEY = nullMap(); BANK.forEach(function(b){ BANK_BY_KEY[normKey(b.n)] = b; }); }
+  return BANK_BY_KEY[normKey(n)] || null;
+}
 var BANK = [
   /* mains */
-  F('Turkey & cheese roll-ups','main',['protein','soft','hearty','savory','ice'],'deli',['dairy'],1,1),
-  F('Ham & cheese sandwich','main',['protein','soft','hearty','savory','ice'],'deli',['dairy','gluten'],1,1),
-  F('Sunbutter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],1,1),
-  F('Peanut butter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['nuts','gluten'],0,1),
-  F('Peanut butter & banana wrap','main',['protein','soft','hearty','sweet'],'pantry',['nuts','gluten'],0,0),
-  F('Cream cheese & cucumber bagel','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,0),
-  F('Pasta salad cup','main',['chewy','hearty','savory','ice'],'pantry',['gluten'],1,0),
-  F('Chicken salad in a pita','main',['protein','soft','hearty','messy','ice'],'deli',['gluten','egg'],0,0),
-  F('Crackers, cheese cubes & salami','main',['protein','crunchy','salty','savory','ice'],'deli',['dairy','gluten'],1,1),
-  F('Egg salad sandwich','main',['protein','soft','hearty','messy','ice'],'deli',['gluten','egg'],0,0),
-  F('Hummus & veggie wrap','main',['protein','soft','light','savory'],'deli',['gluten','soy','seeds'],0,0),
-  F('Tuna salad with crackers','main',['protein','salty','savory','ice'],'pantry',['fish','gluten'],0,0),
-  F('Bean & cheese roll-up','main',['protein','soft','hearty','savory'],'deli',['dairy','gluten'],1,1),
-  F('Yogurt & granola parfait','main',['protein','soft','sweet','ice'],'dairy',['dairy'],1,1),
-  F('Chicken & cheese skewers','main',['protein','hearty','savory','ice'],'deli',['dairy'],0,1),
-  F('Cucumber sushi rolls','main',['light','chewy','savory','ice'],'deli',[],0,0),
-  F('Cold grilled chicken strips','main',['protein','hearty','savory','ice'],'deli',[],0,1),
-  F('Turkey & cheese pinwheels','main',['protein','soft','savory','ice'],'deli',['dairy','gluten'],1,1),
-  F('Mac & cheese thermos','main',['soft','hearty','savory','heat'],'pantry',['dairy','gluten'],0,1),
-  F('Turkey & avocado wrap','main',['protein','soft','hearty','savory','messy','ice'],'deli',['gluten'],0,0),
-  F('Grilled cheese, packed cold','main',['soft','hearty','savory'],'bakery',['dairy','gluten'],0,1),
-  F('Chicken caesar wrap','main',['protein','soft','hearty','savory','ice'],'deli',['dairy','gluten','fish'],0,0),
-  F('Cheese & cracker stackers','main',['protein','crunchy','savory','ice'],'snacks',['dairy','gluten'],1,1),
-  F('Bagel with cream cheese','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1),
-  F('Ham & cheese pinwheels','main',['protein','soft','savory','ice'],'deli',['dairy','gluten'],0,1),
-  F('Chicken nuggets, packed cold','main',['protein','crunchy','hearty','savory'],'frozen',['gluten'],0,1),
-  F('Mini bagel pizzas, cold','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1),
-  F('Rice & black bean bowl','main',['protein','chewy','hearty','savory'],'pantry',[],0,0),
-  F('Quinoa salad cup','main',['protein','chewy','light','savory','ice'],'pantry',[],0,0),
-  F('Lentil soup thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0),
-  F('Turkey chili thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0),
-  F('Chicken noodle soup thermos','main',['soft','hearty','savory','heat'],'pantry',['gluten'],0,1),
-  F('Deli turkey & crackers','main',['protein','crunchy','salty','savory','ice'],'deli',['gluten'],0,1),
-  F('Cheese quesadilla, packed cold','main',['soft','hearty','savory'],'deli',['dairy','gluten'],0,1),
-  F('Egg & cheese muffin, cold','main',['protein','soft','hearty','savory','ice'],'bakery',['dairy','egg','gluten'],0,0),
-  F('Tortellini salad','main',['chewy','hearty','savory','ice'],'pantry',['dairy','gluten','egg'],0,0),
-  F('Chicken & rice bowl','main',['protein','hearty','savory','heat'],'pantry',[],0,1),
-  F('Veggie & hummus pita','main',['protein','soft','light','savory'],'deli',['gluten','soy','seeds'],0,0),
-  F('Salmon & cracker bites','main',['protein','salty','savory','ice'],'pantry',['fish','gluten'],0,0),
-  F('Cottage cheese & fruit cup','main',['protein','soft','light','sweet','ice'],'dairy',['dairy'],0,0),
-  F('Chicken salad crackers','main',['protein','crunchy','savory','ice'],'deli',['gluten','egg'],0,0),
-  F('BLT wrap, hold the mayo','main',['protein','soft','crunchy','savory','ice'],'deli',['gluten'],0,0),
-  F('Sunbutter & honey roll-up','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],0,1),
-  F('Turkey & cheese sub roll','main',['protein','soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1),
-  F('Pesto pasta cup','main',['chewy','hearty','savory','ice'],'pantry',['dairy','gluten','nuts'],0,0)
+  F('Turkey & cheese roll-ups','main',['protein','soft','hearty','savory','ice'],'deli',['dairy'],1,1,'Deli turkey|Cheese slices|Tortillas'),
+  F('Ham & cheese sandwich','main',['protein','soft','hearty','savory','ice'],'deli',['dairy','gluten'],1,1,'Sliced ham|Cheese slices|Sandwich bread'),
+  F('Sunbutter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],1,1,'Sunflower butter|Jelly|Sandwich bread'),
+  F('Peanut butter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['nuts','gluten'],0,1,'Peanut butter|Jelly|Sandwich bread'),
+  F('Peanut butter & banana wrap','main',['protein','soft','hearty','sweet'],'pantry',['nuts','gluten'],0,0,'Peanut butter|Bananas|Tortillas'),
+  F('Cream cheese & cucumber bagel','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,0,'Cream cheese|Cucumber|Bagels'),
+  F('Pasta salad cup','main',['chewy','hearty','savory','ice'],'pantry',['gluten'],1,0,'Pasta|Italian dressing|Cherry tomatoes'),
+  F('Chicken salad in a pita','main',['protein','soft','hearty','messy','ice'],'deli',['gluten','egg'],0,0,'Chicken salad|Pita bread'),
+  F('Crackers, cheese cubes & salami','main',['protein','crunchy','salty','savory','ice'],'deli',['dairy','gluten'],1,1,'Crackers|Cheese block|Salami'),
+  F('Egg salad sandwich','main',['protein','soft','hearty','messy','ice'],'deli',['gluten','egg'],0,0,'Eggs|Mayonnaise|Sandwich bread'),
+  F('Hummus & veggie wrap','main',['protein','soft','light','savory'],'deli',['gluten','soy','seeds'],0,0,'Hummus|Cucumber|Shredded carrots|Tortillas'),
+  F('Tuna salad with crackers','main',['protein','salty','savory','ice'],'pantry',['fish','gluten'],0,0,'Canned tuna|Mayonnaise|Crackers'),
+  F('Bean & cheese roll-up','main',['protein','soft','hearty','savory'],'deli',['dairy','gluten'],1,1,'Refried beans|Shredded cheese|Tortillas'),
+  F('Yogurt & granola parfait','main',['protein','soft','sweet','ice'],'dairy',['dairy'],1,1,'Yogurt|Granola'),
+  F('Chicken & cheese skewers','main',['protein','hearty','savory','ice'],'deli',['dairy'],0,1,'Cooked chicken|Cheese block|Skewers'),
+  F('Cucumber sushi rolls','main',['light','chewy','savory','ice'],'deli',[],0,0,'Sushi rice|Nori sheets|Cucumber'),
+  F('Cold grilled chicken strips','main',['protein','hearty','savory','ice'],'deli',[],0,1,'Chicken breast'),
+  F('Turkey & cheese pinwheels','main',['protein','soft','savory','ice'],'deli',['dairy','gluten'],1,1,'Deli turkey|Cheese slices|Tortillas'),
+  F('Mac & cheese thermos','main',['soft','hearty','savory','heat'],'pantry',['dairy','gluten'],0,1,'Mac & cheese'),
+  F('Turkey & avocado wrap','main',['protein','soft','hearty','savory','messy','ice'],'deli',['gluten'],0,0,'Deli turkey|Avocado|Tortillas'),
+  F('Grilled cheese, packed cold','main',['soft','hearty','savory'],'bakery',['dairy','gluten'],0,1,'Cheese slices|Sandwich bread|Butter'),
+  F('Chicken caesar wrap','main',['protein','soft','hearty','savory','ice'],'deli',['dairy','gluten','fish'],0,0,'Cooked chicken|Romaine lettuce|Caesar dressing|Tortillas'),
+  F('Cheese & cracker stackers','main',['protein','crunchy','savory','ice'],'snacks',['dairy','gluten'],1,1,'Cheese slices|Crackers'),
+  F('Bagel with cream cheese','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1,'Bagels|Cream cheese'),
+  F('Ham & cheese pinwheels','main',['protein','soft','savory','ice'],'deli',['dairy','gluten'],0,1,'Sliced ham|Cheese slices|Tortillas'),
+  F('Chicken nuggets, packed cold','main',['protein','crunchy','hearty','savory'],'frozen',['gluten'],0,1,'Chicken nuggets'),
+  F('Mini bagel pizzas, cold','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1,'Mini bagels|Pizza sauce|Shredded cheese'),
+  F('Rice & black bean bowl','main',['protein','chewy','hearty','savory'],'pantry',[],0,0,'Rice|Black beans|Shredded cheese'),
+  F('Quinoa salad cup','main',['protein','chewy','light','savory','ice'],'pantry',[],0,0,'Quinoa|Cucumber|Cherry tomatoes'),
+  F('Lentil soup thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0,'Lentil soup'),
+  F('Turkey chili thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0,'Turkey chili'),
+  F('Chicken noodle soup thermos','main',['soft','hearty','savory','heat'],'pantry',['gluten'],0,1,'Chicken noodle soup'),
+  F('Deli turkey & crackers','main',['protein','crunchy','salty','savory','ice'],'deli',['gluten'],0,1,'Deli turkey|Crackers'),
+  F('Cheese quesadilla, packed cold','main',['soft','hearty','savory'],'deli',['dairy','gluten'],0,1,'Shredded cheese|Tortillas'),
+  F('Egg & cheese muffin, cold','main',['protein','soft','hearty','savory','ice'],'bakery',['dairy','egg','gluten'],0,0,'Eggs|Cheese slices|English muffins'),
+  F('Tortellini salad','main',['chewy','hearty','savory','ice'],'pantry',['dairy','gluten','egg'],0,0,'Cheese tortellini|Italian dressing'),
+  F('Chicken & rice bowl','main',['protein','hearty','savory','heat'],'pantry',[],0,1,'Cooked chicken|Rice'),
+  F('Veggie & hummus pita','main',['protein','soft','light','savory'],'deli',['gluten','soy','seeds'],0,0,'Hummus|Cucumber|Shredded carrots|Pita bread'),
+  F('Salmon & cracker bites','main',['protein','salty','savory','ice'],'pantry',['fish','gluten'],0,0,'Smoked salmon|Cream cheese|Crackers'),
+  F('Cottage cheese & fruit cup','main',['protein','soft','light','sweet','ice'],'dairy',['dairy'],0,0,'Cottage cheese|Berries'),
+  F('Chicken salad crackers','main',['protein','crunchy','savory','ice'],'deli',['gluten','egg'],0,0,'Chicken salad|Crackers'),
+  F('BLT wrap, hold the mayo','main',['protein','soft','crunchy','savory','ice'],'deli',['gluten'],0,0,'Bacon|Lettuce|Tomatoes|Tortillas'),
+  F('Sunbutter & honey roll-up','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],0,1,'Sunflower butter|Honey|Tortillas'),
+  F('Turkey & cheese sub roll','main',['protein','soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1,'Deli turkey|Cheese slices|Sub rolls'),
+  F('Pesto pasta cup','main',['chewy','hearty','savory','ice'],'pantry',['dairy','gluten','nuts'],0,0,'Pasta|Pesto')
   /* sides */,
   F('Pretzel sticks','side',['crunchy','salty'],'snacks',['gluten'],1,1),
-  F('Baby carrots & ranch','side',['crunchy','light','tangy'],'produce',['dairy'],1,1),
-  F('Cucumber coins','side',['crunchy','light'],'produce',[],1,1),
+  F('Baby carrots & ranch','side',['crunchy','light','tangy'],'produce',['dairy'],1,1,'Baby carrots|Ranch dressing'),
+  F('Cucumber coins','side',['crunchy','light'],'produce',[],1,1,'Cucumber'),
   F('Cherry tomatoes','side',['juicy','light','tangy'],'produce',[],0,0),
   F('Sugar snap peas','side',['crunchy','light'],'produce',[],1,0),
-  F('Celery sticks','side',['crunchy','light'],'produce',[],0,0),
-  F('Bell pepper strips','side',['crunchy','light'],'produce',[],1,0),
-  F('Dill pickle spear','side',['crunchy','tangy','messy'],'pantry',[],1,0),
+  F('Celery sticks','side',['crunchy','light'],'produce',[],0,0,'Celery'),
+  F('Bell pepper strips','side',['crunchy','light'],'produce',[],1,0,'Bell peppers'),
+  F('Dill pickle spear','side',['crunchy','tangy','messy'],'pantry',[],1,0,'Dill pickles'),
   F('Popcorn','side',['crunchy','light','salty'],'snacks',[],1,1),
-  F('Tortilla chips & salsa','side',['crunchy','salty','messy'],'snacks',[],0,1),
-  F('Cheese stick','side',['protein','soft','savory','ice'],'dairy',['dairy'],1,1),
-  F('Hard-boiled egg','side',['protein','soft','savory','ice'],'dairy',['egg'],0,0),
+  F('Tortilla chips & salsa','side',['crunchy','salty','messy'],'snacks',[],0,1,'Tortilla chips|Salsa'),
+  F('Cheese stick','side',['protein','soft','savory','ice'],'dairy',['dairy'],1,1,'String cheese'),
+  F('Hard-boiled egg','side',['protein','soft','savory','ice'],'dairy',['egg'],0,0,'Eggs'),
   F('Edamame','side',['protein','light','salty','ice'],'frozen',['soy'],0,0),
   F('Black olives','side',['salty','tangy','light'],'pantry',[],0,0),
   F('Veggie straws','side',['crunchy','salty','light'],'snacks',[],1,1),
@@ -612,7 +632,7 @@ var BANK = [
   F('Rice cakes','side',['crunchy','light'],'snacks',[],0,1),
   F('Guacamole cup','side',['soft','savory','messy','ice'],'deli',[],0,0),
   F('Snap pea crisps','side',['crunchy','light','salty'],'snacks',[],0,0),
-  F('Broccoli florets & dip','side',['crunchy','light','tangy'],'produce',['dairy'],0,0),
+  F('Broccoli florets & dip','side',['crunchy','light','tangy'],'produce',['dairy'],0,0,'Broccoli|Ranch dressing'),
   F('Corn salad cup','side',['juicy','light','savory','ice'],'deli',[],0,0),
   F('Three-bean salad','side',['protein','chewy','tangy','ice'],'deli',[],0,0),
   F('Potato salad cup','side',['soft','hearty','savory','messy','ice'],'deli',['egg'],0,0),
@@ -624,8 +644,8 @@ var BANK = [
   F('Babybel cheese round','side',['protein','soft','savory','ice'],'dairy',['dairy'],1,1),
   F('Pepperoni slices','side',['protein','salty','savory','ice'],'deli',[],0,1),
   F('Turkey roll slices','side',['protein','soft','savory','ice'],'deli',[],0,1),
-  F('Olives & feta cup','side',['salty','tangy','savory','ice'],'deli',['dairy'],0,0),
-  F('Caprese skewers','side',['protein','soft','savory','ice'],'deli',['dairy'],0,0),
+  F('Olives & feta cup','side',['salty','tangy','savory','ice'],'deli',['dairy'],0,0,'Olives|Feta cheese'),
+  F('Caprese skewers','side',['protein','soft','savory','ice'],'deli',['dairy'],0,0,'Mozzarella balls|Cherry tomatoes|Skewers'),
   F('Pita chips','side',['crunchy','salty'],'snacks',['gluten'],0,1),
   F('Plantain chips','side',['crunchy','salty','light'],'snacks',[],0,0),
   F('Apple chips','side',['crunchy','sweet','light'],'snacks',[],0,1),
@@ -633,51 +653,51 @@ var BANK = [
   F('Corn chips','side',['crunchy','salty'],'snacks',[],0,1),
   F('Breadsticks','side',['crunchy','light'],'bakery',['gluten'],0,1),
   F('Cottage cheese cup','side',['protein','soft','light','savory','ice'],'dairy',['dairy'],0,0),
-  F('Cheese & pretzel bites','side',['protein','crunchy','salty','ice'],'snacks',['dairy','gluten'],0,1),
-  F('Sliced cucumbers & dip','side',['crunchy','light','tangy'],'produce',['dairy'],0,1),
+  F('Cheese & pretzel bites','side',['protein','crunchy','salty','ice'],'snacks',['dairy','gluten'],0,1,'Cheese block|Pretzel bites'),
+  F('Sliced cucumbers & dip','side',['crunchy','light','tangy'],'produce',['dairy'],0,1,'Cucumber|Ranch dressing'),
   F('Mixed nuts','side',['protein','crunchy','salty'],'snacks',['nuts'],0,0),
   F('Granola cluster','side',['crunchy','sweet','hearty'],'snacks',['gluten'],0,0)
   /* fruit */,
-  F('Apple slices','fruit',['crunchy','juicy','light','sweet'],'produce',[],1,1),
+  F('Apple slices','fruit',['crunchy','juicy','light','sweet'],'produce',[],1,1,'Apples'),
   F('Green grapes','fruit',['juicy','light','sweet'],'produce',[],1,1),
   F('Strawberries','fruit',['juicy','light','sweet','ice'],'produce',[],1,1),
   F('Blueberries','fruit',['juicy','light','sweet'],'produce',[],1,1),
   F('Clementine','fruit',['juicy','light','tangy','sweet'],'produce',[],1,1),
   F('Banana','fruit',['soft','light','sweet'],'produce',[],1,1),
-  F('Watermelon cubes','fruit',['juicy','light','sweet','messy','ice'],'produce',[],0,1),
-  F('Pineapple chunks','fruit',['juicy','tangy','sweet','messy','ice'],'produce',[],0,0),
-  F('Cantaloupe cubes','fruit',['juicy','light','sweet','ice'],'produce',[],0,0),
+  F('Watermelon cubes','fruit',['juicy','light','sweet','messy','ice'],'produce',[],0,1,'Watermelon'),
+  F('Pineapple chunks','fruit',['juicy','tangy','sweet','messy','ice'],'produce',[],0,0,'Pineapple'),
+  F('Cantaloupe cubes','fruit',['juicy','light','sweet','ice'],'produce',[],0,0,'Cantaloupe'),
   F('Raspberries','fruit',['juicy','light','tangy','ice'],'produce',[],0,0),
   F('Mandarin orange cup','fruit',['juicy','sweet','messy'],'pantry',[],0,1),
-  F('Peach slices','fruit',['juicy','soft','sweet','ice'],'produce',[],0,0),
-  F('Mango chunks','fruit',['juicy','sweet','messy','ice'],'produce',[],0,0),
+  F('Peach slices','fruit',['juicy','soft','sweet','ice'],'produce',[],0,0,'Peaches'),
+  F('Mango chunks','fruit',['juicy','sweet','messy','ice'],'produce',[],0,0,'Mango'),
   F('Dried apricots','fruit',['chewy','sweet'],'pantry',[],0,0),
   F('Raisins','fruit',['chewy','sweet'],'pantry',[],1,1),
   F('Blackberries','fruit',['juicy','tangy','light','ice'],'produce',[],0,0),
-  F('Honeydew cubes','fruit',['juicy','light','sweet','ice'],'produce',[],0,0),
-  F('Kiwi slices','fruit',['juicy','tangy','sweet','messy','ice'],'produce',[],0,0),
-  F('Pear slices','fruit',['juicy','soft','sweet'],'produce',[],0,1),
+  F('Honeydew cubes','fruit',['juicy','light','sweet','ice'],'produce',[],0,0,'Honeydew'),
+  F('Kiwi slices','fruit',['juicy','tangy','sweet','messy','ice'],'produce',[],0,0,'Kiwis'),
+  F('Pear slices','fruit',['juicy','soft','sweet'],'produce',[],0,1,'Pears'),
   F('Plum','fruit',['juicy','sweet','messy'],'produce',[],0,0),
   F('Cherries','fruit',['juicy','sweet'],'produce',[],0,0),
   F('Fruit salad cup','fruit',['juicy','sweet','messy','ice'],'deli',[],0,0),
   F('Dried mango','fruit',['chewy','sweet'],'pantry',[],0,0),
   F('Banana chips','fruit',['crunchy','sweet','light'],'snacks',[],0,1),
   F('Freeze-dried strawberries','fruit',['crunchy','light','sweet'],'snacks',[],0,1),
-  F('Orange segments','fruit',['juicy','sweet','messy'],'produce',[],0,1),
-  F('Nectarine slices','fruit',['juicy','soft','sweet','ice'],'produce',[],0,0),
-  F('Grapes & blueberries','fruit',['juicy','light','sweet'],'produce',[],0,1),
+  F('Orange segments','fruit',['juicy','sweet','messy'],'produce',[],0,1,'Oranges'),
+  F('Nectarine slices','fruit',['juicy','soft','sweet','ice'],'produce',[],0,0,'Nectarines'),
+  F('Grapes & blueberries','fruit',['juicy','light','sweet'],'produce',[],0,1,'Grapes|Blueberries'),
   F('Pomegranate seeds','fruit',['juicy','tangy','sweet','ice'],'produce',[],0,0),
   F('Fruit cup in juice','fruit',['soft','sweet','messy'],'pantry',[],0,1),
-  F('Frozen grapes','fruit',['crunchy','sweet','light','ice'],'produce',[],0,1),
-  F('Melon skewers','fruit',['juicy','light','sweet','ice'],'produce',[],0,0),
+  F('Frozen grapes','fruit',['crunchy','sweet','light','ice'],'produce',[],0,1,'Grapes'),
+  F('Melon skewers','fruit',['juicy','light','sweet','ice'],'produce',[],0,0,'Melon|Skewers'),
   F('Dried cranberries','fruit',['chewy','sweet','tangy'],'pantry',[],0,0),
   F('Tangerine','fruit',['juicy','sweet','tangy'],'produce',[],0,1),
   F('Red grapes','fruit',['juicy','light','sweet'],'produce',[],1,1),
   F('Blueberry yogurt cup','fruit',['protein','soft','sweet','ice'],'dairy',['dairy'],0,1),
-  F('Apple & cinnamon slices','fruit',['crunchy','sweet','light'],'produce',[],0,1),
-  F('Sliced strawberries & cream','fruit',['soft','sweet','ice'],'dairy',['dairy'],0,0),
+  F('Apple & cinnamon slices','fruit',['crunchy','sweet','light'],'produce',[],0,1,'Apples|Cinnamon'),
+  F('Sliced strawberries & cream','fruit',['soft','sweet','ice'],'dairy',['dairy'],0,0,'Strawberries|Whipped cream'),
   F('Dried apple rings','fruit',['chewy','sweet'],'pantry',[],0,1),
-  F('Blueberry & melon cup','fruit',['juicy','light','sweet','ice'],'produce',[],0,0)
+  F('Blueberry & melon cup','fruit',['juicy','light','sweet','ice'],'produce',[],0,0,'Blueberries|Melon')
   /* sweets */,
   F('Chocolate chip cookies','sweet',['crunchy','sweet','hearty'],'bakery',['gluten','dairy'],1,1),
   F('Graham crackers','sweet',['crunchy','sweet','light'],'snacks',['gluten'],1,1),
@@ -731,14 +751,14 @@ var BANK = [
   F('Cereal cup','snack',['crunchy','sweet','light'],'pantry',['gluten'],0,1),
   F('Veggie chips','snack',['crunchy','salty','light'],'snacks',[],1,1),
   F('Muesli bar','snack',['chewy','sweet','hearty'],'snacks',['gluten','nuts'],0,0),
-  F('Cheese cubes','snack',['protein','soft','savory','ice'],'dairy',['dairy'],1,1),
-  F('Crackers & hummus','snack',['protein','crunchy','savory','ice'],'deli',['gluten','soy','seeds'],0,0),
-  F('Apple & cheese slices','snack',['protein','crunchy','light','ice'],'produce',['dairy'],1,0),
+  F('Cheese cubes','snack',['protein','soft','savory','ice'],'dairy',['dairy'],1,1,'Cheese block'),
+  F('Crackers & hummus','snack',['protein','crunchy','savory','ice'],'deli',['gluten','soy','seeds'],0,0,'Crackers|Hummus'),
+  F('Apple & cheese slices','snack',['protein','crunchy','light','ice'],'produce',['dairy'],1,0,'Apples|Cheese slices'),
   F('Yogurt pouch','snack',['protein','soft','sweet','ice'],'dairy',['dairy'],1,1),
   F('Pretzel crisps','snack',['crunchy','salty','light'],'snacks',['gluten'],0,1),
   F('Banana muffin','snack',['soft','sweet'],'bakery',['gluten','egg'],0,1),
   F('Seaweed crisps','snack',['crunchy','salty','light'],'snacks',[],0,0),
-  F('Carrot sticks & hummus','snack',['protein','crunchy','light','ice'],'produce',['soy','seeds'],0,0),
+  F('Carrot sticks & hummus','snack',['protein','crunchy','light','ice'],'produce',['soy','seeds'],0,0,'Carrots|Hummus'),
   F('Popcorn cup','snack',['crunchy','light','salty'],'snacks',[],1,1),
   F('Dried fruit mix','snack',['chewy','sweet'],'pantry',[],0,1),
   /* drinks */
@@ -1059,7 +1079,7 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v7';      /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v8';      /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -1076,7 +1096,7 @@ function newKid(name, hue){
 }
 function newFood(kid, o){
   return {id:uid('food'), kidId:kid.id, n:o.n, c:o.c, t:(o.t||[]).slice(), a:o.a||'other',
-    al:(o.al||[]).slice(), createdAt:now(), updatedAt:now(), deletedAt:null};
+    al:(o.al||[]).slice(), buy:Array.isArray(o.buy) ? o.buy.slice() : null, createdAt:now(), updatedAt:now(), deletedAt:null};
 }
 /* the phone's IANA zone (America/New_York), or null where the browser will not say */
 function phoneTz(){ try{ return validTz(Intl.DateTimeFormat().resolvedOptions().timeZone); }catch(e){ return null; } }
@@ -1170,8 +1190,15 @@ function normFood(kid, f){
     t:(Array.isArray(f.t) ? f.t : []).filter(function(x){ return TAGS.indexOf(x) > -1; }),
     a: AISLES.indexOf(f.a) > -1 ? f.a : 'other',
     al:(Array.isArray(f.al) ? f.al : []).filter(function(x){ return ALLERGENS.some(function(y){ return y.k === x; }); }),
+    buy:normBuy(f.buy, n),
     img:(typeof f.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
     createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt), deletedAt: f.deletedAt ? safeStamp(f.deletedAt) : null};
+}
+/* what to buy for a food: its own list if it has one ([] means the food itself), else the bank's
+   list for a food of that name, so households seeded before lists existed get them too */
+function normBuy(v, name){
+  if(Array.isArray(v)) return v.map(function(x){ return safeStr(x, 40, '').trim(); }).filter(Boolean).slice(0, 8);
+  var b = bankByName(name); return b && b.buy ? b.buy.slice() : null;
 }
 function normStamped(v){
   v = plainObj(v);
@@ -1902,6 +1929,7 @@ function upcomingDates(){
   });
   return Object.keys(map).sort().map(function(d){ return {date:d, entries:map[d]}; });
 }
+function dishWords(d){ return d.slice(0, 2).join(' \u00b7 ')+(d.length > 2 ? ' +'+(d.length-2) : ''); }
 function shoppingList(){
   var rows = nullMap();
   kids().forEach(function(k){
@@ -1911,10 +1939,17 @@ function shoppingList(){
       if(d.d < t0) return;                              /* already packed; nothing left to buy for it */
       catsFor(k).forEach(function(c){
         var f = foodById(k, d.slots[c.k]); if(!f) return;
-        var key = normKey(f.n);
-        var r = rows[key] || (rows[key] = {key:key, name:f.n, aisle:f.a||'other', qty:0, forKids:[]});
-        r.qty++;
-        if(r.forKids.indexOf(k.name)<0) r.forKids.push(k.name);
+        var parts = (f.buy && f.buy.length)
+          ? f.buy.map(function(nm){ return {name:nm, aisle:ING_AISLE[normKey(nm)] || f.a || 'other', dish:f.n}; })
+          : [{name:f.n, aisle:f.a||'other', dish:null}];
+        if(parts.length === 1 && parts[0].dish && normKey(parts[0].dish).indexOf(normKey(parts[0].name).replace(/s$/,'')) > -1) parts[0].dish = null;
+        parts.forEach(function(pt){
+          var key = normKey(pt.name);
+          var r = rows[key] || (rows[key] = {key:key, name:pt.name, aisle:pt.aisle, qty:0, forKids:[], dishes:[]});
+          r.qty++;
+          if(r.forKids.indexOf(k.name)<0) r.forKids.push(k.name);
+          if(pt.dish && r.dishes.indexOf(pt.dish)<0) r.dishes.push(pt.dish);   /* the dishes it is for; a dish that is just this one thing says nothing new */
+        });
       });
     });
   });
@@ -1960,7 +1995,8 @@ function tinHTML(kid, day, mode){
     var sub = f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '');
     var tr = f ? traitsOf(f) : [];
     var mark = mode==='pack' ? '<span class="tick">'+svg('check',9)+'</span>'
-             : (day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>' : '');
+             : (day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>'
+             : (dayLabel(day.d).diff < 0 || isHelper() ? '' : '<span class="swap">'+svg('swap',12)+'</span>'));  /* the tap cue: this box can be swapped */
     h += '<button class="cmp c-'+c.k+(f?'':' empty')+(c.minor?' minor':'')+'" data-act="'+(mode==='pack'?'toggle':'slot')+'"'
       +  ' data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'"'
       +  (mode==='pack' ? ' aria-pressed="'+(packed?'true':'false')+'"' : '')+'>'
@@ -2255,7 +2291,7 @@ function viewWeek(){
   var h = '<div class="stack"><div class="spread"><div>'
     + '<p class="view-sub">'+(NUMWORD[n]||n)+' lunch'+(n===1?'':'es')+(multi ? ' · '+esc(kid.name) : '')+'</p>'
     + '<h2 class="view-title">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+'</h2></div>'
-    + '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+'Shuffle</button></div>'
+    + (isHelper() ? '' : '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+'Shuffle all</button>')+'</div>'
     + planBanner();
   if(!kid.week)
     return h + '<div class="empty"><p>Shuffle draws the week.</p></div></div>';
@@ -2264,8 +2300,8 @@ function viewWeek(){
     var l = dayLabel(day.d);
     h += '<div class="daycard'+(l.diff<0?' past':'')+'"><div class="dayhead"><div class="dayname">'+esc(l.full)
       +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):(l.diff<0?' · gone':''))+'</em></div>'
-      +  (l.diff < 0 ? '' : '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'">'
-      +  svg('dice',15)+'Re-draw</button>')+'</div>'
+      +  (l.diff < 0 || isHelper() ? '' : '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'">'
+      +  svg('dice',15)+'Shuffle</button>')+'</div>'
       +  tinHTML(kid, day, 'week') + '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day) + pickButton(kid, day) + '</div></div>';
   });
   return h + '</div>';
@@ -2280,7 +2316,8 @@ function viewShop(){
 
   var toBuy = rows.filter(function(r){ return !r.have; }).length;
   h += '<div class="spread"><span class="count">'+toBuy+' to buy'+(gated() ? '' : ' · '+(rows.length-toBuy)+' already home')+'</span>'
-    +  '<button class="btn ghost sm" data-act="copy-list">Copy list</button></div>'
+    +  '<span class="row" style="gap:6px">'+(canShare() ? '<button class="btn ghost sm" data-act="send-list" aria-label="Send the list">'+svg('share',16)+'</button>' : '')
+    +  '<button class="btn ghost sm" data-act="copy-list">Copy</button></span></div>'
     +  (gated() || premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>'+(gated() ? 'A pantry that remembers is part of the Household plan.' : 'Tick what is already home.')+'</span>'+premiumTag()+'</p>' : '');
   var groups = nullMap();
   rows.forEach(function(r){ (groups[r.aisle] = groups[r.aisle] || []).push(r); });
@@ -2290,7 +2327,7 @@ function viewShop(){
     groups[a].forEach(function(r){
       h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
-        +  (multi ? '<span class="meta">for '+esc(r.forKids.join(', '))+'</span>' : '')
+        +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
         +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
     });
     h += '</div></div>';
@@ -2325,7 +2362,7 @@ function viewFoods(){
         +  '<span class="grow"><span class="nm">'+esc(f.n)+'</span>'
         +  (v ? '<span class="meta" style="color:var(--warn)">skipped &mdash; '+esc(v)+'</span>'
              : '<span class="meta"'+(eatStats(kid,f.id).resting ? ' style="color:var(--warn)"' : '')+'>'
-                 + esc(eatLabel(kid, f.id) || AISLE_LABEL[f.a] || 'Your own')+'</span>')
+                 + esc(eatLabel(kid, f.id) || (f.buy && f.buy.length > 1 ? f.buy.join(' \u00b7 ') : AISLE_LABEL[f.a] || 'Your own'))+'</span>')
         +  '</span><button class="x" data-act="del-food" data-id="'+esc(f.id)+'" aria-label="Remove '+esc(f.n)+'">'
         +  svg('trash',17)+'</button></div>';
     });
@@ -2582,7 +2619,7 @@ function slotSheet(kidId, dayStr, cat){
   var main = foodById(kid, day.slots.main);
   var h = '<div class="row" style="gap:8px;flex-wrap:wrap">'
     + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'">'
-    + svg('dice',15)+'Re-draw this one</button>'
+    + svg('dice',15)+'Shuffle this one</button>'
     + '<button class="tg" data-act="sheet-lock" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'"'
     + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Don&#8217;t change this one</button></div>';
   if(!pool.length){
@@ -2632,7 +2669,9 @@ function addOwnSheet(){
     + catsFor(kid).map(function(c,i){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(i===0)+'">'+c.label+'</button>'; }).join('')
     + '</div></div><div class="field"><label for="nfAisle">Store aisle</label><select id="nfAisle">'
     + AISLES.map(function(a){ return '<option value="'+a+'">'+AISLE_SHORT[a]+'</option>'; }).join('')
-    + '</select></div><div class="field"><label>What it&#39;s like</label><div id="nfTags"><div class="toggles">'
+    + '</select></div><div class="field"><label for="nfBuy">To buy for it, if more than one thing</label>'
+    + '<input type="text" id="nfBuy" placeholder="Zucchini, flour, eggs" autocomplete="off" maxlength="200"></div>'
+    + '<div class="field"><label>What it&#39;s like</label><div id="nfTags"><div class="toggles">'
     + TAG_FIRST.map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="false">'+TAG_LABEL[t]+'</button>'; }).join('')
     + '</div><details class="more"><summary>More</summary><div class="toggles" style="margin-top:8px">'
     + TAGS.filter(function(t){ return TAG_FIRST.indexOf(t) < 0; }).map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="false">'+TAG_LABEL[t]+'</button>'; }).join('')
@@ -2721,7 +2760,7 @@ function render(){
 
 /* ---------------------------------------------------------------- events */
 var HELPER_OK = ['tab','toggle','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
-  'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','kid-exit'];
+  'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit'];
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
   if(!el || !S) return;
@@ -2868,7 +2907,7 @@ document.addEventListener('click', function(ev){
     var k4 = kidById(el.getAttribute('data-kid')), cat = el.getAttribute('data-cat');
     var day4 = k4.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
     var wasKept = !!(day4.lock[cat] || (day4.kidPick && day4.kidPick[cat]));
-    if(reshuffleSlot(k4, day4, cat)){ slotSheet(k4.id, day4.d, cat); render(); if(wasKept) toast('Re-drawn \u2014 it is no longer kept'); }
+    if(reshuffleSlot(k4, day4, cat)){ slotSheet(k4.id, day4.d, cat); render(); if(wasKept) toast('Shuffled \u2014 it is no longer kept'); }
     else toast('Nothing else in that category');
     return;
   }
@@ -2906,11 +2945,11 @@ document.addEventListener('click', function(ev){
     S.pantry[key] = {have:!(own(S.pantry, key) && S.pantry[key].have), at:now(), by:(deviceMember()||{}).id || null};
     save(); render(); return;
   }
-  if(act==='copy-list'){
-    var txt = shoppingList().filter(function(r){ return !r.have; })
-      .map(function(r){ return '- '+r.name+(r.qty>1?' x'+r.qty:''); }).join('\n');
+  if(act==='copy-list' || act==='send-list'){
+    var txt = listText();
     if(!txt){ toast('Nothing left to buy'); return; }
-    copy('Lunch shopping list\n'+txt, 'List copied'); return;
+    if(act==='send-list') shareText('Lunch shopping list', listText(true)); else copy(txt, 'List copied');   /* the share sheet carries the title itself */
+    return;
   }
 
   /* foods */
@@ -2934,6 +2973,7 @@ document.addEventListener('click', function(ev){
       n:n,
       c:document.querySelector('#nfCat .tg[aria-pressed="true"]').getAttribute('data-v'),
       a:document.getElementById('nfAisle').value,
+      buy:(document.getElementById('nfBuy').value||'').split(',').map(function(x){ return x.trim().slice(0, 40); }).filter(Boolean).slice(0, 8),
       t:[].slice.call(document.querySelectorAll('#nfTags .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
       al:[].slice.call(document.querySelectorAll('#nfAl .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); })
     }));
@@ -3220,6 +3260,23 @@ document.addEventListener('input', function(ev){
   }
 });
 
+/* the list as plain text, one line each, grouped by aisle, for Notes, Reminders or a text message */
+function listText(bare){
+  var rows = shoppingList().filter(function(r){ return !r.have; }), out = [], last = null;
+  rows.forEach(function(r){
+    if(r.aisle !== last){ out.push((out.length ? '\n' : '')+AISLE_SHORT[r.aisle]); last = r.aisle; }
+    out.push('- '+r.name+(r.qty>1 ? ' x'+r.qty : ''));
+  });
+  return rows.length ? (bare ? '' : 'Lunch shopping list\n\n')+out.join('\n') : '';
+}
+/* the phone's share sheet: the app's plugin inside the iPhone app, the browser's on the web */
+function canShare(){ return !!(nativePlugin('Share') || navigator.share); }
+function shareText(title, text){
+  var sh = nativePlugin('Share');
+  var p = sh ? sh.share({title:title, text:text, dialogTitle:title}) : (navigator.share ? navigator.share({title:title, text:text}) : null);
+  if(!p){ copy(text, 'List copied'); return; }
+  p.catch(function(e){ if(!/abort|cancel/i.test(String(e && (e.name || e.message)))) copy(text, 'List copied'); });
+}
 function copy(text, okMsg){
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(function(){ toast(okMsg); },

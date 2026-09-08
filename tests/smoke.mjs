@@ -307,7 +307,11 @@ try {
   check('the week says who picked, once, on that day', (await page.$$eval('.chip.picked', a => a.map(c => c.textContent))).join() === 'Nia picked');
   await page.click('[data-act="shuffle-day"][data-day="'+targetDate+'"]'); await page.waitForTimeout(300);
   const stillMain = await page.evaluate((td) => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.find(x => x.d === td).slots.main, targetDate);
-  check("a re-draw does not overwrite what the kid chose", stillMain === chosenMain);
+  check("a shuffle does not overwrite what the kid chose", stillMain === chosenMain);
+  check('every compartment that can change shows the swap cue, a locked one the lock', await page.evaluate(() => {
+    const cells = [...document.querySelectorAll('.daycard:not(.past) .cmp')];
+    return cells.length > 0 && cells.every(c => (c.querySelector('.swap') ? 1 : 0) + (c.querySelector('.lock') ? 1 : 0) === 1) && document.querySelectorAll('.daycard.past .cmp .swap').length === 0;
+  }));
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(200);
 
   /* ----------------------------------------------------------- shopping */
@@ -315,6 +319,27 @@ try {
   await page.waitForTimeout(200);
   const rows = await page.$$eval('.list .item', a => a.length);
   check('the week produces a shopping list', rows > 0, rows);
+  {
+    /* a dish goes on the list as what you buy for it: the pinwheel is deli turkey, cheese slices and tortillas */
+    const dishes = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.flatMap(k => k.week ? k.week.days.map(d => k.foods.find(f => f.id === d.slots.main)).filter(Boolean) : []));
+    const withParts = dishes.filter(f => f.buy && f.buy.length);
+    const names = await page.$$eval('.list .item .nm', a => a.map(x => x.textContent));
+    check('a dish with parts lists the parts, never the dish', withParts.length > 0 && withParts.every(f => !names.includes(f.n) && f.buy.every(b => names.includes(b))), {withParts: withParts.map(f => f.n), names});
+    const shared = await page.$$eval('.list .item', a => a.filter(x => /\u00d7\d/.test(x.querySelector('.qty').textContent)).length);
+    check('a part two dishes share is one line with a count', dishes.length < 2 || shared > 0 || new Set(withParts.flatMap(f => f.buy)).size === withParts.flatMap(f => f.buy).length, shared);
+    const fromBank = await page.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted')); const f = d.kids[0].foods.find(x => x.buy && x.buy.length); delete f.buy;   /* a food seeded before lists existed */
+      localStorage.setItem('lunchsorted', JSON.stringify(d)); return f.n;
+    });
+    await page.reload(); await page.waitForTimeout(600); await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
+    check('a food seeded before parts existed takes the bank\'s parts', fromBank && await page.evaluate((n) => { const f = JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.find(x => x.n === n); return !!(f.buy && f.buy.length); }, fromBank), fromBank);
+    check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
+    await page.context().grantPermissions(['clipboard-read','clipboard-write']);
+    await page.click('[data-act="copy-list"]'); await page.waitForTimeout(250);
+    const txt = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+    check('Copy puts the list on the clipboard grouped by aisle, one line a thing', /^Lunch shopping list\n\n[A-Z][a-z]+\n- /.test(txt) && txt.split('\n').filter(l => l.startsWith('- ')).length === (await page.$$eval('.list .item:not(.done)', a => a.length)), txt.slice(0, 80));
+    check('the share button shows only where the phone has a share sheet', (await page.$$eval('[data-act="send-list"]', a => a.length)) === (await page.evaluate(() => navigator.share ? 1 : 0)));
+  }
   const head = await page.textContent('.count');
   await page.click('.list .item');
   await page.waitForTimeout(200);
@@ -714,7 +739,7 @@ try {
   check('a re-draw in place keeps the days already gone exactly as they were (vacuous on a Monday)',
     pastAfter.n === 7 && JSON.stringify(pastAfter.slots) === JSON.stringify(pastKept), {before: pastKept, after: pastAfter});
   await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].settings.days = [1,2,3,4,5]; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
-  check('and offers no Re-draw on a day that has gone', (await page.$$eval('.daycard.past [data-act="shuffle-day"]', a => a.length)) === 0);
+  check('and offers no Shuffle on a day that has gone', (await page.$$eval('.daycard.past [data-act="shuffle-day"]', a => a.length)) === 0);
 
   /* the pack view names the last day of a plan that has gone by */
   await page.evaluate(() => {
@@ -1011,7 +1036,8 @@ try {
   const helperPut = await p3.evaluate(v => fetch('/api/household', {method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify({doc: JSON.parse(localStorage.getItem('lunchsorted')), version:v})}).then(r => r.status), helperState.version);
   check("a helper's push is refused", helperPut === 403, helperPut);
   await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
-  await p3.click('[data-act="plan-kid"]'); await p3.waitForTimeout(200);
+  check('and a helper sees no Shuffle button and no swap cue, only the week', (await p3.$$eval('[data-act="plan-kid"],[data-act="shuffle-day"],.cmp .swap', a => a.length)) === 0 && (await p3.$$eval('.cmp', a => a.length)) > 0);
+  await p3.click('.daycard:not(.past) .cmp >> nth=0'); await p3.waitForTimeout(200);
   check('and the app says so instead of pretending', /Only a parent can change the plan/.test(await p3.textContent('#toast')));
   await ctx3.close();
 

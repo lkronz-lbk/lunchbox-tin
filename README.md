@@ -27,9 +27,16 @@ food list from a 200-item library and produce a planned week immediately. From t
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
   balance, tangy against savory); each compartment carries the words the pairing used
   (crunchy, soft, protein, tangy, sweet, salty, juicy, hearty, light), two at most. Keep a
-  compartment and it survives the next shuffle; re-drawing that one compartment on purpose
-  un-keeps it.
-- **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes.
+  compartment and it survives the next shuffle; shuffling that one compartment on purpose
+  un-keeps it. Every compartment that can change shows a small swap arrow; a kept one, a lock.
+- **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes. A dish
+  goes on the list as what you buy for it (`buy` on the food: turkey and cheese pinwheels are
+  deli turkey, cheese slices and tortillas; `ING_AISLE` puts each part in its aisle), one line
+  per thing with a count, and the dishes it is for underneath. Bank foods carry their lists,
+  a food seeded before lists existed takes the bank's, and "Add your own" asks for one.
+  **Copy** puts the list on the clipboard grouped by aisle; the share button opens the phone’s share
+  sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
+  Share plugin in the iPhone app.
 - **Pack** — the next school day as a checklist, with ice-pack, sealed-container and
   no-protein flags. **Kid's pick** lives here, behind the lunchbox's "They pick their box
   each day" switch (Household plan), for the next box not yet in the bag. Two ways, chosen
@@ -39,9 +46,9 @@ food list from a 200-item library and produce a planned week immediately. From t
   box, and choosing the other trades those two parts between the days; each choice is
   saved as it is made, so stopping early keeps it. **Whole box** shows this day's box
   against the next one, and choosing the other trades the whole days. A box with anything
-  already in the bag is never offered or traded. What the kid chose locks against a re-draw
+  already in the bag is never offered or traded. What the kid chose locks against a shuffle
   and is marked `picker: 'kid'` with the adult who handed the phone over; the part or box
-  the kid passed on loses its mark. A manual swap or re-draw clears the mark. Both ways are
+  the kid passed on loses its mark. A manual swap or shuffle clears the mark. Both ways are
   in for the beta testers to compare; one may go. In the iPhone app a "Remind us the night
   before" switch with a time (on by default at 6pm beside the kid's say, household settings)
   schedules a local notification only on evenings before one of that lunchbox's pack days
@@ -67,7 +74,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   from the live week and the shopping list; past weeks keep it for history.
 - **Anchoring.** A new plan goes into this week while at least two pack days (today included)
   are still ahead and only covers the days still to come; otherwise it goes into next week. An
-  existing plan is re-drawn in place until its last day has gone by, and a re-draw never touches
+  existing plan is re-drawn in place until its last day has gone by, and a shuffle never touches
   a day that has already gone: what was packed stays exactly as it was, for the review and the
   pack ticks. The shopping list likewise skips days already gone. The morning review only asks about a
   day the plan already existed on, or that had something ticked into the bag.
@@ -202,7 +209,7 @@ the visual identity.
   home or bought ready-made. A family that never bakes should not be offered a slice of
   zucchini bread unless there is a store-bought equivalent to recommend in its place; foods
   carry a `homemade` flag and a suggested packaged stand-in.
-- **Shopping-list hand-off.** Send the week's list to Reminders, Google Keep, AnyList, or an
+- **Shopping-list hand-off.** The share sheet covers Notes, Reminders and a text; next an
   Instacart / Walmart cart, so the shop happens where the family already shops.
 - **Rated products.** Pull in product ratings (Yuka or similar) so the packaged suggestions
   above lean toward well-rated items, and flag a poorly rated pantry staple with an

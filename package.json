@@ -24,6 +24,7 @@
     "playwright": "^1.49.0"
   },
   "dependencies": {
+    "@capacitor/share": "^7.0.4",
     "@neondatabase/serverless": "^1.1.0"
   }
 }
