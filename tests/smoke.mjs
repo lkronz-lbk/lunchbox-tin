@@ -1257,12 +1257,19 @@ try {
     check('the beta page says how many spots are left and links into the app with the code', /2 spots left/.test(betaPage) && betaPage.includes('/app/?beta=BETA-TEST-1234') && !/<script/.test(betaPage), betaPage.slice(0, 200));
     const wrong = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-NOPE-0000' }) }).then(r => r.status));
     check('a wrong beta code grants nothing', wrong === 404 && ((await entPat()) || {}).plan !== 'lifetime', wrong);
+    check('a stranger cannot claim the beta', (await fetch(NODE_BASE + '/api/billing/beta', { method: 'POST', body: JSON.stringify({ code: 'BETA-TEST-1234' }) })).status === 401);
     await pb.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pb.waitForLoadState('load');
     let got = null; for (let i = 0; i < 40 && !(got && got.plan === 'lifetime'); i++) { await pb.waitForTimeout(250); got = await entPat(); }
     check('opening the beta link while signed in switches the household to forever, marked as the beta', !!got && got.plan === 'lifetime' && got.source === 'code' && got.status === 'active', got);
     check('the code leaves the address bar and the phone once used', !/beta=/.test(pb.url()) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-beta'))) === null);
     await until(pb, () => /Forever|for good/.test(document.querySelector('#view').textContent) || /free forever/.test((document.querySelector('#toast') || {}).textContent || ''));
     check('the beta page counts it', /1 spot left/.test(await (await fetch(NODE_BASE + '/beta')).text()));
+    const again = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, already: j.already }))));
+    check('claiming twice is fine and says so', again.status === 200 && again.already === true, again);
+    await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', stripe_subscription_id = 'sub_beta_x' WHERE household_id = ${patState.household.id}`);
+    const paying = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, paying: j.paying }))));
+    check('a household paying for the plan is refused the beta, so its card is not charged for nothing', paying.status === 409 && paying.paying === true && (await entPat()).plan === 'household', paying);
+    await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL WHERE household_id = ${patState.household.id}`);
     process.env.BETA_CAP = '1';
     check('at the cap the page says the beta is full', /beta is full/.test(await (await fetch(NODE_BASE + '/beta')).text()));
     await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'none' WHERE household_id = ${patState.household.id}`);

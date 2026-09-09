@@ -874,12 +874,12 @@ var BILLING_KEY = 'lunchsorted-billing', BETA_KEY = 'lunchsorted-beta';
 function betaWaiting(){ try{ return localStorage.getItem(BETA_KEY) || ''; }catch(e){ return ''; } }
 function betaForget(){ try{ localStorage.removeItem(BETA_KEY); }catch(e){} }
 function claimBeta(){
-  var code = betaWaiting(); if(!code || !signedIn() || isHelper() || claimBeta.busy) return;
-  claimBeta.busy = true;
+  var code = betaWaiting(); if(!code || !signedIn() || isHelper() || claimBeta.busy || claimBeta.tries >= 3) return;   /* three tries an open: no hammering a hiccup */
+  claimBeta.busy = true; claimBeta.tries = (claimBeta.tries || 0) + 1;
   api('POST', '/api/billing/beta', {code:code}).then(function(r){
     claimBeta.busy = false;
     if(r.status === 200){ betaForget(); UI.notice = ''; toast(r.already ? 'Lunch Sorted is already yours, for good' : 'Lunch Sorted is yours, free forever'); Sync.pull().then(render); return; }
-    if(r.status === 409){ betaForget(); UI.notice = 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
+    if(r.status === 409){ betaForget(); UI.notice = r.paying ? 'This household already pays for the Household plan, so the beta link is not for it.' : 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
     if(r.status === 404){ betaForget(); UI.notice = 'That beta link is not right. Ask for a fresh one.'; render(); return; }
     /* offline or a hiccup: the code stays, the next sign-in or pull tries again */
   }).catch(function(){ claimBeta.busy = false; });

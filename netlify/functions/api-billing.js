@@ -171,11 +171,16 @@ export default async function handler(req, context) {
     if (action === 'beta') {
       /* the beta link: forever, free, for the first BETA_CAP households; the code is in the link, the cap is the limit */
       const body = await req.json().catch(() => ({}));
+      if (await throttled('beta:' + user.id, 5, 3600)) return fail('Too many tries in an hour; try again shortly', 429);
       if (!codeMatches(body.code)) return fail('That beta link is not right', 404);
       if (h.plan === 'lifetime' && h.status === 'active') return json({ ok: true, already: true });
+      /* a household paying for the Household plan is a customer, not a tester: the card would go on being charged */
+      if (h.stripe_subscription_id && (h.status === 'active' || h.status === 'past_due')) return fail('This household already has the Household plan', 409, { paying: true });
+      /* two claims in the same instant can both pass this count and land at cap + 1: fine for a hand-shared link and a cap of 25 */
       if (await betaCount() >= betaCap()) return fail('The beta is full', 409, { full: true });
       const ok = await write(h.id, new Date().toISOString(), { plan: 'lifetime', source: 'code', status: 'active', customer: h.stripe_customer_id || null, subscription: null, price: null, paidBy: user.id });
       console.log(`billing: beta household=${h.id} ${ok ? 'on' : 'stale'}`);
+      if (!ok) return fail('Try again in a moment', 503);                /* a Stripe event stamped ahead of our clock: the code stays on the phone */
       return json({ ok: true });
     }
     const site = siteUrl(req);
