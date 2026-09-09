@@ -34,9 +34,9 @@ a{color:var(--accent)}</style></head><body><div class="card">${body}</div></body
 }
 
 /* a first sign-in gets one welcome; a failure to send never fails the sign-in */
-async function welcome(user, req) {
+async function welcome(user, req, beta) {
   if (!user.created) return;
-  try { await sendWelcome(user.email, siteUrl(req), `${siteUrl(req)}/api/auth/mail-stop?t=${await mailStopToken(user.id)}`); }
+  try { await sendWelcome(user.email, siteUrl(req), `${siteUrl(req)}/api/auth/mail-stop?t=${await mailStopToken(user.id)}`, !!beta); }   /* a beta tester's first sign-in gets the beta welcome, not the three-weeks one */
   catch (e) { console.error('welcome email', e.message); }
 }
 
@@ -71,7 +71,7 @@ export default async function handler(req, context) {
          fixed code and gets no email. The code is still only accepted for that address, still expires. */
       const review = reviewAccount(email);
       const { token, code } = await createMagicLink(email, review || undefined);
-      const link = `${siteUrl(req)}/api/auth/verify?t=${token}`;
+      const link = `${siteUrl(req)}/api/auth/verify?t=${token}${body.beta === true ? '&b=1' : ''}`;   /* the app says a beta code is waiting; only the welcome's wording rides on it */
       const sent = review ? { ok: true } : await sendMagicLink(email, link, code);
       /* the link and code come back to the caller only where a deploy has opted in (the test suite) */
       const show = sent.devLink && (siteEnv() === 'test' || process.env.DEV_LINKS === '1');
@@ -79,22 +79,22 @@ export default async function handler(req, context) {
     }
 
     if (req.method === 'GET' && action === 'verify') {
-      const t = url.searchParams.get('t') || '';
+      const t = url.searchParams.get('t') || '', b = url.searchParams.get('b') === '1';
       const email = t && await peekMagicLink(t);
       if (!email) return page('Link expired', `<h1>That link has expired.</h1><p>Sign-in links work once and last fifteen minutes. Ask for a new one from the app.</p><p><a href="/app/">Back to Lunch Sorted</a></p>`, 410);
       const nonce = verifyNonce();
       return page('Sign in', `<h1>Sign in as ${esc(email)}?</h1><p>One tap and you are signed in on this device. Building the week on your phone? Open the app there and type the code from the same email instead.</p>
-<form method="post" action="/api/auth/verify"><input type="hidden" name="t" value="${esc(t)}"><input type="hidden" name="n" value="${esc(nonce)}"><button type="submit">Continue to Lunch Sorted</button></form>`, 200, verifyCookie(nonce));
+<form method="post" action="/api/auth/verify"><input type="hidden" name="t" value="${esc(t)}"><input type="hidden" name="n" value="${esc(nonce)}">${b ? '<input type="hidden" name="b" value="1">' : ''}<button type="submit">Continue to Lunch Sorted</button></form>`, 200, verifyCookie(nonce));
     }
 
     if (req.method === 'POST' && action === 'verify') {
       const ip = ipKey(clientIp(req, context));
       if (ip && await throttled('verify-ip:' + ip, 20, 15 * 60)) return fail('Too many attempts; try again in a few minutes', 429);
       const ctype = req.headers.get('content-type') || '';
-      let token, kind = 'web';
-      if (ctype.includes('application/json')) { const b = await req.json().catch(() => ({})); token = b.token; kind = b.kind === 'native' ? 'native' : 'web'; }
+      let token, kind = 'web', beta = false;
+      if (ctype.includes('application/json')) { const b = await req.json().catch(() => ({})); token = b.token; kind = b.kind === 'native' ? 'native' : 'web'; beta = b.beta === true; }
       else {
-        const form = await req.formData().catch(() => null); token = form && form.get('t');
+        const form = await req.formData().catch(() => null); token = form && form.get('t'); beta = !!(form && form.get('b') === '1');
         /* the button must be pressed on our own page: same origin, and the nonce the page set */
         const nonce = form && form.get('n'), cookieNonce = verifyCookieFrom(req);
         if (!sameOrigin(req, siteUrl(req)) || !nonce || !cookieNonce || nonce !== cookieNonce)
@@ -107,7 +107,7 @@ export default async function handler(req, context) {
       }
       const user = await findOrCreateUser(email);
       const session = await createSession(user.id, kind);
-      await welcome(user, req);
+      await welcome(user, req, beta);
       if (kind === 'native') return json({ token: session, user: { id: user.id, email: user.email, name: user.name } });
       const h = new Headers({ location: '/app/?signed-in=1' });
       h.append('set-cookie', sessionCookie(session)['set-cookie']);
@@ -125,7 +125,7 @@ export default async function handler(req, context) {
       if (!ok) return fail('That code is not right, or it has expired. Codes work once, for fifteen minutes.', 410);
       const user = await findOrCreateUser(email);
       const session = await createSession(user.id, 'web');
-      await welcome(user, req);
+      await welcome(user, req, body.beta === true);
       return json({ ok: true, user: { id: user.id, email: user.email, name: user.name } }, 200, sessionCookie(session));
     }
 

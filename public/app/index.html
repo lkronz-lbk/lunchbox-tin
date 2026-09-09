@@ -3179,7 +3179,7 @@ document.addEventListener('click', function(ev){
     if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(em)){ inp.focus(); toast('That does not look like an email address'); return; }
     Account.sending = true; UI.obDraft = em; render();
     if(UI.obEmail) rememberAfter('week');                    /* the link, tapped, lands on the week it promised */
-    api('POST', '/api/auth/request', {email:em}).then(function(r){
+    api('POST', '/api/auth/request', {email:em, beta:!!betaWaiting()}).then(function(r){
       Account.sending = false;
       if(r.status !== 200){ render(); toast(r.error || 'Could not send the link'); return; }
       Account.linkSent = em; Account.devLink = r.devLink || ''; Account.devCode = r.devCode || ''; UI.obDraft = ''; render(); toast('Check your email');
@@ -3190,7 +3190,7 @@ document.addEventListener('click', function(ev){
   if(act==='signin-code'){
     var codeEl = document.getElementById('signinCode'), code = (codeEl.value || '').trim();
     if(code.replace(/[^A-Za-z0-9]/g, '').length < 8){ codeEl.focus(); toast('The code is eight letters and numbers'); return; }
-    api('POST', '/api/auth/code', {email:Account.linkSent, code:code}).then(function(r){
+    api('POST', '/api/auth/code', {email:Account.linkSent, code:code, beta:!!betaWaiting()}).then(function(r){
       if(r.status !== 200){ toast(r.error || 'That code did not work'); return; }
       Account.user = r.user; Account.linkSent = ''; Account.devLink = ''; Account.devCode = ''; Account.first = true; UI.obEmail = false;
       return Sync.pull().then(function(){ render(); toast('Signed in'); });

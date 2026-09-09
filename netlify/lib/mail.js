@@ -46,8 +46,14 @@ export async function sendMagicLink(to, link, code) {
   return r.logged || r.captured ? { devLink: link, devCode: code } : {};
 }
 
-export function sendWelcome(to, site, stopUrl) {
+export function sendWelcome(to, site, stopUrl, beta) {
   const app = `${site}/app/`;
+  if (beta) return send({
+    to,
+    subject: 'You\u2019re in the beta. Lunch Sorted is yours, free forever.',
+    text: `Thank you for beta testing Lunch Sorted.\n\nYou are signed in, and the moment the app opens, everything is on for your household, for good: every lunchbox, kid's pick, the morning review, a pantry that remembers, and the other parent's phone. No card, ever.\n\nOpen the planner: ${app}\n\nWorth doing this week: add it to your phone's home screen (on iPhone: Share, then Add to Home Screen), and invite the other parent from Account so you both see the same week.\n\nThree short emails in your first week say what to try and where to give feedback. Reply to any of them and I read it.\n\nLiz` + foot(stopUrl).text,
+    html: `<p>Thank you for beta testing Lunch Sorted.</p><p>You are signed in, and the moment the app opens, everything is on for your household, for good: every lunchbox, kid\u2019s pick, the morning review, a pantry that remembers, and the other parent\u2019s phone. No card, ever.</p>${btn(app, 'Open the planner')}<p>Worth doing this week: add it to your phone\u2019s home screen (on iPhone: Share, then <b>Add to Home Screen</b>), and invite the other parent from Account so you both see the same week.</p><p>Three short emails in your first week say what to try and where to give feedback. Reply to any of them and I read it.</p><p>Liz</p>` + foot(stopUrl).html
+  });
   return send({
     to,
     subject: 'You’re in. Everything is on for three weeks.',

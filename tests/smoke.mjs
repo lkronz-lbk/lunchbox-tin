@@ -1277,6 +1277,15 @@ try {
     process.env.BETA_CAP = '0';                                   /* closed: nobody else gets in, whatever the count */
     const full = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, full: j.full }))));
     check('and a claim past the cap is refused', full.status === 409 && full.full === true, full);
+    /* a tester's first sign-in gets the beta welcome, not the three-weeks one: the flag rides on the link and the code */
+    {
+      const rq = await (await fetch(NODE_BASE + '/api/auth/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'betawelcome@example.com', beta: true }) })).json();
+      check('a sign-in link asked for with a beta code waiting carries the mark', /&b=1$/.test(rq.devLink || ''), rq);
+      const tok = new URL(rq.devLink).searchParams.get('t');
+      const v = await fetch(NODE_BASE + '/api/auth/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: tok, kind: 'native', beta: true }) });
+      const w = mails.filter(m => m.to === 'betawelcome@example.com' && /beta/.test(m.subject));
+      check('and the welcome says free forever, not three weeks', v.status === 200 && w.length === 1 && /free forever/.test(w[0].subject) && !mails.some(m => m.to === 'betawelcome@example.com' && /three weeks/.test(m.subject)), w.map(m => m.subject));
+    }
     process.env.BETA_CAP = '2';
     await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'none', event_at = NULL, paid_by = NULL, stripe_customer_id = NULL, stripe_subscription_id = NULL, stripe_price_id = NULL WHERE household_id = ${patState.household.id}`);   /* back to a fresh household for the checkout tests */
     await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
