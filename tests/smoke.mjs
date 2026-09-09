@@ -344,6 +344,8 @@ try {
     /* an update says what changed, once, and only to a phone that already had the app */
     check('a phone that had the app is told what changed on the first open after an update', await page.evaluate(() => { localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'); return true; })
       && (await page.reload(), await page.waitForTimeout(600), /New: /.test(await page.textContent('#view'))) && (await page.$$eval('[data-act="notice-dismiss"]', a => a.length)) === 1);
+    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
+    check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="notice-dismiss"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
     await page.click('[data-act="notice-dismiss"]'); await page.waitForTimeout(200); await page.reload(); await page.waitForTimeout(600);
     check('and once dismissed it stays gone', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);

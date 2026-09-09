@@ -198,6 +198,7 @@ input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:foc
 .empty{border:2px dashed var(--line);border-radius:var(--r-lg);padding:26px 20px;text-align:center;display:flex;
   flex-direction:column;gap:12px;align-items:center;background:var(--surface)}
 .empty p{margin:0;color:var(--ink-2);font-size:14px;max-width:38ch}
+.banner.good{background:var(--accent-soft);color:var(--accent)}
 .banner{background:var(--warn-soft);color:var(--warn);border-radius:var(--r-md);padding:11px 13px;font-size:13.5px;
   display:flex;gap:10px;align-items:center;justify-content:space-between}
 
@@ -1083,12 +1084,12 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
 var APP_BUILD = 'lunchsorted-v10';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v10', text:'New: the shopping list shows what to buy, and one tick packs a box.'};
+var WHATS_NEW = {build:'lunchsorted-v10', text:'New: the shopping list is now ingredients by aisle, and one Packed tick fills the box.'};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
 function whatsNew(){
   var seen = ''; try{ seen = localStorage.getItem(SEEN_KEY) || ''; }catch(e){}
-  if(!seen && !S.onboardedAt){ markSeen(); return; }                 /* a phone new to the app has nothing to be told */
+  if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
   if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text && !UI.notice) UI.notice = WHATS_NEW.text;
 }
 var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
@@ -2084,7 +2085,7 @@ function noticeBanner(){
   if(!msg && signedIn() && Account.status === 'error' && Account.tries >= RETRY_WAITS.length && UI.tab !== 'setup')
     return '<div class="banner"><span>Not sent to the other phone yet \u2014 it goes with your next change.</span></div>';
   if(!msg) return '';
-  return '<div class="banner"><span>'+esc(msg)+'</span>'
+  return '<div class="banner'+(msg === WHATS_NEW.text ? ' good' : '')+'"><span>'+esc(msg)+'</span>'
     + (UI.notice ? '<button class="btn sm ghost" data-act="notice-dismiss">OK</button>' : '')+'</div>';
 }
 function noFoodsEmpty(){
@@ -2242,11 +2243,11 @@ function pickButton(kid, day){
 function viewPack(){
   var ks = kids(), multi = ks.length>1;
   if(!ks.some(function(k){ return foodsOf(k).length; }))
-    return '<div class="stack"><p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
+    return '<div class="stack">'+noticeBanner()+'<p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
 
   var dates = upcomingDates();
   if(!dates.length)
-    return '<div class="stack"><p class="view-sub">Pack list</p><h2 class="view-title">No plan yet</h2>'
+    return '<div class="stack">'+noticeBanner()+'<p class="view-sub">Pack list</p><h2 class="view-title">No plan yet</h2>'
       + '<div class="empty"><p>Draw a week and this page is the morning&#8217;s box.</p>'
       + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
 
@@ -2254,7 +2255,8 @@ function viewPack(){
   var slot = dates.filter(function(x){ return x.date>=t; })[0] || dates[dates.length-1];
   var lab = dayLabel(slot.date);
 
-  var h = '<div class="stack">' + noticeBanner() + trialBanner() + planBanner();
+  var news = UI.notice === WHATS_NEW.text;                        /* news waits behind the trial and the plan; an error does not */
+  var h = '<div class="stack">' + (news ? trialBanner() + planBanner() + noticeBanner() : noticeBanner() + trialBanner() + planBanner());
   ks.forEach(function(k){
     var rd = reviewDay(k); if(!rd) return;
     if(UI.reviewLater[k.id] === rd.d) return;                       /* "Not now" on a locked card: gone for this open, the answers untouched */
@@ -2769,11 +2771,11 @@ function render(){
   document.getElementById('view').innerHTML =
       UI.box           ? viewBox()
     : UI.tab==='pack'  ? viewPack()
-    : (UI.notice ? '<div class="stack">'+noticeBanner()+'</div>' : '') + (   /* a notice is read on whichever tab the app opened on; Pack draws its own */
+    : '<div class="stack">' + (UI.notice ? noticeBanner() : '') + (   /* a notice is read on whichever tab the app opened on; Pack draws its own */
       UI.tab==='week'  ? viewWeek()
     : UI.tab==='shop'  ? viewShop()
     : UI.tab==='foods' ? viewFoods()
-    : viewSetup());
+    : viewSetup()) + '</div>';
   document.getElementById('tabs').innerHTML = TABS.map(function(t){
     return '<button data-act="tab" data-tab="'+t.k+'" aria-current="'+(UI.tab===t.k)+'">'
       + svg(t.icon)+'<span>'+t.label+'</span></button>'; }).join('');
