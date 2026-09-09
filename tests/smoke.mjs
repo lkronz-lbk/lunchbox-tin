@@ -1262,7 +1262,8 @@ try {
     let got = null; for (let i = 0; i < 40 && !(got && got.plan === 'lifetime'); i++) { await pb.waitForTimeout(250); got = await entPat(); }
     check('opening the beta link while signed in switches the household to forever, marked as the beta', !!got && got.plan === 'lifetime' && got.source === 'code' && got.status === 'active', got);
     check('the code leaves the address bar and the phone once used', !/beta=/.test(pb.url()) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-beta'))) === null);
-    await until(pb, () => /Forever|for good/.test(document.querySelector('#view').textContent) || /free forever/.test((document.querySelector('#toast') || {}).textContent || ''));
+    await until(pb, () => /The beta is on/.test(document.querySelector('#view').textContent));
+    check('and the app says so where it stays, in green', !!(await pb.$('.banner.good [data-act="notice-dismiss"]')));
     check('the beta page counts it', /1 spot left/.test(await (await fetch(NODE_BASE + '/beta')).text()));
     const again = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, already: j.already }))));
     check('claiming twice is fine and says so', again.status === 200 && again.already === true, again);

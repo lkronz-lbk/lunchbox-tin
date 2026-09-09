@@ -869,20 +869,21 @@ function nativePlugin(name){ try{ return native() && window.Capacitor.Plugins &&
 /* ---- billing: the plan is a row on the household that only Stripe's webhook writes.
    Free is one lunchbox on one phone; the Household plan is every lunchbox and the other
    parent's phone. When billing is not switched on (no Stripe in this deploy) nothing is gated. */
-var BILLING_KEY = 'lunchsorted-billing', BETA_KEY = 'lunchsorted-beta';
+var BILLING_KEY = 'lunchsorted-billing', BETA_KEY = 'lunchsorted-beta', BETA_ON = 'The beta is on: Lunch Sorted is yours, free forever.';
 /* the beta link: the code waits on this phone until a parent is signed in, then one request switches the plan on */
 function betaWaiting(){ try{ return localStorage.getItem(BETA_KEY) || ''; }catch(e){ return ''; } }
 function betaForget(){ try{ localStorage.removeItem(BETA_KEY); }catch(e){} }
 function claimBeta(){
-  var code = betaWaiting(); if(!code || !signedIn() || isHelper() || claimBeta.busy || claimBeta.tries >= 3) return;   /* three tries an open: no hammering a hiccup */
-  claimBeta.busy = true; claimBeta.tries = (claimBeta.tries || 0) + 1;
+  var code = betaWaiting(); if(!code || !signedIn() || claimBeta.busy || claimBeta.tries >= 3) return;   /* three tries an open: no hammering a hiccup */
+  if(isHelper()){ betaForget(); UI.notice = 'The beta link is for a parent\u2019s sign-in.'; render(); return; }
+  claimBeta.busy = true; claimBeta.tries = (claimBeta.tries || 0) + 1; claimBeta.failed = false;
   api('POST', '/api/billing/beta', {code:code}).then(function(r){
     claimBeta.busy = false;
-    if(r.status === 200){ betaForget(); UI.notice = ''; toast(r.already ? 'Lunch Sorted is already yours, for good' : 'Lunch Sorted is yours, free forever'); Sync.pull().then(render); return; }
+    if(r.status === 200){ betaForget(); UI.notice = BETA_ON; toast(r.already ? 'Lunch Sorted is already yours, for good' : 'Lunch Sorted is yours, free forever'); Sync.pull().then(render); return; }
     if(r.status === 409){ betaForget(); UI.notice = r.paying ? 'This household already pays for the Household plan, so the beta link is not for it.' : 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
     if(r.status === 404){ betaForget(); UI.notice = 'That beta link is not right. Ask for a fresh one.'; render(); return; }
-    /* offline or a hiccup: the code stays, the next sign-in or pull tries again */
-  }).catch(function(){ claimBeta.busy = false; });
+    claimBeta.failed = true; render();                             /* a hiccup: the code stays, the banner offers another go */
+  }).catch(function(){ claimBeta.busy = false; claimBeta.failed = true; render(); });
 }
 function paid(){ var e = Account.entitlement; return !!(e && e.plan !== 'free' && (e.status === 'active' || e.status === 'past_due')); }
 function billingOn(){ return !!(Account.billing && Account.billing.enabled) && !isHelper(); }
@@ -2100,13 +2101,18 @@ function noticeBanner(){
     if(Account.status === 'syncing' || Account.busy) return '<div class="banner"><span>Getting your lunches back\u2026</span></div>';
     if(Account.status === 'error') return '<div class="banner"><span>Could not reach your lunches.</span><button class="btn sm primary" data-act="sync-now">Try again</button></div>';
   }
+  if(betaWaiting() && !UI.notice && S.onboardedAt && !isHelper()){
+    if(!signedIn()) return '<div class="banner good"><span>Sign in and the beta switches on: Lunch Sorted, free forever.</span>'+(UI.tab === 'setup' ? '' : '<button class="btn sm ghost" data-act="tab" data-tab="setup">Sign in</button>')+'</div>';
+    if(claimBeta.failed) return '<div class="banner"><span>Could not switch the beta on.</span><button class="btn sm ghost" data-act="beta-retry">Try again</button></div>';
+    return '<div class="banner good"><span>Switching the beta on\u2026</span></div>';
+  }
   var msg = UI.notice || (!Store.ok ? (native() ? 'This phone' : 'This browser')+' is not letting the app save. Changes will be lost when you close it.' : '');
   if(!msg && Account.join && UI.tab !== 'setup')
     return '<div class="banner"><span>'+esc(Account.join.from || 'Someone')+' invited you to share their lunches.</span><button class="btn sm primary" data-act="tab" data-tab="setup">Have a look</button></div>';
   if(!msg && signedIn() && Account.status === 'error' && Account.tries >= RETRY_WAITS.length && UI.tab !== 'setup')
     return '<div class="banner"><span>Not sent to the other phone yet \u2014 it goes with your next change.</span></div>';
   if(!msg) return '';
-  return '<div class="banner'+(msg === WHATS_NEW.text ? ' good' : '')+'"><span>'+esc(msg)+'</span>'
+  return '<div class="banner'+(msg === WHATS_NEW.text || msg === BETA_ON ? ' good' : '')+'"><span>'+esc(msg)+'</span>'
     + (UI.notice ? '<button class="btn sm ghost" data-act="notice-dismiss">OK</button>' : '')+'</div>';
 }
 function noFoodsEmpty(){
@@ -2128,6 +2134,7 @@ function viewObEmail(){
   var back = !S.onboardedAt;                                /* a returning parent on a fresh phone, not a new one */
   if(!sent){
     h += (back ? '<h1>Welcome back. Where should we send the sign-in link?</h1><p class="lede">Your lunches come back to this phone the moment you are signed in. No password, ever.</p></div>'
+               : betaWaiting() ? '<h1>Your week is ready. Sign in and the beta switches on.</h1><p class="lede">Lunch Sorted, free forever, for your household. No password, ever.</p></div>'
                : '<h1>Your week is ready. Where should we send the sign-in link?</h1><p class="lede">So the lunches are safe if this phone is lost, and the other parent can see the same week. No password, ever.</p></div>')
       +  '<div class="q"><label for="signinEmail">Your email</label><input type="email" id="signinEmail" value="'+esc(UI.obDraft || '')+'" placeholder="you@example.com" autocomplete="email" inputmode="email" enterkeyhint="send"></div>'
       +  '<button class="btn primary wide go" data-act="signin-request"'+(Account.sending ? ' disabled' : '')+'>'+(Account.sending ? 'Sending\u2026' : 'Email me the link')+'</button>'
@@ -3021,6 +3028,7 @@ document.addEventListener('click', function(ev){
   /* foods */
   if(act==='ideas'){ ideasSheet(); return; }
   if(act==='help'){ helpSheet(); return; }
+  if(act==='beta-retry'){ claimBeta.tries = 0; claimBeta.failed = false; claimBeta(); render(); return; }
   if(act==='help-site'){ var hb = nativePlugin('Browser'); if(hb) hb.open({url: location.origin+'/help.html'}).catch(function(){}); return; }
   if(act==='add-idea'){
     var b = BANK.filter(function(x){ return x.n===el.getAttribute('data-name'); })[0];
@@ -3404,7 +3412,6 @@ Store.load().then(function(r){
   }
   var betaCode = qs.get('beta') || '';
   if(/^[A-Za-z0-9-]{8,64}$/.test(betaCode)){ try{ localStorage.setItem(BETA_KEY, betaCode); }catch(e){} UI.tab = 'setup'; Account.first = true; }
-  if(betaWaiting() && !signedIn()) UI.notice = 'Sign in with your email and the beta switches on: Lunch Sorted, free forever.';
   var joinCode = qs.get('join') || (function(){ try{ return localStorage.getItem('lunchsorted-join') || ''; }catch(e){ return ''; } })();
   if(joinCode){ try{ localStorage.setItem('lunchsorted-join', joinCode); }catch(e){} UI.tab = 'setup'; }
   var back = qs.get('paid'), portalBack = qs.get('portal'), wantUpgrade = qs.get('upgrade') === '1';
