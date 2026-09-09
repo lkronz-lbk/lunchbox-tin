@@ -21,6 +21,11 @@ p{color:var(--ink-2);margin:0 0 14px;max-width:60ch} strong{color:var(--ink)} li
 .btn{display:inline-flex;align-items:center;min-height:48px;padding:0 22px;border-radius:14px;background:var(--accent);color:var(--accent-fg);font-weight:600;text-decoration:none;margin:8px 0 6px}
 .left{font:600 13px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 22px}
 a{color:var(--accent)}
+.signup{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 6px;max-width:460px}
+.signup input[type=email]{flex:1 1 220px;min-height:48px;padding:0 15px;border-radius:13px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit}
+.signup input[type=email]:focus{border-color:var(--accent);outline:none}
+.signup .btn{margin:0;border:0;font:inherit;font-weight:600;cursor:pointer}
+.hp{position:absolute;left:-9999px}
 .go{display:flex;flex-wrap:wrap;gap:8px 28px;align-items:flex-start}
 .go>div{flex:none}
 .qr{display:none;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);max-width:220px}
@@ -41,7 +46,16 @@ export default async function handler(req) {
 <p><strong>In return:</strong> pack real lunchboxes with it, add your own foods, shop from its list, let the kids pick their box, and tell us everything.</p>
 <p>Three short emails in your first week say what to try and where to give us feedback.</p>
 <p><strong>Open this on the phone you pack lunches with.</strong> Setup takes under a minute; your email is what keeps your household yours.</p>`;
-    if (!left) return page('The beta is full', `<p class="eyebrow">Lunch Sorted beta</p><h1>The beta is full.</h1><p>Thank you for wanting in. Every new household still gets the whole app for three weeks, no card: <a href="/">lunchsorted.app</a>.</p>`);
+    if (!left) return page('The beta is full', `<p class="eyebrow">Lunch Sorted beta</p><h1>Oh no, the beta is full!</h1>
+<p>Thank you for wanting in. Leave your email and I will tell you about the next round of testing, and the launch.</p>
+<form name="waitlist" method="POST" action="/on-the-list.html" data-netlify="true" netlify-honeypot="bot-field" class="signup">
+  <input type="hidden" name="form-name" value="waitlist"><input type="hidden" name="source" value="beta-full">
+  <label for="wlEmail" class="hp">Email address</label>
+  <input id="wlEmail" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
+  <button class="btn" type="submit">Add me to the list</button>
+  <p class="hp" aria-hidden="true"><label>Leave this empty: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
+</form>
+<p style="font-size:14px">Every new household still gets the whole app for three weeks, no card: <a href="/">lunchsorted.app</a>.</p>`);
     return page('Join the beta', `<p class="eyebrow">Lunch Sorted beta</p><h1>Sick of thinking about what to pack for lunch, for the next 15 years?</h1>${ask}
 <div class="go"><div><a class="btn" href="/app/?beta=${encodeURIComponent(code)}">Join the beta</a>
 <p class="left">${esc(left)} spot${left === 1 ? '' : 's'} left</p></div>${qr ? `<div class="qr">${qr}<p>On a laptop? Scan this with your phone instead.</p></div>` : ''}</div>`);

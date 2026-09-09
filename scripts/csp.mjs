@@ -79,7 +79,7 @@ if (process.argv[1] && process.argv[1].endsWith('csp.mjs')) {
   let toml = fs.readFileSync('netlify.toml', 'utf8');
   if (process.argv.includes('--check')) {
     const have = readPolicies(toml);
-    const want = {'/app/*': APP_CSP, '/': LANDING_CSP, '/index.html': LANDING_CSP, '/privacy.html': SITE_CSP, '/terms.html': SITE_CSP, '/help.html': SITE_CSP, '/feedback.html': SITE_CSP, '/thanks.html': SITE_CSP, '/back.html': BACK_CSP};
+    const want = {'/app/*': APP_CSP, '/': LANDING_CSP, '/index.html': LANDING_CSP, '/privacy.html': SITE_CSP, '/terms.html': SITE_CSP, '/help.html': SITE_CSP, '/feedback.html': SITE_CSP, '/thanks.html': SITE_CSP, '/on-the-list.html': SITE_CSP, '/back.html': BACK_CSP};
     const stale = Object.keys(want).filter(p => have[p] !== want[p]);
     if (stale.length) { console.error('netlify.toml CSP is stale for ' + stale.join(', ') + ' — run `npm run csp`'); process.exit(1); }
     console.log('CSP up to date'); process.exit(0);
@@ -92,7 +92,7 @@ if (process.argv[1] && process.argv[1].endsWith('csp.mjs')) {
   };
   put('/app/*', APP_CSP);
   ['/', '/index.html'].forEach(p => put(p, LANDING_CSP));
-  ['/privacy.html', '/terms.html', '/help.html', '/feedback.html', '/thanks.html'].forEach(p => put(p, SITE_CSP));
+  ['/privacy.html', '/terms.html', '/help.html', '/feedback.html', '/thanks.html', '/on-the-list.html'].forEach(p => put(p, SITE_CSP));
   put('/back.html', BACK_CSP);
   fs.writeFileSync('netlify.toml', toml);
   console.log('CSP written:', hashes.length, 'script hash(es)');
