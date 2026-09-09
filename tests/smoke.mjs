@@ -1294,7 +1294,7 @@ try {
       const v = await fetch(NODE_BASE + '/api/auth/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: tok, kind: 'native', beta: true }) });
       const w = mails.filter(m => m.to === 'betawelcome@example.com' && /beta/.test(m.subject));
       check('and the welcome says free forever, not three weeks', v.status === 200 && w.length === 1 && /free forever/.test(w[0].subject) && !mails.some(m => m.to === 'betawelcome@example.com' && /three weeks/.test(m.subject)), w.map(m => m.subject));
-      check('and invites them to the testers\' Facebook group', w.length === 1 && /fb\.me\/g\//.test(w[0].text) && /Join us on Facebook/.test(w[0].html));
+      check('and invites them to the testers\' Facebook group', w.length === 1 && /fb\.me\/g\//.test(w[0].text) && /private Facebook group/.test(w[0].html));
     }
     process.env.BETA_CAP = '2';
     await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'none', event_at = NULL, paid_by = NULL, stripe_customer_id = NULL, stripe_subscription_id = NULL, stripe_price_id = NULL WHERE household_id = ${patState.household.id}`);   /* back to a fresh household for the checkout tests */
