@@ -102,7 +102,7 @@
   status = 302
 
 [[redirects]]
-  from = "/join"
+  from = "/tester"
   to = "/beta?utm_source=share&utm_medium=link&utm_campaign=beta"
   status = 302
 
