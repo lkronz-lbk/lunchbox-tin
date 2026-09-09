@@ -54,8 +54,7 @@ export default async function handler(req) {
   <input id="wlEmail" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
   <button class="btn" type="submit">Add me to the list</button>
   <p class="hp" aria-hidden="true"><label>Leave this empty: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
-</form>
-<p style="font-size:14px">Every new household still gets the whole app for three weeks, no card: <a href="/">lunchsorted.app</a>.</p>`);
+</form>`);
     return page('Join the beta', `<p class="eyebrow">Lunch Sorted beta</p><h1>Sick of thinking about what to pack for lunch, for the next 15 years?</h1>${ask}
 <div class="go"><div><a class="btn" href="/app/?beta=${encodeURIComponent(code)}">Join the beta</a>
 <p class="left">${esc(left)} spot${left === 1 ? '' : 's'} left</p></div>${qr ? `<div class="qr">${qr}<p>On a laptop? Scan this with your phone instead.</p></div>` : ''}</div>`);
