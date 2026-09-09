@@ -39,7 +39,7 @@ npm run migrate       # apply netlify/database/migrations/*.sql (needs NETLIFY_D
 ```
 
 Run `npm run csp` before every commit that touches the app; `npm test` refuses a stale hash.
-Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
+Bump `VERSION` in `public/app/sw.js` and `APP_BUILD` in `public/app/index.html` on every deploy that changes the app, and write that build's `WHATS_NEW` line beside `APP_BUILD` (`npm run csp` refuses a stale one).
 
 ## Layout
 

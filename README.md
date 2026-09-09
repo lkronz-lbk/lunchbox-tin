@@ -206,6 +206,18 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
+- **Help** — the ? at the top of every tab opens a sheet: five one-line answers, "Ask a
+  question" (the feedback email with the build and phone filled in) and "More answers", which
+  is `public/help.html`, the longer FAQ on the site (linked from the site footer).
+
+### Releasing an app change
+
+Bump `APP_BUILD` in `public/app/index.html` and `VERSION` in `public/app/sw.js` together, and
+write that build's `WHATS_NEW` line beside them: one sentence a parent sees once, on the first
+open after the update, with an OK (a phone new to the app is never shown it). `npm run csp`
+refuses a build whose note names an older build, so the note cannot be forgotten; set the
+text to `''` for a release with nothing to say.
+
 ### Backlog (ideas to revisit, not scheduled)
 
 - **Home-cooked or store-bought.** Setup asks whether sides and sweets are mostly cooked at

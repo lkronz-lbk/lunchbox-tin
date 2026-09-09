@@ -341,11 +341,24 @@ try {
     });
     await page.reload(); await page.waitForTimeout(600); await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('a food seeded before parts existed takes the bank\'s parts', fromBank && await page.evaluate((n) => { const f = JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.find(x => x.n === n); return !!(f.buy && f.buy.length); }, fromBank), fromBank);
+    /* an update says what changed, once, and only to a phone that already had the app */
+    check('a phone that had the app is told what changed on the first open after an update', await page.evaluate(() => { localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'); return true; })
+      && (await page.reload(), await page.waitForTimeout(600), /New: /.test(await page.textContent('#view'))) && (await page.$$eval('[data-act="notice-dismiss"]', a => a.length)) === 1);
+    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
+    check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="notice-dismiss"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
+    await page.click('[data-act="notice-dismiss"]'); await page.waitForTimeout(200); await page.reload(); await page.waitForTimeout(600);
+    check('and once dismissed it stays gone', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
     await page.context().grantPermissions(['clipboard-read','clipboard-write']);
     await page.click('[data-act="copy-list"]'); await page.waitForTimeout(250);
     const txt = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
     check('Copy puts the list on the clipboard grouped by aisle, one line a thing', /^Lunch shopping list\n\n[A-Z][a-z]+\n- /.test(txt) && txt.split('\n').filter(l => l.startsWith('- ')).length === (await page.$$eval('.list .item:not(.done)', a => a.length)), txt.slice(0, 80));
+    await page.click('[data-act="help"]'); await page.waitForTimeout(300);
+    check('the ? at the top opens help: questions, a way to write in, and the page on the site', (await page.$$eval('#sheetBody details', a => a.length)) >= 4 && !!(await page.$('#sheetBody a[data-feedback][href^="mailto:"]')) && !!(await page.$('#sheetBody a[href="/help.html"]')));
+    await page.evaluate(() => document.querySelector('#sheetBody details summary').click()); await page.waitForTimeout(150);
+    check('and an answer opens on a tap', await page.$eval('#sheetBody details', d => d.open));
+    await page.click('#sheetClose'); await page.waitForTimeout(250);
     check('the share button shows only where the phone has a share sheet', (await page.$$eval('[data-act="send-list"]', a => a.length)) === (await page.evaluate(() => navigator.share ? 1 : 0)));
   }
   const head = await page.textContent('.count');
@@ -900,7 +913,7 @@ try {
 
   /* the site is served under its real CSP (the server above enforces netlify.toml) */
   check('the app runs under the generated Content-Security-Policy', !!POLICIES['/app/*'] && POLICIES['/app/*'].includes('sha256-'));
-  check('the marketing pages carry a CSP too', !!POLICIES['/index.html'] && !!POLICIES['/privacy.html'] && !!POLICIES['/terms.html']);
+  check('the marketing pages carry a CSP too', !!POLICIES['/index.html'] && !!POLICIES['/privacy.html'] && !!POLICIES['/terms.html'] && !!POLICIES['/help.html'] && /googletagmanager/.test(POLICIES['/index.html']) && !/googletagmanager/.test(POLICIES['/help.html']));
 
   /* --------------------------------------------- the old name's data survives */
   for (const oldKey of ['fiveboxes', 'lunchbox-tin']) {
@@ -1508,6 +1521,8 @@ try {
   check('the waitlist form is wired to Netlify',
     await site.$eval('form.signup', f => f.getAttribute('data-netlify') === 'true' &&
       !!f.querySelector('input[name="form-name"]')));
+  await site.goto(BASE+'/help.html'); await site.waitForTimeout(250);
+  check('the help page answers the questions and points at the planner and the address', /pick the week/.test(await site.textContent('body')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href^="mailto:hello@lunchsorted.app"]')));
   await site.goto(BASE+'/privacy.html');
   await site.waitForTimeout(250);
   warn('the privacy page has a real contact address, not the placeholder',

@@ -198,6 +198,7 @@ input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:foc
 .empty{border:2px dashed var(--line);border-radius:var(--r-lg);padding:26px 20px;text-align:center;display:flex;
   flex-direction:column;gap:12px;align-items:center;background:var(--surface)}
 .empty p{margin:0;color:var(--ink-2);font-size:14px;max-width:38ch}
+.banner.good{background:var(--accent-soft);color:var(--accent)}
 .banner{background:var(--warn-soft);color:var(--warn);border-radius:var(--r-md);padding:11px 13px;font-size:13.5px;
   display:flex;gap:10px;align-items:center;justify-content:space-between}
 
@@ -492,6 +493,7 @@ var I = {
   check:'<path d="M4 12.5l5 5L20 6.5"/>',
   swap:'<path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/>',
   share:'<path d="M12 3v12"/><path d="M7.5 7.5L12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
+  help:'<circle cx="12" cy="12" r="9"/><path d="M9.4 9.6a2.6 2.6 0 1 1 3.7 2.4c-.7.4-1.1.9-1.1 1.7"/><circle cx="12" cy="16.8" r=".7" fill="currentColor" stroke="none"/>',
   lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7a3.5 3.5 0 0 1 7 0v3.5"/>',
   dice:'<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="9" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.3" fill="currentColor" stroke="none"/>',
   trash:'<path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M7 7l1 12.2A1.8 1.8 0 0 0 9.8 21h4.4a1.8 1.8 0 0 0 1.8-1.8L17 7"/>',
@@ -831,7 +833,7 @@ var Store = {
     }catch(e){ return false; }
   },
   forget:function(){
-    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen'].concat(Store.PRIOR_KEYS, Store.backupKeys())
+    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', SEEN_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
 };
@@ -1079,7 +1081,17 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v9';      /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v10';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+/* one sentence shown once, on the first open after an update, to a phone that already had the app;
+   npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
+var WHATS_NEW = {build:'lunchsorted-v10', text:'New: the shopping list is now ingredients by aisle, and one Packed tick fills the box.'};
+var SEEN_KEY = 'lunchsorted-seen';
+function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
+function whatsNew(){
+  var seen = ''; try{ seen = localStorage.getItem(SEEN_KEY) || ''; }catch(e){}
+  if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
+  if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text && !UI.notice) UI.notice = WHATS_NEW.text;
+}
 var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -2073,7 +2085,7 @@ function noticeBanner(){
   if(!msg && signedIn() && Account.status === 'error' && Account.tries >= RETRY_WAITS.length && UI.tab !== 'setup')
     return '<div class="banner"><span>Not sent to the other phone yet \u2014 it goes with your next change.</span></div>';
   if(!msg) return '';
-  return '<div class="banner"><span>'+esc(msg)+'</span>'
+  return '<div class="banner'+(msg === WHATS_NEW.text ? ' good' : '')+'"><span>'+esc(msg)+'</span>'
     + (UI.notice ? '<button class="btn sm ghost" data-act="notice-dismiss">OK</button>' : '')+'</div>';
 }
 function noFoodsEmpty(){
@@ -2231,11 +2243,11 @@ function pickButton(kid, day){
 function viewPack(){
   var ks = kids(), multi = ks.length>1;
   if(!ks.some(function(k){ return foodsOf(k).length; }))
-    return '<div class="stack"><p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
+    return '<div class="stack">'+noticeBanner()+'<p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
 
   var dates = upcomingDates();
   if(!dates.length)
-    return '<div class="stack"><p class="view-sub">Pack list</p><h2 class="view-title">No plan yet</h2>'
+    return '<div class="stack">'+noticeBanner()+'<p class="view-sub">Pack list</p><h2 class="view-title">No plan yet</h2>'
       + '<div class="empty"><p>Draw a week and this page is the morning&#8217;s box.</p>'
       + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
 
@@ -2243,7 +2255,8 @@ function viewPack(){
   var slot = dates.filter(function(x){ return x.date>=t; })[0] || dates[dates.length-1];
   var lab = dayLabel(slot.date);
 
-  var h = '<div class="stack">' + noticeBanner() + trialBanner() + planBanner();
+  var news = UI.notice === WHATS_NEW.text;                        /* news waits behind the trial and the plan; an error does not */
+  var h = '<div class="stack">' + (news ? trialBanner() + planBanner() + noticeBanner() : noticeBanner() + trialBanner() + planBanner());
   ks.forEach(function(k){
     var rd = reviewDay(k); if(!rd) return;
     if(UI.reviewLater[k.id] === rd.d) return;                       /* "Not now" on a locked card: gone for this open, the answers untouched */
@@ -2685,6 +2698,21 @@ function addOwnSheet(){
   openSheet('Add your own', h);
   setTimeout(function(){ var el = document.getElementById('nfName'); if(el) el.focus(); }, 220);
 }
+function helpSheet(){
+  var qa = [
+    ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle a day, or tap a compartment to change one thing.'],
+    ['Why did a food stop showing up?', 'A school rule or allergen under the gear beside the lunchbox name. Foods it skips are marked on the Foods tab.'],
+    ['Where does the shopping list come from?', 'Every planned box, as what to buy. Tick what is home. Copy it, or send it to Notes.'],
+    ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
+    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the morning review, more lunchboxes and sharing are the Household plan, free for three weeks.']
+  ];
+  var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
+    return '<details class="more"><summary>'+esc(q[0])+'</summary><p class="hint" style="margin:0 0 10px">'+esc(q[1])+'</p></details>';
+  }).join('') + '</div>'
+    + '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:14px"><a class="btn primary" href="'+esc(feedbackMail())+'" data-feedback>Ask a question</a>'
+    + '<a class="btn" href="/help.html" target="_blank" rel="noopener">More answers</a></div>';
+  openSheet('Help', h);
+}
 function addKidSheet(){
   if(gated() && kids().length >= 1){ upgradeSheet('lunchbox'); return; }
   var h = '<div class="field"><label for="nkName">Name on the lunchbox</label>'
@@ -2743,10 +2771,11 @@ function render(){
   document.getElementById('view').innerHTML =
       UI.box           ? viewBox()
     : UI.tab==='pack'  ? viewPack()
-    : UI.tab==='week'  ? viewWeek()
+    : '<div class="stack">' + (UI.notice ? noticeBanner() : '') + (   /* a notice is read on whichever tab the app opened on; Pack draws its own */
+      UI.tab==='week'  ? viewWeek()
     : UI.tab==='shop'  ? viewShop()
     : UI.tab==='foods' ? viewFoods()
-    : viewSetup();
+    : viewSetup()) + '</div>';
   document.getElementById('tabs').innerHTML = TABS.map(function(t){
     return '<button data-act="tab" data-tab="'+t.k+'" aria-current="'+(UI.tab===t.k)+'">'
       + svg(t.icon)+'<span>'+t.label+'</span></button>'; }).join('');
@@ -2754,15 +2783,16 @@ function render(){
      only belongs on the views it actually steers. */
   var householdView = kids().length>1 && (UI.tab==='pack' || UI.tab==='shop') && !UI.box;
   var gear = isHelper() ? '' : '<button class="iconbtn" data-act="box-settings" aria-label="Lunchbox settings" aria-pressed="'+(!!UI.box)+'">'+svg('setup',18)+'</button>';
-  document.getElementById('who').innerHTML = !kid ? ''
+  var help = '<button class="iconbtn" data-act="help" aria-label="Help">'+svg('help',19)+'</button>';
+  document.getElementById('who').innerHTML = (!kid ? ''
     : (householdView
       ? '<button class="kidbtn" data-act="kidsheet">'+kids().length+' lunchboxes<span class="caret">&#9662;</span></button>'
       : '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)+'"></span>'
-        + esc(kid.name)+'<span class="caret">&#9662;</span></button>') + (UI.tab === 'setup' ? '' : gear);
+        + esc(kid.name)+'<span class="caret">&#9662;</span></button>') + (UI.tab === 'setup' ? '' : gear)) + help;
 }
 
 /* ---------------------------------------------------------------- events */
-var HELPER_OK = ['tab','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
+var HELPER_OK = ['tab','help','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
   'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit'];
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
@@ -2969,6 +2999,7 @@ document.addEventListener('click', function(ev){
 
   /* foods */
   if(act==='ideas'){ ideasSheet(); return; }
+  if(act==='help'){ helpSheet(); return; }
   if(act==='add-idea'){
     var b = BANK.filter(function(x){ return x.n===el.getAttribute('data-name'); })[0];
     if(!b) return;
@@ -3230,7 +3261,7 @@ document.addEventListener('click', function(ev){
     }).catch(offline);
     return;
   }
-  if(act==='notice-dismiss'){ UI.notice=''; render(); return; }
+  if(act==='notice-dismiss'){ UI.notice=''; markSeen(); render(); return; }
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = el.getAttribute('data-day'); render(); return; }
@@ -3329,6 +3360,7 @@ Store.load().then(function(r){
   DEVICE.memberId = (r.device && memberById(r.device)) ? r.device : members()[0].id;
   /* anyone who already has a list has effectively finished onboarding */
   if(!S.onboardedAt && kids().some(function(k){ return foodsOf(k).length; })) S.onboardedAt = now();
+  whatsNew();
   try{ render(); }
   catch(e){
     /* the last line of defence: a document that renders badly must not become
