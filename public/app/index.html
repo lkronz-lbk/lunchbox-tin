@@ -870,6 +870,17 @@ function nativePlugin(name){ try{ return native() && window.Capacitor.Plugins &&
    Free is one lunchbox on one phone; the Household plan is every lunchbox and the other
    parent's phone. When billing is not switched on (no Stripe in this deploy) nothing is gated. */
 var BILLING_KEY = 'lunchsorted-billing', BETA_KEY = 'lunchsorted-beta', BETA_ON = 'The beta is on: Lunch Sorted is yours, free forever.';
+/* once, after a sign-in in a phone's browser: put it on the home screen, said the way that phone does it */
+var HOME_KEY = 'lunchsorted-home-seen';
+function homeHint(){
+  if(!UI.homeHint || native()) return '';
+  try{ if(localStorage.getItem(HOME_KEY)) return ''; }catch(e){}
+  if(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)) return '';
+  var ua = navigator.userAgent;
+  if(/iPhone|iPad/.test(ua)) return 'Put Lunch Sorted on your home screen: tap Share, then Add to Home Screen.';
+  if(/Android/.test(ua)) return 'Put Lunch Sorted on your home screen: tap the browser menu, then Add to Home screen.';
+  return '';
+}
 /* the beta link: the code waits on this phone until a parent is signed in, then one request switches the plan on */
 function betaWaiting(){ try{ return localStorage.getItem(BETA_KEY) || ''; }catch(e){ return ''; } }
 function betaForget(){ try{ localStorage.removeItem(BETA_KEY); }catch(e){} }
@@ -2106,6 +2117,8 @@ function noticeBanner(){
     if(claimBeta.failed) return '<div class="banner"><span>Could not switch the beta on.</span><button class="btn sm ghost" data-act="beta-retry">Try again</button></div>';
     return '<div class="banner good"><span>Switching the beta on\u2026</span></div>';
   }
+  var home = !UI.notice && homeHint();
+  if(home) return '<div class="banner good"><span>'+esc(home)+'</span><button class="btn sm ghost" data-act="home-ok">OK</button></div>';
   var msg = UI.notice || (!Store.ok ? (native() ? 'This phone' : 'This browser')+' is not letting the app save. Changes will be lost when you close it.' : '');
   if(!msg && Account.join && UI.tab !== 'setup')
     return '<div class="banner"><span>'+esc(Account.join.from || 'Someone')+' invited you to share their lunches.</span><button class="btn sm primary" data-act="tab" data-tab="setup">Have a look</button></div>';
@@ -2804,7 +2817,7 @@ function render(){
   document.getElementById('view').innerHTML =
       UI.box           ? viewBox()
     : UI.tab==='pack'  ? viewPack()
-    : '<div class="stack">' + (UI.notice ? noticeBanner() : '') + (   /* a notice is read on whichever tab the app opened on; Pack draws its own */
+    : '<div class="stack">' + noticeBanner() + (   /* whatever banner applies is read on whichever tab the app opened on; Pack draws its own */
       UI.tab==='week'  ? viewWeek()
     : UI.tab==='shop'  ? viewShop()
     : UI.tab==='foods' ? viewFoods()
@@ -2825,7 +2838,7 @@ function render(){
 }
 
 /* ---------------------------------------------------------------- events */
-var HELPER_OK = ['tab','help','help-site','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
+var HELPER_OK = ['tab','help','help-site','home-ok','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
   'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit'];
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
@@ -3033,6 +3046,7 @@ document.addEventListener('click', function(ev){
   /* foods */
   if(act==='ideas'){ ideasSheet(); return; }
   if(act==='help'){ helpSheet(); return; }
+  if(act==='home-ok'){ try{ localStorage.setItem(HOME_KEY, '1'); }catch(e){} UI.homeHint = false; render(); return; }
   if(act==='beta-retry'){ claimBeta.tries = 0; claimBeta.failed = false; claimBeta(); render(); return; }
   if(act==='help-site'){ var hb = nativePlugin('Browser'), hp = el.getAttribute('data-url') || '/help.html'; if(hb && /^\/[a-z-]+\.html$/.test(hp)) hb.open({url: location.origin+hp}).catch(function(){}); return; }
   if(act==='add-idea'){
@@ -3193,6 +3207,7 @@ document.addEventListener('click', function(ev){
     api('POST', '/api/auth/code', {email:Account.linkSent, code:code, beta:!!betaWaiting()}).then(function(r){
       if(r.status !== 200){ toast(r.error || 'That code did not work'); return; }
       Account.user = r.user; Account.linkSent = ''; Account.devLink = ''; Account.devCode = ''; Account.first = true; UI.obEmail = false;
+      UI.homeHint = true;
       return Sync.pull().then(function(){ render(); toast('Signed in'); });
     }).catch(offline);
     return;
@@ -3413,7 +3428,7 @@ Store.load().then(function(r){
   if(qs.get('signed-in')){
     var after = ''; try{ after = localStorage.getItem(AFTER_KEY) || ''; }catch(e){}
     if(after === 'week'){ UI.tab = 'week'; } else { UI.tab = 'setup'; Account.first = true; }
-    toast('Signed in');
+    UI.homeHint = true; toast('Signed in');
   }
   var betaCode = qs.get('beta') || '';
   if(/^[A-Za-z0-9-]{8,64}$/.test(betaCode)){ try{ localStorage.setItem(BETA_KEY, betaCode); }catch(e){} UI.tab = 'setup'; Account.first = true; }
