@@ -35,11 +35,12 @@ export default async function handler(req) {
     const cap = betaCap(), left = Math.max(0, cap - await betaCount());
     let base = ''; try { base = siteUrl(req); } catch { /* no URL env here: the page stands, without the code to scan */ }
     const qr = base ? await QRCode.toString(`${base}/tester`, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' }).catch(() => '') : '';
-    const ask = `<p>So was I. So I built this. Join as a beta tester, free, and if you like it, keep it free forever. The first ${esc(cap)} households.</p>
-<p><strong>In return:</strong> sign in, pack real lunchboxes with it, add your own foods, shop from its list, let the kids pick their box, and tell us everything. We&rsquo;ll email you a couple of times in your first week with what to try and where to say what you found.</p>
-<p><strong>Open this page on the phone you pack lunches with.</strong> Setup takes under a minute. Your email is what keeps your account, and your free-forever household, yours.</p>`;
+    const ask = `<p>So was I. So I built this. Join the beta free, and if you like it, keep it free forever.</p>
+<p><strong>In return:</strong> pack real lunchboxes with it, add your own foods, shop from its list, let the kids pick their box, and tell us everything.</p>
+<p>Three short emails in your first week say what to try and where to give us feedback.</p>
+<p><strong>Open this on the phone you pack lunches with.</strong> Setup takes under a minute. Your email is what keeps your account, and your free-forever household, yours.</p>`;
     if (!left) return page('The beta is full', `<p class="eyebrow">Lunch Sorted beta</p><h1>The beta is full.</h1><p>Thank you for wanting in. Every new household still gets the whole app for three weeks, no card: <a href="/">lunchsorted.app</a>.</p>`);
-    return page('Join the beta', `<p class="eyebrow">Lunch Sorted beta</p><h1>Sick of thinking about what to pack for lunch, every day, for the next 15 years?</h1>${ask}
+    return page('Join the beta', `<p class="eyebrow">Lunch Sorted beta</p><h1>Sick of thinking about what to pack for lunch, for the next 15 years?</h1>${ask}
 <a class="btn" href="/app/?beta=${encodeURIComponent(code)}">Join the beta</a>
 <p class="left">${esc(left)} spot${left === 1 ? '' : 's'} left</p>
 <div class="qr">${qr}<p>On a laptop? Point your phone&rsquo;s camera at this.</p></div>`);
