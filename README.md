@@ -223,7 +223,10 @@ doing, what happened, would they keep it) that posts to `/thanks.html`; submissi
 Forms in the Netlify dashboard, which can email each one. The help sheet's "Send feedback"
 and the site footer point at it. `cron-tester.js` sends every beta household three short
 emails in its first week (days 1, 3, 6 after it switched on; `notices` kinds `tester_1/3/6`),
-each with one thing to try and the form; "no more of these" is honoured.
+each in Liz's voice with one feature, the steps, a screenshot (`public/img/mail-day*.png`, made by
+`scripts/mail-shots.mjs`; rerun it when those screens change) and the form; the last one lists
+`PLANNED` (mail.js) and asks what they would add. The form asks the same: an ideas box and the
+planned list as tick boxes. "No more of these" is honoured.
 
 
 `/beta` (netlify/functions/beta.js; `/tester` is the short link with a source tag for GA4) is the page to hand out: it shows the spots left and one

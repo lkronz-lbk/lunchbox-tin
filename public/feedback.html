@@ -29,7 +29,8 @@ input[type=email],input[type=text],textarea{width:100%;box-sizing:border-box;min
 textarea{min-height:120px;resize:vertical}
 input:focus,textarea:focus{border-color:var(--accent);outline:none}
 .choices{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:0} .choices legend{display:block;font-weight:600;color:var(--ink);margin:18px 0 6px;padding:0;width:100%} .choices label{margin:0;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:1.5px solid var(--line);border-radius:999px;font-weight:400;cursor:pointer}
-.choices input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.choices input{width:18px;height:18px;margin:0;accent-color:var(--accent);flex:none}
+.choices.stack{flex-direction:column;align-items:flex-start} .choices.stack label{border-radius:14px;padding:10px 14px;min-height:44px;text-align:left}
 .btn{display:inline-flex;align-items:center;min-height:48px;padding:0 22px;border-radius:14px;background:var(--accent);color:#FBFCF9;font-weight:600;border:0;font:inherit;font-weight:600;margin-top:22px;cursor:pointer}
 .hp{position:absolute;left:-9999px}
 </style>
@@ -51,6 +52,15 @@ input:focus,textarea:focus{border-color:var(--accent);outline:none}
     <label><input type="radio" name="keep" value="yes"> Yes</label>
     <label><input type="radio" name="keep" value="maybe"> Maybe</label>
     <label><input type="radio" name="keep" value="no"> No</label>
+  </fieldset>
+  <label for="fbIdeas">What else would you want it to do?</label>
+  <textarea id="fbIdeas" name="ideas" maxlength="2000" style="min-height:80px"></textarea>
+  <fieldset class="choices stack"><legend>Coming next. Tick what you would use.</legend>
+    <label><input type="checkbox" name="want" value="iphone-app"> The iPhone app, from the App Store</label>
+    <label><input type="checkbox" name="want" value="instacart"> Send the list straight to Instacart or Walmart</label>
+    <label><input type="checkbox" name="want" value="homemade"> Home-cooked or store-bought: it suggests the right one for you</label>
+    <label><input type="checkbox" name="want" value="quality"> A quality score for each box</label>
+    <label><input type="checkbox" name="want" value="macros"> Macros and targets for a kid on a set diet</label>
   </fieldset>
   <p class="hp" aria-hidden="true"><label>Leave this empty: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
   <button class="btn" type="submit">Send it</button>

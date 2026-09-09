@@ -86,21 +86,52 @@ export function sendTrialEnded(to, site, stopUrl) {
   });
 }
 
-/* the beta testers' first week: three short emails, each with one thing to try and the feedback form */
+/* the beta testers' first week: three emails in Liz's voice, one feature each, the steps to try it,
+   a screenshot from the app (public/img/mail-day*.png, made by scripts/mail-shots.mjs) and the form */
 export const TESTER_DAYS = [1, 3, 6];
+export const PLANNED = [
+  'The iPhone app, from the App Store',
+  'Sending the shopping list straight to Instacart or Walmart',
+  'Home-cooked or store-bought: tell it which you are, and it suggests the right one',
+  'A quality score for each box',
+  'Macros and targets for a kid on a set diet'
+];
 export function sendTester(to, site, day, stopUrl) {
   const fb = `${site}/feedback.html`, f = foot(stopUrl);
+  const pic = (n, alt) => `<img src="${esc(site)}/img/mail-day${n}.png" width="300" alt="${esc(alt)}" style="display:block;width:300px;max-width:100%;height:auto;border:1px solid #CFDACB;border-radius:12px;margin:18px 0">`;
+  const steps = (arr) => `<ol style="padding-left:22px">${arr.map(x => `<li style="margin:0 0 8px">${x}</li>`).join('')}</ol>`;
+  const plain = (arr) => arr.map((x, i) => `${i + 1}. ${x.replace(/<[^>]+>/g, '')}`).join('\n');
   const notes = {
-    1: { subject: 'Pack one real box with it',
-         text: `Thanks for testing Lunch Sorted.\n\nToday: if the week is not planned yet, tap Shuffle all. Open Shop and buy from the list. Tomorrow morning, open Pack and tap Packed.\n\nThen tell us one thing: did the boxes make sense for your kid?\n${fb}`,
-         html: `<p>Thanks for testing Lunch Sorted.</p><p><b>Today:</b> if the week is not planned yet, tap <b>Shuffle all</b>. Open <b>Shop</b> and buy from the list. Tomorrow morning, open <b>Pack</b> and tap <b>Packed</b>.</p><p>Then tell us one thing: did the boxes make sense for your kid?</p>${btn(fb, 'Send feedback')}` },
-    3: { subject: 'Tonight, let them pick',
-         text: `Tonight, hand over the phone.\n\nTap the settings button beside the lunchbox name and switch on "They pick their box each day". On Foods, tap the picture beside a food to add a photo of the real thing. Then on Pack, tap "Let [your kid's name] pick" and give them the phone.\n\nThere are two ways to pick, Each part and Whole box, under the same switch. Tell us which one your kid took to.\n${fb}`,
-         html: `<p>Tonight, hand over the phone.</p><p>Tap the settings button beside the lunchbox name and switch on <b>They pick their box each day</b>. On <b>Foods</b>, tap the picture beside a food to add a photo of the real thing. Then on <b>Pack</b>, tap <b>Let [your kid&rsquo;s name] pick</b> and give them the phone.</p><p>There are two ways to pick, <b>Each part</b> and <b>Whole box</b>, under the same switch. Tell us which one your kid took to.</p>${btn(fb, 'Send feedback')}` },
-    6: { subject: 'What came home?',
-         text: `The morning after a packed box, Pack asks what was eaten and what came home. Next week leans toward what actually gets eaten.\n\nAlso try: Foods, Add your own, with what to buy for it, so the list carries your family's real food.\n\nA week in: would you keep using it? Tell us why, either way.\n${fb}`,
-         html: `<p>The morning after a packed box, <b>Pack</b> asks what was eaten and what came home. Next week leans toward what actually gets eaten.</p><p>Also try: <b>Foods</b>, <b>Add your own</b>, with what to buy for it, so the list carries your family&rsquo;s real food.</p><p>A week in: would you keep using it? Tell us why, either way.</p>${btn(fb, 'Send feedback')}` }
+    1: { subject: 'Thank you for beta testing Lunch Sorted',
+         intro: 'Thank you for beta testing Lunch Sorted. I built it because I was sick of thinking about lunch every single day, and what you tell me this week is what makes it better for everyone.',
+         feature: 'the week, planned in a minute.',
+         steps: ['Open the app and tap <b>Week</b>. If it is empty, tap <b>Shuffle all</b>.',
+                 'Not sure about something? Tap that compartment and swap it, or tap <b>Shuffle</b> on that day.',
+                 'Tap <b>Shop</b>. That is your grocery list, by aisle. Tick what is already home, then <b>Copy</b> it or send it to Notes.',
+                 'Tomorrow morning, tap <b>Pack</b>, then <b>Packed</b>.'],
+         alt: 'The Week tab: a planned week of lunchboxes',
+         ask: 'One question for today: did the boxes make sense for your kid? Tell me on the feedback form, it takes a minute.' },
+    3: { subject: 'Today: let your kid pick their lunch',
+         intro: 'Thanks for sticking with it. Today is the feature I am proudest of: the kid\u2019s pick. A lunch they chose comes home emptier.',
+         feature: 'let them pick.',
+         steps: ['Tap the settings button beside your kid\u2019s name and switch on <b>They pick their box each day</b>.',
+                 'On <b>Foods</b>, tap the picture beside a food and add a photo of the real thing, so a little one can pick without reading.',
+                 'This evening, open <b>Pack</b>, tap <b>Let [your kid\u2019s name] pick</b>, and hand over the phone.'],
+         alt: 'The kid\u2019s pick: two pictures to choose between',
+         ask: 'There are two ways to pick under that switch, <b>Each part</b> and <b>Whole box</b>. Try both if you can. Which one did your kid take to?' },
+    6: { subject: 'Almost a week in. What came home?',
+         intro: 'Almost a week in, and thank you. Today is the last one: the morning after.',
+         feature: 'what came home.',
+         steps: ['The morning after a packed box, <b>Pack</b> asks how it went. Tap <b>Ate it</b>, <b>Some</b> or <b>Came home</b> for each compartment.',
+                 'That is it. Next week\u2019s shuffle leans toward what actually got eaten.',
+                 'While you are on <b>Foods</b>: <b>Add your own</b>, with what to buy for it, so the list carries your family\u2019s real food.'],
+         alt: 'The morning review: ate it, some, or came home',
+         ask: 'Here is what I am planning next:<ul style="padding-left:22px">' + PLANNED.map(x => `<li style="margin:0 0 6px">${esc(x)}</li>`).join('') + '</ul>Would those help? What would you add? And would you keep using Lunch Sorted? Tell me why, either way.',
+         askText: 'Here is what I am planning next:\n' + PLANNED.map(x => '- ' + x).join('\n') + '\n\nWould those help? What would you add? And would you keep using Lunch Sorted? Tell me why, either way.' }
   }[day];
   if (!notes) throw new Error('no tester note for day ' + day);
-  return send({ to, subject: notes.subject, text: notes.text + f.text, html: notes.html + f.html });
+  const strip = (x) => x.replace(/<[^>]+>/g, '');
+  const text = `Hi,\n\n${strip(notes.intro)}\n\nToday's feature: ${strip(notes.feature)}\n\n${plain(notes.steps)}\n\n${notes.askText || strip(notes.ask)}\n${fb}\n\nLiz` + f.text;
+  const html = `<p>Hi,</p><p>${notes.intro}</p><p><b>Today\u2019s feature:</b> ${notes.feature}</p>${steps(notes.steps)}${pic(day, notes.alt)}<p>${notes.ask}</p>${btn(fb, 'Send feedback')}<p>Liz</p>` + f.html;
+  return send({ to, subject: notes.subject, text, html });
 }

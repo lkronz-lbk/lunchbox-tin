@@ -1535,8 +1535,8 @@ try {
       const r1 = await runTester(Date.now(), 'https://test.example');
       const to = (e) => mails.slice(b0).filter(m => m.to === e);
       check('day one, three and six each get their note, a household too new or too old gets none, and no more of these is honoured',
-        r1.sent === 3 && /Pack one real box/.test(to('t1@example.com')[0].subject) && /let them pick/.test(to('t3@example.com')[0].subject) && /What came home/.test(to('t6@example.com')[0].subject) && to('t0@example.com').length === 0 && to('t9@example.com').length === 0 && to('tq@example.com').length === 0, r1);
-      check('every note carries the feedback form, the reply line and a stop link', to('t1@example.com')[0].text.includes('/feedback.html') && /a person reads it/.test(to('t1@example.com')[0].text) && /mail-stop\?t=[a-f0-9]{32}/.test(to('t1@example.com')[0].text));
+        r1.sent === 3 && /Thank you for beta testing/.test(to('t1@example.com')[0].subject) && /let your kid pick/.test(to('t3@example.com')[0].subject) && /What came home/.test(to('t6@example.com')[0].subject) && to('t0@example.com').length === 0 && to('t9@example.com').length === 0 && to('tq@example.com').length === 0, r1);
+      check('every note carries numbered steps, a screenshot, the feedback form, the reply line and a stop link', to('t1@example.com')[0].text.includes('/feedback.html') && /\n1\. /.test(to('t1@example.com')[0].text) && /img\/mail-day1\.png/.test(to('t1@example.com')[0].html) && /img\/mail-day6\.png/.test(to('t6@example.com')[0].html) && /Instacart/.test(to('t6@example.com')[0].text) && /a person reads it/.test(to('t1@example.com')[0].text) && /mail-stop\?t=[a-f0-9]{32}/.test(to('t1@example.com')[0].text));
       const r2 = await runTester(Date.now(), 'https://test.example');
       check('a second run the same day sends nothing again', r2.sent === 0, r2);
     }
@@ -1567,6 +1567,7 @@ try {
   /* wake the lazy images the way a reader does: a screen at a time, top to bottom */
   await site.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 60)); } window.scrollTo(0, document.body.scrollHeight); });
   await site.waitForTimeout(600);
+  check('the three email screenshots are on the site', ['1','3','6'].every(d => fs.existsSync('public/img/mail-day'+d+'.png')));
   check('every screenshot on the landing page loads',
     await site.$$eval('img', a => a.length > 0 && a.every(i => i.complete && i.naturalWidth > 0)));
   check('screenshots ship as WebP with a PNG fallback and load lazily',
@@ -1582,7 +1583,7 @@ try {
     await site.$eval('form.signup', f => f.getAttribute('data-netlify') === 'true' &&
       !!f.querySelector('input[name="form-name"]')));
   await site.goto(BASE+'/feedback.html'); await site.waitForTimeout(250);
-  check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));
+  check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && !!f.querySelector('textarea[name="ideas"]') && f.querySelectorAll('input[name="want"]').length === 5 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));
   await site.goto(BASE+'/help.html'); await site.waitForTimeout(250);
   check('the help page answers the questions and points at the planner and the address', /pick the week/.test(await site.textContent('body')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href^="mailto:hello@lunchsorted.app"]')));
   await site.goto(BASE+'/privacy.html');
