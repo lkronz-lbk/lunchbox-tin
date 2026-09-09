@@ -358,6 +358,7 @@ try {
     check('the ? at the top opens help: questions, a way to write in, and the page on the site', (await page.$$eval('#sheetBody details', a => a.length)) >= 4 && !!(await page.$('#sheetBody a[data-feedback][href^="mailto:"]')) && !!(await page.$('#sheetBody a[href="/help.html"]')));
     await page.evaluate(() => document.querySelector('#sheetBody details summary').click()); await page.waitForTimeout(150);
     check('and an answer opens on a tap', await page.$eval('#sheetBody details', d => d.open));
+    check('the ? still fits beside a long name and two lunchboxes', await page.evaluate(() => { const b = document.querySelector('[data-act="help"]').getBoundingClientRect(); return b.right <= window.innerWidth - 8 && document.documentElement.scrollWidth <= window.innerWidth; }));
     await page.click('#sheetClose'); await page.waitForTimeout(250);
     check('the share button shows only where the phone has a share sheet', (await page.$$eval('[data-act="send-list"]', a => a.length)) === (await page.evaluate(() => navigator.share ? 1 : 0)));
   }

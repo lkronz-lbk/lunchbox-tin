@@ -255,6 +255,10 @@ nav.tabs svg{width:21px;height:21px}
 .kidmode{position:fixed;inset:0;z-index:60;background:var(--ground);display:flex;flex-direction:column;
   overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .kidmode .top .exit{margin-left:auto}
+.faq summary{font-family:var(--f-body);font-size:15px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink);border-top:1px solid var(--line);justify-content:space-between}
+.faq:first-child summary{border-top:0}
+.faq summary::after{content:'+';font-weight:500;color:var(--ink-3);font-size:18px}
+.faq[open] summary::after{content:'\2212'}
 .more summary{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);cursor:pointer;min-height:44px;display:flex;align-items:center}
 .kidmode .top{display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:calc(12px + env(safe-area-inset-top)) 16px 6px}
@@ -313,11 +317,13 @@ nav.tabs svg{width:21px;height:21px}
 .review .btn.wide{margin-top:12px}
 
 /* --- multi-profile chrome --- */
-.topbar .who{display:flex;align-items:center;gap:8px}
-.kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);max-width:min(46vw,190px);white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;
+.topbar .who{display:flex;align-items:center;gap:8px;min-width:0}
+@media (max-width:399px){ .brand{font-size:17px} .topbar{gap:8px} .topbar .who{gap:6px} }
+.kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);max-width:min(46vw,190px);min-width:0;white-space:nowrap;overflow:hidden;
   border-radius:999px;padding:0 12px;min-height:44px;font-size:13.5px;font-weight:600;color:var(--ink)}
-.kidbtn .dot{width:8px;height:8px}
+.kidbtn .dot{width:8px;height:8px;flex:none}
+.kidbtn .nm{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.kidbtn .caret{flex:none}
 .iconbtn{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-2);
   display:inline-flex;align-items:center;justify-content:center;padding:0}
 .iconbtn[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
@@ -2492,9 +2498,8 @@ function viewSetup(){
   return h+'</div>';
 }
 /* what a bug report needs and a parent should not have to type: the build, the phone, the shape of the household; never a food or a name */
-function feedbackMail(){
-  var lines = [
-    '', '', 'What happened:', '', '', 'What I expected:', '', '',
+function feedbackMail(kind){
+  var lines = [].concat(kind === 'question' ? ['', '', ''] : ['', '', 'What happened:', '', '', 'What I expected:', '', '']).concat([
     '\u2014\u2014 the app filled this in \u2014\u2014',
     'Build: '+APP_BUILD+(native() ? ' (iPhone app)' : ' (web)'),
     'Phone: '+navigator.userAgent,
@@ -2504,8 +2509,8 @@ function feedbackMail(){
     'Kid\u2019s pick: '+kids().map(function(k){ return k.settings.kidPick ? (k.settings.kidPickMode === 'boxes' ? 'whole box' : 'each part') : 'off'; }).join(', '),
     'Came from: '+(UI.lastTab || 'the start')+' \u00b7 plan: '+planLabel()+' \u00b7 zone: '+(S.tz || '?'),
     'Storage: '+(Store.ok ? 'ok' : 'blocked')+' \u00b7 online: '+(navigator.onLine ? 'yes' : 'no')
-  ];
-  return 'mailto:hello@lunchsorted.app?subject='+encodeURIComponent('Lunch Sorted: something wrong')+'&body='+encodeURIComponent(lines.join('\n'));
+  ]);
+  return 'mailto:hello@lunchsorted.app?subject='+encodeURIComponent(kind === 'question' ? 'Lunch Sorted: a question' : 'Lunch Sorted: something wrong')+'&body='+encodeURIComponent(lines.join('\n'));
 }
 
 /* the camera or the roll, then the thumbnail onto the food */
@@ -2702,15 +2707,16 @@ function helpSheet(){
   var qa = [
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle a day, or tap a compartment to change one thing.'],
     ['Why did a food stop showing up?', 'A school rule or allergen under the gear beside the lunchbox name. Foods it skips are marked on the Foods tab.'],
-    ['Where does the shopping list come from?', 'Every planned box, as what to buy. Tick what is home. Copy it, or send it to Notes.'],
+    ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
-    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the morning review, more lunchboxes and sharing are the Household plan, free for three weeks.']
+    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the morning review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.']
   ];
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
-    return '<details class="more"><summary>'+esc(q[0])+'</summary><p class="hint" style="margin:0 0 10px">'+esc(q[1])+'</p></details>';
+    return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
   }).join('') + '</div>'
-    + '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:14px"><a class="btn primary" href="'+esc(feedbackMail())+'" data-feedback>Ask a question</a>'
-    + '<a class="btn" href="/help.html" target="_blank" rel="noopener">More answers</a></div>';
+    + '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:14px"><a class="btn primary" href="'+esc(feedbackMail('question'))+'" data-feedback>Ask a question</a>'
+    + (nativePlugin('Browser') ? '<button class="btn" data-act="help-site">More answers</button>'   /* the iPhone app: Safari, with its Done button, not the app's only view */
+                               : '<a class="btn" href="/help.html" target="_blank" rel="noopener">More answers</a>')+'</div>';
   openSheet('Help', h);
 }
 function addKidSheet(){
@@ -2786,13 +2792,13 @@ function render(){
   var help = '<button class="iconbtn" data-act="help" aria-label="Help">'+svg('help',19)+'</button>';
   document.getElementById('who').innerHTML = (!kid ? ''
     : (householdView
-      ? '<button class="kidbtn" data-act="kidsheet">'+kids().length+' lunchboxes<span class="caret">&#9662;</span></button>'
+      ? '<button class="kidbtn" data-act="kidsheet"><span class="nm">'+kids().length+' lunchboxes</span><span class="caret">&#9662;</span></button>'
       : '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)+'"></span>'
-        + esc(kid.name)+'<span class="caret">&#9662;</span></button>') + (UI.tab === 'setup' ? '' : gear)) + help;
+        + '<span class="nm">'+esc(kid.name)+'</span><span class="caret">&#9662;</span></button>') + (UI.tab === 'setup' ? '' : gear)) + help;
 }
 
 /* ---------------------------------------------------------------- events */
-var HELPER_OK = ['tab','help','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
+var HELPER_OK = ['tab','help','help-site','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
   'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit'];
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
@@ -3000,6 +3006,7 @@ document.addEventListener('click', function(ev){
   /* foods */
   if(act==='ideas'){ ideasSheet(); return; }
   if(act==='help'){ helpSheet(); return; }
+  if(act==='help-site'){ var hb = nativePlugin('Browser'); if(hb) hb.open({url: location.origin+'/help.html'}).catch(function(){}); return; }
   if(act==='add-idea'){
     var b = BANK.filter(function(x){ return x.n===el.getAttribute('data-name'); })[0];
     if(!b) return;
