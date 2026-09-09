@@ -2725,6 +2725,11 @@ function addOwnSheet(){
   openSheet('Add your own', h);
   setTimeout(function(){ var el = document.getElementById('nfName'); if(el) el.focus(); }, 220);
 }
+/* a page on the site, from inside the app: Safari with its Done button in the iPhone app, a new tab on the web */
+function siteLink(path, label){
+  return nativePlugin('Browser') ? '<button class="btn" data-act="help-site" data-url="'+esc(path)+'">'+label+'</button>'
+                                 : '<a class="btn" href="'+esc(path)+'" target="_blank" rel="noopener">'+label+'</a>';
+}
 function helpSheet(){
   var qa = [
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle a day, or tap a compartment to change one thing.'],
@@ -2737,8 +2742,7 @@ function helpSheet(){
     return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
   }).join('') + '</div>'
     + '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:14px"><a class="btn primary" href="'+esc(feedbackMail('question'))+'" data-feedback>Ask a question</a>'
-    + (nativePlugin('Browser') ? '<button class="btn" data-act="help-site">More answers</button>'   /* the iPhone app: Safari, with its Done button, not the app's only view */
-                               : '<a class="btn" href="/help.html" target="_blank" rel="noopener">More answers</a>')+'</div>';
+    + siteLink('/feedback.html', 'Send feedback') + siteLink('/help.html', 'More answers') + '</div>';
   openSheet('Help', h);
 }
 function addKidSheet(){
@@ -3029,7 +3033,7 @@ document.addEventListener('click', function(ev){
   if(act==='ideas'){ ideasSheet(); return; }
   if(act==='help'){ helpSheet(); return; }
   if(act==='beta-retry'){ claimBeta.tries = 0; claimBeta.failed = false; claimBeta(); render(); return; }
-  if(act==='help-site'){ var hb = nativePlugin('Browser'); if(hb) hb.open({url: location.origin+'/help.html'}).catch(function(){}); return; }
+  if(act==='help-site'){ var hb = nativePlugin('Browser'), hp = el.getAttribute('data-url') || '/help.html'; if(hb && /^\/[a-z-]+\.html$/.test(hp)) hb.open({url: location.origin+hp}).catch(function(){}); return; }
   if(act==='add-idea'){
     var b = BANK.filter(function(x){ return x.n===el.getAttribute('data-name'); })[0];
     if(!b) return;

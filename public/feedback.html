@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feedback — Lunch Sorted</title>
+<meta name="robots" content="index">
+<link rel="icon" href="/icons/icon-192.png" sizes="192x192">
+<meta name="theme-color" content="#E9EEE6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;600;700&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+:root{color-scheme:light dark;--ground:#E9EEE6;--ink:#16241E;--ink-2:#46584F;--ink-3:#78897F;--line:#CFDACB;--accent:#2E5A48}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ground:#0E1815;--ink:#E6EEE7;--ink-2:#A6BAAE;--ink-3:#7A8E84;--line:#2B3E36;--accent:#79C8A2}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:"Karla","Helvetica Neue",sans-serif;font-size:16px;line-height:1.65}
+.wrap{max-width:660px;margin:0 auto;padding:48px 22px 80px}
+h1{font-family:"Familjen Grotesk",sans-serif;font-size:34px;font-weight:700;letter-spacing:-0.025em;margin:0 0 8px}
+h2{font-family:"Familjen Grotesk",sans-serif;font-size:20px;font-weight:600;margin:36px 0 6px}
+p,li{color:var(--ink-2);max-width:62ch} p{margin:0 0 14px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px}
+a{color:var(--accent)}
+.back{display:inline-block;margin-top:34px;font-size:14px}
+strong{color:var(--ink)}
+label{display:block;font-weight:600;color:var(--ink);margin:18px 0 6px}
+input[type=email],input[type=text],textarea{width:100%;box-sizing:border-box;min-height:48px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);background:transparent;color:var(--ink);font:inherit}
+textarea{min-height:120px;resize:vertical}
+input:focus,textarea:focus{border-color:var(--accent);outline:none}
+.choices{display:flex;flex-wrap:wrap;gap:8px} .choices label{margin:0;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:1.5px solid var(--line);border-radius:999px;font-weight:500;cursor:pointer}
+.choices input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;min-height:48px;padding:0 22px;border-radius:14px;background:var(--accent);color:#FBFCF9;font-weight:600;border:0;font:inherit;font-weight:600;margin-top:22px;cursor:pointer}
+.hp{position:absolute;left:-9999px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<p class="eyebrow">Beta feedback</p>
+<h1>Tell us everything.</h1>
+<p>What broke, what confused you, what you wished it did. Short is fine. This goes straight to the person who built it.</p>
+<form name="feedback" method="POST" action="/thanks.html" data-netlify="true" netlify-honeypot="bot-field">
+  <input type="hidden" name="form-name" value="feedback">
+  <label for="fbEmail">Your email</label>
+  <input id="fbEmail" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
+  <label for="fbDoing">What were you doing?</label>
+  <input id="fbDoing" type="text" name="doing" placeholder="Packing Tuesday’s box, on the Pack tab" maxlength="200">
+  <label for="fbWhat">What happened, or what would you change?</label>
+  <textarea id="fbWhat" name="what" required maxlength="4000"></textarea>
+  <label>Would you keep using it?</label>
+  <div class="choices">
+    <label><input type="radio" name="keep" value="yes"> Yes</label>
+    <label><input type="radio" name="keep" value="maybe"> Maybe</label>
+    <label><input type="radio" name="keep" value="no"> No</label>
+  </div>
+  <p class="hp" aria-hidden="true"><label>Leave this empty: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
+  <button class="btn" type="submit">Send it</button>
+</form>
+<p style="margin-top:22px;font-size:14px">Something broken right now? The ? at the top of the app opens an email with the details we need already in it.</p>
+<a class="back" href="/app/">&larr; Back to the planner</a>
+</div>
+</body>
+</html>

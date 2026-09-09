@@ -85,3 +85,24 @@ export function sendTrialEnded(to, site, stopUrl) {
     html: `<p>Your three weeks of everything on Lunch Sorted are up.</p><p>Planning the week and the shopping list are still free, and everything you added is still there. Kid’s pick, the morning review and the pantry are waiting under the Household plan, along with adding lunchboxes and phones: $29 a year, $3.99 a month, or $79 once, forever.</p>${btn(keep, 'Switch it back on')}<p style="color:#6E7F75;font-size:13px">This is the last email about it.</p>` + foot(stopUrl).html
   });
 }
+
+/* the beta testers' first week: three short emails, each with one thing to try and where to say what they found */
+export const TESTER_DAYS = [1, 3, 6];
+export function sendTester(to, site, day, stopUrl) {
+  const app = `${site}/app/`, fb = `${site}/feedback.html`;
+  const notes = {
+    1: { subject: 'Day one: pack one real box with it',
+         text: `Thanks for testing Lunch Sorted.\n\nToday: if the week is not planned yet, tap Shuffle all. Open Shop and buy from the list (Copy, or the share button to send it to Notes). Tomorrow morning, open Pack and tap Packed.\n\nThen tell us one thing: did the boxes make sense for your kid?\n${fb}\n\nThe app: ${app}`,
+         html: `<p>Thanks for testing Lunch Sorted.</p><p><b>Today:</b> if the week is not planned yet, tap <b>Shuffle all</b>. Open <b>Shop</b> and buy from the list (Copy, or the share button to send it to Notes). Tomorrow morning, open <b>Pack</b> and tap <b>Packed</b>.</p><p>Then tell us one thing: did the boxes make sense for your kid?</p>${btn(fb, 'Tell us')}<p><a href="${esc(app)}">Open the planner</a></p>` },
+    3: { subject: 'Day three: let them pick',
+         text: `Tonight, hand over the phone.\n\nTap the gear beside the lunchbox name and switch on "They pick their box each day". On the Foods tab, tap the picture beside a food to add a photo of the real thing, for a kid who cannot read yet. Then Pack, "Let them pick", and give them the phone.\n\nThere are two ways to pick, Each part and Whole box, under the same switch. Tell us which one your kid got: ${fb}`,
+         html: `<p>Tonight, hand over the phone.</p><p>Tap the gear beside the lunchbox name and switch on <b>They pick their box each day</b>. On <b>Foods</b>, tap the picture beside a food to add a photo of the real thing, for a kid who cannot read yet. Then <b>Pack</b>, <b>Let them pick</b>, and give them the phone.</p><p>There are two ways to pick, <b>Each part</b> and <b>Whole box</b>, under the same switch. Tell us which one your kid got.</p>${btn(fb, 'Tell us')}` },
+    6: { subject: 'Day six: what came home?',
+         text: `The morning after a packed box, Pack asks what was eaten and what came home; next week leans toward what actually gets eaten.\n\nAlso try: Foods, Add your own, with what to buy for it, so the shopping list carries your family's real food.\n\nA week in: what would make you keep using it, and what would make you stop? ${fb}`,
+         html: `<p>The morning after a packed box, <b>Pack</b> asks what was eaten and what came home; next week leans toward what actually gets eaten.</p><p>Also try: <b>Foods</b>, <b>Add your own</b>, with what to buy for it, so the shopping list carries your family&rsquo;s real food.</p><p>A week in: what would make you keep using it, and what would make you stop?</p>${btn(fb, 'Tell us')}` }
+  }[day];
+  if (!notes) throw new Error('no tester note for day ' + day);
+  return send({ to, subject: notes.subject,
+    text: `${notes.text}\n\nNo more of these: ${stopUrl}`,
+    html: `${notes.html}<p style="font-size:12px;color:#78897F">These come a few times in your first week of the beta. <a href="${esc(stopUrl)}" style="color:#78897F">No more of these</a>.</p>` });
+}

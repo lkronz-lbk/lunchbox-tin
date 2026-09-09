@@ -916,7 +916,7 @@ try {
 
   /* the site is served under its real CSP (the server above enforces netlify.toml) */
   check('the app runs under the generated Content-Security-Policy', !!POLICIES['/app/*'] && POLICIES['/app/*'].includes('sha256-'));
-  check('the marketing pages carry a CSP too', !!POLICIES['/index.html'] && !!POLICIES['/privacy.html'] && !!POLICIES['/terms.html'] && !!POLICIES['/help.html'] && /googletagmanager/.test(POLICIES['/index.html']) && !/googletagmanager/.test(POLICIES['/help.html']));
+  check('the marketing pages carry a CSP too', !!POLICIES['/index.html'] && !!POLICIES['/privacy.html'] && !!POLICIES['/terms.html'] && !!POLICIES['/help.html'] && !!POLICIES['/feedback.html'] && !!POLICIES['/thanks.html'] && /googletagmanager/.test(POLICIES['/index.html']) && !/googletagmanager/.test(POLICIES['/help.html']));
 
   /* --------------------------------------------- the old name's data survives */
   for (const oldKey of ['fiveboxes', 'lunchbox-tin']) {
@@ -1254,7 +1254,7 @@ try {
   {
     const entPat = async () => (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
     const betaPage = await (await fetch(NODE_BASE + '/beta')).text();
-    check('the beta page says how many spots are left and links into the app with the code', /2 spots left/.test(betaPage) && betaPage.includes('/app/?beta=BETA-TEST-1234') && (betaPage.match(/<script/g) || []).length === 1 && /<script src="\/ga\.js" defer>/.test(betaPage), betaPage.slice(0, 200));
+    check('the beta page says how many spots are left and links into the app with the code', /2 spots left/.test(betaPage) && betaPage.includes('/app/?beta=BETA-TEST-1234') && (betaPage.match(/<script/g) || []).length === 1 && /<script src="\/ga\.js" defer>/.test(betaPage) && /15 years/.test(betaPage) && /class="qr"><svg/.test(betaPage), betaPage.slice(0, 200));
     const wrong = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-NOPE-0000' }) }).then(r => r.status));
     check('a wrong beta code grants nothing', wrong === 404 && ((await entPat()) || {}).plan !== 'lifetime', wrong);
     check('a stranger cannot claim the beta', (await fetch(NODE_BASE + '/api/billing/beta', { method: 'POST', body: JSON.stringify({ code: 'BETA-TEST-1234' }) })).status === 401);
@@ -1523,6 +1523,20 @@ try {
       check('the job refuses to run for anything but the schedule on the published deploy', stray.status === 404);
     }
     void young; void paidOne; void quiet; void ended; void west; void odd;
+    /* the beta testers' first week: days 1, 3 and 6, once each, never after "no more of these" */
+    {
+      const { run: runTester } = await import('../netlify/functions/cron-tester.js');
+      const seed = async (email, daysAgo, opts = {}) => { const r = await mk(email, daysAgo + 1, opts); await db.query(`UPDATE entitlements SET plan = 'lifetime', status = 'active', source = 'code', event_at = '${ago(daysAgo)}' WHERE household_id = ${r.h}`); return r; };
+      await seed('t1@example.com', 1.2); await seed('t3@example.com', 3.5); await seed('t6@example.com', 6.1); await seed('t0@example.com', 0.4); await seed('t9@example.com', 9.5); await seed('tq@example.com', 1.2, { mailOk: false });
+      const b0 = mails.length;
+      const r1 = await runTester(Date.now(), 'https://test.example');
+      const to = (e) => mails.slice(b0).filter(m => m.to === e);
+      check('day one, three and six each get their note, a household too new or too old gets none, and no more of these is honoured',
+        r1.sent === 3 && /Day one/.test(to('t1@example.com')[0].subject) && /Day three/.test(to('t3@example.com')[0].subject) && /Day six/.test(to('t6@example.com')[0].subject) && to('t0@example.com').length === 0 && to('t9@example.com').length === 0 && to('tq@example.com').length === 0, r1);
+      check('every note carries the feedback form and a stop link', to('t1@example.com')[0].text.includes('/feedback.html') && /mail-stop\?t=[a-f0-9]{32}/.test(to('t1@example.com')[0].text));
+      const r2 = await runTester(Date.now(), 'https://test.example');
+      check('a second run the same day sends nothing again', r2.sent === 0, r2);
+    }
   }
   for (const k of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_YEAR', 'STRIPE_PRICE_LIFETIME', 'STRIPE_PRICE_MONTH']) delete process.env[k];
   stripeLib.forgetPrices();
@@ -1564,6 +1578,8 @@ try {
   check('the waitlist form is wired to Netlify',
     await site.$eval('form.signup', f => f.getAttribute('data-netlify') === 'true' &&
       !!f.querySelector('input[name="form-name"]')));
+  await site.goto(BASE+'/feedback.html'); await site.waitForTimeout(250);
+  check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));
   await site.goto(BASE+'/help.html'); await site.waitForTimeout(250);
   check('the help page answers the questions and points at the planner and the address', /pick the week/.test(await site.textContent('body')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href^="mailto:hello@lunchsorted.app"]')));
   await site.goto(BASE+'/privacy.html');

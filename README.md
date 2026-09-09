@@ -218,6 +218,14 @@ A change to the schema, or to a comment, is a new numbered file.
 
 ### Beta testers
 
+Feedback lands in one place: `public/feedback.html` is a Netlify form (email, what they were
+doing, what happened, would they keep it) that posts to `/thanks.html`; submissions are under
+Forms in the Netlify dashboard, which can email each one. The help sheet's "Send feedback"
+and the site footer point at it. `cron-tester.js` sends every beta household three short
+emails in its first week (days 1, 3, 6 after it switched on; `notices` kinds `tester_1/3/6`),
+each with one thing to try and the form; "no more of these" is honoured.
+
+
 `/beta` (netlify/functions/beta.js; `/tester` is the short link with a source tag for GA4) is the page to hand out: it shows the spots left and one
 button into the app with the code from `BETA_CODE` (Netlify env, per context). The app keeps the
 code on the phone until a parent is signed in, then `POST /api/billing/beta` switches the
