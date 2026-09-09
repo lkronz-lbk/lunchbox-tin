@@ -33,7 +33,8 @@ export default async function handler(req) {
     const code = betaCode();
     if (!code) return page('Not found', '<h1>Not found.</h1><p><a href="/">Lunch Sorted</a></p>', 404);
     const cap = betaCap(), left = Math.max(0, cap - await betaCount());
-    const qr = await QRCode.toString(`${siteUrl(req)}/tester`, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' }).catch(() => '');
+    let base = ''; try { base = siteUrl(req); } catch { /* no URL env here: the page stands, without the code to scan */ }
+    const qr = base ? await QRCode.toString(`${base}/tester`, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' }).catch(() => '') : '';
     const ask = `<p>So was I. So I built this. Join as a beta tester, free, and if you like it, keep it free forever. The first ${esc(cap)} households.</p>
 <p><strong>In return:</strong> sign in, pack real lunchboxes with it, add your own foods, shop from its list, let the kids pick their box, and tell us everything. We&rsquo;ll email you a couple of times in your first week with what to try and where to say what you found.</p>
 <p><strong>Open this page on the phone you pack lunches with.</strong> Setup takes under a minute. Your email is what keeps your account, and your free-forever household, yours.</p>`;
