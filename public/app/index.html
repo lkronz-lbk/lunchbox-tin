@@ -1088,7 +1088,7 @@ var Sync = {
 };
 function syncLine(){
   if(!signedIn()) return '';
-  if(isHelper()) return 'Read-only on this phone \u2014 ticks stay here';
+  if(isHelper()) return 'Read-only on this phone \u2014 checkmarks stay here';
   if(!navigator.onLine) return 'Offline \u2014 changes are saved on this phone and sent when you are back';
   if(Account.status === 'syncing') return 'Syncing\u2026';
   if(Account.status === 'big') return 'This household is too large to send \u2014 remove some photos, foods or old lunchboxes';
@@ -1106,7 +1106,7 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
 var APP_BUILD = 'lunchsorted-v10';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v10', text:'New: the shopping list is now ingredients by aisle, and one Packed tick fills the box.'};
+var WHATS_NEW = {build:'lunchsorted-v10', text:'New: the shopping list is now ingredients by aisle, and one Packed check fills the box.'};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
 function whatsNew(){
@@ -2362,7 +2362,7 @@ function viewShop(){
   h += '<div class="spread"><span class="count">'+toBuy+' to buy'+(gated() ? '' : ' · '+(rows.length-toBuy)+' already home')+'</span>'
     +  '<span class="row" style="gap:6px">'+(canShare() ? '<button class="btn ghost sm" data-act="send-list" aria-label="Send the list">'+svg('share',16)+'</button>' : '')
     +  '<button class="btn ghost sm" data-act="copy-list">Copy</button></span></div>'
-    +  (gated() || premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>'+(gated() ? 'A pantry that remembers is part of the Household plan.' : 'Tick what is already home.')+'</span>'+premiumTag()+'</p>' : '');
+    +  (gated() || premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>'+(gated() ? 'A pantry that remembers is part of the Household plan.' : 'Check off what is already home.')+'</span>'+premiumTag()+'</p>' : '');
   var groups = nullMap();
   rows.forEach(function(r){ (groups[r.aisle] = groups[r.aisle] || []).push(r); });
   AISLES.forEach(function(a){
@@ -3136,7 +3136,7 @@ document.addEventListener('click', function(ev){
     if(!Downloads) return;
     Downloads.save({filename:'lunch-sorted-'+iso(today())+'.json', data:exportText()})
       .then(function(){ toast('Backup saved'); },
-            function(err){ toast(err && err.code==='declined' ? 'Backup cancelled' : 'Could not save the file'); });
+            function(err){ toast(err && err.code==='declined' ? 'Backup canceled' : 'Could not save the file'); });
     return;
   }
   if(act==='import-open'){ importSheet(); return; }

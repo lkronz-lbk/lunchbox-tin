@@ -92,7 +92,7 @@ export default async function handler(req) {
     const body = `<h1>Lunch Sorted, by the numbers</h1><p class="sub">${esc(siteEnv())} · ${esc(when)} ET · counts from the database</p>
 <h2>Households</h2><div class="grid">${tile(t.households.total, 'households')}${tile(t.households.week, 'new this week', `${t.households.month} in 30 days`)}${tile(t.households.shared, 'with a second phone', `${t.households.helpers} helpers`)}</div>
 <h2>Three weeks</h2><div class="grid">${tile(t.trials.trialing, 'on the trial', `${t.trials.endingSoon} end within 4 days${t.trials.capped ? ' · newest 5,000 households' : ''}`)}${tile(t.trials.lapsed, 'lapsed to free', t.trials.capped ? 'newest 5,000 households' : '')}${tile(t.plans.paid, 'paying', t.plans.pastDue ? `${t.plans.pastDue} past due` : '')}</div>
-<h2>Plans</h2><div class="grid">${tile(t.plans.year, 'yearly')}${tile(t.plans.month, 'monthly')}${tile(t.plans.lifetime, 'forever')}${tile(t.plans.ending, 'set to end', 'cancelled, running to the period end')}</div>
+<h2>Plans</h2><div class="grid">${tile(t.plans.year, 'yearly')}${tile(t.plans.month, 'monthly')}${tile(t.plans.lifetime, 'forever')}${tile(t.plans.ending, 'set to end', 'canceled, running to the period end')}</div>
 <h2>People</h2><div class="grid">${tile(t.people.total, 'signed-in people')}${tile(t.people.signinsWeek, 'sign-ins this week')}${tile(t.people.activeWeek, 'active this week', 'a session used in 7 days')}${tile(t.people.stoppedMail, 'stopped reminders')}</div>
 <h2>Emails and invites</h2><table>
 ${row('Trial-ending emails, all time / this week', `${(t.emails.trial_ending || {}).total || 0} / ${(t.emails.trial_ending || {}).week || 0}`)}

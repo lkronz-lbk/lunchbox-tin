@@ -45,10 +45,10 @@ and App Store Connect scales them for the smaller phones.
 > Nut-free, seed-free, dairy-free, cold lunches only, no ice pack, a short eating window, no chocolate, plus anything else you list. Foods that break a rule are flagged in your list, never silently dropped, so you always know why something stopped appearing.
 >
 > THE SHOPPING LIST
-> Every planned box rolls into one list of what to buy, grouped by aisle: a pinwheel is deli turkey, cheese slices and tortillas. Tick what the pantry already has, shop the rest, or send the list to Notes or Reminders. More than one kid? One list covers them all.
+> Every planned box rolls into one list of what to buy, grouped by aisle: a pinwheel is deli turkey, cheese slices and tortillas. Check off what the pantry already has, shop the rest, or send the list to Notes or Reminders. More than one kid? One list covers them all.
 >
 > MORNINGS
-> The next school day's box, one tick when it is packed, and a flag when it needs an ice pack, a sealed container, or is missing any protein.
+> The next school day's box, one check when it is packed, and a flag when it needs an ice pack, a sealed container, or is missing any protein.
 >
 > KID'S PICK
 > Switch on "They pick their box each day", then the night before hand them the phone. Part by part, two pictures at a time, or the whole box against the next one: either way the choice comes from the week you already shopped for, so there is nothing new to buy. On iPhone, an optional reminder at the time you choose. A lunch they chose tends to come home emptier.
@@ -79,7 +79,7 @@ and App Store Connect scales them for the smaller phones.
 ## Screenshots (6.9-inch, in this order)
 
 1. `01-week.png`: A week of lunches in about a minute.
-2. `02-pack.png`: Mornings: one box, one tick.
+2. `02-pack.png`: Mornings: one box, one check.
 3. `03-kidpick.png`: Hand them the phone. They pick.
 4. `04-shop.png`: The shopping list writes itself.
 5. `05-rules.png`: Your school's rules, respected.
@@ -147,7 +147,7 @@ weeks the reviewer will see the free tier with the plan's pieces locked, which i
 
 > Lunch Sorted is a planner for parents. The parent is the user; a child only ever sees the "kid's pick" screen, which the parent opens and hands over, and it asks the child for nothing.
 >
-> How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle the week or one day; tap a compartment (the swap arrow) to change it. Shop: the list is what to buy, by aisle; the share button sends it to Notes or Reminders. Pack: one Packed tick per box; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the gear beside the lunchbox name). The gear beside the lunchbox name: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
+> How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle the week or one day; tap a compartment (the swap arrow) to change it. Shop: the list is what to buy, by aisle; the share button sends it to Notes or Reminders. Pack: one Packed check per box; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the gear beside the lunchbox name). The gear beside the lunchbox name: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
 >
 > Payments: the Household plan is sold on our website (lunchsorted.app) and not in the app. The app does not use in-app purchase. Where the app mentions the plan, it opens Safari to our site; the app itself takes no payment. The review account is inside its free three weeks, so everything is on. This is a US-only listing.
 >

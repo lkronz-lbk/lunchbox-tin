@@ -107,7 +107,7 @@ export function sendTester(to, site, day, stopUrl) {
          feature: 'the week, planned in a minute.',
          steps: ['Open the app and tap <b>Week</b>. If it is empty, tap <b>Shuffle all</b>.',
                  'Not sure about something? Tap that compartment and swap it, or tap <b>Shuffle</b> on that day.',
-                 'Tap <b>Shop</b>. That is your grocery list, by aisle. Tick what is already home, then <b>Copy</b> it or send it to Notes.',
+                 'Tap <b>Shop</b>. That is your grocery list, by aisle. Check off what is already home, then <b>Copy</b> it or send it to Notes.',
                  'Tomorrow morning, tap <b>Pack</b>, then <b>Packed</b>.'],
          alt: 'The Week tab: a planned week of lunchboxes',
          ask: 'One question for today: did the boxes make sense for your kid? Tell me on the feedback form, it takes a minute.' },

@@ -14,7 +14,7 @@ SUB = ImageFont.truetype('store/Karla-Medium.ttf', 46)
 
 SHOTS = [
     ('week',    '01-week',    'A week of lunches\nin about a minute.', 'A main, a side, a fruit and a sweet for every school day, matched so each box goes together: crunchy against soft, tangy against salty.'),
-    ('pack',    '02-pack',    'Mornings: one box,\none tick.',            'Today’s box, an ice-pack flag when it needs one, and the rest of the week coming up.'),
+    ('pack',    '02-pack',    'Mornings: one box,\none check.',            'Today’s box, an ice-pack flag when it needs one, and the rest of the week coming up.'),
     ('kidpick', '03-kidpick', 'Hand them the phone.\nThey pick.',       'Tomorrow’s box, chosen from the week you already shopped for. A lunch they chose comes home emptier.'),
     ('shop',    '04-shop',    'The shopping list\nwrites itself.',      'Everything planned, grouped by aisle. Tick what the pantry already has.'),
     ('setup',   '05-rules',   'Your school’s rules,\nrespected.',       'Nut-free, cold-only, no ice pack, a short eating window. Foods are flagged, never silently dropped.'),
