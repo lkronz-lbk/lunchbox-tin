@@ -210,6 +210,12 @@ the visual identity.
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 
+### Migrations are frozen once applied
+
+Netlify checks every applied migration file against what it ran, byte for byte, and a
+deploy that changes one fails ("has been modified after being applied"): comments included.
+A change to the schema, or to a comment, is a new numbered file.
+
 ### Beta testers
 
 `/beta` (netlify/functions/beta.js; `/tester` is the short link with a source tag for GA4) is the page to hand out: it shows the spots left and one
