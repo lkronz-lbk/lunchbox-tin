@@ -1254,7 +1254,7 @@ try {
   {
     const entPat = async () => (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
     const betaPage = await (await fetch(NODE_BASE + '/beta')).text();
-    check('the beta page says how many spots are left and links into the app with the code', /2 spots left/.test(betaPage) && betaPage.includes('/app/?beta=BETA-TEST-1234') && !/<script/.test(betaPage), betaPage.slice(0, 200));
+    check('the beta page says how many spots are left and links into the app with the code', /2 spots left/.test(betaPage) && betaPage.includes('/app/?beta=BETA-TEST-1234') && (betaPage.match(/<script/g) || []).length === 1 && /<script src="\/ga\.js" defer>/.test(betaPage), betaPage.slice(0, 200));
     const wrong = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-NOPE-0000' }) }).then(r => r.status));
     check('a wrong beta code grants nothing', wrong === 404 && ((await entPat()) || {}).plan !== 'lifetime', wrong);
     check('a stranger cannot claim the beta', (await fetch(NODE_BASE + '/api/billing/beta', { method: 'POST', body: JSON.stringify({ code: 'BETA-TEST-1234' }) })).status === 401);

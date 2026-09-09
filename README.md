@@ -212,7 +212,7 @@ the visual identity.
 
 ### Beta testers
 
-`/beta` (netlify/functions/beta.js) is the page to hand out: it shows the spots left and one
+`/beta` (netlify/functions/beta.js; `/join` is the short link with a source tag for GA4) is the page to hand out: it shows the spots left and one
 button into the app with the code from `BETA_CODE` (Netlify env, per context). The app keeps the
 code on the phone until a parent is signed in, then `POST /api/billing/beta` switches the
 household to forever for good, refused once `BETA_CAP` (default 25; 0 closes it) households

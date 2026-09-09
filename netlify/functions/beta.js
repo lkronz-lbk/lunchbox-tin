@@ -1,13 +1,14 @@
 import { betaCode, betaCap, betaCount } from '../lib/beta.js';
 
-/* The beta page: how many spots are left, one button into the app carrying the code. No script,
-   noindex; the link is shared by hand, the cap is what limits it. */
-const CSP = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'";
+/* The beta page: how many spots are left, one button into the app carrying the code. The only
+   script is the site's own /ga.js (Google Analytics, as on the front page); noindex; the link is
+   shared by hand, the cap is what limits it. */
+const CSP = "default-src 'none'; script-src 'self' https://www.googletagmanager.com; img-src https://www.googletagmanager.com https://*.google-analytics.com; connect-src https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'";
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function page(title, body, status = 200) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>${esc(title)} · Lunch Sorted</title><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#E9EEE6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
+<title>${esc(title)} · Lunch Sorted</title><meta name="color-scheme" content="light dark"><script src="/ga.js" defer></script><meta name="theme-color" content="#E9EEE6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
 <style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--ink:#16241E;--ink-2:#4A5C53;--ink-3:#6E7F75;--accent:#2E5A48;--accent-fg:#FBFCF9}
 @media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--ink:#E6EEE7;--ink-2:#A6BAAE;--ink-3:#7A8E84;--accent:#79C8A2;--accent-fg:#0E1815}}
 body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.6 Karla,"Helvetica Neue",sans-serif;padding:40px 22px 70px}

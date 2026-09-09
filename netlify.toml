@@ -102,6 +102,11 @@
   status = 302
 
 [[redirects]]
+  from = "/join"
+  to = "/beta?utm_source=share&utm_medium=link&utm_campaign=beta"
+  status = 302
+
+[[redirects]]
   from = "/app"
   to = "/app/"
   status = 301
