@@ -103,7 +103,7 @@ ${row('Stripe events this week', t.stripeEventsWeek)}
 <h2>Beta testers</h2>
 ${t.testers.length ? `<table>${t.testers.map(x => `<tr><td>${esc(x.emails || ('household ' + x.id))}<br><small style="color:var(--ink-3)">since ${day(x.since)} · last seen ${day(x.lastSeen)}</small></td><td>${esc(x.plan === 'lifetime' ? 'forever' : x.plan)}${x.status === 'active' ? '' : ' · ' + esc(x.status)}</td></tr>`).join('')}</table>
 <p style="font-size:13px">For a sheet, one line each (email, since, last seen):</p><pre style="font-size:12px;white-space:pre-wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px">${esc(t.testers.map(x => [x.emails, day(x.since), day(x.lastSeen)].join(', ')).join('\n'))}</pre>`
-  : '<p>None yet. A household that checks out with a 100%-off code (TESTER) lands here, with the emails of everyone in it.</p>'}
+  : '<p>None yet. A household that joins through the beta link (/beta), or checks out with a 100%-off code, lands here with the emails of everyone in it.</p>'}
 <p style="font-size:13px;color:var(--ink-3);margin-top:22px">Stripe holds the money side: <a href="https://dashboard.stripe.com/">dashboard.stripe.com</a>. This page is for the people in ADMIN_EMAILS only.</p>`;
     return page('By the numbers', body);
   } catch (e) {

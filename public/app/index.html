@@ -839,7 +839,7 @@ var Store = {
     }catch(e){ return false; }
   },
   forget:function(){
-    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', SEEN_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
+    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', SEEN_KEY, BETA_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
 };
@@ -869,7 +869,21 @@ function nativePlugin(name){ try{ return native() && window.Capacitor.Plugins &&
 /* ---- billing: the plan is a row on the household that only Stripe's webhook writes.
    Free is one lunchbox on one phone; the Household plan is every lunchbox and the other
    parent's phone. When billing is not switched on (no Stripe in this deploy) nothing is gated. */
-var BILLING_KEY = 'lunchsorted-billing';
+var BILLING_KEY = 'lunchsorted-billing', BETA_KEY = 'lunchsorted-beta';
+/* the beta link: the code waits on this phone until a parent is signed in, then one request switches the plan on */
+function betaWaiting(){ try{ return localStorage.getItem(BETA_KEY) || ''; }catch(e){ return ''; } }
+function betaForget(){ try{ localStorage.removeItem(BETA_KEY); }catch(e){} }
+function claimBeta(){
+  var code = betaWaiting(); if(!code || !signedIn() || isHelper() || claimBeta.busy) return;
+  claimBeta.busy = true;
+  api('POST', '/api/billing/beta', {code:code}).then(function(r){
+    claimBeta.busy = false;
+    if(r.status === 200){ betaForget(); UI.notice = ''; toast(r.already ? 'Lunch Sorted is already yours, for good' : 'Lunch Sorted is yours, free forever'); Sync.pull().then(render); return; }
+    if(r.status === 409){ betaForget(); UI.notice = 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
+    if(r.status === 404){ betaForget(); UI.notice = 'That beta link is not right. Ask for a fresh one.'; render(); return; }
+    /* offline or a hiccup: the code stays, the next sign-in or pull tries again */
+  }).catch(function(){ claimBeta.busy = false; });
+}
 function paid(){ var e = Account.entitlement; return !!(e && e.plan !== 'free' && (e.status === 'active' || e.status === 'past_due')); }
 function billingOn(){ return !!(Account.billing && Account.billing.enabled) && !isHelper(); }
 /* the first three weeks are the whole product, no card asked: the trial runs from the day the
@@ -975,6 +989,7 @@ function firstNameFrom(email){ var p = String(email || '').split('@')[0].split(/
 function applyState(st){
   Account.user = {id:st.me.userId, email:st.me.email}; Account.me = st.me; Account.members = st.members || [];
   Account.entitlement = st.entitlement || null; Account.version = st.version || 0; Account.household = st.household || null;
+  if(betaWaiting()) setTimeout(claimBeta, 0);                       /* signed in with a beta code waiting: switch it on */
   if(typeof st.billing === 'boolean' && (!Account.billing || Account.billing.enabled !== st.billing)) loadBilling(true).then(render);
   /* the person on this phone is the member the server says they are, once the
      household exists there; before the first push it is this phone's own member,
@@ -3387,6 +3402,9 @@ Store.load().then(function(r){
     if(after === 'week'){ UI.tab = 'week'; } else { UI.tab = 'setup'; Account.first = true; }
     toast('Signed in');
   }
+  var betaCode = qs.get('beta') || '';
+  if(/^[A-Za-z0-9-]{8,64}$/.test(betaCode)){ try{ localStorage.setItem(BETA_KEY, betaCode); }catch(e){} UI.tab = 'setup'; Account.first = true; }
+  if(betaWaiting() && !signedIn()) UI.notice = 'Sign in with your email and the beta switches on: Lunch Sorted, free forever.';
   var joinCode = qs.get('join') || (function(){ try{ return localStorage.getItem('lunchsorted-join') || ''; }catch(e){ return ''; } })();
   if(joinCode){ try{ localStorage.setItem('lunchsorted-join', joinCode); }catch(e){} UI.tab = 'setup'; }
   var back = qs.get('paid'), portalBack = qs.get('portal'), wantUpgrade = qs.get('upgrade') === '1';
@@ -3394,7 +3412,7 @@ Store.load().then(function(r){
   if(back === '1'){ UI.tab = 'setup'; Account.first = true; Account.settling = true; toast('Thank you \u2014 switching on the Household plan\u2026'); }
   else if(back === '0'){ UI.tab = 'setup'; Account.first = true; rememberAfter(''); toast('No charge was made'); }
   else if(portalBack){ UI.tab = 'setup'; Account.first = true; }
-  if(qs.get('signed-in') || qs.get('join') || back !== null || portalBack || wantUpgrade) history.replaceState(null, '', location.pathname);
+  if(qs.get('signed-in') || qs.get('join') || qs.get('beta') || back !== null || portalBack || wantUpgrade) history.replaceState(null, '', location.pathname);
   /* what the plans cost and whether anything is gated at all; cached, and answered from the phone offline */
   loadBilling().then(function(){ if(!signedIn()) render(); kidReminderSync(); });
   var afterMe = function(){

@@ -1,4 +1,5 @@
 import { sql, json, fail, siteUrl, throttled } from '../lib/db.js';
+import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
 
@@ -158,14 +159,25 @@ export default async function handler(req, context) {
       return json({ received: true });
     }
 
-    if (req.method !== 'POST' || !['checkout', 'portal'].includes(action)) return fail('Not found', 404);
-    if (!billingEnabled()) return fail('Billing is not switched on here', 503);
+    if (req.method !== 'POST' || !['checkout', 'portal', 'beta'].includes(action)) return fail('Not found', 404);
+    if (action !== 'beta' && !billingEnabled()) return fail('Billing is not switched on here', 503);
     const user = await currentUser(req);
     if (!user) return fail('Not signed in', 401);
     if (await throttled('billing:' + user.id, 20, 3600)) return fail('Too many tries in an hour; try again shortly', 429);
     const h = await membership(user.id);
     if (!h) return fail('Not in a household', 404);
     if (h.role === 'helper') return fail('Only a parent can change the plan', 403);
+
+    if (action === 'beta') {
+      /* the beta link: forever, free, for the first BETA_CAP households; the code is in the link, the cap is the limit */
+      const body = await req.json().catch(() => ({}));
+      if (!codeMatches(body.code)) return fail('That beta link is not right', 404);
+      if (h.plan === 'lifetime' && h.status === 'active') return json({ ok: true, already: true });
+      if (await betaCount() >= betaCap()) return fail('The beta is full', 409, { full: true });
+      const ok = await write(h.id, new Date().toISOString(), { plan: 'lifetime', source: 'code', status: 'active', customer: h.stripe_customer_id || null, subscription: null, price: null, paidBy: user.id });
+      console.log(`billing: beta household=${h.id} ${ok ? 'on' : 'stale'}`);
+      return json({ ok: true });
+    }
     const site = siteUrl(req);
 
     if (action === 'checkout') {

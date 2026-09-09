@@ -212,8 +212,12 @@ the visual identity.
 
 ### Beta testers
 
-A household that checks out with a 100%-off code (TESTER, on the forever plan) is written
-with `source = 'code'` and kept so through later Stripe events; `/admin` lists them under
+`/beta` (netlify/functions/beta.js) is the page to hand out: it shows the spots left and one
+button into the app with the code from `BETA_CODE` (Netlify env, per context). The app keeps the
+code on the phone until a parent is signed in, then `POST /api/billing/beta` switches the
+household to forever for good, refused once `BETA_CAP` (default 25; 0 closes it) households
+carry `source = 'code'`. A household that checks out with a 100%-off Stripe code (TESTER) is
+written the same way and kept so through later Stripe events; `/admin` lists them under
 "Beta testers" with every email in the household, when they came in and when last seen,
 plus a sheet-ready line per household.
 

@@ -29,8 +29,10 @@ const { default: authHandler } = await import('../netlify/functions/api-auth.js'
 const { default: householdHandler } = await import('../netlify/functions/api-household.js');
 const { default: billingHandler } = await import('../netlify/functions/api-billing.js');
 const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
+const { default: betaHandler } = await import('../netlify/functions/beta.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
 process.env.REVIEW_EMAIL = 'review@example.com'; process.env.REVIEW_CODE = 'REVU-2468';
+process.env.BETA_CODE = 'BETA-TEST-1234'; process.env.BETA_CAP = '2';
 const stripeLib = await import('../netlify/lib/stripe.js');
 /* Stripe itself is a stub: it answers the four calls the code makes and records what it was asked */
 const stripeCalls = [];
@@ -60,7 +62,7 @@ async function apiProxy(req, res){
   const method = req.method;
   const request = new Request(`http://${req.headers.host}${req.url}`, {method, headers,
     body: (method === 'GET' || method === 'HEAD') ? undefined : Buffer.concat(chunks), duplex: 'half'});
-  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : householdHandler;
+  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : req.url.startsWith('/beta') ? betaHandler : householdHandler;
   let resp;
   try { resp = await handler(request, {ip: '127.0.0.1'}); }
   catch (e) { res.writeHead(500); return res.end(String(e)); }
@@ -87,7 +89,7 @@ const TYPES = {'.html':'text/html','.js':'text/javascript','.png':'image/png','.
 function serve(){
   const server = http.createServer((req, res) => {
     let p = decodeURIComponent(req.url.split('?')[0]);
-    if(p.startsWith('/api/')) return apiProxy(req, res);
+    if(p.startsWith('/api/') || p === '/beta') return apiProxy(req, res);
     if(p.endsWith('/')) p += 'index.html';
     const file = path.join(ROOT, p);
     if(!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()){
@@ -1248,6 +1250,29 @@ try {
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
   await until(pb, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1));
   const patState = await pb.evaluate(() => fetch('/api/household').then(r => r.json()));
+  /* ---- the beta link: free forever for the first BETA_CAP households, switched on from the app once signed in */
+  {
+    const entPat = async () => (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
+    const betaPage = await (await fetch(NODE_BASE + '/beta')).text();
+    check('the beta page says how many spots are left and links into the app with the code', /2 spots left/.test(betaPage) && betaPage.includes('/app/?beta=BETA-TEST-1234') && !/<script/.test(betaPage), betaPage.slice(0, 200));
+    const wrong = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-NOPE-0000' }) }).then(r => r.status));
+    check('a wrong beta code grants nothing', wrong === 404 && ((await entPat()) || {}).plan !== 'lifetime', wrong);
+    await pb.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pb.waitForLoadState('load');
+    let got = null; for (let i = 0; i < 40 && !(got && got.plan === 'lifetime'); i++) { await pb.waitForTimeout(250); got = await entPat(); }
+    check('opening the beta link while signed in switches the household to forever, marked as the beta', !!got && got.plan === 'lifetime' && got.source === 'code' && got.status === 'active', got);
+    check('the code leaves the address bar and the phone once used', !/beta=/.test(pb.url()) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-beta'))) === null);
+    await until(pb, () => /Forever|for good/.test(document.querySelector('#view').textContent) || /free forever/.test((document.querySelector('#toast') || {}).textContent || ''));
+    check('the beta page counts it', /1 spot left/.test(await (await fetch(NODE_BASE + '/beta')).text()));
+    process.env.BETA_CAP = '1';
+    check('at the cap the page says the beta is full', /beta is full/.test(await (await fetch(NODE_BASE + '/beta')).text()));
+    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'none' WHERE household_id = ${patState.household.id}`);
+    process.env.BETA_CAP = '0';                                   /* closed: nobody else gets in, whatever the count */
+    const full = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, full: j.full }))));
+    check('and a claim past the cap is refused', full.status === 409 && full.full === true, full);
+    process.env.BETA_CAP = '2';
+    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'none', event_at = NULL, paid_by = NULL, stripe_customer_id = NULL, stripe_subscription_id = NULL, stripe_price_id = NULL WHERE household_id = ${patState.household.id}`);   /* back to a fresh household for the checkout tests */
+    await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
+  }
   const inviteFree = await pb.evaluate(() => fetch('/api/household/invite', {method:'POST', headers:{'content-type':'application/json'}, body:'{}'}).then(r => r.status));
   check('the server refuses an invite from a free household', inviteFree === 402, inviteFree);
   await db.query(`UPDATE households SET doc = jsonb_set(doc, '{createdAt}', to_jsonb(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))) WHERE id = ${patState.household.id}`);
