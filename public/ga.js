@@ -1,7 +1,7 @@
 /* Google Analytics 4 for the marketing site only. The planner at /app/ never loads this
    file, and its own CSP would refuse the tag. Leave GA_ID empty and nothing loads. */
 (function(){
-  var GA_ID = 'G-V4SM2DX4CH';                       /* the measurement id from GA4 */
+  var GA_ID = 'G-G6JDE4B593';                       /* the measurement id from GA4 */
   if(!/^G-[A-Z0-9]{6,}$/.test(GA_ID)) return;
   window.dataLayer = window.dataLayer || [];
   function gtag(){ dataLayer.push(arguments); }
