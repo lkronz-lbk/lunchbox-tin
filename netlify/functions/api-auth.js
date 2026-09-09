@@ -133,7 +133,7 @@ export default async function handler(req, context) {
        follows links cannot unsubscribe anyone; the button does it. Sign-in emails still come when asked for. */
     if (req.method === 'GET' && action === 'mail-stop') {
       const t = url.searchParams.get('t') || '';
-      return page('Stop reminders', `<h1>Stop the reminder emails?</h1><p>You will not get emails about your three weeks or the Household plan. Sign-in links still arrive when you ask for one.</p>
+      return page('Stop reminders', `<h1>Stop the reminder emails?</h1><p>You will not get emails about your three weeks, the Household plan, or the beta. Sign-in links still arrive when you ask for one.</p>
 <form method="post" action="/api/auth/mail-stop"><input type="hidden" name="t" value="${esc(t)}"><button type="submit">Stop these reminders</button></form><p><a href="/app/">Back to Lunch Sorted</a></p>`);
     }
     if (req.method === 'POST' && action === 'mail-stop') {

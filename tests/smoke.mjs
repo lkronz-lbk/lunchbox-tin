@@ -1254,7 +1254,7 @@ try {
   {
     const entPat = async () => (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
     const betaPage = await (await fetch(NODE_BASE + '/beta')).text();
-    check('the beta page says how many spots are left and links into the app with the code', /2 spots left/.test(betaPage) && betaPage.includes('/app/?beta=BETA-TEST-1234') && (betaPage.match(/<script/g) || []).length === 1 && /<script src="\/ga\.js" defer>/.test(betaPage) && /15 years/.test(betaPage) && /class="qr"><svg/.test(betaPage), betaPage.slice(0, 200));
+    check('the beta page says how many spots are left and links into the app with the code', /2 spots left/.test(betaPage) && betaPage.includes('/app/?beta=BETA-TEST-1234') && (betaPage.match(/<script/g) || []).length === 1 && /<script src="\/ga\.js" defer>/.test(betaPage) && /15 years/.test(betaPage) && /class="qr"><svg/.test(betaPage) && !/<script|on\w+=/.test(betaPage.slice(betaPage.indexOf('class="qr"'))), betaPage.slice(0, 200));
     const wrong = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-NOPE-0000' }) }).then(r => r.status));
     check('a wrong beta code grants nothing', wrong === 404 && ((await entPat()) || {}).plan !== 'lifetime', wrong);
     check('a stranger cannot claim the beta', (await fetch(NODE_BASE + '/api/billing/beta', { method: 'POST', body: JSON.stringify({ code: 'BETA-TEST-1234' }) })).status === 401);
@@ -1521,6 +1521,9 @@ try {
       const { default: cronHandler } = await import('../netlify/functions/cron-trial.js');
       const stray = await cronHandler(new Request('http://x/cron', { method: 'POST', body: '{}' }));
       check('the job refuses to run for anything but the schedule on the published deploy', stray.status === 404);
+      const { default: testerHandler } = await import('../netlify/functions/cron-tester.js');
+      const strayT = await testerHandler(new Request('http://x/cron', { method: 'POST', body: '{"next_run":"x"}' }));
+      check('and so does the beta-week job, even with a schedule-shaped body, off the published deploy', strayT.status === 404);
     }
     void young; void paidOne; void quiet; void ended; void west; void odd;
     /* the beta testers' first week: days 1, 3 and 6, once each, never after "no more of these" */

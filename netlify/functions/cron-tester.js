@@ -1,10 +1,11 @@
-import { sql, siteUrl } from '../lib/db.js';
+import { sql, siteUrl, siteEnv } from '../lib/db.js';
 import { sendTester, TESTER_DAYS } from '../lib/mail.js';
 
 /* Once a day: every household that came in on the beta gets three short emails in its first
    week, on days 1, 3 and 6 after it switched on, each with one thing to try and the feedback
    form. Each household, each day, once; anyone who tapped "no more of these" never. */
 const DAY = 86400000;
+const PER_RUN = 200;
 
 export async function run(now = Date.now(), siteOverride = '') {
   const out = { sent: 0, skipped: 0 };
@@ -12,6 +13,7 @@ export async function run(now = Date.now(), siteOverride = '') {
   const q = sql();
   const rows = await q`SELECT household_id AS id, event_at FROM entitlements WHERE source = 'code' AND event_at > now() - interval '10 days' ORDER BY event_at LIMIT 500`;
   for (const h of rows) {
+    if (out.sent >= PER_RUN) break;
     const age = (now - new Date(h.event_at).getTime()) / DAY;
     /* the latest day that has come, so a household that was missed a day still gets that note, once */
     const day = TESTER_DAYS.filter(d => age >= d && age < d + 2).pop();
@@ -39,6 +41,7 @@ export async function run(now = Date.now(), siteOverride = '') {
 }
 
 export default async function handler(req) {
+  if (siteEnv() !== 'production') return new Response('not here', { status: 404 });   /* the schedule runs on the published deploy alone */
   const body = await req.json().catch(() => null);
   if (!body || !body.next_run) return new Response('not found', { status: 404 });
   try { await run(); return new Response('ok'); }
