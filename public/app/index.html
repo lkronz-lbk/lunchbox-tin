@@ -32,7 +32,7 @@ img{max-width:100%}
   --c-main:#2E5A48; --c-side:#8A5309; --c-fruit:#A2304C; --c-sweet:#57448A; --c-snack:#6B7A1F; --c-drink:#2B6B85;
   --scrim:rgba(8,16,13,.5); --shadow-1:0 1px 2px rgba(0,0,0,.25); --shadow-lift:0 4px 0 rgba(0,0,0,.06);
   --accent:#2E5A48; --accent-fg:#FBFCF9; --accent-soft:#DCE8DF;
-  --warn:#8A5A06; --warn-soft:#F6E9CE;
+  --warn:#8A5A06; --warn-soft:#F6E9CE; --hot:#B4460F; --hot-soft:#FDE3D0;
   --toast-bg:#1E3329; --toast-fg:#F4F8F3;
   --r-lg:20px; --r-md:12px; --r-sm:8px;
   --f-display:"Familjen Grotesk","Trebuchet MS",sans-serif;
@@ -47,7 +47,7 @@ img{max-width:100%}
     --c-main:#79C8A2; --c-side:#E0A253; --c-fruit:#EA8299; --c-sweet:#A793DC; --c-snack:#C3CF6E; --c-drink:#7FC3DE;
     --scrim:rgba(0,0,0,.62); --shadow-1:0 0 0 1px rgba(255,255,255,.14); --shadow-lift:0 4px 0 rgba(255,255,255,.08);
     --accent:#79C8A2; --accent-fg:#0E1815; --accent-soft:#1F332A;
-    --warn:#E0A253; --warn-soft:#2C2415;
+    --warn:#E0A253; --warn-soft:#2C2415; --hot:#F2A26E; --hot-soft:#3A2114;
     --toast-bg:#E6EEE7; --toast-fg:#0E1815;
   }
 }
@@ -58,7 +58,7 @@ img{max-width:100%}
   --c-main:#79C8A2; --c-side:#E0A253; --c-fruit:#EA8299; --c-sweet:#A793DC; --c-snack:#C3CF6E; --c-drink:#7FC3DE;
   --scrim:rgba(0,0,0,.62); --shadow-1:0 0 0 1px rgba(255,255,255,.14); --shadow-lift:0 4px 0 rgba(255,255,255,.08);
   --accent:#79C8A2; --accent-fg:#0E1815; --accent-soft:#1F332A;
-  --warn:#E0A253; --warn-soft:#2C2415;
+  --warn:#E0A253; --warn-soft:#2C2415; --hot:#F2A26E; --hot-soft:#3A2114;
   --toast-bg:#E6EEE7; --toast-fg:#0E1815;
 }
 *{box-sizing:border-box}
@@ -199,6 +199,10 @@ input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:foc
   flex-direction:column;gap:12px;align-items:center;background:var(--surface)}
 .empty p{margin:0;color:var(--ink-2);font-size:14px;max-width:38ch}
 .banner.good{background:var(--accent-soft);color:var(--accent)}
+.banner.hot{background:var(--hot-soft);color:var(--hot);border:1.5px solid var(--hot)}
+.banner.hot b{display:block;margin-bottom:2px}
+.betabar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 14px;padding:6px 6px 6px 13px;border-radius:var(--r-md);background:var(--hot-soft);color:var(--hot);font-size:13px;font-weight:600}
+.betabar .btn{min-height:40px;padding:0 12px;font-size:13px;border-color:var(--hot);color:var(--hot);background:transparent}
 .banner{background:var(--warn-soft);color:var(--warn);border-radius:var(--r-md);padding:11px 13px;font-size:13.5px;
   display:flex;gap:10px;align-items:center;justify-content:space-between}
 
@@ -877,8 +881,8 @@ function homeHint(){
   try{ if(localStorage.getItem(HOME_KEY)) return ''; }catch(e){}
   if(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)) return '';
   var ua = navigator.userAgent;
-  if(/iPhone|iPad/.test(ua)) return 'Put Lunch Sorted on your home screen: tap Share, then Add to Home Screen.';
-  if(/Android/.test(ua)) return 'Put Lunch Sorted on your home screen: tap the browser menu, then Add to Home screen.';
+  if(/iPhone|iPad/.test(ua)) return '<b>Put Lunch Sorted on your home screen.</b>In Safari: tap the \u22ef button at the bottom right (or the Share icon), tap Share, scroll down, tap Add to Home Screen.';
+  if(/Android/.test(ua)) return '<b>Put Lunch Sorted on your home screen.</b>Tap the \u22ee menu at the top right, then Add to Home screen.';
   return '';
 }
 /* the beta link: the code waits on this phone until a parent is signed in, then one request switches the plan on */
@@ -2118,7 +2122,7 @@ function noticeBanner(){
     return '<div class="banner good"><span>Switching the beta on\u2026</span></div>';
   }
   var home = !UI.notice && homeHint();
-  if(home) return '<div class="banner good"><span>'+esc(home)+'</span><button class="btn sm ghost" data-act="home-ok">OK</button></div>';
+  if(home) return '<div class="banner hot"><span>'+home+'</span><button class="btn sm ghost" data-act="home-ok">OK</button></div>';   /* the text is the app's own, with its one <b> */
   var msg = UI.notice || (!Store.ok ? (native() ? 'This phone' : 'This browser')+' is not letting the app save. Changes will be lost when you close it.' : '');
   if(!msg && Account.join && UI.tab !== 'setup')
     return '<div class="banner"><span>'+esc(Account.join.from || 'Someone')+' invited you to share their lunches.</span><button class="btn sm primary" data-act="tab" data-tab="setup">Have a look</button></div>';
@@ -2744,6 +2748,11 @@ function siteLink(path, label, primary){
   return nativePlugin('Browser') ? '<button class="'+cls+'" data-act="help-site" data-url="'+esc(path)+'">'+label+'</button>'
                                  : '<a class="'+cls+'" href="'+esc(path)+'" target="_blank" rel="noopener">'+label+'</a>';
 }
+function isTester(){ return !!(Account.entitlement && Account.entitlement.source === 'code'); }
+function betaBar(){
+  if(!isTester() || isHelper()) return '';
+  return '<div class="betabar"><span>Beta tester \u00b7 found something?</span>' + siteLink('/feedback.html', 'Send feedback') + '</div>';
+}
 function helpSheet(){
   var qa = [
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle a day, or tap a compartment to change one thing.'],
@@ -2814,14 +2823,14 @@ function render(){
   document.getElementById('tabs').style.display = '';
   document.querySelector('.topbar').style.display = '';
   if(UI.box && (UI.tab === 'setup' || !kid)) UI.box = false;   /* the settings belong to a lunchbox tab; Account has no gear */
-  document.getElementById('view').innerHTML =
+  document.getElementById('view').innerHTML = betaBar() + (
       UI.box           ? viewBox()
     : UI.tab==='pack'  ? viewPack()
     : '<div class="stack">' + noticeBanner() + (   /* whatever banner applies is read on whichever tab the app opened on; Pack draws its own */
       UI.tab==='week'  ? viewWeek()
     : UI.tab==='shop'  ? viewShop()
     : UI.tab==='foods' ? viewFoods()
-    : viewSetup()) + '</div>';
+    : viewSetup()) + '</div>');
   document.getElementById('tabs').innerHTML = TABS.map(function(t){
     return '<button data-act="tab" data-tab="'+t.k+'" aria-current="'+(UI.tab===t.k)+'">'
       + svg(t.icon)+'<span>'+t.label+'</span></button>'; }).join('');

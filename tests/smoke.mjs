@@ -1238,7 +1238,7 @@ try {
   await until(pb, () => !!document.querySelector('[data-dev-link]'));
   await pb.goto(await pb.getAttribute('[data-dev-link]', 'href')); await pb.click('button[type="submit"]'); await pb.waitForURL(/\/app\//); await pb.waitForLoadState('load');
   await until(pb, () => /Signed in as\s*pat@example\.com/.test(document.querySelector('#view').textContent) && !!document.querySelector('[data-act="upgrade"]'));
-  check('signed in from a phone\'s Safari, the app says how to put it on the home screen, once', /Add to Home Screen/.test(await pb.textContent('#view')) && !!(await pb.$('.banner.good [data-act="home-ok"]')));
+  check('signed in from a phone\'s Safari, the app says how to put it on the home screen, step by step, once', /bottom right/.test(await pb.textContent('#view')) && /Add to Home Screen/.test(await pb.textContent('#view')) && !!(await pb.$('.banner.hot [data-act="home-ok"]')));
   await pb.$eval('[data-act="home-ok"]', b => b.click()); await pb.waitForTimeout(200);   /* the resumed sheet sits over it in this flow; the tap itself is what is under test */
   check('and OK puts it away for good', !/Add to Home Screen/.test(await pb.textContent('#view')) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-home-seen'))) === '1');
   const resumed = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /second lunchbox/i.test(document.querySelector('#sheetBody').textContent));
@@ -1268,6 +1268,10 @@ try {
     check('the code leaves the address bar and the phone once used', !/beta=/.test(pb.url()) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-beta'))) === null);
     await until(pb, () => /The beta is on/.test(document.querySelector('#view').textContent));
     check('and the app says so where it stays, in green', !!(await pb.$('.banner.good [data-act="notice-dismiss"]')));
+    await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(250);
+    check('a beta household has the feedback strip on every tab', !!(await pb.$('.betabar a[href="/feedback.html"], .betabar [data-act="help-site"]')) && /Beta tester/.test(await pb.textContent('.betabar')));
+    await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(250);
+    check('on Foods too', !!(await pb.$('.betabar')));
     check('the beta page counts it', /1 spot left/.test(await (await fetch(NODE_BASE + '/beta')).text()));
     const again = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, already: j.already }))));
     check('claiming twice is fine and says so', again.status === 200 && again.already === true, again);
