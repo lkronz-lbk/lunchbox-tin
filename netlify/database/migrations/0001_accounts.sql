@@ -74,7 +74,7 @@ CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions (expires_at);
 CREATE TABLE IF NOT EXISTS entitlements (
   household_id           INT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
   plan                   TEXT NOT NULL DEFAULT 'free',      -- free | household | lifetime
-  source                 TEXT NOT NULL DEFAULT 'none',      -- none | stripe | apple | comp
+  source                 TEXT NOT NULL DEFAULT 'none',      -- none | stripe | code (a 100%-off code: the beta testers) | apple | comp
   status                 TEXT NOT NULL DEFAULT 'none',      -- none | active | past_due | canceled
   current_period_end     TIMESTAMPTZ,
   stripe_customer_id     TEXT,

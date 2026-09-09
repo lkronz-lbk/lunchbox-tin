@@ -5,7 +5,8 @@ import { trialEnd } from '../lib/trial.js';
 
 /* The numbers, for the people named in ADMIN_EMAILS and nobody else: households,
    trials, plans, sign-ins, emails sent. Counts from the database, rendered as a
-   page with no script, so there is nothing to hash and nothing to leak. */
+   page with no script, so there is nothing to hash. The beta-tester table carries emails:
+   the page is for ADMIN_EMAILS only and is never cached. */
 const PAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'";
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -38,6 +39,7 @@ p{color:var(--ink-2)} a{color:var(--accent)}</style></head><body><div class="wra
 
 const tile = (n, label, note) => `<div class="tile"><b>${esc(n)}</b><span>${esc(label)}</span>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
 const row = (label, n) => `<tr><td>${esc(label)}</td><td>${esc(n)}</td></tr>`;
+const day = (d) => d ? new Date(d).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' }) : 'never';
 
 export async function stats(now = Date.now()) {
   const q = sql();
@@ -64,13 +66,19 @@ export async function stats(now = Date.now()) {
   const notices = await q`SELECT kind, count(*)::int AS n, count(*) FILTER (WHERE sent_at > now() - interval '7 days')::int AS week FROM notices GROUP BY kind`;
   const [ev] = await q`SELECT count(*) FILTER (WHERE received_at > now() - interval '7 days')::int AS week FROM stripe_events`;
   const [inv] = await q`SELECT count(*) FILTER (WHERE used_at IS NOT NULL)::int AS used, count(*) FILTER (WHERE used_at IS NULL AND expires_at > now())::int AS open FROM invites`;
+  /* the beta testers: every household that came in on a 100%-off code, with the people in it */
+  const testers = await q`SELECT e.household_id AS id, e.plan, e.status, e.event_at AS since,
+      (SELECT string_agg(u.email, ', ' ORDER BY (m.role = 'owner') DESC, u.email) FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = e.household_id) AS emails,
+      (SELECT max(u.last_seen_at) FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = e.household_id) AS last_seen
+    FROM entitlements e WHERE e.source = 'code' ORDER BY e.event_at DESC NULLS LAST LIMIT 500`;
   return {
     households: { total: h.total, week: h.week, month: h.month, shared: m.shared, helpers: helpers.n },
     people: { total: u.total, signinsWeek: s.week, activeWeek: s.active, stoppedMail: u.quiet },
     plans: { paid: paid.length, year: byPlan.year, month: byPlan.month, lifetime: byPlan.lifetime, pastDue, ending },
     trials: { trialing, endingSoon, lapsed, capped },
     emails: Object.fromEntries(notices.map(n => [n.kind, { total: n.n, week: n.week }])),
-    invites: inv, stripeEventsWeek: ev.week
+    invites: inv, stripeEventsWeek: ev.week,
+    testers: testers.map(x => ({ id: x.id, plan: x.plan, status: x.status, since: x.since, emails: x.emails || '', lastSeen: x.last_seen }))
   };
 }
 
@@ -92,6 +100,10 @@ ${row('Trial-ended emails, all time / this week', `${(t.emails.trial_ended || {}
 ${row('Invites used / open', `${t.invites.used} / ${t.invites.open}`)}
 ${row('Stripe events this week', t.stripeEventsWeek)}
 </table>
+<h2>Beta testers</h2>
+${t.testers.length ? `<table>${t.testers.map(x => `<tr><td>${esc(x.emails || ('household ' + x.id))}<br><small style="color:var(--ink-3)">since ${day(x.since)} · last seen ${day(x.lastSeen)}</small></td><td>${esc(x.plan === 'lifetime' ? 'forever' : x.plan)}${x.status === 'active' ? '' : ' · ' + esc(x.status)}</td></tr>`).join('')}</table>
+<p style="font-size:13px">For a sheet, one line each (email, since, last seen):</p><pre style="font-size:12px;white-space:pre-wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px">${esc(t.testers.map(x => [x.emails, day(x.since), day(x.lastSeen)].join(', ')).join('\n'))}</pre>`
+  : '<p>None yet. A household that checks out with a 100%-off code (TESTER) lands here, with the emails of everyone in it.</p>'}
 <p style="font-size:13px;color:var(--ink-3);margin-top:22px">Stripe holds the money side: <a href="https://dashboard.stripe.com/">dashboard.stripe.com</a>. This page is for the people in ADMIN_EMAILS only.</p>`;
     return page('By the numbers', body);
   } catch (e) {

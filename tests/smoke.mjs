@@ -28,7 +28,7 @@ await migrate(globalThis.__LS_SQL);
 const { default: authHandler } = await import('../netlify/functions/api-auth.js');
 const { default: householdHandler } = await import('../netlify/functions/api-household.js');
 const { default: billingHandler } = await import('../netlify/functions/api-billing.js');
-const { default: adminHandler } = await import('../netlify/functions/api-admin.js');
+const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
 process.env.REVIEW_EMAIL = 'review@example.com'; process.env.REVIEW_CODE = 'REVU-2468';
 const stripeLib = await import('../netlify/lib/stripe.js');
@@ -1391,6 +1391,15 @@ try {
   check('a partial refund changes nothing', (await ent()).plan === 'lifetime');
   await hook({ id: 'evt_refund', type: 'charge.refunded', created: t0 + 9, data: { object: { id: 'ch_1', object: 'charge', customer: 'cus_pat', refunded: true } } });
   check('a forever purchase refunded in full is undone', (await ent()).plan === 'free' && (await ent()).status === 'canceled');
+  /* a beta tester: forever, on a 100%-off code, nothing charged; the admin page lists them by email */
+  await hook({ id: 'evt_tester', type: 'checkout.session.completed', created: t0 + 9.5, data: { object: { id: 'cs_test_t', mode: 'payment', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
+  check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
+  {
+    const testers = (await adminStats()).testers;
+    check('the numbers page lists the beta testers by email, with when they came in and were last seen', testers.length === 1 && /pat@example\.com/.test(testers[0].emails) && testers[0].plan === 'lifetime' && !!testers[0].since && !!testers[0].lastSeen, testers);
+  }
+  await hook({ id: 'evt_refund_t', type: 'charge.refunded', created: t0 + 9.6, data: { object: { id: 'ch_t', object: 'charge', customer: 'cus_pat', refunded: true } } });
+  check('undoing it clears the tester mark too', (await ent()).plan === 'free' && (await ent()).source === 'none', await ent());
   /* who may manage billing: the owner, and whoever paid; a helper may buy nothing */
   await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_pat', paid_by=NULL WHERE household_id=${patState.household.id}`);
   await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);

@@ -210,6 +210,13 @@ the visual identity.
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 
+### Beta testers
+
+A household that checks out with a 100%-off code (TESTER, on the forever plan) is written
+with `source = 'code'` and kept so through later Stripe events; `/admin` lists them under
+"Beta testers" with every email in the household, when they came in and when last seen,
+plus a sheet-ready line per household.
+
 ### Releasing an app change
 
 Bump `APP_BUILD` in `public/app/index.html` and `VERSION` in `public/app/sw.js` together, and

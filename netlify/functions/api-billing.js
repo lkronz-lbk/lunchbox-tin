@@ -49,7 +49,9 @@ async function write(hid, at, v) {
   const rows = await sql()`
     INSERT INTO entitlements (household_id, plan, source, status, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, stripe_price_id, paid_by, event_at, updated_at)
     VALUES (${hid}, ${v.plan}, ${v.source}, ${v.status}, ${v.periodEnd || null}, ${!!v.cancelAtPeriodEnd}, ${v.customer || null}, ${v.subscription || null}, ${v.price || null}, ${v.paidBy || null}, ${at}, now())
-    ON CONFLICT (household_id) DO UPDATE SET plan = EXCLUDED.plan, source = EXCLUDED.source, status = EXCLUDED.status,
+    ON CONFLICT (household_id) DO UPDATE SET plan = EXCLUDED.plan,
+      source = CASE WHEN ${!!v.keepCode} AND entitlements.source = 'code' AND EXCLUDED.plan <> 'free' THEN 'code' ELSE EXCLUDED.source END,   /* a tester stays a tester through renewals; a real purchase later is a sale */
+      status = EXCLUDED.status,
       current_period_end = EXCLUDED.current_period_end, cancel_at_period_end = EXCLUDED.cancel_at_period_end,
       stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, entitlements.stripe_customer_id),
       stripe_subscription_id = EXCLUDED.stripe_subscription_id, stripe_price_id = EXCLUDED.stripe_price_id,
@@ -72,10 +74,11 @@ async function applyEvent(ev) {
     const cust = idOf(obj.customer);
     const paidBy = Number(obj.metadata && obj.metadata.user_id) || null;
     const plan = PLANS[obj.metadata && obj.metadata.plan] || (obj.mode === 'payment' ? 'lifetime' : 'household');
+    const source = obj.amount_total === 0 ? 'code' : 'stripe';          /* nothing charged: a 100%-off code (the beta testers); the admin page lists them */
     const [cur] = await q`SELECT plan, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
     const oldSub = cur && cur.stripe_subscription_id;
     if (plan === 'lifetime') {
-      const ok = await write(hid, at, { plan: 'lifetime', source: 'stripe', status: 'active', customer: cust, subscription: null, price: prices().lifetime, paidBy });
+      const ok = await write(hid, at, { plan: 'lifetime', source, status: 'active', customer: cust, subscription: null, price: prices().lifetime, paidBy });
       /* a yearly plan bought before this one stops at its period end, so nobody pays twice */
       if (ok && oldSub) { try { await stripe('POST', `/subscriptions/${oldSub}`, { cancel_at_period_end: true }); } catch (e) { console.error('billing: could not stop the old subscription', oldSub, e.message); } }
       return ok ? 'applied' : 'stale';
@@ -86,7 +89,7 @@ async function applyEvent(ev) {
        first moment and the subscription.created event, which may carry an earlier stamp, is not needed */
     let sub = null;
     if (subId) { try { sub = await stripe('GET', `/subscriptions/${subId}`); } catch (e) { console.error('billing: could not read', subId, e.message); } }
-    const ok = await write(hid, at, { plan: 'household', source: 'stripe', status: sub ? subscriptionStatus(sub) : 'active', periodEnd: periodEnd(sub),
+    const ok = await write(hid, at, { plan: 'household', source, status: sub ? subscriptionStatus(sub) : 'active', periodEnd: periodEnd(sub),
       cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy });
     /* a second subscription for the same household (a card that failed, then a fresh checkout) replaces the first */
     if (ok && oldSub && subId && oldSub !== subId) await cancelSubscription(oldSub);
@@ -102,7 +105,7 @@ async function applyEvent(ev) {
     const status = ev.type === 'customer.subscription.deleted' ? 'canceled' : subscriptionStatus(obj);
     const price = obj.items && obj.items.data && obj.items.data[0] && obj.items.data[0].price && obj.items.data[0].price.id;
     const ok = await write(hid, at, { plan: status === 'canceled' ? 'free' : 'household', source: status === 'canceled' ? 'none' : 'stripe', status,
-      periodEnd: periodEnd(obj), cancelAtPeriodEnd: obj.cancel_at_period_end, customer: idOf(obj.customer), subscription: obj.id, price });
+      periodEnd: periodEnd(obj), cancelAtPeriodEnd: obj.cancel_at_period_end, customer: idOf(obj.customer), subscription: obj.id, price, keepCode: true });
     return ok ? 'applied' : 'stale';
   }
 
