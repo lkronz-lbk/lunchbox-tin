@@ -28,7 +28,7 @@ label{display:block;font-weight:600;color:var(--ink);margin:18px 0 6px}
 input[type=email],input[type=text],textarea{width:100%;box-sizing:border-box;min-height:48px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);background:transparent;color:var(--ink);font:inherit}
 textarea{min-height:120px;resize:vertical}
 input:focus,textarea:focus{border-color:var(--accent);outline:none}
-.choices{display:flex;flex-wrap:wrap;gap:8px} .choices label{margin:0;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:1.5px solid var(--line);border-radius:999px;font-weight:500;cursor:pointer}
+.choices{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:0} .choices legend{display:block;font-weight:600;color:var(--ink);margin:18px 0 6px;padding:0;width:100%} .choices label{margin:0;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:1.5px solid var(--line);border-radius:999px;font-weight:400;cursor:pointer}
 .choices input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
 .btn{display:inline-flex;align-items:center;min-height:48px;padding:0 22px;border-radius:14px;background:var(--accent);color:#FBFCF9;font-weight:600;border:0;font:inherit;font-weight:600;margin-top:22px;cursor:pointer}
 .hp{position:absolute;left:-9999px}
@@ -47,16 +47,15 @@ input:focus,textarea:focus{border-color:var(--accent);outline:none}
   <input id="fbDoing" type="text" name="doing" placeholder="Packing Tuesday’s box, on the Pack tab" maxlength="200">
   <label for="fbWhat">What happened, or what would you change?</label>
   <textarea id="fbWhat" name="what" required maxlength="4000"></textarea>
-  <label>Would you keep using it?</label>
-  <div class="choices">
+  <fieldset class="choices"><legend>Would you keep using it?</legend>
     <label><input type="radio" name="keep" value="yes"> Yes</label>
     <label><input type="radio" name="keep" value="maybe"> Maybe</label>
     <label><input type="radio" name="keep" value="no"> No</label>
-  </div>
+  </fieldset>
   <p class="hp" aria-hidden="true"><label>Leave this empty: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
   <button class="btn" type="submit">Send it</button>
 </form>
-<p style="margin-top:22px;font-size:14px">Something broken right now? The ? at the top of the app opens an email with the details we need already in it.</p>
+<p style="margin-top:22px;font-size:14px">Something broken right now? The ? in the app, then Ask a question, opens an email with the details we need already in it.</p>
 <a class="back" href="/app/">&larr; Back to the planner</a>
 </div>
 </body>

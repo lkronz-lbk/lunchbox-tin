@@ -21,8 +21,10 @@ p{color:var(--ink-2);margin:0 0 14px;max-width:60ch} strong{color:var(--ink)} li
 .btn{display:inline-flex;align-items:center;min-height:48px;padding:0 22px;border-radius:14px;background:var(--accent);color:var(--accent-fg);font-weight:600;text-decoration:none;margin:8px 0 6px}
 .left{font:600 13px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 22px}
 a{color:var(--accent)}
-.qr{display:none;margin:26px 0 0;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);max-width:300px}
-.qr svg{display:block;width:150px;height:150px;background:#fff;padding:6px;border-radius:8px}
+.go{display:flex;flex-wrap:wrap;gap:8px 28px;align-items:flex-start}
+.go>div{flex:none}
+.qr{display:none;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);max-width:220px}
+.qr svg{display:block;width:150px;height:150px;background:#fff;padding:10px;border-radius:8px}
 .qr p{font-size:13px;margin:10px 0 0}
 @media (hover:hover) and (pointer:fine){.qr{display:block}}</style></head><body><div class="wrap">${body}</div></body></html>`;
   return new Response(html, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': CSP, 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex' } });
@@ -34,16 +36,15 @@ export default async function handler(req) {
     if (!code) return page('Not found', '<h1>Not found.</h1><p><a href="/">Lunch Sorted</a></p>', 404);
     const cap = betaCap(), left = Math.max(0, cap - await betaCount());
     let base = ''; try { base = siteUrl(req); } catch { /* no URL env here: the page stands, without the code to scan */ }
-    const qr = base ? await QRCode.toString(`${base}/tester`, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' }).catch(() => '') : '';
+    const qr = base ? await QRCode.toString(`${base}/tester`, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).catch(() => '') : '';
     const ask = `<p>So was I. So I built this. Join the beta free, and if you like it, keep it free forever.</p>
 <p><strong>In return:</strong> pack real lunchboxes with it, add your own foods, shop from its list, let the kids pick their box, and tell us everything.</p>
 <p>Three short emails in your first week say what to try and where to give us feedback.</p>
-<p><strong>Open this on the phone you pack lunches with.</strong> Setup takes under a minute. Your email is what keeps your account, and your free-forever household, yours.</p>`;
+<p><strong>Open this on the phone you pack lunches with.</strong> Setup takes under a minute; your email is what keeps your household yours.</p>`;
     if (!left) return page('The beta is full', `<p class="eyebrow">Lunch Sorted beta</p><h1>The beta is full.</h1><p>Thank you for wanting in. Every new household still gets the whole app for three weeks, no card: <a href="/">lunchsorted.app</a>.</p>`);
     return page('Join the beta', `<p class="eyebrow">Lunch Sorted beta</p><h1>Sick of thinking about what to pack for lunch, for the next 15 years?</h1>${ask}
-<a class="btn" href="/app/?beta=${encodeURIComponent(code)}">Join the beta</a>
-<p class="left">${esc(left)} spot${left === 1 ? '' : 's'} left</p>
-<div class="qr">${qr}<p>On a laptop? Point your phone&rsquo;s camera at this.</p></div>`);
+<div class="go"><div><a class="btn" href="/app/?beta=${encodeURIComponent(code)}">Join the beta</a>
+<p class="left">${esc(left)} spot${left === 1 ? '' : 's'} left</p></div>${qr ? `<div class="qr">${qr}<p>On a laptop? Scan this with your phone instead.</p></div>` : ''}</div>`);
   } catch (e) {
     console.error('beta', e);
     return page('Something went wrong', '<h1>Something went wrong on our side.</h1><p><a class="btn" href="/beta">Try again</a></p>', 500);

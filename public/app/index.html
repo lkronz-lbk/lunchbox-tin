@@ -2726,9 +2726,10 @@ function addOwnSheet(){
   setTimeout(function(){ var el = document.getElementById('nfName'); if(el) el.focus(); }, 220);
 }
 /* a page on the site, from inside the app: Safari with its Done button in the iPhone app, a new tab on the web */
-function siteLink(path, label){
-  return nativePlugin('Browser') ? '<button class="btn" data-act="help-site" data-url="'+esc(path)+'">'+label+'</button>'
-                                 : '<a class="btn" href="'+esc(path)+'" target="_blank" rel="noopener">'+label+'</a>';
+function siteLink(path, label, primary){
+  var cls = 'btn'+(primary ? ' primary' : '');
+  return nativePlugin('Browser') ? '<button class="'+cls+'" data-act="help-site" data-url="'+esc(path)+'">'+label+'</button>'
+                                 : '<a class="'+cls+'" href="'+esc(path)+'" target="_blank" rel="noopener">'+label+'</a>';
 }
 function helpSheet(){
   var qa = [
@@ -2741,8 +2742,8 @@ function helpSheet(){
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
     return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
   }).join('') + '</div>'
-    + '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:14px"><a class="btn primary" href="'+esc(feedbackMail('question'))+'" data-feedback>Ask a question</a>'
-    + siteLink('/feedback.html', 'Send feedback') + siteLink('/help.html', 'More answers') + '</div>';
+    + '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:14px">' + siteLink('/feedback.html', 'Send feedback', true)
+    + '<a class="btn" href="'+esc(feedbackMail('question'))+'" data-feedback>Ask a question</a>' + siteLink('/help.html', 'More answers') + '</div>';
   openSheet('Help', h);
 }
 function addKidSheet(){

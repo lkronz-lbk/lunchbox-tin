@@ -1535,8 +1535,8 @@ try {
       const r1 = await runTester(Date.now(), 'https://test.example');
       const to = (e) => mails.slice(b0).filter(m => m.to === e);
       check('day one, three and six each get their note, a household too new or too old gets none, and no more of these is honoured',
-        r1.sent === 3 && /Day one/.test(to('t1@example.com')[0].subject) && /Day three/.test(to('t3@example.com')[0].subject) && /Day six/.test(to('t6@example.com')[0].subject) && to('t0@example.com').length === 0 && to('t9@example.com').length === 0 && to('tq@example.com').length === 0, r1);
-      check('every note carries the feedback form and a stop link', to('t1@example.com')[0].text.includes('/feedback.html') && /mail-stop\?t=[a-f0-9]{32}/.test(to('t1@example.com')[0].text));
+        r1.sent === 3 && /Pack one real box/.test(to('t1@example.com')[0].subject) && /let them pick/.test(to('t3@example.com')[0].subject) && /What came home/.test(to('t6@example.com')[0].subject) && to('t0@example.com').length === 0 && to('t9@example.com').length === 0 && to('tq@example.com').length === 0, r1);
+      check('every note carries the feedback form, the reply line and a stop link', to('t1@example.com')[0].text.includes('/feedback.html') && /a person reads it/.test(to('t1@example.com')[0].text) && /mail-stop\?t=[a-f0-9]{32}/.test(to('t1@example.com')[0].text));
       const r2 = await runTester(Date.now(), 'https://test.example');
       check('a second run the same day sends nothing again', r2.sent === 0, r2);
     }
