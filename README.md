@@ -48,7 +48,8 @@ food list from a 200-item library and produce a planned week immediately. From t
   **Copy** puts the list on the clipboard grouped by aisle; the share button opens the phone’s share
   sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
   Share plugin in the iPhone app.
-- **Pack** — the next school day's box with ice-pack, sealed-container and no-protein
+- **Pack** — the next school day's box with ice-pack, sealed-container and no-protein For a household that packs the night before
+  (Account → When do you pack?), tomorrow's box from 3pm.
   flags, and one **Packed** tick per box that fills every compartment's tick at once (the
   ticks stay per compartment underneath, so sync and the other phone are unchanged). The
   compartments there are not buttons: only Week changes a box, and only Week shows the swap

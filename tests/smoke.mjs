@@ -738,6 +738,19 @@ try {
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('and stays out of the way for the rest of that afternoon', (await page.$$eval('.review', a => a.length)) === 0);
+  /* a night-before household is packing tomorrow's box by now */
+  check('a household that packs in the morning still sees today\'s box in the evening', /Today/.test(await page.$eval('#view .view-title', e => e.textContent)));
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="pack-when"][data-v="evening"]'); await page.waitForTimeout(300);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  check('say you pack the night before and, from three, Pack shows tomorrow\'s box', /Tomorrow/.test(await page.$eval('#view .view-title', e => e.textContent)));
+  await page.evaluate(() => window.__pinHour(7));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  check('but in the morning, before the box has gone, it is still today\'s', /Today/.test(await page.$eval('#view .view-title', e => e.textContent)));
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="pack-when"][data-v="morning"]'); await page.waitForTimeout(300);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   await page.evaluate(() => window.__pinHour(9));
   await page.reload(); await page.waitForTimeout(600);
   check('and a new open before three has nothing to ask yet: the box is back at school', (await page.$$eval('.review', a => a.length)) === 0 && !(await page.$('nav.tabs .due')));

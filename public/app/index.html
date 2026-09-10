@@ -474,6 +474,7 @@ window.LSMerge = (function(){
       activeKidId:a.activeKidId || b.activeKidId,
       align:(a.align && b.align) ? newer(a.align, b.align) : (a.align || b.align),
       reviewReminder:(a.reviewReminder && b.reviewReminder) ? newer(a.reviewReminder, b.reviewReminder) : (a.reviewReminder || b.reviewReminder),
+      packWhen:(a.packWhen && b.packWhen) ? newer(a.packWhen, b.packWhen) : (a.packWhen || b.packWhen),
       pantry:mergeMap(a.pantry, b.pantry)
     };
   }
@@ -1179,7 +1180,7 @@ function newAccount(){
   var owner = newMember('Me','owner');
   var kid = newKid('Lunchbox', 0);
   return {schema:SCHEMA, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-    members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:true, updatedAt:now()}, pantry:nullMap(), tz:phoneTz()};
+    members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:true, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap(), tz:phoneTz()};
 }
 
 /* migrations: keyed by the schema they upgrade FROM */
@@ -1188,7 +1189,7 @@ var MIGRATIONS = {
     var owner = newMember('Me','owner');
     var kid = newKid((old.settings && old.settings.kid) || 'Lunchbox', 0);
     var acct = {schema:2, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-      members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:true, updatedAt:now()}, pantry:nullMap()};
+      members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:true, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap()};
     if(old.settings){
       kid.settings.days = old.settings.days || [1,2,3,4,5];
       kid.settings.noHeat = old.settings.noHeat !== false;
@@ -1346,12 +1347,19 @@ function normAlign(v){
   if(v && typeof v === 'object') return {on: v.on !== false, updatedAt: safeStamp(v.updatedAt, '')};
   return {on: v !== false, updatedAt: (v === undefined || v === null) ? '' : '0000'};
 }
+/* Some households pack the night before, some the morning of. A record with its
+   own stamp, like align; anything but 'evening' means the morning. */
+function normPackWhen(v){
+  var o = (v && typeof v === 'object') ? v : {};
+  return {v: o.v === 'evening' ? 'evening' : 'morning', updatedAt: safeStamp(o.updatedAt, '')};
+}
+function packsAtNight(){ return !!(S.packWhen && S.packWhen.v === 'evening'); }
 function normalizeAccount(doc){
   if(!isAccount(doc)) return null;
   var acct = {schema:SCHEMA, id:safeId(doc.id,'acc'), name:safeStr(doc.name, 60, 'My household'),
     createdAt:safeStamp(doc.createdAt), updatedAt:safeStamp(doc.updatedAt),
     members:doc.members.slice(0, 50).map(normMember), kids:doc.kids.slice(0, 20).map(normKid),
-    activeKidId:null, align:normAlign(doc.align), reviewReminder:normAlign(doc.reviewReminder), pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
+    activeKidId:null, align:normAlign(doc.align), reviewReminder:normAlign(doc.reviewReminder), packWhen:normPackWhen(doc.packWhen), pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
   if(!acct.members.length) acct.members = [newMember('Me','owner')];
   if(!acct.members.some(function(m){ return m.role === 'owner' && !m.deletedAt; })) acct.members[0].role = 'owner';
   var live = acct.kids.filter(function(k){ return !k.deletedAt; });
@@ -2466,6 +2474,11 @@ function kidState(k, dateStr){
 function nextPackDay(kid){
   if(!kid.week || !kid.week.days.length) return null;
   var t = iso(today());
+  /* a night-before household, once today's box is home, is packing tomorrow's */
+  if(packsAtNight() && afterSchool()){
+    var tomorrow = kid.week.days.filter(function(d){ return d.d > t; })[0];
+    if(tomorrow) return tomorrow;
+  }
   return kid.week.days.filter(function(d){ return d.d >= t; })[0] || kid.week.days[kid.week.days.length-1];
 }
 /* Every lunchbox's box for this date, packed or not: the one line that says
@@ -2719,6 +2732,13 @@ function viewSetup(){
       +  '<div class="d">Plan the week gives every box the same lunches where its rules allow.</div></div>'
       +  '<button class="sw" data-act="align" aria-pressed="'+!(S.align && S.align.on === false)+'" aria-label="Match the boxes"></button>'
       +  '</div></div></div>';
+  }
+  if(!isHelper()){
+    h += '<div><div class="sect-head"><h3>When do you pack?</h3></div><div class="card">'
+      +  '<div class="toggles">'
+      +  '<button class="tg" data-act="pack-when" data-v="morning" aria-pressed="'+!packsAtNight()+'">The morning of</button>'
+      +  '<button class="tg" data-act="pack-when" data-v="evening" aria-pressed="'+packsAtNight()+'">The night before</button>'
+      +  '</div><span class="hint">Pack shows the box you are packing: tomorrow&#8217;s from three o&#8217;clock if you pack at night.</span></div></div>';
   }
   if(nativePlugin('LocalNotifications') && !isHelper() && !gated()){
     h += '<div><div class="sect-head"><h3>Reminders</h3></div><div class="card">'
@@ -3324,6 +3344,12 @@ document.addEventListener('click', function(ev){
   }
 
   /* planning */
+  if(act==='pack-when'){
+    S.packWhen = {v: el.getAttribute('data-v') === 'evening' ? 'evening' : 'morning', updatedAt: now()};
+    save(); render();
+    toast(packsAtNight() ? 'Pack shows tomorrow\u2019s box from three' : 'Pack shows today\u2019s box');
+    return;
+  }
   if(act==='review-reminder'){
     var rr = !(S.reviewReminder && S.reviewReminder.on === false);
     S.reviewReminder = {on: !rr, updatedAt: now()};
