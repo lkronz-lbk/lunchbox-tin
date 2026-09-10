@@ -1962,21 +1962,22 @@ function offMap(kid, align){
 function alignOn(){ return !(S.align && S.align.on === false) && kids().length > 1; }
 /* The household draw and what it says. When two lists barely overlap, matching
    has little to match on, and the parent is told what would change that. */
-function planAllToast(){
-  var r = planAll(); render();
-  if(r.short.length){ toast('No '+r.short.join(' or ').toLowerCase()+' available \u2014 check Foods'); return; }
-  if(!r.aligned){ toast(r.boxes > 1 ? 'Weeks drawn' : 'Week drawn'); return; }
-  if(!r.swaps){ toast('Weeks drawn \u2014 all '+r.boxes+' boxes match'); return; }
+function planAllToast(subset, undo){
+  var r = planAll(subset); render();
+  var say = function(m){ toast(m, undo); };
+  if(r.short.length){ say('No '+r.short.join(' or ').toLowerCase()+' available \u2014 check Foods'); return; }
+  if(!r.aligned){ say(r.boxes > 1 ? 'Weeks drawn' : 'Week drawn'); return; }
+  if(!r.swaps){ say('Weeks drawn \u2014 all '+r.boxes+' boxes match'); return; }
   var thin = r.total && r.swaps * 2 > r.total;
-  toast('Weeks drawn \u2014 '+r.boxes+' boxes match, '+r.swaps+(r.swaps===1 ? ' compartment differs' : ' compartments differ')
+  say('Weeks drawn \u2014 '+r.boxes+' boxes match, '+r.swaps+(r.swaps===1 ? ' compartment differs' : ' compartments differ')
     + (thin ? '. The lists share few foods: add foods to every box from Foods to match more.' : ' for their rules'));
 }
 /* One draw for the whole household. The fullest food list leads, because it
    gives the others the most to match, and every other lunchbox starts from the
    same foods. Per-lunchbox Shuffle and a single swap stay per-lunchbox: once a
    parent has changed one box on purpose, the others are not dragged along. */
-function planAll(){
-  var short = {}, ready = kids().filter(function(k){ return foodsOf(k).length; });
+function planAll(subset){
+  var short = {}, ready = (subset || kids()).filter(function(k){ return foodsOf(k).length; });
   var lead = (alignOn() && ready.length > 1) ? ready.slice().sort(function(a, b){
     return foodsOf(b).length - foodsOf(a).length || ready.indexOf(a) - ready.indexOf(b);
   })[0] : null;
@@ -1989,6 +1990,50 @@ function planAll(){
     else if(map){ var o = offMap(k, map); swaps += o.off; total += o.total; }
   });
   return {short:Object.keys(short), boxes:ready.length, aligned:!!lead, swaps:swaps, total:total};
+}
+/* A shuffle is a choice about whose boxes, and it can be taken back. The
+   sheet lists the lunchboxes, all on; with Match the boxes on it says so, and
+   the boxes picked are drawn from the same foods while the rest keep theirs.
+   One lunchbox needs no sheet, only the Undo. */
+function shuffleSheet(dayStr){
+  var ks = kids(), l = dayStr ? dayLabel(dayStr) : null;
+  var h = '<div class="field"><label>'+(l ? esc(l.full)+'\u2019s box for' : 'The week for')+'</label><div class="toggles" id="shKids">'
+    + ks.map(function(k){ return '<button class="tg" data-nf="k" data-v="'+esc(k.id)+'" aria-pressed="true">'+esc(k.name)+'</button>'; }).join('')
+    + '</div></div>'
+    + (alignOn() ? '<p class="hint" style="margin:0"><b>Match the boxes</b> is on: the boxes you pick are drawn from the same foods where their rules allow. The rest keep what they have.</p>'
+                 : '<p class="hint" style="margin:0">Each box is drawn on its own. The rest keep what they have.</p>')
+    + '<button class="btn primary wide" data-act="shuffle-go"'+(dayStr ? ' data-day="'+esc(dayStr)+'"' : '')+'>'+svg('dice',16)+'Shuffle</button>';
+  openSheet(l ? 'Shuffle '+l.full : 'Shuffle the week', h);
+}
+function snapshotWeeks(ks){ return ks.map(function(k){ return {id:k.id, week:JSON.parse(JSON.stringify(k.week))}; }); }
+function restoreWeeks(snap){
+  snap.forEach(function(x){ var k = kidById(x.id); if(k){ k.week = x.week; touch(k); } });
+  save(); render(); toast('Put back');
+}
+/* One day, for several boxes. With matching on the fullest list leads and the
+   others take its new foods by name where they can, as the week draw does. */
+function shuffleDayFor(ks, dayStr){
+  var ready = ks.filter(function(k){ return k.week && k.week.days.some(function(d){ return d.d === dayStr; }); });
+  if(!ready.length) return false;
+  var lead = (alignOn() && ready.length > 1) ? ready.slice().sort(function(a, b){ return foodsOf(b).length - foodsOf(a).length; })[0] : null;
+  var order = lead ? [lead].concat(ready.filter(function(k){ return k !== lead; })) : ready, want = null, any = false;
+  order.forEach(function(k){
+    var d = k.week.days.filter(function(x){ return x.d === dayStr; })[0];
+    if(dayGone(d)) return;
+    var byName = nullMap();
+    foodsOf(k).forEach(function(f){ var key = f.c+'|'+normKey(f.n); if(!byName[key]) byName[key] = f; });
+    catsFor(k).forEach(function(c){
+      if(d.lock[c.k]) return;
+      var f = want && want[c.k] ? byName[c.k+'|'+want[c.k]] : null;
+      if(f && !violation(k, f) && !eatStats(k, f.id).resting && f.id !== d.slots[c.k]){
+        d.slots[c.k] = f.id; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); any = true;
+      } else if(reshuffleSlot(k, d, c.k)) any = true;
+    });
+    touch(k.week); touch(k);
+    if(k === lead){ want = nullMap(); ALL_CATS.forEach(function(c){ var f = foodById(k, d.slots[c.k]); if(f) want[c.k] = normKey(f.n); }); }
+  });
+  save();
+  return any;
 }
 /* Leave resting foods out whenever the list can afford it — the same rule the
    weekly draw applies, so a single re-draw or the kid's options never bring
@@ -2550,7 +2595,11 @@ function viewPack(){
   var asked = 0, stack = '';
   if(!isHelper()){
     var rd = reviewDay(kid);
-    if(rd && !laterHolds(kid, rd)){                                   /* Answer later: gone until the next three o'clock, or the next day */
+    if(rd && laterHolds(kid, rd) && !reviewComplete(kid, rd)){        /* Answer later: the question waits, in one line, with the way back */
+      stack += '<div class="card spread" style="padding:12px 16px"><span class="hint" style="margin:0">How did '
+        + (kidRef(kid) ? esc(kidRef(kid))+'\u2019s' : 'the')+' box go? Not answered yet.</span>'
+        + '<button class="btn ghost sm" data-act="review-now" data-kid="'+esc(kid.id)+'">Answer now</button></div>';
+    } else if(rd){
       if(!reviewComplete(kid, rd) || UI.reviewEdit[kid.id] === rd.d){ stack += reviewCard(kid, rd); if(!reviewComplete(kid, rd)) asked++; }
       else if(reviewedToday(kid, rd)) stack += reviewSummary(kid, rd.d);
     }
@@ -2628,7 +2677,7 @@ function viewWeek(){
 function viewShop(){
   var rows = shoppingList(), multi = kids().length>1;
   var h = '<div class="stack"><div><p class="view-sub">Shopping list'
-    + (multi ? ' \u00b7 all '+kids().length+' lunchboxes' : '')+'</p><h2 class="view-title">What to buy</h2></div>';
+    + (multi ? ' \u00b7 '+(kids().length === 2 ? 'both lunchboxes' : 'all '+kids().length+' lunchboxes') : '')+'</p><h2 class="view-title">What to buy</h2></div>';
   if(!rows.length)
     return h + '<div class="empty"><p>Plan a week and the list builds itself from the boxes.</p>'
       + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
@@ -3076,10 +3125,15 @@ function ideasSheet(){
   if(hidden) h += '<p class="hint">'+hidden+' idea'+(hidden>1?'s':'')+' hidden by the rules you set.</p>';
   openSheet('Idea bank', h);
 }
+function addOwnLabel(){
+  var ks = kids(), t = addTargets();
+  if(ks.length < 2) return 'Add to the list';
+  if(t.length === ks.length) return 'Add to '+(ks.length === 2 ? 'both lunchboxes' : 'all '+ks.length+' lunchboxes');
+  return 'Add to '+listNames(t);
+}
 function addOwnSheet(){
   var h = '<div class="field"><label for="nfName">Food</label>'
     + '<input type="text" id="nfName" placeholder="Grandma&#39;s zucchini muffins" autocomplete="off"></div>'
-    + targetRow('')
     + '<div class="field"><label>Goes in</label><div class="toggles" id="nfCat">'
     + addCats().map(function(c,i){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(i===0)+'">'+c.label+'</button>'; }).join('')
     + '</div></div><div class="field"><label for="nfAisle">Store aisle</label><select id="nfAisle">'
@@ -3093,7 +3147,8 @@ function addOwnSheet(){
     + '</div></details></div><span class="hint">Tap what fits.</span></div>'
     + '<div class="field"><label>Contains</label><div class="toggles" id="nfAl">'
     + ALLERGENS.map(function(a){ return '<button class="tg" data-nf="al" data-v="'+a.k+'" aria-pressed="false">'+a.label+'</button>'; }).join('')
-    + '</div></div><button class="btn primary wide" data-act="save-own">Add to the list</button>';
+    + '</div></div>' + targetRow('')
+    + '<button class="btn primary wide" id="nfSave" data-act="save-own">'+addOwnLabel()+'</button>';
   openSheet('Add your own', h);
   setTimeout(function(){ var el = document.getElementById('nfName'); if(el) el.focus(); }, 220);
 }
@@ -3207,7 +3262,7 @@ function render(){
   document.getElementById('who').innerHTML = (!kid ? ''
     : ((pagerHere || householdView) ? ''
       : '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)+'"></span>'
-        + '<span class="nm">'+esc(kid.name)+'</span><span class="caret">&#9662;</span></button>') + (UI.tab === 'setup' ? '' : gear)) + help;
+        + '<span class="nm">'+esc(kid.name)+'</span><span class="caret">&#9662;</span></button>') + ((UI.tab === 'setup' || UI.tab === 'shop') ? '' : gear)) + help;
 }
 
 /* The views that are about one lunchbox, and so carry the folder tabs. Shop is
@@ -3363,17 +3418,31 @@ document.addEventListener('click', function(ev){
     return;
   }
   if(act==='plan-kid'){
-    if(alignOn()){ planAllToast(); return; }               /* matching is on: Shuffle all is the household's draw, not one box's */
+    if(kids().length > 1){ shuffleSheet(null); return; }   /* whose boxes? the sheet asks */
+    var snap1 = snapshotWeeks([kid]);
     prunePantry();
     var short = planWeek(kid); render();
-    toast(short.length ? 'No '+short.join(' or ').toLowerCase()+' available — check Foods' : 'Week drawn');
+    toast(short.length ? 'No '+short.join(' or ').toLowerCase()+' available — check Foods' : 'Week drawn', function(){ restoreWeeks(snap1); });
+    return;
+  }
+  if(act==='shuffle-go'){
+    var picked = [].slice.call(document.querySelectorAll('#shKids .tg[aria-pressed="true"]')).map(function(b){ return kidById(b.getAttribute('data-v')); }).filter(Boolean);
+    if(!picked.length){ toast('Pick at least one lunchbox'); return; }
+    var dayS = el.getAttribute('data-day'), snapS = snapshotWeeks(picked), undoS = function(){ restoreWeeks(snapS); };
+    closeSheet();
+    if(dayS){
+      var did = shuffleDayFor(picked, dayS); render();
+      toast(did ? dayLabel(dayS).full+' shuffled for '+listNames(picked) : 'Nothing else to draw for '+dayLabel(dayS).full, did ? undoS : null);
+    } else planAllToast(picked, undoS);
     return;
   }
   if(act==='plan-all'){ planAllToast(); return; }
   if(act==='shuffle-day'){
-    var k3 = kidById(el.getAttribute('data-kid')) || kid;
-    var d = k3.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
-    if(d){ catsFor(k3).forEach(function(c){ if(!d.lock[c.k]) reshuffleSlot(k3, d, c.k); }); render(); }
+    var k3 = kidById(el.getAttribute('data-kid')) || kid, dS = el.getAttribute('data-day');
+    if(kids().length > 1){ shuffleSheet(dS); return; }     /* whose box? the sheet asks */
+    var snap3 = snapshotWeeks([k3]);
+    if(shuffleDayFor([k3], dS)){ render(); toast(dayLabel(dS).full+' shuffled', function(){ restoreWeeks(snap3); }); }
+    else toast('Nothing else to draw for '+dayLabel(dS).full);
     return;
   }
   if(act==='slot'){ slotSheet(el.getAttribute('data-kid'), el.getAttribute('data-day'), el.getAttribute('data-cat')); return; }
@@ -3487,6 +3556,7 @@ document.addEventListener('click', function(ev){
       el.setAttribute('aria-pressed', i9 > -1 ? 'false' : 'true');
       var cat9 = document.getElementById('nfCat');           /* the compartments on offer follow the boxes; the name field is untouched */
       if(cat9) cat9.innerHTML = addCats().map(function(c,i){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(i===0)+'">'+c.label+'</button>'; }).join('');
+      var save9 = document.getElementById('nfSave'); if(save9) save9.textContent = addOwnLabel();   /* the button says where it will land */
     }
     return;
   }
@@ -3766,6 +3836,7 @@ document.addEventListener('click', function(ev){
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = {d:el.getAttribute('data-day'), at:Date.now()}; render(); return; }
+  if(act==='review-now'){ delete UI.reviewLater[el.getAttribute('data-kid')]; render(); return; }
   if(act==='review-later-all'){
     kids().forEach(function(k){ var rd = reviewDay(k); if(rd && !reviewComplete(k, rd)) UI.reviewLater[k.id] = {d:rd.d, at:Date.now()}; });
     render(); window.scrollTo(0,0); toast('We\u2019ll ask again tomorrow'); return;
