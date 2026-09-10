@@ -84,7 +84,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   are two-tap, deleting a food offers Undo, and the shopping ticks survive a plan clear.
 - **A parent may override a rule** for one compartment: pick a flagged food from the
   compartment sheet and it goes in, rule named, with Undo. The compartment carries a `!`, the day
-  an *Against your rules* chip, and the rules sweep leaves it alone. The override is recorded
+  an *Against the rules* chip, and the rules sweep leaves it alone. The override is recorded
   against that exact food in that compartment (`day.over`), so a re-draw, another choice, the food
   deleted or the compartment switched off ends it; when the kid's pick trades a part or a box, it
   travels with its food.

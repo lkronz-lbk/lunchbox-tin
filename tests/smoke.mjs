@@ -471,20 +471,20 @@ try {
   check('and then the one weird food lands in that one box only',
     landed2[1] === true && landed2[0] === hadIt[0], [idea2, hadIt, landed2]);
   /* rules flag foods; they never refuse them: with Sam the only box, a food his
-     rule keeps out still lands on his list, flagged, as it always did */
-  const glutenIdea = await page.$$eval('[data-act="add-idea"]:not(.done)',
-    a => (a.find(b => /gluten/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
-  if (glutenIdea) {
-    await page.click('[data-act="add-idea"][data-name="' + glutenIdea + '"]');
-    await page.waitForTimeout(350);
-    const flaggedLanded = await page.evaluate(n => {
-      const d = JSON.parse(localStorage.getItem('lunchsorted'));
-      const sam = d.kids.filter(k => !k.deletedAt).find(k => k.name === 'Sam');
-      return sam.foods.some(f => !f.deletedAt && f.n === n);
-    }, glutenIdea);
-    check('a rule flags a food on the only box it is added to; it never refuses it',
-      flaggedLanded && /so it is flagged/.test(await page.textContent('#toast')), {glutenIdea, toast: await page.textContent('#toast')});
-  }
+     rule keeps out still lands on his list, flagged, as Add your own always did */
+  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  await page.click('[data-act="add-own"]'); await page.waitForTimeout(350);
+  await page.fill('#nfName', 'Sourdough toast');
+  await page.click('#nfAl .tg[data-v="gluten"]'); await page.waitForTimeout(100);
+  await page.click('[data-act="save-own"]'); await page.waitForTimeout(400);
+  const flaggedLanded = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const sam = d.kids.filter(k => !k.deletedAt).find(k => k.name === 'Sam');
+    return sam.foods.some(f => !f.deletedAt && f.n === 'Sourdough toast');
+  });
+  check('a rule flags a food on the only box it is added to; it never refuses it',
+    flaggedLanded && /so it is flagged/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+  await page.click('[data-act="ideas"]'); await page.waitForTimeout(350);
   await page.click('[data-act="add-to"]');                     /* put it back for the tests below */
   await page.waitForTimeout(350);
   await page.click('#sheetClose');
@@ -526,7 +526,7 @@ try {
   });
   check('picking it puts it in the box and records the override', (await over()) && (await over()).live);
   const flagged = await page.textContent('#view');
-  check('and the day says so where the parent will see it', /Against your rules/.test(flagged));
+  check('and the day says so where the parent will see it', /Against the rules/.test(flagged));
   check('the compartment carries the mark too', (await page.$$eval('.tin .over', a => a.length)) > 0);
 
   /* on main the rules live behind the gear beside the lunchbox name */

@@ -113,6 +113,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .packbox[aria-pressed="true"] .tick svg{opacity:1}
 .lock{opacity:.85}
 .marks{display:inline-flex;align-items:center;gap:5px;flex:none}
+.linkbtn{background:none;border:0;padding:10px 2px;margin:-10px -2px;font:inherit;color:var(--accent);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .over{width:15px;height:15px;border-radius:50%;background:var(--warn-soft);color:var(--warn);flex:none;
   display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;line-height:1}
 .swap{color:var(--ink-3);opacity:.9}
@@ -1570,7 +1571,7 @@ function dayFlags(kid, day){
   if(items.some(function(i){ return has(i,'messy'); })) f.push({t:'Sealed container', cls:''});
   if(items.length && !items.some(function(i){ return has(i,'protein'); })) f.push({t:'No protein', cls:'warn'});
   if(day.kidPick && Object.keys(day.kidPick).length) f.push({t:kidLabel(kid) ? kidLabel(kid)+' picked' : 'Picked', cls:'picked'});
-  if(overrides(kid, day).length) f.push({t:'Against your rules', cls:'warn'});
+  if(overrides(kid, day).length) f.push({t:'Against the rules', cls:'warn'});
   return f;
 }
 
@@ -2439,6 +2440,7 @@ function nextPackDay(kid){
 function householdReady(dateStr){
   var out = {boxes:0, ready:0, left:[]};
   kids().forEach(function(k){
+    if(!foodsOf(k).length) return;                 /* nothing to plan, nothing to pack: the banner says so */
     var slot = nextPackDay(k);
     if(slot && slot.d !== dateStr) return;
     out.boxes++;
@@ -2477,7 +2479,7 @@ function viewPack(){
     + (lab.rel==='Today' ? 'Today&#8217;s box' : lab.rel==='Tomorrow' ? 'Tomorrow&#8217;s box' : esc(lab.full)+'&#8217;s box')
     + '</h2></div>';
 
-  h += '<div class="kidgroup">' + (multi ? kidLine(kid) : '')
+  h += '<div class="kidgroup">'
     +  tinHTML(kid, day, 'pack')
     +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day)
     +  '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">' + packButton(kid, day) + pickButton(kid, day) + '</span></div></div>';
@@ -2485,8 +2487,9 @@ function viewPack(){
   /* with more than one lunchbox, the box on screen is not the whole morning */
   var hh = householdReady(day.d);
   if(hh.boxes > 1){
+    var link = function(k){ return '<button class="linkbtn" data-act="pick-kid" data-id="'+esc(k.id)+'">'+esc(k.name)+'</button>'; };
     h += '<p class="hint" style="margin:0;color:var(--ink-2)">'+hh.ready+' of '+hh.boxes+' boxes ready'
-      +  (hh.left.length ? ' — '+esc(listNames(hh.left))+' still to pack.' : ' — everyone is packed.')+'</p>';
+      +  (hh.left.length ? ' — '+listNames(hh.left, link)+' still to pack.' : ' — everyone is packed.')+'</p>';
   }
 
   var rest = kid.week.days.filter(function(x){ return x.d > day.d; });
@@ -2676,7 +2679,7 @@ function viewSetup(){
   if(kids().length > 1 && !isHelper()){
     h += '<div><div class="sect-head"><h3>All the lunchboxes</h3></div><div class="card">'
       +  '<div class="switch"><div><div class="t">Match the boxes</div>'
-      +  '<div class="d">Everyone gets the same lunch where their own rules allow it.</div></div>'
+      +  '<div class="d">Plan the week gives every box the same lunches where its rules allow.</div></div>'
       +  '<button class="sw" data-act="align" aria-pressed="'+!(S.align && S.align.on === false)+'" aria-label="Match the boxes"></button>'
       +  '</div></div></div>';
   }
@@ -2862,7 +2865,7 @@ function slotSheet(kidId, dayStr, cat){
     pool.forEach(function(f){
       var v = violation(kid, f);
       var sc = cat==='main' ? null : pairScore(main, f, cat).s;
-      var meta = v ? (day.slots[cat]===f.id ? v+' — in the box anyway' : v+' — tap to use it anyway')
+      var meta = v ? (day.slots[cat]===f.id ? (isOverride(kid, day, cat) ? v+' — in the box anyway' : 'skipped — '+v) : v+' — tap to use it anyway')
         : (eatLabel(kid, f.id) || (sc!==null && sc>=3 ? 'goes well with '+(main?main.n:'the main') : ''));
       h += '<button class="item'+(day.slots[cat]===f.id?' done':'')+'" data-act="pick" data-kid="'+esc(kid.id)
         +  '" data-day="'+esc(dayStr)+'" data-cat="'+cat+'" data-id="'+esc(f.id)+'">'
@@ -2918,8 +2921,8 @@ function addFoodTo(targets, o){
   });
   return r;
 }
-function listNames(ks){
-  var n = ks.map(function(k){ return k.name; });
+function listNames(ks, wrap){
+  var n = ks.map(function(k){ return wrap ? wrap(k) : k.name; });
   return n.length < 2 ? (n[0] || '') : n.slice(0, -1).join(', ')+' and '+n[n.length-1];
 }
 function addedLine(name, r){
@@ -2930,7 +2933,7 @@ function addedLine(name, r){
 }
 function addFailLine(name, r){
   if(!r.skipped.length) return 'Already on the list';
-  var line = name+' is kept out of '+listNames(r.skipped)+'\u2019s box by the rules';
+  var line = name+' is kept out of '+listNames(r.skipped)+(r.skipped.length > 1 ? '\u2019 boxes' : '\u2019s box')+' by the rules';
   return r.already.length ? line+'; the rest already had it' : line;
 }
 function ideasSheet(){
@@ -3280,7 +3283,7 @@ document.addEventListener('click', function(ev){
     var on = !(S.align && S.align.on === false);
     S.align = {on: !on, updatedAt: now()};
     save(); render();
-    toast(S.align.on ? 'Lunchboxes will match where the rules allow' : 'Each lunchbox is drawn on its own');
+    toast(S.align.on ? 'Matched next time you plan the week' : 'Drawn on their own next time you plan the week');
     return;
   }
   if(act==='plan-kid'){
@@ -3293,7 +3296,7 @@ document.addEventListener('click', function(ev){
     var r2 = planAll(); render();
     toast(r2.short.length ? 'No '+r2.short.join(' or ').toLowerCase()+' available — check Foods'
       : !r2.aligned ? (r2.boxes > 1 ? 'Weeks drawn' : 'Week drawn')
-      : r2.swaps ? 'Weeks drawn \u2014 '+r2.boxes+' boxes matched, '+r2.swaps+(r2.swaps===1 ? ' swap' : ' swaps')
+      : r2.swaps ? 'Weeks drawn \u2014 '+r2.boxes+' boxes match, '+r2.swaps+(r2.swaps===1 ? ' compartment differs' : ' compartments differ')+' for their rules'
       : 'Weeks drawn \u2014 all '+r2.boxes+' boxes match');
     return;
   }
@@ -3404,7 +3407,11 @@ document.addEventListener('click', function(ev){
     /* the idea bank changes with the targets; the add-your-own form must not be
        redrawn under a half-typed name, so that one flips in place */
     if(el.getAttribute('data-re') === 'ideas') ideasSheet();
-    else el.setAttribute('aria-pressed', i9 > -1 ? 'false' : 'true');
+    else {
+      el.setAttribute('aria-pressed', i9 > -1 ? 'false' : 'true');
+      var cat9 = document.getElementById('nfCat');           /* the compartments on offer follow the boxes; the name field is untouched */
+      if(cat9) cat9.innerHTML = addCats().map(function(c,i){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(i===0)+'">'+c.label+'</button>'; }).join('');
+    }
     return;
   }
   if(act==='add-idea'){
