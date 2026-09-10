@@ -41,6 +41,22 @@ npm run migrate       # apply netlify/database/migrations/*.sql (needs NETLIFY_D
 Run `npm run csp` before every commit that touches the app; `npm test` refuses a stale hash.
 Bump `VERSION` in `public/app/sw.js` and `APP_BUILD` in `public/app/index.html` on every deploy that changes the app, and write that build's `WHATS_NEW` line beside `APP_BUILD` (`npm run csp` refuses a stale one).
 
+## Before any change, on every machine
+
+Work lands on `main` from more than one place — this machine, and Claude on Liz's phone — so a
+checkout can be days behind without anything looking wrong. The multi-lunchbox work of
+2026-09-10 was built on a `dev` that was 69 commits behind production and could not be merged.
+Never again:
+
+1. `git fetch origin` first, every session, before reading any code.
+2. Bring local `main` level: `git branch -f main origin/main` (or `git pull --ff-only` on it).
+   Everything pushed from the phone must come back onto this machine.
+3. Build only on a branch that contains `origin/main`. If `dev` is behind, bring it level first
+   (`git merge --ff-only origin/main` from `dev`). If that refuses, `dev` has diverged: stop and
+   say so rather than build on it.
+4. Commit before the session ends. Uncommitted work left across sessions interleaves with the
+   next session's and cannot be split apart afterwards.
+
 ## Layout
 
 - `public/app/index.html`: the whole app, one file, vanilla JS, three inline script blocks
