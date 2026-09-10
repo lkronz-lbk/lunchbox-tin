@@ -48,8 +48,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   **Copy** puts the list on the clipboard grouped by aisle; the share button opens the phone’s share
   sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
   Share plugin in the iPhone app.
-- **Pack** — the next school day's box with ice-pack, sealed-container and no-protein For a household that packs the night before
-  (Account → When do you pack?), tomorrow's box from 3pm.
+- **Pack** — the next school day's box with ice-pack, sealed-container and no-protein
   flags, and one **Packed** tick per box that fills every compartment's tick at once (the
   ticks stay per compartment underneath, so sync and the other phone are unchanged). The
   compartments there are not buttons: only Week changes a box, and only Week shows the swap
@@ -73,12 +72,14 @@ food list from a 200-item library and produce a planned week immediately. From t
   re-checked on every import and merge), and the kid's-pick screens and the Foods list show
   it in place of the emoji; tapping it again offers "Take another" or "Remove the photo".
   Every food has an emoji icon derived from its name, so
-  custom foods get a picture too.
+  custom foods get a picture too. A household that packs the night before (Account → When do you
+  pack?) sees tomorrow's box from 3pm.
 - **Did they eat it?** — from 3pm on a pack day, or the morning after, the Pack view asks about
   that box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
   stored against the food, so they survive re-plans. "Answer later" hides the cards until the next
   3pm or the next open; a red dot on the Pack tab says an answer is owed, and the iPhone app can
-  remind at 3pm (Account → Reminders). The draw leans toward foods that get
+  remind at 3pm (Account → Reminders, off until switched on). From 3pm today's box has gone:
+  no re-draw, swap, kid's pick, shopping line or merge touches it. The draw leans toward foods that get
   eaten, and anything that came home twice running is rested for three weeks. Outgoing weeks
   are archived (`kid.past`) so Monday can still ask about Friday.
 - **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it

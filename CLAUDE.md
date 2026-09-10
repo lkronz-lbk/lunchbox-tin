@@ -24,7 +24,8 @@ author and the Netlify + Neon stack. Read `README.md` first; it is the product s
 - Lunchboxes are aligned, never merged. Plan the week starts every box from the lead box's
   foods and swaps only where a box's own rules or its own food list say otherwise; a
   per-lunchbox shuffle or a single swap never reaches the other boxes.
-- A day that has gone is never rewritten by a re-draw or a rules sweep. What was packed stays.
+- A day that has gone — any day before today, and today from 3pm once the box is home — is
+  never rewritten by a re-draw, a swap, the kid's pick, a rules sweep or a merge. What was packed stays.
 - Two "came home" in a row rests a food for three weeks, everywhere a food can be drawn —
   including the aligned draw. The rule's own exception: a list too short to fill the week may
   draw a resting food rather than leave a compartment empty.

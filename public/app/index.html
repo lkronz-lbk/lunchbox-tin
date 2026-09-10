@@ -218,7 +218,7 @@ nav.tabs button{flex:1;border:0;background:none;min-height:52px;display:flex;fle
 nav.tabs button span{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
 nav.tabs button[aria-current="true"]{color:var(--accent)}
 nav.tabs button{position:relative}
-nav.tabs .due{position:absolute;top:8px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:var(--hot);border:2px solid var(--surface)}
+nav.tabs .due{position:absolute;top:8px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:var(--hot);border:2px solid var(--ground)}
 nav.tabs svg{width:21px;height:21px}
 
 .backdrop{position:fixed;inset:0;background:var(--scrim);z-index:30;opacity:0;pointer-events:none;transition:opacity .18s}
@@ -964,7 +964,7 @@ function trialBanner(){
   if(!billingOn() || paid() || !S.onboardedAt) return '';
   var left = trialDaysLeft(), seen = trialSeen();
   if(left > 0 && left <= 3 && seen !== 'soon' && seen !== 'ended')
-    return '<div class="banner wrap"><span>Your three weeks of everything end '+esc(trialWhen())+'. The lunches stay; kid\u2019s pick, the morning review and the pantry pause.</span>'
+    return '<div class="banner wrap"><span>Your three weeks of everything end '+esc(trialWhen())+'. The lunches stay; kid\u2019s pick, the after-school review and the pantry pause.</span>'
       + '<span class="row" style="gap:8px"><button class="btn sm primary" data-act="upgrade" data-why="keep">Keep everything</button><button class="btn sm ghost" data-act="trial-dismiss" data-stage="soon">Later</button></span></div>';
   if(left === 0 && seen !== 'ended')
     return '<div class="banner wrap"><span>Your three weeks are up. Lunches and the list stay free; kid\u2019s pick, the review and the pantry are waiting.</span>'
@@ -1008,7 +1008,7 @@ function upgradeSheet(why){
         : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.' : 'Planning and the shopping list are free for good. The Household plan is the rest.')
         : forever ? 'You have the yearly plan. Pay once and it never renews: the year you have paid for runs to its end and is not charged again.'
         : 'The Household plan is everything the free planner is not.')+'</p>';
-  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Kid’s pick, the morning review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
+  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
   if(!signedIn()){
     h += '<p class="hint" style="margin:0">Sign in first — the Household plan belongs to the household, so it works on every phone.</p>'
       +  '<button class="btn primary wide" data-act="go-signin" data-why="'+esc(why || '')+'" data-close="1">Sign in</button>';
@@ -1073,7 +1073,7 @@ var Sync = {
           activeKidId:remote.activeKidId
         });
       }
-      var merged = normalizeAccount(window.LSMerge.merge(mine, remote, iso(today())));
+      var merged = normalizeAccount(window.LSMerge.merge(mine, remote, mergeHorizon()));
       if(!window.LSMerge.same(merged, S)){ S = merged; if(!activeKid() && kids().length) S.activeKidId = kids()[0].id; Store.save(S, DEVICE.memberId); render(); kidReminderSync(); }
       Account.status = 'ok'; Account.syncedAt = Date.now(); Account.tries = 0; renderSyncLine();
       if(!isHelper() && !window.LSMerge.same(merged, remote)) return Sync.push();
@@ -1096,7 +1096,7 @@ var Sync = {
       if(r.status === 200){ Account.version = r.version; if(first && Account.me){ Account.me.memberId = DEVICE.memberId; } return done(true); }
       if(r.status === 409 && r.doc){                          /* the other phone got there first: merge, try once more */
         Account.version = r.version;
-        var merged = normalizeAccount(window.LSMerge.merge(S, normalizeAccount(r.doc), iso(today())));
+        var merged = normalizeAccount(window.LSMerge.merge(S, normalizeAccount(r.doc), mergeHorizon()));
         if(!window.LSMerge.same(merged, S)){ S = merged; Store.save(S, DEVICE.memberId); render(); }
         return api('PUT', '/api/household', {doc:S, version:Account.version}).then(function(r2){
           if(r2.status === 200){ Account.version = r2.version; return done(true); }
@@ -1144,7 +1144,7 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
 var APP_BUILD = 'lunchsorted-v11';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v11', text:'New: more than one lunchbox? Plan the week now gives them the same lunches where the rules allow, a food you add goes into every box, and you can swipe between them. A rule can be overruled for one compartment; it stays flagged.'};
+var WHATS_NEW = {build:'lunchsorted-v11', text:'New: more than one lunchbox? Plan the week now gives them the same lunches where the rules allow, a food you add goes into every box, and you can swipe between them. A rule can be overruled for one compartment; it stays flagged. From three o\u2019clock Pack asks how today\u2019s box went, with a dot on the Pack tab until you answer. Pack at night? Say so under Account and Pack shows tomorrow\u2019s box from three.'};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
 function whatsNew(){
@@ -1180,7 +1180,7 @@ function newAccount(){
   var owner = newMember('Me','owner');
   var kid = newKid('Lunchbox', 0);
   return {schema:SCHEMA, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-    members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:true, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap(), tz:phoneTz()};
+    members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:false, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap(), tz:phoneTz()};
 }
 
 /* migrations: keyed by the schema they upgrade FROM */
@@ -1189,7 +1189,7 @@ var MIGRATIONS = {
     var owner = newMember('Me','owner');
     var kid = newKid((old.settings && old.settings.kid) || 'Lunchbox', 0);
     var acct = {schema:2, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-      members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:true, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap()};
+      members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:false, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap()};
     if(old.settings){
       kid.settings.days = old.settings.days || [1,2,3,4,5];
       kid.settings.noHeat = old.settings.noHeat !== false;
@@ -1353,13 +1353,18 @@ function normPackWhen(v){
   var o = (v && typeof v === 'object') ? v : {};
   return {v: o.v === 'evening' ? 'evening' : 'morning', updatedAt: safeStamp(o.updatedAt, '')};
 }
+/* A reminder nobody asked for is a nag: off until the parent flips it. */
+function normOptIn(v){
+  var o = (v && typeof v === 'object') ? v : {};
+  return {on: o.on === true, updatedAt: safeStamp(o.updatedAt, '')};
+}
 function packsAtNight(){ return !!(S.packWhen && S.packWhen.v === 'evening'); }
 function normalizeAccount(doc){
   if(!isAccount(doc)) return null;
   var acct = {schema:SCHEMA, id:safeId(doc.id,'acc'), name:safeStr(doc.name, 60, 'My household'),
     createdAt:safeStamp(doc.createdAt), updatedAt:safeStamp(doc.updatedAt),
     members:doc.members.slice(0, 50).map(normMember), kids:doc.kids.slice(0, 20).map(normKid),
-    activeKidId:null, align:normAlign(doc.align), reviewReminder:normAlign(doc.reviewReminder), packWhen:normPackWhen(doc.packWhen), pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
+    activeKidId:null, align:normAlign(doc.align), reviewReminder:normOptIn(doc.reviewReminder), packWhen:normPackWhen(doc.packWhen), pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
   if(!acct.members.length) acct.members = [newMember('Me','owner')];
   if(!acct.members.some(function(m){ return m.role === 'owner' && !m.deletedAt; })) acct.members[0].role = 'owner';
   var live = acct.kids.filter(function(k){ return !k.deletedAt; });
@@ -1695,8 +1700,14 @@ function packedEvidence(kid, d){
    is left alone until the next three o'clock, or the next open. */
 var REVIEW_HOUR = 15;
 function afterSchool(){ return new Date().getHours() >= REVIEW_HOUR; }
+/* A day has gone once its box has been eaten: any day before today, and today
+   from three o'clock. Nothing rewrites a day that has gone — not a re-draw, a
+   swap, the kid's pick, the shopping list, nor a merge from the other phone. */
+function dayGone(d){ var t = iso(today()); return d.d < t || (d.d === t && afterSchool()); }
+function mergeHorizon(){ return iso(afterSchool() ? addDays(today(), 1) : today()); }
 function laterHolds(kid, d){
   var e = UI.reviewLater[kid.id]; if(!e || e.d !== d.d) return false;
+  if(iso(new Date(e.at)) !== iso(today())) return false;           /* a new day always asks again */
   var cut = today(); cut.setHours(REVIEW_HOUR, 0, 0, 0);
   return !(e.at < cut.getTime() && Date.now() >= cut.getTime());   /* crossed three o'clock since: ask again */
 }
@@ -1704,9 +1715,9 @@ function reviewOwed(){
   return kids().some(function(k){ var rd = reviewDay(k); return !!(rd && !reviewComplete(k, rd)); });
 }
 function reviewDay(kid){
-  var t = iso(today()), floor = iso(addDays(today(), -7)), home = afterSchool();
+  var floor = iso(addDays(today(), -7));
   var cands = (kid.past || []).concat(kid.week ? kid.week.days : []).filter(function(d){
-    return (d.d < t || (home && d.d === t)) && d.d >= floor && packedEvidence(kid, d) && ALL_CATS.some(function(c){ return foodById(kid, d.slots[c.k]); });
+    return dayGone(d) && d.d >= floor && packedEvidence(kid, d) && ALL_CATS.some(function(c){ return foodById(kid, d.slots[c.k]); });
   });
   if(!cands.length) return null;
   cands.sort(function(a,b){ return b.d.localeCompare(a.d); });
@@ -1797,7 +1808,7 @@ function enforceRules(kid){
   if(!kid.week) return 0;
   var hit = {}, n = 0, t0 = iso(today());
   kid.week.days.forEach(function(d){
-    if(d.d < t0) return;                    /* a day that has gone is not ours to rewrite */
+    if(dayGone(d)) return;                  /* a day that has gone is not ours to rewrite */
     catsFor(kid).forEach(function(c){
       var f = foodById(kid, d.slots[c.k]);
       if(f && violation(kid, f) && !isOverride(kid, d, c.k)){
@@ -1823,7 +1834,7 @@ function rulesChanged(kid){
    mid-week. Returns false only when there was nothing to draw from. */
 function fillCategory(kid, week, c){
   var pool = eligible(kid, c.k), t0 = iso(today());
-  var open = week.days.filter(function(d){ return !d.slots[c.k] && d.d >= t0; });
+  var open = week.days.filter(function(d){ return !d.slots[c.k] && !dayGone(d); });
   if(!open.length) return true;
   if(!pool.length) return false;
   var locked = week.days.filter(function(d){ return d.slots[c.k]; }).map(function(d){ return d.slots[c.k]; });
@@ -1853,7 +1864,7 @@ function planWeek(kid, align){
      in-place re-draw keeps the days already gone exactly as they were packed */
   days = days.filter(function(dw){
     var d = iso(addDays(ws, (dw+6)%7));
-    return d >= t0 || (prev && prev.days.some(function(x){ return x.d === d; }));
+    return !dayGone({d:d}) || (prev && prev.days.some(function(x){ return x.d === d; }));
   });
   if(kid.week && !prev) archiveWeek(kid);               /* a new week: keep the old one's days for the eat review */
   var week = {id:(prev && prev.id) || uid('week'), kidId:kid.id, start:iso(ws), createdAt:(prev && prev.createdAt) || now(), updatedAt:now(), days:[]};
@@ -1866,7 +1877,7 @@ function planWeek(kid, align){
       over: old ? Object.assign({}, old.over || {}) : {}});
   });
   week.days.forEach(function(day){
-    if(day.d < t0) return;                             /* already packed: not ours to change */
+    if(dayGone(day)) return;                           /* already eaten, or packed: not ours to change */
     catsFor(kid).forEach(function(c){
       if(!day.lock[c.k] || !foodById(kid, day.slots[c.k])){ day.slots[c.k] = null; setOverride(day, c.k, null); }
     });
@@ -1916,7 +1927,7 @@ function seedAligned(kid, week, align, t0){
   foodsOf(kid).forEach(function(f){ var key = f.c+'|'+normKey(f.n); if(!byName[key]) byName[key] = f; });
   week.days.forEach(function(day){
     var want = align[day.d];
-    if(!want || day.d < t0) return;
+    if(!want || dayGone(day)) return;
     catsFor(kid).forEach(function(c){
       if(day.slots[c.k] || !want[c.k]) return;
       var f = byName[c.k+'|'+want[c.k]];
@@ -1931,7 +1942,7 @@ function offMap(kid, align){
   var n = 0, t0 = iso(today());
   kid.week.days.forEach(function(day){
     var want = align[day.d];
-    if(!want || day.d < t0) return;              /* a day already gone was never up for matching */
+    if(!want || dayGone(day)) return;            /* a day already gone was never up for matching */
     catsFor(kid).forEach(function(c){
       if(!want[c.k]) return;
       var f = foodById(kid, day.slots[c.k]);
@@ -1999,7 +2010,7 @@ function untouched(kid, d){                                   /* nothing of this
 function nextPickDay(kid){
   if(!kid.week) return null;
   var t0 = iso(today());
-  return kid.week.days.filter(function(d){ return d.d >= t0 && untouched(kid, d) && catsFor(kid).some(function(c){ return d.slots[c.k]; }); })[0] || null;
+  return kid.week.days.filter(function(d){ return !dayGone(d) && untouched(kid, d) && catsFor(kid).some(function(c){ return d.slots[c.k]; }); })[0] || null;
 }
 function pickChoices(kid){
   var target = nextPickDay(kid); if(!target) return [];
@@ -2102,18 +2113,21 @@ function reminderEvenings(){
 /* One a day, at three, on a day any box was planned and none of it answered:
    the box is home, the parent may not be looking at the app. */
 function reviewReminders(){
-  if(S.reviewReminder && S.reviewReminder.on === false) return [];
+  if(!(S.reviewReminder && S.reviewReminder.on === true)) return [];
   var out = [], t0 = today(), nowMs = Date.now();
   for(var i = 0; i < 7; i++){
     var day = new Date(t0.getTime() + i * 86400000), ds = iso(day);
-    var planned = kids().some(function(k){
+    var owed = kids().filter(function(k){
       var d = k.week && k.week.days.filter(function(x){ return x.d === ds; })[0];
-      return !!(d && catsFor(k).some(function(c){ return d.slots[c.k]; }) && !(k.eaten || {})[ds]);
+      return !!(d && ALL_CATS.some(function(c){ return foodById(k, d.slots[c.k]); }) && !reviewComplete(k, d));
     });
-    if(!planned) continue;
+    if(!owed.length) continue;
     var at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), REVIEW_HOUR, 0, 0);
     if(at.getTime() <= nowMs) continue;
-    out.push({id:2000 + i, at:at, title:'How did the boxes go?', body:'Tap to say what came home.'});
+    var one = owed.length === 1 ? owed[0] : null;
+    out.push({id:2000 + i, at:at,
+      title: one ? 'How did '+(kidRef(one) ? kidRef(one)+'\u2019s' : 'the')+' box go?' : 'How did the boxes go?',
+      body:'Ate it, some, or came home \u2014 one tap each.'});
   }
   return out;
 }
@@ -2122,7 +2136,7 @@ function kidReminderSync(ask){
   var ln = nativePlugin('LocalNotifications'); if(!ln || !S) return;
   clearTimeout(reminderTimer);
   reminderTimer = setTimeout(function(){
-    var eves = gated() ? [] : reminderEvenings().concat(reviewReminders());
+    var eves = (gated() || isHelper()) ? [] : reminderEvenings().concat(reviewReminders());
     var cancel = ln.cancel({notifications:REMINDER_IDS.map(function(id){ return {id:id}; })}).catch(function(){});
     if(!eves.length) return;
     var perm = ask ? ln.requestPermissions() : ln.checkPermissions();   /* the dialog follows the parent's tap, never a launch */
@@ -2143,7 +2157,7 @@ function shoppingList(){
     if(!k.week) return;
     var t0 = iso(today());
     k.week.days.forEach(function(d){
-      if(d.d < t0) return;                              /* already packed; nothing left to buy for it */
+      if(dayGone(d)) return;                            /* already eaten, or packed; nothing left to buy for it */
       catsFor(k).forEach(function(c){
         var f = foodById(k, d.slots[c.k]); if(!f) return;
         var parts = (f.buy && f.buy.length)
@@ -2207,9 +2221,9 @@ function tinHTML(kid, day, mode){
     var over = isOverride(kid, day, c.k);
     var mark = over ? '<span class="over" title="'+esc(violation(kid, f) || 'against a rule')+'">!</span>' : '';
     if(mode!=='pack') mark += day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>'
-             : (dayLabel(day.d).diff < 0 || isHelper() ? '' : '<span class="swap">'+svg('swap',12)+'</span>');  /* the tap cue: this box can be swapped */
+             : (dayGone(day) || isHelper() ? '' : '<span class="swap">'+svg('swap',12)+'</span>');  /* the tap cue: this box can be swapped */
     if(mark) mark = '<span class="marks">'+mark+'</span>';
-    var gone = dayLabel(day.d).diff < 0;
+    var gone = dayGone(day);
     var tag = (mode==='pack' || gone) ? 'div' : 'button';       /* on Pack, and on a day that has gone, a compartment is not a button */
     h += '<'+tag+' class="cmp c-'+c.k+(f?'':' empty')+(c.minor?' minor':'')+'"'
       +  ((mode==='pack' || gone) ? '' : ' data-act="slot" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'"')+'>'
@@ -2455,7 +2469,7 @@ function kidPager(withState){
   return '<div class="kidpager">'+ks.map(function(k){
     var st = withState ? kidState(k, typeof withState === 'string' ? withState : null) : '';
     return '<button data-act="pick-kid" data-id="'+esc(k.id)+'" aria-current="'+(k.id===S.activeKidId)+'"'
-      +  (st ? ' aria-label="'+esc(k.name)+' — '+(st==='packed' ? 'packed' : 'yesterday still to answer')+'"' : '')+'>'
+      +  (st ? ' aria-label="'+esc(k.name)+' — '+(st==='packed' ? 'packed' : 'still to answer')+'"' : '')+'>'
       +  '<span class="dot" style="background:'+hueVar(k)+'"></span>'+esc(k.name)
       +  (st==='packed' ? '<span class="pin ok">'+svg('check',10)+'</span>'
          : st==='due' ? '<span class="pin due"></span>' : '')+'</button>'; }).join('')+'</div>';
@@ -2464,7 +2478,7 @@ function kidPager(withState){
    still owed an answer, or today's is already in the bag. */
 function kidState(k, dateStr){
   var rd = reviewDay(k);
-  if(rd && !reviewComplete(k, rd) && !laterHolds(k, rd)) return 'due';
+  if(rd && !reviewComplete(k, rd)) return 'due';               /* Answer later hides the card, not the fact */
   var day = nextPackDay(k);
   if(!day || (dateStr && day.d !== dateStr)) return '';    /* a different school day: not this morning's tick */
   return boxPacked(k, day) ? 'packed' : '';
@@ -2512,24 +2526,26 @@ function viewPack(){
   var h = top;
   /* The review is the one thing that should stack: it exists once a day and then
      goes, and making a parent visit four boxes to answer four questions would be
-     the whole cost of one box at a time. */
-  var asked = 0;
-  ks.forEach(function(k){
+     the whole cost of one box at a time. A helper is never asked. */
+  var asked = 0, stack = '';
+  if(!isHelper()) ks.forEach(function(k){
     var rd = reviewDay(k); if(!rd) return;
-    if(laterHolds(k, rd)) return;                                   /* Answer later: gone until the next three o'clock, the answers untouched */
-    if(!reviewComplete(k, rd) || UI.reviewEdit[k.id] === rd.d){ h += (multi ? kidLine(k) : '') + reviewCard(k, rd); if(!reviewComplete(k, rd)) asked++; }
-    else if(k === kid && reviewedToday(k, rd)) h += reviewSummary(k, rd.d);
+    if(laterHolds(k, rd)) return;                                   /* Answer later: gone until the next three o'clock, or the next day */
+    if(!reviewComplete(k, rd) || UI.reviewEdit[k.id] === rd.d){ stack += (multi ? kidLine(k) : '') + reviewCard(k, rd); if(!reviewComplete(k, rd)) asked++; }
+    else if(k === kid && reviewedToday(k, rd)) stack += reviewSummary(k, rd.d);
   });
-  /* one way past the questions for the parent who only came to pack a box */
-  if(asked) h += '<button class="btn ghost wide" data-act="review-later-all">Answer later</button>';
+  /* the way past the questions sits on the first screen, not under the last card */
+  if(asked) stack = '<div class="spread"><p class="view-sub" style="margin:0">'+asked+' box'+(asked===1?'':'es')+' came home</p>'
+    + '<button class="btn ghost sm" data-act="review-later-all">Answer later</button></div>' + stack;
 
+  var box = '';
   var lab = dayLabel(day.d);
-  h += '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
+  box += '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
     + ' · '+esc(lab.date)+(multi ? ' · '+esc(kid.name) : '')+'</p><h2 class="view-title">'
     + (lab.rel==='Today' ? 'Today&#8217;s box' : lab.rel==='Tomorrow' ? 'Tomorrow&#8217;s box' : esc(lab.full)+'&#8217;s box')
     + '</h2></div>';
 
-  h += '<div class="kidgroup">'
+  box += '<div class="kidgroup">'
     +  tinHTML(kid, day, 'pack')
     +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day)
     +  '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">' + packButton(kid, day) + pickButton(kid, day) + '</span></div></div>';
@@ -2538,9 +2554,11 @@ function viewPack(){
   var hh = householdReady(day.d);
   if(hh.boxes > 1){
     var link = function(k){ return '<button class="linkbtn" data-act="pick-kid" data-id="'+esc(k.id)+'">'+esc(k.name)+'</button>'; };
-    h += '<p class="hint" style="margin:0;color:var(--ink-2)">'+hh.ready+' of '+hh.boxes+' boxes ready'
+    box += '<p class="hint" style="margin:0;color:var(--ink-2)">'+hh.ready+' of '+hh.boxes+' boxes ready'
       +  (hh.left.length ? ' — '+listNames(hh.left, link)+' still to pack.' : ' — everyone is packed.')+'</p>';
   }
+  /* a night-before household came to pack tomorrow's box: it goes first, the questions after */
+  h += (packsAtNight() && afterSchool()) ? box + stack : stack + box;
 
   var rest = kid.week.days.filter(function(x){ return x.d > day.d; });
   if(rest.length){
@@ -2579,7 +2597,7 @@ function viewWeek(){
     var l = dayLabel(day.d);
     h += '<div class="daycard'+(l.diff<0?' past':'')+'"><div class="dayhead"><div class="dayname">'+esc(l.full)
       +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):(l.diff<0?' · gone':''))+'</em></div>'
-      +  (l.diff < 0 || isHelper() ? '' : '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'">'
+      +  (dayGone(day) || isHelper() ? '' : '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'">'
       +  svg('dice',15)+'Shuffle</button>')+'</div>'
       +  tinHTML(kid, day, 'week') + '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day) + pickButton(kid, day) + '</div></div>';
   });
@@ -2736,15 +2754,15 @@ function viewSetup(){
   if(!isHelper()){
     h += '<div><div class="sect-head"><h3>When do you pack?</h3></div><div class="card">'
       +  '<div class="toggles">'
-      +  '<button class="tg" data-act="pack-when" data-v="morning" aria-pressed="'+!packsAtNight()+'">The morning of</button>'
+      +  '<button class="tg" data-act="pack-when" data-v="morning" aria-pressed="'+!packsAtNight()+'">In the morning</button>'
       +  '<button class="tg" data-act="pack-when" data-v="evening" aria-pressed="'+packsAtNight()+'">The night before</button>'
-      +  '</div><span class="hint">Pack shows the box you are packing: tomorrow&#8217;s from three o&#8217;clock if you pack at night.</span></div></div>';
+      +  '</div><p class="hint" style="margin:10px 0 0">If you pack at night, Pack shows tomorrow&#8217;s box from three o&#8217;clock.</p></div></div>';
   }
   if(nativePlugin('LocalNotifications') && !isHelper() && !gated()){
     h += '<div><div class="sect-head"><h3>Reminders</h3></div><div class="card">'
-      +  '<div class="switch"><div><div class="t">Ask at three how the boxes went</div>'
-      +  '<div class="d">One a day, when a box is home and nothing has been said about it.</div></div>'
-      +  '<button class="sw" data-act="review-reminder" aria-pressed="'+!(S.reviewReminder && S.reviewReminder.on === false)+'" aria-label="Ask at three how the boxes went"></button>'
+      +  '<div class="switch"><div><div class="t">Remind us at three</div>'
+      +  '<div class="d">One a day, on days a box came home and you haven&#8217;t said how it went.</div></div>'
+      +  '<button class="sw" data-act="review-reminder" aria-pressed="'+!!(S.reviewReminder && S.reviewReminder.on === true)+'" aria-label="Remind us at three"></button>'
       +  '</div></div></div>';
   }
   h += '<div><div class="sect-head"><h3>This phone</h3></div><div class="card stack" style="gap:12px">'
@@ -3077,7 +3095,7 @@ function helpSheet(){
     ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Plan the week gives them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and you swipe between them.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
-    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the morning review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.']
+    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.']
   ];
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
     return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
@@ -3149,7 +3167,7 @@ function render(){
     : UI.tab==='shop'  ? viewShop()
     : UI.tab==='foods' ? viewFoods()
     : viewSetup()) + '</div>');
-  var owed = !isHelper() && reviewOwed();
+  var owed = !isHelper() && !gated() && reviewOwed();
   document.getElementById('tabs').innerHTML = TABS.map(function(t){
     return '<button data-act="tab" data-tab="'+t.k+'" aria-current="'+(UI.tab===t.k)+'"'+(t.k==='pack' && owed ? ' aria-label="Pack — how did the boxes go?"' : '')+'>'
       + svg(t.icon)+(t.k==='pack' && owed ? '<i class="due" aria-hidden="true"></i>' : '')+'<span>'+t.label+'</span></button>'; }).join('');
@@ -3311,7 +3329,7 @@ document.addEventListener('click', function(ev){
   }
 
   /* navigation */
-  if(act==='tab'){ if(UI.tab !== 'setup') UI.lastTab = UI.box ? 'lunchbox settings' : UI.tab; UI.tab = el.getAttribute('data-tab'); UI.box = false; render(); window.scrollTo(0,0); return; }
+  if(act==='tab'){ if(el.getAttribute('data-tab')==='pack' && UI.tab==='pack' && reviewOwed()) UI.reviewLater = {};   /* the dot is a door: tapping Pack again brings the questions back */ if(UI.tab !== 'setup') UI.lastTab = UI.box ? 'lunchbox settings' : UI.tab; UI.tab = el.getAttribute('data-tab'); UI.box = false; render(); window.scrollTo(0,0); return; }
   if(act==='box-settings'){ if(!UI.box) UI.boxScroll = window.scrollY; UI.box = !UI.box; render(); window.scrollTo(0, UI.box ? 0 : (UI.boxScroll || 0)); return; }
   if(act==='box-done'){ UI.box = false; render(); window.scrollTo(0, UI.boxScroll || 0); return; }
   if(act==='go-foods'){ UI.tab='foods'; UI.box = false; render(); window.scrollTo(0,0); return; }
@@ -3351,7 +3369,7 @@ document.addEventListener('click', function(ev){
     return;
   }
   if(act==='review-reminder'){
-    var rr = !(S.reviewReminder && S.reviewReminder.on === false);
+    var rr = !!(S.reviewReminder && S.reviewReminder.on === true);
     S.reviewReminder = {on: !rr, updatedAt: now()};
     save(); render(); kidReminderSync(true);
     toast(S.reviewReminder.on ? 'A reminder at three, on days a box is home' : 'No three o\u2019clock reminder');
@@ -3390,7 +3408,7 @@ document.addEventListener('click', function(ev){
     if(!k4 || !k4.week){ closeSheet(); toast('That lunchbox is gone'); return; }
     var day4 = k4.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
     if(!day4){ closeSheet(); toast('That day is no longer planned'); return; }
-    if(day4.d < iso(today())){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
+    if(dayGone(day4)){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     var wasKept = !!(day4.lock[cat] || (day4.kidPick && day4.kidPick[cat]));
     if(reshuffleSlot(k4, day4, cat)){ slotSheet(k4.id, day4.d, cat); render(); if(wasKept) toast('Shuffled \u2014 it is no longer kept'); }
     else toast('Nothing else in that category');
@@ -3401,7 +3419,7 @@ document.addEventListener('click', function(ev){
     if(!k5 || !k5.week){ closeSheet(); toast('That lunchbox is gone'); return; }
     var day5 = k5.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
     if(!day5){ closeSheet(); toast('That day is no longer planned'); return; }
-    if(day5.d < iso(today())){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
+    if(dayGone(day5)){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     day5.lock[cat5] = !day5.lock[cat5]; touch(k5.week); touch(k5); save();
     el.setAttribute('aria-pressed', day5.lock[cat5]); render(); return;
   }
@@ -3410,7 +3428,7 @@ document.addEventListener('click', function(ev){
     if(!k6 || !k6.week){ closeSheet(); toast('That lunchbox is gone'); return; }
     var day6 = k6.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
     if(!day6){ closeSheet(); toast('That day is no longer planned'); return; }
-    if(day6.d < iso(today())){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
+    if(dayGone(day6)){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     var cat6 = el.getAttribute('data-cat'), id6 = el.getAttribute('data-id');
     var f6 = foodById(k6, id6);
     if(!f6){ closeSheet(); render(); toast('That food is gone'); return; }    /* removed on the other phone since the sheet opened */
@@ -3743,7 +3761,7 @@ document.addEventListener('click', function(ev){
           kids:S.kids.filter(function(k){ return !k.deletedAt && (foodsOf(k).length || k.week); }),
           members:S.members.filter(function(m){ return m.id === DEVICE.memberId; })
         });
-        S = normalizeAccount(window.LSMerge.merge(mine, theirs, iso(today()))); S.activeKidId = (kids()[0] || {}).id;
+        S = normalizeAccount(window.LSMerge.merge(mine, theirs, mergeHorizon())); S.activeKidId = (kids()[0] || {}).id;
         if(theirs.createdAt) S.createdAt = theirs.createdAt;      /* their household's birthday, not this phone's: joining never shortens their three weeks */
         Store.save(S, DEVICE.memberId);
       }
@@ -3769,7 +3787,7 @@ document.addEventListener('click', function(ev){
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = {d:el.getAttribute('data-day'), at:Date.now()}; render(); return; }
   if(act==='review-later-all'){
     kids().forEach(function(k){ var rd = reviewDay(k); if(rd && !reviewComplete(k, rd)) UI.reviewLater[k.id] = {d:rd.d, at:Date.now()}; });
-    render(); window.scrollTo(0,0); toast('Ask me again at three'); return;
+    render(); window.scrollTo(0,0); toast('We\u2019ll ask again tomorrow'); return;
   }
   if(act==='trial-dismiss'){ try{ localStorage.setItem(TRIAL_SEEN_KEY, el.getAttribute('data-stage') || 'soon'); }catch(e){} render(); return; }
   if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }
@@ -3954,7 +3972,7 @@ Store.load().then(function(r){
   window.addEventListener('online', function(){ if(signedIn()) Sync.resume(); else render(); });
   window.addEventListener('pageshow', function(e){ if(e.persisted && Account.buying){ Account.buying = false; closeSheet(); render(); } });
   window.addEventListener('offline', function(){ renderSyncLine(); });
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ if(S && !UI.kid) render(); Sync.resume(); } });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ if(S && !UI.kid && !sheetState && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName || '')) render(); Sync.resume(); } });
 });
 })();
 </script>

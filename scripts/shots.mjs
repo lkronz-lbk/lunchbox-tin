@@ -14,7 +14,7 @@ const OUT = '/Users/lizkronzek/lunch-sorted/public/img';
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 const b = await chromium.launch();
-const ctx = await b.newContext({ viewport: {width:375, height:812}, deviceScaleFactor:2, colorScheme:'light' });
+const ctx = await b.newContext({ viewport: {width:375, height:812}, deviceScaleFactor:2, colorScheme:'light', timezoneId:'America/New_York' });
 /* Shoot on a Monday, so the week view shows a week rather than the two days
    left after a Thursday. The app reads the clock in a dozen places; pin it once. */
 await ctx.addInitScript(() => {
