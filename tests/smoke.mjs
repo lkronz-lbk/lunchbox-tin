@@ -210,7 +210,32 @@ const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 /* every context is a phone; the browser never fetches Google Fonts, which the suite does not
    test and which, through a slow proxy, can turn a page load into a thirty-second wait */
-const phone = async () => { const c = await browser.newContext({ viewport:{width:375,height:812} }); await c.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort()); return c; };
+/* The app reads the clock in a dozen places and the week it plans depends on
+   the weekday: on a Thursday the anchor rule leaves two days, the suite packs
+   one, and the kid's pick (which needs two untouched days) never appears. So
+   the suite failed every Thursday and Friday, on CI too. Every browser context
+   is pinned to the most recent Tuesday, 9am local: Monday has gone (so the
+   past-day invariants are exercised) and four days are still ahead. Set
+   SMOKE_TODAY=YYYY-MM-DD to pin another day. Server-side code keeps the real
+   clock, which is how a phone and a server always relate. */
+const pinnedDay = (() => {
+  if (process.env.SMOKE_TODAY) return process.env.SMOKE_TODAY;
+  const d = new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - ((d.getDay() + 5) % 7));     /* back to Tuesday (0=Sun: Tue is 2; (day+5)%7 is days since Tuesday) */
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+})();
+const pinClock = async c => c.addInitScript(day => {
+  const Real = Date;
+  const [y, m, dd] = day.split('-').map(Number);
+  const offset = new Real(y, m - 1, dd, 9, 0, 0).getTime() - Real.now();
+  function Fake(...a){ return a.length ? new Real(...a) : new Real(Real.now() + offset); }
+  Fake.prototype = Real.prototype;
+  Fake.now = () => Real.now() + offset;
+  Fake.parse = Real.parse; Fake.UTC = Real.UTC;
+  window.Date = Fake;
+}, pinnedDay);
+console.log(`  clock pinned to ${pinnedDay} in every browser context (SMOKE_TODAY to change)`);
+const phone = async () => { const c = await browser.newContext({ viewport:{width:375,height:812} }); await pinClock(c); await c.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort()); return c; };
 const ctx = await phone();
 const page = await ctx.newPage();
 const errors = [];
@@ -1143,6 +1168,7 @@ try {
 
   Object.assign(process.env, { STRIPE_SECRET_KEY: 'sk_test_stub', STRIPE_WEBHOOK_SECRET: WH, STRIPE_PRICE_YEAR: 'price_year', STRIPE_PRICE_LIFETIME: 'price_life', STRIPE_PRICE_MONTH: 'price_month' });
   const ctxB = await browser.newContext({ viewport:{width:375,height:812}, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });   /* a phone's Safari, not the app */
+  await pinClock(ctxB);
   await ctxB.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort());
   const pb = await ctxB.newPage(); pb.on('pageerror', e => errors.push(String(e.message)));
   await pb.route('https://checkout.stripe.com/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stripe checkout</title>' }));
@@ -1340,6 +1366,7 @@ try {
   }
   {
     const ctxApp = await browser.newContext({ viewport:{width:375,height:812}, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LunchSortedApp/1' });
+    await pinClock(ctxApp);
     await ctxApp.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort());
     const pa = await ctxApp.newPage(); pa.on('pageerror', e => errors.push(String(e.message)));
     await pa.goto(BASE+'/app/'); await pa.waitForTimeout(300);

@@ -167,6 +167,10 @@ npx playwright install chromium
 npm test
 ```
 
+Every browser the suite opens has its clock pinned to the most recent Tuesday, so the week it
+plans is the same week whatever day it runs on (a Thursday used to leave the kid's pick with
+nothing to offer). `SMOKE_TODAY=2026-09-14 npm test` pins another day.
+
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
 onboarding, the week draw and its trait words, packing, the kid's pick, the morning review
 and resting, the school rules re-checking a live plan, compartments switching on and off,
