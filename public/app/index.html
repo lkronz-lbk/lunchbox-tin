@@ -328,6 +328,20 @@ nav.tabs svg{width:21px;height:21px}
 .kidbtn .dot{width:8px;height:8px;flex:none}
 .kidbtn .nm{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .kidbtn .caret{flex:none}
+.kidpager{display:flex;gap:6px;overflow-x:auto;margin:-5px -16px;padding:5px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.kidpager::-webkit-scrollbar{display:none}
+.kidpager button{flex:none;display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);
+  background:var(--surface);border-radius:999px;padding:0 15px;min-height:44px;font-size:13.5px;font-weight:600;color:var(--ink-2)}
+.kidpager button[aria-current="true"]{border-color:var(--accent);background:var(--surface-2);color:var(--ink)}
+.kidpager .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.kidpager .pin{width:15px;height:15px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.kidpager .pin.ok{background:var(--accent);color:var(--accent-fg)}
+.kidpager .pin.ok svg{width:9px;height:9px}
+.kidpager .pin.due{background:var(--warn-soft);border:1.5px solid var(--warn)}
+.swipe-l{animation:swipeL .18s ease-out}
+.swipe-r{animation:swipeR .18s ease-out}
+@keyframes swipeL{from{transform:translateX(26px);opacity:.4}to{transform:none;opacity:1}}
+@keyframes swipeR{from{transform:translateX(-26px);opacity:.4}to{transform:none;opacity:1}}
 .iconbtn{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-2);
   display:inline-flex;align-items:center;justify-content:center;padding:0}
 .iconbtn[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
@@ -1130,7 +1144,7 @@ function whatsNew(){
   if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
   if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text && !UI.notice) UI.notice = WHATS_NEW.text;
 }
-var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, swipe:'', pagerTo:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function now(){ return new Date().toISOString(); }
@@ -1356,6 +1370,14 @@ function save(){
 }
 
 /* ------------------------------------------------------------- accessors */
+/* Which lunchbox is on screen is device-local in everything but where it is
+   stored: persist it, but never bump the document clock and never push it —
+   LSMerge.same() already ignores it, so a push would carry nothing anyway. */
+function saveView(){
+  if(!S) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){ Store.save(S, DEVICE.memberId); }, 120);
+}
 function kids(){ return S.kids.filter(function(k){ return !k.deletedAt; }); }
 function activeKid(){
   var ks = kids();
@@ -2043,14 +2065,6 @@ function kidReminderSync(ask){
 }
 
 /* --------------------------------------------- household-wide roll-ups */
-function upcomingDates(){
-  var map = {};
-  kids().forEach(function(k){
-    if(!k.week) return;
-    k.week.days.forEach(function(d){ (map[d.d] = map[d.d] || []).push({kid:k, day:d}); });
-  });
-  return Object.keys(map).sort().map(function(d){ return {date:d, entries:map[d]}; });
-}
 function dishWords(d){ return d.slice(0, 2).join(' \u00b7 ')+(d.length > 2 ? ' +'+(d.length-2) : ''); }
 function shoppingList(){
   var rows = nullMap();
@@ -2358,58 +2372,105 @@ function pickButton(kid, day){
   return '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">'+premiumTag()
     + '<button class="btn sm" data-act="kid-start" data-kid="'+esc(kid.id)+'">'+(picked ? 'Pick again' : 'Let '+who+' pick')+'</button></span>';
 }
+/* Several lunchboxes: a row you can swipe past or tap, so looking across four
+   kids is a thumb flick rather than a trip through a menu. On Pack the pills
+   carry the morning's state, so four kids is not four guesses. */
+function kidPager(withState){
+  var ks = kids();
+  if(ks.length < 2) return '';
+  return '<div class="kidpager">'+ks.map(function(k){
+    var st = withState ? kidState(k, typeof withState === 'string' ? withState : null) : '';
+    return '<button data-act="pick-kid" data-id="'+esc(k.id)+'" aria-current="'+(k.id===S.activeKidId)+'"'
+      +  (st ? ' aria-label="'+esc(k.name)+' — '+(st==='packed' ? 'packed' : 'yesterday still to answer')+'"' : '')+'>'
+      +  '<span class="dot" style="background:'+hueVar(k)+'"></span>'+esc(k.name)
+      +  (st==='packed' ? '<span class="pin ok">'+svg('check',10)+'</span>'
+         : st==='due' ? '<span class="pin due"></span>' : '')+'</button>'; }).join('')+'</div>';
+}
+/* What a pill has to say at 7am, in the order it matters: yesterday's box is
+   still owed an answer, or today's is already in the bag. */
+function kidState(k, dateStr){
+  var rd = reviewDay(k);
+  if(rd && !reviewComplete(k, rd) && UI.reviewLater[k.id] !== rd.d) return 'due';
+  var day = nextPackDay(k);
+  if(!day || (dateStr && day.d !== dateStr)) return '';    /* a different school day: not this morning's tick */
+  return boxPacked(k, day) ? 'packed' : '';
+}
+/* The next day this lunchbox packs, or the last one planned when the week has
+   gone — Pack always has a box to show. */
+function nextPackDay(kid){
+  if(!kid.week || !kid.week.days.length) return null;
+  var t = iso(today());
+  return kid.week.days.filter(function(d){ return d.d >= t; })[0] || kid.week.days[kid.week.days.length-1];
+}
+/* Every lunchbox's box for this date, packed or not: the one line that says
+   whether you can leave the house. A different school day is not this
+   morning's problem; a box with no plan still counts, and is named. */
+function householdReady(dateStr){
+  var out = {boxes:0, ready:0, left:[]};
+  kids().forEach(function(k){
+    var slot = nextPackDay(k);
+    if(slot && slot.d !== dateStr) return;
+    out.boxes++;
+    if(!slot){ out.left.push(k); return; }
+    if(boxPacked(k, slot)) out.ready++; else out.left.push(k);
+  });
+  return out;
+}
 function viewPack(){
-  var ks = kids(), multi = ks.length>1;
+  var kid = activeKid(), ks = kids(), multi = ks.length>1;
+  var news = UI.notice === WHATS_NEW.text;                        /* news waits behind the trial and the plan; an error does not */
+  var top = '<div class="stack">' + (news ? trialBanner() + planBanner() + noticeBanner() : noticeBanner() + trialBanner() + planBanner()) + kidPager(true);
   if(!ks.some(function(k){ return foodsOf(k).length; }))
-    return '<div class="stack">'+noticeBanner()+'<p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
+    return top + '<p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
 
-  var dates = upcomingDates();
-  if(!dates.length)
-    return '<div class="stack">'+noticeBanner()+'<p class="view-sub">Pack list</p><h2 class="view-title">No plan yet</h2>'
+  var day = nextPackDay(kid);
+  if(!day)
+    return top + '<p class="view-sub">Pack list</p><h2 class="view-title">No plan yet</h2>'
       + '<div class="empty"><p>Draw a week and this page is the morning&#8217;s box.</p>'
       + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
 
-  var t = iso(today());
-  var slot = dates.filter(function(x){ return x.date>=t; })[0] || dates[dates.length-1];
-  var lab = dayLabel(slot.date);
-
-  var news = UI.notice === WHATS_NEW.text;                        /* news waits behind the trial and the plan; an error does not */
-  var h = '<div class="stack">' + (news ? trialBanner() + planBanner() + noticeBanner() : noticeBanner() + trialBanner() + planBanner());
+  var h = top;
+  /* The review is the one thing that should stack: it exists once a day and then
+     goes, and making a parent visit four boxes to answer four questions would be
+     the whole cost of one box at a time. */
   ks.forEach(function(k){
     var rd = reviewDay(k); if(!rd) return;
     if(UI.reviewLater[k.id] === rd.d) return;                       /* "Not now" on a locked card: gone for this open, the answers untouched */
     if(!reviewComplete(k, rd) || UI.reviewEdit[k.id] === rd.d) h += (multi ? kidLine(k) : '') + reviewCard(k, rd);
-    else if(reviewedToday(k, rd)) h += reviewSummary(k, rd.d);
+    else if(k === kid && reviewedToday(k, rd)) h += reviewSummary(k, rd.d);
   });
-  var boxesDone = slot.entries.filter(function(e){ return boxPacked(e.kid, e.day); }).length;
+
+  var lab = dayLabel(day.d);
   h += '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
-    + ' · '+esc(lab.date)+(slot.entries.length > 1 ? ' · '+boxesDone+' of '+slot.entries.length+' packed' : '')+'</p><h2 class="view-title">'
+    + ' · '+esc(lab.date)+(multi ? ' · '+esc(kid.name) : '')+'</p><h2 class="view-title">'
     + (lab.rel==='Today' ? 'Today&#8217;s box' : lab.rel==='Tomorrow' ? 'Tomorrow&#8217;s box' : esc(lab.full)+'&#8217;s box')
-    + (slot.entries.length > 1 ? 'es' : '') + '</h2></div>';
+    + '</h2></div>';
 
-  slot.entries.forEach(function(e){
-    h += '<div class="kidgroup">' + (multi ? kidLine(e.kid) : '')
-      +  tinHTML(e.kid, e.day, 'pack')
-      +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(e.kid, e.day)
-      +  '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">' + packButton(e.kid, e.day) + pickButton(e.kid, e.day) + '</span></div></div>';
-  });
+  h += '<div class="kidgroup">' + (multi ? kidLine(kid) : '')
+    +  tinHTML(kid, day, 'pack')
+    +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day)
+    +  '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">' + packButton(kid, day) + pickButton(kid, day) + '</span></div></div>';
 
+  /* with more than one lunchbox, the box on screen is not the whole morning */
+  var hh = householdReady(day.d);
+  if(hh.boxes > 1){
+    h += '<p class="hint" style="margin:0;color:var(--ink-2)">'+hh.ready+' of '+hh.boxes+' boxes ready'
+      +  (hh.left.length ? ' — '+esc(listNames(hh.left))+' still to pack.' : ' — everyone is packed.')+'</p>';
+  }
 
-  var rest = dates.filter(function(x){ return x.date > slot.date; });
+  var rest = kid.week.days.filter(function(x){ return x.d > day.d; });
   if(rest.length){
     h += '<div><div class="sect-head"><h3>Coming up</h3></div><div class="list">';
     rest.forEach(function(x){
-      var l = dayLabel(x.date);
-      var who = multi ? x.entries.map(function(e){ return e.kid.name; }).join(', ')
-        : catsFor(x.entries[0].kid).map(function(c){ var f = foodById(x.entries[0].kid, x.entries[0].day.slots[c.k]); return f?f.n:null; })
-              .filter(Boolean).join(' · ');
-      var picks = x.entries.map(function(e){ return pickButton(e.kid, e.day); }).join('');
-      var pickedBy = x.entries.filter(function(e){ return e.day.kidPick && Object.keys(e.day.kidPick).length; }).map(function(e){ return kidLabel(e.kid) ? kidLabel(e.kid)+' picked' : 'Picked'; }).join(', ');
+      var l = dayLabel(x.d);
+      var what = catsFor(kid).map(function(c){ var f = foodById(kid, x.slots[c.k]); return f?f.n:null; }).filter(Boolean).join(' · ');
+      var pick = pickButton(kid, x);
+      var pickedBy = (x.kidPick && Object.keys(x.kidPick).length) ? (kidLabel(kid) ? kidLabel(kid)+' picked' : 'Picked') : '';
       /* the day the kid's pick would change carries the button, so the pick lands where it is seen */
-      h += '<'+(picks ? 'div' : 'button')+' class="item"'+(picks ? '' : ' data-act="go-week"')+'><span class="grow"><span class="nm">'+esc(l.full)+(picks ? ' <span class="qty" style="font-size:12px">'+esc(l.date)+'</span>' : '')+(pickedBy ? ' <span class="chip picked">'+esc(pickedBy)+'</span>' : '')+'</span>'
-        +  '<span class="meta">'+esc(who || 'nothing picked')+'</span></span>'
-        +  (picks ? '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">'+picks+'</span>' : '<span class="qty">'+esc(l.date)+'</span>')
-        +  '</'+(picks ? 'div' : 'button')+'>';
+      h += '<'+(pick ? 'div' : 'button')+' class="item"'+(pick ? '' : ' data-act="go-week"')+'><span class="grow"><span class="nm">'+esc(l.full)+(pick ? ' <span class="qty" style="font-size:12px">'+esc(l.date)+'</span>' : '')+(pickedBy ? ' <span class="chip picked">'+esc(pickedBy)+'</span>' : '')+'</span>'
+        +  '<span class="meta">'+esc(what || 'nothing picked')+'</span></span>'
+        +  (pick ? '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">'+pick+'</span>' : '<span class="qty">'+esc(l.date)+'</span>')
+        +  '</'+(pick ? 'div' : 'button')+'>';
     });
     h += '</div></div>';
   }
@@ -2419,10 +2480,10 @@ function viewPack(){
 function viewWeek(){
   var kid = activeKid(), multi = kids().length>1;
   if(!foodsOf(kid).length)
-    return '<div class="stack"><p class="view-sub">The week</p><h2 class="view-title">No foods yet</h2>'+noFoodsEmpty()+'</div>';
+    return '<div class="stack">'+kidPager()+'<p class="view-sub">The week</p><h2 class="view-title">No foods yet</h2>'+noFoodsEmpty()+'</div>';
   var ws = kid.week ? parseISO(kid.week.start) : anchorWeek(kid);
   var n = kid.week ? kid.week.days.length : packDaysSorted(kid).length;
-  var h = '<div class="stack"><div class="spread"><div>'
+  var h = '<div class="stack">'+kidPager()+'<div class="spread"><div>'
     + '<p class="view-sub">'+(NUMWORD[n]||n)+' lunch'+(n===1?'':'es')+(multi ? ' · '+esc(kid.name) : '')+'</p>'
     + '<h2 class="view-title">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+'</h2></div>'
     + (isHelper() ? '' : '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+'Shuffle all</button>')+'</div>'
@@ -2443,7 +2504,8 @@ function viewWeek(){
 
 function viewShop(){
   var rows = shoppingList(), multi = kids().length>1;
-  var h = '<div class="stack"><div><p class="view-sub">Shopping list</p><h2 class="view-title">What to buy</h2></div>';
+  var h = '<div class="stack"><div><p class="view-sub">Shopping list'
+    + (multi ? ' \u00b7 all '+kids().length+' lunchboxes' : '')+'</p><h2 class="view-title">What to buy</h2></div>';
   if(!rows.length)
     return h + '<div class="empty"><p>Plan a week and the list builds itself from the boxes.</p>'
       + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
@@ -2471,7 +2533,7 @@ function viewShop(){
 
 function viewFoods(){
   var kid = activeKid(), multi = kids().length>1;
-  var h = '<div class="stack"><div class="spread"><div>'
+  var h = '<div class="stack">'+kidPager()+'<div class="spread"><div>'
     + '<p class="view-sub">Food list'+(multi ? ' · '+esc(kid.name) : '')+'</p>'
     + '<h2 class="view-title">What they&#8217;ll eat</h2></div>'
     + '<button class="btn sm" data-act="ideas">'+svg('plus',15)+'Ideas</button></div>';
@@ -2983,17 +3045,68 @@ function render(){
   document.getElementById('tabs').innerHTML = TABS.map(function(t){
     return '<button data-act="tab" data-tab="'+t.k+'" aria-current="'+(UI.tab===t.k)+'">'
       + svg(t.icon)+'<span>'+t.label+'</span></button>'; }).join('');
-  /* Pack and Shop cover the whole household, so the per-lunchbox switcher
-     only belongs on the views it actually steers. */
-  var householdView = kids().length>1 && (UI.tab==='pack' || UI.tab==='shop') && !UI.box;
+  if(UI.swipe){
+    var vw = document.getElementById('view');
+    vw.classList.remove('swipe-l','swipe-r');
+    void vw.offsetWidth;                                  /* restart the animation on a second swipe */
+    vw.classList.add('swipe-'+UI.swipe);
+    UI.swipe = '';
+  }
+  if(UI.pagerTo){                                         /* only when the lunchbox changed: never scroll the page on a tick */
+    var pg = document.querySelector('.kidpager'), pill = pg && pg.querySelector('[aria-current="true"]');
+    if(pill) pg.scrollLeft = pill.offsetLeft - (pg.clientWidth - pill.offsetWidth) / 2;
+    UI.pagerTo = false;
+  }
+  /* The pager is the switcher wherever it is on screen, and Shop is one list for
+     the whole household with nothing to switch — so the header carries a
+     lunchbox only where there is one lunchbox to carry. */
+  var multiKid = kids().length>1, pagerHere = multiKid && PAGER_TABS.indexOf(UI.tab) > -1 && !UI.box;
+  var householdView = multiKid && UI.tab==='shop' && !UI.box;
   var gear = isHelper() ? '' : '<button class="iconbtn" data-act="box-settings" aria-label="Lunchbox settings" aria-pressed="'+(!!UI.box)+'">'+svg('setup',18)+'</button>';
   var help = '<button class="iconbtn" data-act="help" aria-label="Help">'+svg('help',19)+'</button>';
   document.getElementById('who').innerHTML = (!kid ? ''
-    : (householdView
-      ? '<button class="kidbtn" data-act="kidsheet"><span class="nm">'+kids().length+' lunchboxes</span><span class="caret">&#9662;</span></button>'
+    : ((pagerHere || householdView) ? ''
       : '<button class="kidbtn" data-act="kidsheet"><span class="dot" style="background:'+hueVar(kid)+'"></span>'
         + '<span class="nm">'+esc(kid.name)+'</span><span class="caret">&#9662;</span></button>') + (UI.tab === 'setup' ? '' : gear)) + help;
 }
+
+/* The views that are about one lunchbox, and so carry the pager and the swipe.
+   Shop is not one of them: it is one list for the household, always. */
+var PAGER_TABS = ['pack', 'week', 'foods'];
+/* Only a clearly horizontal flick counts, and nothing is preventDefault-ed, so
+   the page still scrolls exactly as it always did. */
+function swipeKid(dir){
+  var ks = kids();
+  if(ks.length < 2) return;
+  var i = ks.map(function(k){ return k.id; }).indexOf(S.activeKidId);
+  var j = Math.min(ks.length - 1, Math.max(0, i + dir));   /* the ends are ends: a wrap would animate the wrong way */
+  if(j === i) return;
+  S.activeKidId = ks[j].id;
+  UI.swipe = dir > 0 ? 'l' : 'r';
+  UI.pagerTo = true;
+  saveView(); render();
+}
+(function(){
+  var view = document.getElementById('view');
+  var x0 = 0, y0 = 0, t0 = 0, live = false;
+  view.addEventListener('touchstart', function(ev){
+    live = !!(S && !UI.kid && !UI.box && ev.touches.length === 1 && kids().length > 1
+      && PAGER_TABS.indexOf(UI.tab) > -1 && !sheetEl.classList.contains('open')
+      && !ev.target.closest('.kidpager'));
+    if(!live) return;
+    x0 = ev.touches[0].clientX; y0 = ev.touches[0].clientY; t0 = Date.now();
+  }, {passive:true});
+  view.addEventListener('touchmove', function(ev){ if(ev.touches.length > 1) live = false; }, {passive:true});
+  view.addEventListener('touchcancel', function(){ live = false; }, {passive:true});
+  view.addEventListener('touchend', function(ev){
+    if(!live) return;
+    live = false;
+    if(Date.now() - t0 > 700) return;                     /* a slow drag is a scroll, not a flick */
+    var t = ev.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if(Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    swipeKid(dx < 0 ? 1 : -1);
+  }, {passive:true});
+})();
 
 /* ---------------------------------------------------------------- events */
 var HELPER_OK = ['tab','help','help-site','home-ok','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
@@ -3100,7 +3213,7 @@ document.addEventListener('click', function(ev){
 
   /* lunchbox profiles */
   if(act==='pick-kid'){
-    S.activeKidId = el.getAttribute('data-id'); save();
+    S.activeKidId = el.getAttribute('data-id'); UI.pagerTo = true; saveView();
     if(el.getAttribute('data-close')) closeSheet();
     render(); return;
   }
