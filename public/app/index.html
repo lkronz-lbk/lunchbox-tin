@@ -1330,7 +1330,8 @@ function normKid(k, i){
   kid.settings.updatedAt = safeStamp(st.updatedAt);
   kid.foods = (Array.isArray(k.foods) ? k.foods : []).slice(0, 500).map(function(f){ return normFood(kid, f); }).filter(Boolean);
   var normWeekObj = function(v){
-    var w = plainObj(v), wdays = (Array.isArray(w.days) ? w.days : []).map(normDay).filter(Boolean);
+    var w = plainObj(v), seen = nullMap();
+    var wdays = (Array.isArray(w.days) ? w.days : []).slice(0, 14).map(normDay).filter(function(d){ if(!d || seen[d.d]) return false; seen[d.d] = 1; return true; }).slice(0, 7);   /* a week has seven days, once each */
     return (safeDate(w.start) && wdays.length)
       ? {id:safeId(w.id,'week'), kidId:kid.id, start:safeDate(w.start), createdAt:safeStamp(w.createdAt, w.updatedAt), updatedAt:safeStamp(w.updatedAt), days:wdays}
       : null;
@@ -2018,7 +2019,7 @@ function shuffleSheet(dayStr){
 }
 function snapshotWeeks(ks){ return ks.map(function(k){ return {id:k.id, week:JSON.parse(JSON.stringify(k.week)), next:JSON.parse(JSON.stringify(k.next || null))}; }); }
 function restoreWeeks(snap){
-  snap.forEach(function(x){ var k = kidById(x.id); if(k){ k.week = x.week; k.next = x.next; touch(k); } });
+  snap.forEach(function(x){ var k = kidById(x.id); if(k){ k.week = x.week; k.next = x.next; if(k.week) touch(k.week); if(k.next) touch(k.next); touch(k); } });   /* the put-back is the newer plan, so it wins the merge too */
   save(); render(); toast('Put back');
 }
 /* One day, for several boxes. With matching on the fullest list leads and the
@@ -3196,7 +3197,7 @@ function addOwnSheet(){
     + '<div class="field"><label>Contains</label><div class="toggles" id="nfAl">'
     + ALLERGENS.map(function(a){ return '<button class="tg" data-nf="al" data-v="'+a.k+'" aria-pressed="false">'+a.label+'</button>'; }).join('')
     + '</div></div>' + targetRow('')
-    + '<button class="btn primary wide" id="nfSave" data-act="save-own">'+addOwnLabel()+'</button>';
+    + '<button class="btn primary wide" id="nfSave" data-act="save-own">'+esc(addOwnLabel())+'</button>';
   openSheet('Add your own', h);
   setTimeout(function(){ var el = document.getElementById('nfName'); if(el) el.focus(); }, 220);
 }
