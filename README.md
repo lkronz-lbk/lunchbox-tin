@@ -32,9 +32,10 @@ food list from a 200-item library and produce a planned week immediately. From t
 - **More than one lunchbox** — Plan the week draws them together: the fullest food list leads,
   and every other box starts from the same foods, swapping only where that box's school rules or
   its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
-  box alone. Turn it off under Account (**Match the boxes**). Pack, Week and Foods carry a row of
-  lunchboxes to tap or swipe between; on Pack each pill shows whether that box is packed or
-  still owes yesterday's answer, and one line names who is left to pack. A food added from the
+  box alone. Turn it off under Account (**Match the boxes**). Pack, Week and Foods carry the
+  lunchboxes as folder tabs, one tap each; on Pack each tab shows whether that box is packed or
+  still owes an answer, and one line names who is left to pack. With matching on, Shuffle all
+  on Week is the household draw. A food added from the
   idea bank or by hand goes into every lunchbox unless you say otherwise; a box whose rules keep
   it out is skipped and named when another box takes it, and gets it flagged when it is the only
   box. The "Add it to" choice sticks for the rest of the session. A lunchbox filled with "Fill the

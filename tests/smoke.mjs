@@ -374,7 +374,11 @@ try {
       && (await page.reload(), await page.waitForTimeout(600), /New: /.test(await page.textContent('#view'))) && (await page.$$eval('[data-act="notice-dismiss"]', a => a.length)) === 1);
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="notice-dismiss"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
-    await page.click('[data-act="notice-dismiss"]'); await page.waitForTimeout(200); await page.reload(); await page.waitForTimeout(600);
+    await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
+    check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .list .item', a => a.length)) >= 5);
+    await page.click('[data-act="whats-new-ok"]'); await page.waitForTimeout(300);
+    check('Got it dismisses the note for good', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+    await page.reload(); await page.waitForTimeout(600);
     check('and once dismissed it stays gone', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
@@ -506,7 +510,7 @@ try {
   await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
     const sam = d.kids.filter(k => !k.deletedAt).find(k => k.name === 'Sam');
-    document.querySelector('.kidpager button[data-id="' + sam.id + '"]').click();
+    document.querySelector('.boxtabs button[data-id="' + sam.id + '"]').click();
   });
   await page.waitForTimeout(350);
   await page.click('.tin .cmp[data-cat="main"]');
@@ -619,44 +623,19 @@ try {
   /* ------------------------------------------- one week across two boxes */
   await page.click('[data-act="tab"][data-tab="week"]');
   await page.waitForTimeout(250);
-  const pills = await page.$$eval('.kidpager button', a => a.map(b => b.textContent.trim()));
-  check('two lunchboxes get a pager to move between their plans', pills.length === 2, pills);
+  const pills = await page.$$eval('.boxtabs button', a => a.map(b => b.textContent.trim()));
+  check('two lunchboxes get a row of tabs to move between their plans', pills.length === 2, pills);
 
-  await page.click('.kidpager button:first-child');
-  await page.waitForTimeout(300);
-  const kidBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).activeKidId);
-  await page.evaluate(() => {
-    const view = document.getElementById('view');
-    const start = new Event('touchstart', {bubbles:true});
-    start.touches = [{clientX:300, clientY:400}];
-    view.dispatchEvent(start);
-    const end = new Event('touchend', {bubbles:true});
-    end.changedTouches = [{clientX:120, clientY:408}];
-    view.dispatchEvent(end);
-  });
-  await page.waitForTimeout(250);
-  const kidAfter = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).activeKidId);
-  check('a sideways flick moves to the next lunchbox', kidBefore !== kidAfter, [kidBefore, kidAfter]);
-
-  await page.evaluate(() => {
-    const view = document.getElementById('view');
-    const start = new Event('touchstart', {bubbles:true});
-    start.touches = [{clientX:200, clientY:200}];
-    view.dispatchEvent(start);
-    const end = new Event('touchend', {bubbles:true});
-    end.changedTouches = [{clientX:186, clientY:640}];
-    view.dispatchEvent(end);
-  });
-  await page.waitForTimeout(250);
-  check('a scroll down the page is not a swipe',
-    kidAfter === await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).activeKidId));
+  await page.click('.boxtabs button:last-child'); await page.waitForTimeout(300);
+  check('a tab is one tap to the next lunchbox', await page.evaluate(() => document.querySelector('.boxtabs [aria-current="true"]') === document.querySelector('.boxtabs button:last-child')));
+  await page.click('.boxtabs button:first-child'); await page.waitForTimeout(300);
 
 
   /* ------------------------------------- shop is the household's, always */
   await page.click('[data-act="tab"][data-tab="shop"]');
   await page.waitForTimeout(300);
   check('the shopping list offers no lunchbox to switch to, because it covers them all',
-    await page.evaluate(() => !document.querySelector('#who .kidbtn') && !document.querySelector('.kidpager')));
+    await page.evaluate(() => !document.querySelector('#who .kidbtn') && !document.querySelector('.boxtabs')));
   check('and every lunchbox is in it', await page.evaluate(() => {
     const names = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name);
     const metas = [...document.querySelectorAll('.list .item .meta')].map(m => m.textContent).join(' ');
@@ -667,7 +646,7 @@ try {
   /* ----------------------------------------- pack swipes like the plan */
   await page.click('[data-act="tab"][data-tab="pack"]');
   await page.waitForTimeout(300);
-  check('pack carries the same pager as the plan', (await page.$$eval('.kidpager button', a => a.length)) === 2);
+  check('pack carries the same tabs as the plan', (await page.$$eval('.boxtabs button', a => a.length)) === 2);
   const pins = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
     const ks = d.kids.filter(k => !k.deletedAt);
@@ -680,10 +659,11 @@ try {
     const readyLine = t => { const m = /(\d+) of (\d+) boxes ready/.exec(t); return m ? {ready: +m[1], boxes: +m[2]} : null; };
     const before = readyLine(await page.textContent('#view'));
     check('Pack says how much of the household is ready, not just the box on screen', !!before && before.boxes === 2, before);
-    const okBefore = await page.$$eval('.kidpager .pin.ok', a => a.length);
+    await page.click('.boxtabs button:last-child'); await page.waitForTimeout(300);   /* the box not yet packed */
+    const okBefore = await page.$$eval('.boxtabs .pin.ok', a => a.length);
     await page.click('[data-act="pack-all"]');
     await page.waitForTimeout(300);
-    const okAfter = await page.$$eval('.kidpager .pin.ok', a => a.length);
+    const okAfter = await page.$$eval('.boxtabs .pin.ok', a => a.length);
     check('a pill says when that box is packed, so four kids is not four guesses', okAfter === okBefore + 1, {okBefore, okAfter});
     const after = readyLine(await page.textContent('#view')), line = await page.textContent('#view');
     check('and the household line counts it, naming who is still to pack',
@@ -691,33 +671,6 @@ try {
     await page.click('[data-act="pack-all"]');                   /* un-tick: leave the fixture as it was */
     await page.waitForTimeout(300);
   }
-  await page.click('.kidpager button:first-child');
-  await page.waitForTimeout(300);
-  const packBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).activeKidId);
-  await page.evaluate(() => {
-    const view = document.getElementById('view');
-    const start = new Event('touchstart', {bubbles:true});
-    start.touches = [{clientX:300, clientY:400}];
-    view.dispatchEvent(start);
-    const end = new Event('touchend', {bubbles:true});
-    end.changedTouches = [{clientX:120, clientY:404}];
-    view.dispatchEvent(end);
-  });
-  await page.waitForTimeout(300);
-  const packAfter = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).activeKidId);
-  check('and swipes to the next box the same way', packBefore !== packAfter);
-  await page.evaluate(() => {                                  /* past the last box is a wall, not a loop */
-    const view = document.getElementById('view');
-    const start = new Event('touchstart', {bubbles:true});
-    start.touches = [{clientX:300, clientY:400}];
-    view.dispatchEvent(start);
-    const end = new Event('touchend', {bubbles:true});
-    end.changedTouches = [{clientX:120, clientY:404}];
-    view.dispatchEvent(end);
-  });
-  await page.waitForTimeout(300);
-  check('and stops at the last one rather than looping round',
-    packAfter === await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).activeKidId));
 
 
   /* --------------------------- three o'clock: the box is home, ask now */
@@ -728,9 +681,9 @@ try {
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   const askedToday = await page.$$eval('.review', a => a.length);
-  check('from three, it asks about today\'s box, for every lunchbox, and Pack carries the dot',
-    askedToday === 2 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)) && !!(await page.$('nav.tabs .due')), askedToday);
-  check('a pill shows the answer is owed', (await page.$$eval('.kidpager .pin.due', a => a.length)) === 2);
+  check('from three, it asks about today\'s box, in that box\'s tab, and Pack carries the dot',
+    askedToday === 1 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)) && !!(await page.$('nav.tabs .due')), askedToday);
+  check('both tabs show an answer is owed', (await page.$$eval('.boxtabs .pin.due', a => a.length)) === 2);
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
   check('Answer later clears every card at once and keeps the dot as the reminder',
     (await page.$$eval('.review', a => a.length)) === 0 && !!(await page.$('nav.tabs .due')));
@@ -739,7 +692,7 @@ try {
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('and stays out of the way for the rest of that afternoon', (await page.$$eval('.review', a => a.length)) === 0);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
-  check('until Pack is tapped again: the dot is a door, and the questions come back', (await page.$$eval('.review', a => a.length)) === 2);
+  check('until Pack is tapped again: the dot is a door, and the question comes back', (await page.$$eval('.review', a => a.length)) === 1);
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
   /* a night-before household is packing tomorrow's box by now */
   check('a household that packs in the morning still sees today\'s box in the evening', /Today/.test(await page.$eval('#view .view-title', e => e.textContent)));
@@ -833,6 +786,10 @@ try {
   check('the lead box drew a week at all, so the comparison means something',
     align.leadDrew > 0, align);
   check('planning the week gives both boxes the same foods', align.boxes === 2 && align.same > 0, align);
+  /* with matching on, Shuffle all on Week is the household's draw too */
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(500);
+  check('Shuffle all with Match the boxes on draws every box, and says so', /boxes match/.test(await page.textContent('#toast')), await page.textContent('#toast'));
   check('and only differs where a box\'s rules or its own list say otherwise', align.unexplained === 0, align);
 
 
