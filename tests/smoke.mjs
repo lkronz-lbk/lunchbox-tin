@@ -470,6 +470,21 @@ try {
     .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea2);
   check('and then the one weird food lands in that one box only',
     landed2[1] === true && landed2[0] === hadIt[0], [idea2, hadIt, landed2]);
+  /* rules flag foods; they never refuse them: with Sam the only box, a food his
+     rule keeps out still lands on his list, flagged, as it always did */
+  const glutenIdea = await page.$$eval('[data-act="add-idea"]:not(.done)',
+    a => (a.find(b => /gluten/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
+  if (glutenIdea) {
+    await page.click('[data-act="add-idea"][data-name="' + glutenIdea + '"]');
+    await page.waitForTimeout(350);
+    const flaggedLanded = await page.evaluate(n => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const sam = d.kids.filter(k => !k.deletedAt).find(k => k.name === 'Sam');
+      return sam.foods.some(f => !f.deletedAt && f.n === n);
+    }, glutenIdea);
+    check('a rule flags a food on the only box it is added to; it never refuses it',
+      flaggedLanded && /so it is flagged/.test(await page.textContent('#toast')), {glutenIdea, toast: await page.textContent('#toast')});
+  }
   await page.click('[data-act="add-to"]');                     /* put it back for the tests below */
   await page.waitForTimeout(350);
   await page.click('#sheetClose');
@@ -533,6 +548,24 @@ try {
   await page.click('[data-act="box-done"]');
   await page.waitForTimeout(300);
   check('and the override survives the rule going back off as well', (await over()) && (await over()).live);
+  /* the mark states a fact: with the gluten rule off, the food breaks nothing, so
+     no "!" — the record stays, and the mark returns with the rule */
+  await page.click('[data-act="tab"][data-tab="week"]');
+  await page.waitForTimeout(250);
+  await page.click('[data-act="box-settings"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-act="allergen"][data-k="gluten"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-act="box-done"]');
+  await page.waitForTimeout(400);
+  check('with the rule switched off the mark goes, because there is no rule to overrule', (await page.$$eval('.tin .over', a => a.length)) === 0);
+  await page.click('[data-act="box-settings"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-act="allergen"][data-k="gluten"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-act="box-done"]');
+  await page.waitForTimeout(400);
+  check('and comes back with the rule, without the parent choosing again', (await page.$$eval('.tin .over', a => a.length)) > 0 && (await over()).live);
 
   await page.click('[data-act="tab"][data-tab="week"]');
   await page.waitForTimeout(300);

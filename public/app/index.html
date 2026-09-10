@@ -1136,10 +1136,10 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v10';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v11';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v10', text:'New: the shopping list is now ingredients by aisle, and one Packed check fills the box.'};
+var WHATS_NEW = {build:'lunchsorted-v11', text:'New: more than one lunchbox? Plan the week now gives them the same lunches where the rules allow, a food you add goes into every box, and you can swipe between them. A rule can be overruled for one compartment; it stays flagged.'};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
 function whatsNew(){
@@ -1526,7 +1526,8 @@ function eligible(kid, cat){
    long as that food is in that compartment: a re-draw or another choice ends
    it, and it never spreads to any other draw. */
 function isOverride(kid, day, cat){
-  return !!(day.over && day.over[cat] && day.over[cat] === day.slots[cat] && foodById(kid, day.slots[cat]));
+  var f = foodById(kid, day.slots[cat]);
+  return !!(f && day.over && day.over[cat] && day.over[cat] === day.slots[cat] && violation(kid, f));   /* the record stays; the flag needs a rule to break */
 }
 function setOverride(day, cat, foodId){
   day.over = day.over || {};
@@ -2165,9 +2166,10 @@ function tinHTML(kid, day, mode){
     if(mode!=='pack') mark += day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>'
              : (dayLabel(day.d).diff < 0 || isHelper() ? '' : '<span class="swap">'+svg('swap',12)+'</span>');  /* the tap cue: this box can be swapped */
     if(mark) mark = '<span class="marks">'+mark+'</span>';
-    var tag = mode==='pack' ? 'div' : 'button';                 /* on the Pack screen a compartment is not a button: only Week changes a box */
+    var gone = dayLabel(day.d).diff < 0;
+    var tag = (mode==='pack' || gone) ? 'div' : 'button';       /* on Pack, and on a day that has gone, a compartment is not a button */
     h += '<'+tag+' class="cmp c-'+c.k+(f?'':' empty')+(c.minor?' minor':'')+'"'
-      +  (mode==='pack' ? '' : ' data-act="slot" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'"')+'>'
+      +  ((mode==='pack' || gone) ? '' : ' data-act="slot" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'"')+'>'
       +  '<span class="lab">'+c.label+mark+'</span>'
       +  '<span class="nm">'+(f ? esc(f.n) : 'Nothing picked')+'</span>'
       +  '<span class="tr">'+(sub ? '<i class="care">'+esc(sub)+'</i>' : '')+tr.map(function(t){ return '<i class="t-'+t+'">'+t+'</i>'; }).join('')+'</span></'+tag+'>';
@@ -2671,7 +2673,7 @@ function viewSetup(){
   var me = deviceMember();
   var h = '<div class="stack"><div><p class="view-sub">Account</p><h2 class="view-title">'+(signedIn() ? 'Your household' : 'This phone')+'</h2></div>';
   h += accountCard();
-  if(kids().length > 1){
+  if(kids().length > 1 && !isHelper()){
     h += '<div><div class="sect-head"><h3>All the lunchboxes</h3></div><div class="card">'
       +  '<div class="switch"><div><div class="t">Match the boxes</div>'
       +  '<div class="d">Everyone gets the same lunch where their own rules allow it.</div></div>'
@@ -2901,13 +2903,18 @@ function addCats(){
 /* Add one food to several lunchboxes at once. A lunchbox whose rules keep the
    food out is skipped and named — nothing lands in a box it cannot go in. */
 function addFoodTo(targets, o){
-  var r = {added:[], skipped:[], already:[]};
+  var r = {added:[], skipped:[], already:[], flagged:[]};
+  var takers = targets.filter(function(k){ return !violation(k, o); });
   targets.forEach(function(k){
     /* already on the list first: a food a rule now flags is still on the list,
        and saying the rules keep it out of a box that holds it is a lie */
     if(foodsOf(k).some(function(f){ return normKey(f.n) === normKey(o.n); })){ r.already.push(k); return; }
-    if(violation(k, o)){ r.skipped.push(k); return; }
+    /* rules flag foods; they never refuse them. A box whose rules keep the food
+       out steps aside only when another box takes it; the only box, or every
+       box refusing, gets it on the list flagged, where the Foods tab marks it */
+    if(violation(k, o) && takers.length){ r.skipped.push(k); return; }
     k.foods.push(newFood(k, o)); touch(k); r.added.push(k);
+    if(violation(k, o)) r.flagged.push(k);
   });
   return r;
 }
@@ -2916,9 +2923,10 @@ function listNames(ks){
   return n.length < 2 ? (n[0] || '') : n.slice(0, -1).join(', ')+' and '+n[n.length-1];
 }
 function addedLine(name, r){
-  if(kids().length < 2) return name+' added';
+  var flag = r.flagged.length ? ' \u2014 '+(violation(r.flagged[0], {n:name, al:[], t:[]}) || 'a rule')+', so it is flagged' : '';
+  if(kids().length < 2) return name+' added'+flag;
   return name+' added to '+listNames(r.added)
-    + (r.skipped.length ? ' \u2014 not '+listNames(r.skipped)+', the rules keep it out' : '');
+    + (r.skipped.length ? ' \u2014 not '+listNames(r.skipped)+', the rules keep it out' : flag);
 }
 function addFailLine(name, r){
   if(!r.skipped.length) return 'Already on the list';
@@ -2997,7 +3005,7 @@ function betaBar(){
 function helpSheet(){
   var qa = [
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle a day, or tap a compartment to change one thing.'],
-    ['Why did a food stop showing up?', 'A school rule or allergen under the gear beside the lunchbox name. Foods it skips are marked on the Foods tab.'],
+    ['Why did a food stop showing up?', 'A school rule or allergen under the lunchbox settings button, the sliders at the top. Foods it skips are marked on the Foods tab.'],
     ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
     ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Plan the week gives them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and you swipe between them.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
@@ -3301,6 +3309,7 @@ document.addEventListener('click', function(ev){
     if(!k4 || !k4.week){ closeSheet(); toast('That lunchbox is gone'); return; }
     var day4 = k4.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
     if(!day4){ closeSheet(); toast('That day is no longer planned'); return; }
+    if(day4.d < iso(today())){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     var wasKept = !!(day4.lock[cat] || (day4.kidPick && day4.kidPick[cat]));
     if(reshuffleSlot(k4, day4, cat)){ slotSheet(k4.id, day4.d, cat); render(); if(wasKept) toast('Shuffled \u2014 it is no longer kept'); }
     else toast('Nothing else in that category');
@@ -3311,6 +3320,7 @@ document.addEventListener('click', function(ev){
     if(!k5 || !k5.week){ closeSheet(); toast('That lunchbox is gone'); return; }
     var day5 = k5.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
     if(!day5){ closeSheet(); toast('That day is no longer planned'); return; }
+    if(day5.d < iso(today())){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     day5.lock[cat5] = !day5.lock[cat5]; touch(k5.week); touch(k5); save();
     el.setAttribute('aria-pressed', day5.lock[cat5]); render(); return;
   }
@@ -3319,14 +3329,17 @@ document.addEventListener('click', function(ev){
     if(!k6 || !k6.week){ closeSheet(); toast('That lunchbox is gone'); return; }
     var day6 = k6.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
     if(!day6){ closeSheet(); toast('That day is no longer planned'); return; }
+    if(day6.d < iso(today())){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     var cat6 = el.getAttribute('data-cat'), id6 = el.getAttribute('data-id');
+    var f6 = foodById(k6, id6);
+    if(!f6){ closeSheet(); render(); toast('That food is gone'); return; }    /* removed on the other phone since the sheet opened */
     var was6 = {slot:day6.slots[cat6], lock:day6.lock[cat6],
       pick:day6.kidPick && day6.kidPick[cat6], over:(day6.over || {})[cat6] || null};
     if(day6.slots[cat6] !== id6 && day6.kidPick) delete day6.kidPick[cat6];
     day6.slots[cat6] = id6;
     /* a rule does not lock the compartment: the parent chose, once, out loud —
        so it goes in flagged, and stays flagged as long as that food is there */
-    var f6 = foodById(k6, id6), v6 = f6 && violation(k6, f6);
+    var v6 = violation(k6, f6);
     setOverride(day6, cat6, v6 ? id6 : null);
     touch(k6.week); touch(k6); save(); closeSheet(); render();
     if(v6) toast(f6.n+' is in the box \u2014 '+v6+', so it stays flagged', function(){

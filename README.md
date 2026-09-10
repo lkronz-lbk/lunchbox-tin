@@ -36,7 +36,10 @@ food list from a 200-item library and produce a planned week immediately. From t
   lunchboxes to tap or swipe between; on Pack each pill shows whether that box is packed or
   still owes yesterday's answer, and one line names who is left to pack. A food added from the
   idea bank or by hand goes into every lunchbox unless you say otherwise; a box whose rules keep
-  it out is skipped and named.
+  it out is skipped and named when another box takes it, and gets it flagged when it is the only
+  box. The "Add it to" choice sticks for the rest of the session. A lunchbox filled with "Fill the
+  list for me" is planned on its own until the next Plan the week matches it in; the toast after
+  Plan the week says how many compartments had to differ.
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes. A dish
   goes on the list as what you buy for it (`buy` on the food: turkey and cheese pinwheels are
   deli turkey, cheese slices and tortillas; `ING_AISLE` puts each part in its aisle), one line
