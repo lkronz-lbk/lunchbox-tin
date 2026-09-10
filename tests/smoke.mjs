@@ -238,7 +238,13 @@ const pinClock = async c => c.addInitScript(day => {
 /* the lunchbox gear lives on a lunchbox tab, never on the household's Shop: step to Week first if needed */
 const openGear = async pg => { if (!(await pg.$('[data-act="box-settings"]'))) { await pg.click('[data-act="tab"][data-tab="week"]'); await pg.waitForTimeout(250); } await pg.click('[data-act="box-settings"]'); };
 /* a shuffle asks whose boxes when there is more than one; answer "all of them" */
-const goShuffle = async pg => { await pg.waitForTimeout(250); const b = await pg.$('[data-act="shuffle-go"]'); if (b) { await b.click(); await pg.waitForTimeout(400); } };
+const goShuffle = async pg => {
+  await pg.waitForTimeout(250);
+  const b = await pg.$('[data-act="shuffle-go"]');
+  const many = await pg.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted') || '{}').kids?.filter(k => !k.deletedAt).length > 1);
+  if (many && !b) throw new Error('a shuffle with more than one lunchbox must ask whose boxes');
+  if (b) { await b.click(); await pg.waitForTimeout(400); }
+};
 console.log(`  clock pinned to ${pinnedDay} in every browser context (SMOKE_TODAY to change)`);
 const phone = async () => { const c = await browser.newContext({ viewport:{width:375,height:812} }); await pinClock(c); await c.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort()); return c; };
 const ctx = await phone();
@@ -375,11 +381,11 @@ try {
     check('a food seeded before parts existed takes the bank\'s parts', fromBank && await page.evaluate((n) => { const f = JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.find(x => x.n === n); return !!(f.buy && f.buy.length); }, fromBank), fromBank);
     /* an update says what changed, once, and only to a phone that already had the app */
     check('a phone that had the app is told what changed on the first open after an update', await page.evaluate(() => { localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'); return true; })
-      && (await page.reload(), await page.waitForTimeout(600), /New: /.test(await page.textContent('#view'))) && (await page.$$eval('[data-act="notice-dismiss"]', a => a.length)) === 1);
+      && (await page.reload(), await page.waitForTimeout(600), /New: /.test(await page.textContent('#view'))) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1);
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
-    check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="notice-dismiss"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
+    check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
     await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
-    check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .list .item', a => a.length)) >= 5);
+    check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .switch', a => a.length)) >= 5);
     await page.click('[data-act="whats-new-ok"]'); await page.waitForTimeout(300);
     check('Got it dismisses the note for good', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
     await page.reload(); await page.waitForTimeout(600);
@@ -799,16 +805,19 @@ try {
   /* with matching on, Shuffle all on Week is the household's draw too */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(500); await goShuffle(page);
-  check('Shuffle all with Match the boxes on draws every box, and says so', /boxes match/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+  check('Shuffle all with Match the boxes on draws every box, and says so', /Weeks drawn/.test(await page.textContent('#toast')) && /boxes match|compartments? differ/.test(await page.textContent('#toast')), await page.textContent('#toast'));
   /* the sheet: pick boxes, the rest keep theirs, and Undo puts it all back */
   const weeksBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week.days.map(d => d.slots))));
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300);
   check('with two boxes, Shuffle all asks whose, all on, and says matching is on',
-    (await page.$$eval('#shKids .tg[aria-pressed="true"]', a => a.length)) === 2 && /Match the boxes/.test(await page.textContent('#sheetBody')));
+    (await page.$$eval('#shKids .tg[aria-pressed="true"]', a => a.length)) === 2 && /Matching is on/.test(await page.textContent('#sheetBody')));
   await page.click('#shKids .tg >> nth=0'); await page.waitForTimeout(100);          /* leave the first box out */
   await page.click('[data-act="shuffle-go"]'); await page.waitForTimeout(500);
   const weeksAfter = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week.days.map(d => d.slots))));
   check('a box left out of the shuffle keeps exactly what it had', weeksAfter[0] === weeksBefore[0]);
+  await page.click('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0'); await page.waitForTimeout(300);
+  check('a day\'s Shuffle starts with only the box on screen ticked', (await page.$$eval('#shKids .tg[aria-pressed="true"]', a => a.length)) === 1);
+  await page.click('#sheetClose'); await page.waitForTimeout(200);
   check('and the shuffle offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
   await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(400);
   const weeksUndone = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week.days.map(d => d.slots))));
@@ -816,13 +825,13 @@ try {
 
   /* ------------------------------------------- planning the week after */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
-  check('the week header carries arrows, and this week cannot go back further',
-    (await page.$$eval('[data-act="week-ahead"]', a => a.length)) === 2 && await page.$eval('[data-act="week-ahead"][data-v="0"]', b => b.disabled));
+  check('the week header offers Next week, one labelled button',
+    (await page.$$eval('[data-act="week-ahead"]', a => a.length)) === 1 && /Next week/.test(await page.textContent('[data-act="week-ahead"]')));
   const thisWeekTitle = await page.$eval('.view-title', e => e.textContent.replace(/[‹›]/g, '').trim());
   await page.click('[data-act="week-ahead"][data-v="1"]'); await page.waitForTimeout(300);
   const nextTitle = await page.$eval('.view-title', e => e.textContent.replace(/[‹›]/g, '').trim());
   check('the arrow shows the week after, unplanned, with a button to plan it',
-    nextTitle !== thisWeekTitle && /^Week of /.test(nextTitle) && /Plan it/.test(await page.textContent('#view')) && /Nothing planned yet/.test(await page.textContent('#view')), {thisWeekTitle, nextTitle});
+    nextTitle !== thisWeekTitle && /^Week of /.test(nextTitle) && /Plan next week/.test(await page.textContent('#view')) && /Nothing planned for next week yet/.test(await page.textContent('#view')) && /This week/.test(await page.textContent('[data-act="week-ahead"]')), {thisWeekTitle, nextTitle});
   const curBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week)));
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300); await goShuffle(page);
   const aheadPlan = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => ({days: k.next ? k.next.days.length : 0, start: k.next && k.next.start, packDays: k.settings.days.length, weekStart: k.week.start})));
@@ -833,7 +842,7 @@ try {
   await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   check('Shop adds a Next week section once it is planned', /Next week/.test(await page.textContent('#view')));
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
-  check('and coming back to Week lands on this week', await page.$eval('[data-act="week-ahead"][data-v="0"]', b => b.disabled));
+  check('and coming back to Week lands on this week', /Next week/.test(await page.textContent('[data-act="week-ahead"]')));
   /* when this week has gone, the week after becomes this week */
   const rolled = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));

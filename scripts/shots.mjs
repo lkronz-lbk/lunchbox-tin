@@ -68,7 +68,7 @@ const emma = await p.evaluate(() => {
   return d.kids.find(k => k.name === 'Emma').id;
 });
 const toEmma = async () => {
-  await p.evaluate(id => { const b = document.querySelector('.kidpager button[data-id="'+id+'"]'); if(b) b.click(); }, emma);
+  await p.evaluate(id => { const b = document.querySelector('.boxtabs button[data-id="'+id+'"]'); if(b) b.click(); }, emma);
   await wait(400);
 };
 const hideToast = () => p.evaluate(() => document.getElementById('toast').classList.remove('show'));

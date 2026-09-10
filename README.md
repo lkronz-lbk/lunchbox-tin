@@ -35,14 +35,15 @@ food list from a 200-item library and produce a planned week immediately. From t
   box alone. Turn it off under Account (**Match the boxes**). Pack, Week and Foods carry the
   lunchboxes as folder tabs, one tap each; on Pack each tab shows whether that box is packed or
   still owes an answer, and one line names who is left to pack. With matching on, Shuffle all
-  on Week is the household draw; with more than one box every shuffle (the week or a day) first asks
-  whose boxes, leaves the rest untouched, and offers Undo. A food added from the
+  on Week is the household draw; with more than one box, Shuffle all on Week and a day's Shuffle first ask
+  whose boxes (a day's starts with the box on screen), leave the rest untouched, and offer Undo; the
+  "Plan the week" banner draws everything with no sheet. A food added from the
   idea bank or by hand goes into every lunchbox unless you say otherwise; a box whose rules keep
   it out is skipped and named when another box takes it, and gets it flagged when it is the only
   box. The "Add it to" choice sticks for the rest of the session. A lunchbox filled with "Fill the
   list for me" is planned on its own until the next Plan the week matches it in; the toast after
   Plan the week says how many compartments had to differ.
-- **Plan ahead** — one more week (`kid.next`), reached by the arrow on the Week header, drawn and
+- **Plan ahead** — one more week (`kid.next`), reached by the Next week button under the Week header, drawn and
   shuffled like this one, listed on Shop under *Next week*, and rolled into `kid.week` the moment this
   week has gone. Pack, the kid's pick and the review read only this week. Merged and normalised like
   the first week.
@@ -82,7 +83,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   pack?) sees tomorrow's box from 3pm.
 - **Did they eat it?** — from 3pm on a pack day, or the morning after, the Pack view asks about
   that box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
-  stored against the food, so they survive re-plans. "Answer later" hides the cards until the next
+  stored against the food, so they survive re-plans. "Answer later" replaces the card with a one-line "Answer now" until the next
   3pm or the next open; a red dot on the Pack tab says an answer is owed, and the iPhone app can
   remind at 3pm (Account → Reminders, off until switched on). From 3pm today's box has gone:
   no re-draw, swap, kid's pick, shopping line or merge touches it. The draw leans toward foods that get
