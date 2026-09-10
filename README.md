@@ -42,6 +42,10 @@ food list from a 200-item library and produce a planned week immediately. From t
   box. The "Add it to" choice sticks for the rest of the session. A lunchbox filled with "Fill the
   list for me" is planned on its own until the next Plan the week matches it in; the toast after
   Plan the week says how many compartments had to differ.
+- **Plan ahead** — one more week (`kid.next`), reached by the arrow on the Week header, drawn and
+  shuffled like this one, listed on Shop under *Next week*, and rolled into `kid.week` the moment this
+  week has gone. Pack, the kid's pick and the review read only this week. Merged and normalised like
+  the first week.
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes. A dish
   goes on the list as what you buy for it (`buy` on the food: turkey and cheese pinwheels are
   deli turkey, cheese slices and tortillas; `ING_AISLE` puts each part in its aisle), one line

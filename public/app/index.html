@@ -334,6 +334,9 @@ nav.tabs svg{width:21px;height:21px}
 .kidbtn .dot{width:8px;height:8px;flex:none}
 .kidbtn .nm{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .kidbtn .caret{flex:none}
+.weeknav{display:inline-flex;gap:2px;margin-left:2px}
+.weeknav .iconbtn{width:40px;height:40px;font-size:22px;line-height:1}
+.weeknav .iconbtn[disabled]{opacity:.3}
 .boxtabs{display:flex;align-items:flex-end;gap:4px;overflow-x:auto;margin:0 -16px;padding:6px 16px 0;scrollbar-width:none;
   border-bottom:1.5px solid var(--line);-webkit-overflow-scrolling:touch;
   mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
@@ -455,7 +458,7 @@ window.LSMerge = (function(){
       id:a.id, name:head.name, hue:head.hue, createdAt:(a.createdAt || '') < (b.createdAt || '') ? a.createdAt : b.createdAt,
       updatedAt:stamp(a) > stamp(b) ? a.updatedAt : b.updatedAt,
       deletedAt:(a.deletedAt || b.deletedAt) ? (head === a ? a.deletedAt : b.deletedAt) : null,
-      settings:settings, foods:unionById(a.foods, b.foods, newer), week:mergeWeek(a.week, b.week, today),
+      settings:settings, foods:unionById(a.foods, b.foods, newer), week:mergeWeek(a.week, b.week, today), next:mergeWeek(a.next, b.next, today),
       packed:mergeRows(a.packed, b.packed), eaten:mergeRows(a.eaten, b.eaten), past:mergePast(a.past, b.past)
     };
   }
@@ -1159,7 +1162,7 @@ function whatsNew(){
   if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
   if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text && !UI.notice) UI.notice = WHATS_NEW.text;
 }
-var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function now(){ return new Date().toISOString(); }
@@ -1171,7 +1174,7 @@ function newMember(name, role){
 function newKid(name, hue){
   return {id:uid('kid'), name:name, hue:hue||0, createdAt:now(), updatedAt:now(), deletedAt:null,
     settings:{days:[1,2,3,4,5], noHeat:true, avoidAllergens:['nuts'], avoidText:'', updatedAt:now()},
-    foods:[], week:null, packed:{}};
+    foods:[], week:null, next:null, packed:{}};
 }
 function newFood(kid, o){
   return {id:uid('food'), kidId:kid.id, n:o.n, c:o.c, t:(o.t||[]).slice(), a:o.a||'other',
@@ -1326,11 +1329,15 @@ function normKid(k, i){
   kid.settings.kidReminderAt = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(st.kidReminderAt || '')) ? st.kidReminderAt : '18:00';
   kid.settings.updatedAt = safeStamp(st.updatedAt);
   kid.foods = (Array.isArray(k.foods) ? k.foods : []).slice(0, 500).map(function(f){ return normFood(kid, f); }).filter(Boolean);
-  var w = plainObj(k.week);
-  var wdays = (Array.isArray(w.days) ? w.days : []).map(normDay).filter(Boolean);
-  kid.week = (safeDate(w.start) && wdays.length)
-    ? {id:safeId(w.id,'week'), kidId:kid.id, start:safeDate(w.start), createdAt:safeStamp(w.createdAt, w.updatedAt), updatedAt:safeStamp(w.updatedAt), days:wdays}
-    : null;
+  var normWeekObj = function(v){
+    var w = plainObj(v), wdays = (Array.isArray(w.days) ? w.days : []).map(normDay).filter(Boolean);
+    return (safeDate(w.start) && wdays.length)
+      ? {id:safeId(w.id,'week'), kidId:kid.id, start:safeDate(w.start), createdAt:safeStamp(w.createdAt, w.updatedAt), updatedAt:safeStamp(w.updatedAt), days:wdays}
+      : null;
+  };
+  kid.week = normWeekObj(k.week);
+  kid.next = normWeekObj(k.next);                       /* the week after, planned ahead; never before this week */
+  if(kid.next && kid.week && kid.next.start <= kid.week.start) kid.next = null;
   kid.past = (Array.isArray(k.past) ? k.past : []).map(normDay).filter(Boolean).slice(-40);
   kid.packed = normDateRows(k.packed, function(row){
     var out = {}; ALL_CATS.forEach(function(c){ if(row[c.k]) out[c.k] = normStamped(row[c.k]); });
@@ -1682,7 +1689,7 @@ function weightedShuffle(kid, arr){
     .sort(function(a,b){ return b.k - a.k; }).map(function(x){ return x.f; });
 }
 function findDay(kid, dStr){
-  var all = (kid.past || []).concat(kid.week ? kid.week.days : []);
+  var all = (kid.past || []).concat(kid.week ? kid.week.days : []).concat(kid.next ? kid.next.days : []);
   return all.filter(function(d){ return d.d === dStr; })[0] || null;
 }
 function reviewComplete(kid, d){
@@ -1812,9 +1819,9 @@ function anchorWeek(kid){
    now breaks a rule leaves the box — locked, kid-picked or not — and the
    compartment is drawn again. Returns how many compartments changed. */
 function enforceRules(kid){
-  if(!kid.week) return 0;
+  if(!kid.week && !kid.next) return {n:0, empty:0};
   var hit = {}, n = 0, t0 = iso(today());
-  kid.week.days.forEach(function(d){
+  weeksOf(kid).forEach(function(w){ w.days.forEach(function(d){
     if(dayGone(d)) return;                  /* a day that has gone is not ours to rewrite */
     catsFor(kid).forEach(function(c){
       var f = foodById(kid, d.slots[c.k]);
@@ -1824,10 +1831,10 @@ function enforceRules(kid){
         hit[c.k] = 1; n++;
       }
     });
-  });
+  }); });
   var empty = 0;
-  Object.keys(hit).forEach(function(k){ if(!fillCategory(kid, kid.week, catByKey(k))) empty++; });
-  if(n){ touch(kid.week); }
+  weeksOf(kid).forEach(function(w){ Object.keys(hit).forEach(function(k){ if(!fillCategory(kid, w, catByKey(k))) empty++; }); });
+  if(n){ weeksOf(kid).forEach(touch); }
   return {n:n, empty:empty};
 }
 function rulesChanged(kid){
@@ -1861,11 +1868,14 @@ function archiveWeek(kid){
     .map(function(d){ return {d:d.d, dow:d.dow, slots:Object.assign({}, d.slots), kidPick:Object.assign({}, d.kidPick || {})}; });
   kid.past = (kid.past || []).concat(kept).slice(-40);
 }
-function planWeek(kid, align){
+function planWeek(kid, align, ahead){
   var days = packDaysSorted(kid);
-  /* re-plan the week already on screen while it still has days ahead; otherwise anchor fresh */
-  var ws = (kid.week && !weekIsStale(kid)) ? parseISO(kid.week.start) : anchorWeek(kid);
-  var prev = kid.week && kid.week.start === iso(ws) ? kid.week : null;
+  rollover(kid);
+  /* re-plan the week already on screen while it still has days ahead; otherwise anchor fresh.
+     Planning ahead draws the week after, into its own slot. */
+  var ws = ahead ? nextStart(kid) : ((kid.week && !weekIsStale(kid)) ? parseISO(kid.week.start) : anchorWeek(kid));
+  var cur = ahead ? kid.next : kid.week;
+  var prev = cur && cur.start === iso(ws) ? cur : null;
   var t0 = iso(today());
   /* a brand-new plan started mid-week only covers the days still to come; an
      in-place re-draw keeps the days already gone exactly as they were packed */
@@ -1873,7 +1883,7 @@ function planWeek(kid, align){
     var d = iso(addDays(ws, (dw+6)%7));
     return !dayGone({d:d}) || (prev && prev.days.some(function(x){ return x.d === d; }));
   });
-  if(kid.week && !prev) archiveWeek(kid);               /* a new week: keep the old one's days for the eat review */
+  if(!ahead && kid.week && !prev) archiveWeek(kid);     /* a new week: keep the old one's days for the eat review */
   var week = {id:(prev && prev.id) || uid('week'), kidId:kid.id, start:iso(ws), createdAt:(prev && prev.createdAt) || now(), updatedAt:now(), days:[]};
   days.forEach(function(dw){
     var d = iso(addDays(ws, (dw+6)%7));
@@ -1892,8 +1902,8 @@ function planWeek(kid, align){
   if(align) seedAligned(kid, week, align, t0);
   var shortfall = [];
   catsFor(kid).forEach(function(c){ if(!fillCategory(kid, week, c)) shortfall.push(c.plural); });
-  kid.week = week;
-  prune(kid, ws);
+  if(ahead){ kid.next = week; }
+  else { kid.week = week; prune(kid, ws); if(kid.next && kid.next.start <= week.start) kid.next = null; }
   touch(kid); save();
   return shortfall;
 }
@@ -1915,10 +1925,10 @@ function prune(kid, ws){
 }
 /* What one lunchbox's week holds, by name — the shape another lunchbox tries to
    copy. Names, not ids: two kids who both eat cheese toastie have two food rows. */
-function alignMap(kid){
-  var out = nullMap();
-  if(!kid.week) return out;
-  kid.week.days.forEach(function(day){
+function alignMap(kid, ahead){
+  var out = nullMap(), w = ahead ? kid.next : kid.week;
+  if(!w) return out;
+  w.days.forEach(function(day){
     var row = nullMap();
     ALL_CATS.forEach(function(c){ var f = foodById(kid, day.slots[c.k]); if(f) row[c.k] = normKey(f.n); });
     out[day.d] = row;
@@ -1944,10 +1954,11 @@ function seedAligned(kid, week, align, t0){
 }
 /* How many compartments could not match the lead lunchbox, so the app never
    claims a week is aligned when a kid's rules pulled it apart. */
-function offMap(kid, align){
-  if(!kid.week) return {off:0, total:0};
+function offMap(kid, align, ahead){
+  var w = ahead ? kid.next : kid.week;
+  if(!w) return {off:0, total:0};
   var n = 0, total = 0, t0 = iso(today());
-  kid.week.days.forEach(function(day){
+  w.days.forEach(function(day){
     var want = align[day.d];
     if(!want || dayGone(day)) return;            /* a day already gone was never up for matching */
     catsFor(kid).forEach(function(c){
@@ -1962,8 +1973,8 @@ function offMap(kid, align){
 function alignOn(){ return !(S.align && S.align.on === false) && kids().length > 1; }
 /* The household draw and what it says. When two lists barely overlap, matching
    has little to match on, and the parent is told what would change that. */
-function planAllToast(subset, undo){
-  var r = planAll(subset); render();
+function planAllToast(subset, undo, ahead){
+  var r = planAll(subset, ahead); render();
   var say = function(m){ toast(m, undo); };
   if(r.short.length){ say('No '+r.short.join(' or ').toLowerCase()+' available \u2014 check Foods'); return; }
   if(!r.aligned){ say(r.boxes > 1 ? 'Weeks drawn' : 'Week drawn'); return; }
@@ -1976,7 +1987,7 @@ function planAllToast(subset, undo){
    gives the others the most to match, and every other lunchbox starts from the
    same foods. Per-lunchbox Shuffle and a single swap stay per-lunchbox: once a
    parent has changed one box on purpose, the others are not dragged along. */
-function planAll(subset){
+function planAll(subset, ahead){
   var short = {}, ready = (subset || kids()).filter(function(k){ return foodsOf(k).length; });
   var lead = (alignOn() && ready.length > 1) ? ready.slice().sort(function(a, b){
     return foodsOf(b).length - foodsOf(a).length || ready.indexOf(a) - ready.indexOf(b);
@@ -1985,9 +1996,9 @@ function planAll(subset){
   var map = null, swaps = 0, total = 0;
   prunePantry();
   order.forEach(function(k){
-    planWeek(k, k === lead ? null : map).forEach(function(c){ short[c] = 1; });
-    if(k === lead) map = alignMap(k);
-    else if(map){ var o = offMap(k, map); swaps += o.off; total += o.total; }
+    planWeek(k, k === lead ? null : map, ahead).forEach(function(c){ short[c] = 1; });
+    if(k === lead) map = alignMap(k, ahead);
+    else if(map){ var o = offMap(k, map, ahead); swaps += o.off; total += o.total; }
   });
   return {short:Object.keys(short), boxes:ready.length, aligned:!!lead, swaps:swaps, total:total};
 }
@@ -2005,20 +2016,20 @@ function shuffleSheet(dayStr){
     + '<button class="btn primary wide" data-act="shuffle-go"'+(dayStr ? ' data-day="'+esc(dayStr)+'"' : '')+'>'+svg('dice',16)+'Shuffle</button>';
   openSheet(l ? 'Shuffle '+l.full : 'Shuffle the week', h);
 }
-function snapshotWeeks(ks){ return ks.map(function(k){ return {id:k.id, week:JSON.parse(JSON.stringify(k.week))}; }); }
+function snapshotWeeks(ks){ return ks.map(function(k){ return {id:k.id, week:JSON.parse(JSON.stringify(k.week)), next:JSON.parse(JSON.stringify(k.next || null))}; }); }
 function restoreWeeks(snap){
-  snap.forEach(function(x){ var k = kidById(x.id); if(k){ k.week = x.week; touch(k); } });
+  snap.forEach(function(x){ var k = kidById(x.id); if(k){ k.week = x.week; k.next = x.next; touch(k); } });
   save(); render(); toast('Put back');
 }
 /* One day, for several boxes. With matching on the fullest list leads and the
    others take its new foods by name where they can, as the week draw does. */
 function shuffleDayFor(ks, dayStr){
-  var ready = ks.filter(function(k){ return k.week && k.week.days.some(function(d){ return d.d === dayStr; }); });
+  var ready = ks.filter(function(k){ return !!weekOf(k, dayStr); });
   if(!ready.length) return false;
   var lead = (alignOn() && ready.length > 1) ? ready.slice().sort(function(a, b){ return foodsOf(b).length - foodsOf(a).length; })[0] : null;
   var order = lead ? [lead].concat(ready.filter(function(k){ return k !== lead; })) : ready, want = null, any = false;
   order.forEach(function(k){
-    var d = k.week.days.filter(function(x){ return x.d === dayStr; })[0];
+    var d = findWeekDay(k, dayStr);
     if(dayGone(d)) return;
     var byName = nullMap();
     foodsOf(k).forEach(function(f){ var key = f.c+'|'+normKey(f.n); if(!byName[key]) byName[key] = f; });
@@ -2029,7 +2040,7 @@ function shuffleDayFor(ks, dayStr){
         d.slots[c.k] = f.id; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); any = true;
       } else if(reshuffleSlot(k, d, c.k)) any = true;
     });
-    touch(k.week); touch(k);
+    touch(weekOf(k, dayStr)); touch(k);
     if(k === lead){ want = nullMap(); ALL_CATS.forEach(function(c){ var f = foodById(k, d.slots[c.k]); if(f) want[c.k] = normKey(f.n); }); }
   });
   save();
@@ -2045,7 +2056,7 @@ function awake(kid, pool){
 function reshuffleSlot(kid, day, cat){
   var pool = eligible(kid, cat);
   var main = foodById(kid, day.slots.main);
-  var elsewhere = kid.week.days.filter(function(x){ return x.d!==day.d; }).map(function(x){ return x.slots[cat]; });
+  var elsewhere = (weekOf(kid, day.d) || kid.week).days.filter(function(x){ return x.d!==day.d; }).map(function(x){ return x.slots[cat]; });
   var fresh = pool.filter(function(f){ return f.id!==day.slots[cat] && elsewhere.indexOf(f.id)<0; });
   var choices = awake(kid, fresh.length ? fresh : pool.filter(function(f){ return f.id!==day.slots[cat]; }));
   if(!choices.length) return false;
@@ -2215,12 +2226,13 @@ function kidReminderSync(ask){
 
 /* --------------------------------------------- household-wide roll-ups */
 function dishWords(d){ return d.slice(0, 2).join(' \u00b7 ')+(d.length > 2 ? ' +'+(d.length-2) : ''); }
-function shoppingList(){
+function shoppingList(ahead){
   var rows = nullMap();
   kids().forEach(function(k){
-    if(!k.week) return;
+    var w = ahead ? k.next : k.week;
+    if(!w) return;
     var t0 = iso(today());
-    k.week.days.forEach(function(d){
+    w.days.forEach(function(d){
       if(dayGone(d)) return;                            /* already eaten, or packed; nothing left to buy for it */
       catsFor(k).forEach(function(c){
         var f = foodById(k, d.slots[c.k]); if(!f) return;
@@ -2251,6 +2263,21 @@ function weekIsStale(kid){
   return last < iso(today());                          /* every pack day of that plan has gone by */
 }
 function anyStale(){ return kids().some(weekIsStale); }
+/* Planning ahead: one more week, kept apart from the one on screen. It becomes
+   this week the moment the current one has gone, and everything that reads
+   "this week" — Pack, the kid's pick, the review — keeps reading only that. */
+function nextStart(kid){ return addDays((kid.week && !weekIsStale(kid)) ? parseISO(kid.week.start) : anchorWeek(kid), 7); }
+function weeksOf(kid){ return [kid.week, kid.next].filter(Boolean); }
+function weekOf(kid, dStr){ return weeksOf(kid).filter(function(w){ return w.days.some(function(d){ return d.d === dStr; }); })[0] || null; }
+function findWeekDay(kid, dStr){ var w = weekOf(kid, dStr); return w ? w.days.filter(function(d){ return d.d === dStr; })[0] : null; }
+function rollover(kid){
+  if(!kid.next) return false;
+  if(kid.week && !weekIsStale(kid)) return false;
+  if(kid.week) archiveWeek(kid);
+  kid.week = kid.next; kid.next = null; touch(kid);
+  return true;
+}
+function rolloverAll(){ var any = false; kids().forEach(function(k){ if(rollover(k)) any = true; }); if(any) save(); }
 
 /* -------------------------------------------------------------- sheet */
 var sheetEl = document.getElementById('sheet'),
@@ -2653,17 +2680,21 @@ function viewWeek(){
   var kid = activeKid(), multi = kids().length>1;
   if(!foodsOf(kid).length)
     return '<div class="stack">'+kidPager()+'<p class="view-sub">The week</p><h2 class="view-title">No foods yet</h2>'+noFoodsEmpty()+'</div>';
-  var ws = kid.week ? parseISO(kid.week.start) : anchorWeek(kid);
-  var n = kid.week ? kid.week.days.length : packDaysSorted(kid).length;
+  var ahead = UI.weekAhead === 1, wk = ahead ? kid.next : kid.week;
+  var ws = ahead ? nextStart(kid) : (kid.week ? parseISO(kid.week.start) : anchorWeek(kid));
+  var n = wk ? wk.days.length : packDaysSorted(kid).length;
+  var arrows = '<span class="weeknav">'
+    + '<button class="iconbtn" data-act="week-ahead" data-v="0" aria-label="This week"'+(ahead ? '' : ' disabled')+'>&#8249;</button>'
+    + '<button class="iconbtn" data-act="week-ahead" data-v="1" aria-label="Next week"'+(ahead ? ' disabled' : '')+'>&#8250;</button></span>';
   var h = '<div class="stack">'+kidPager()+'<div class="spread"><div>'
-    + '<p class="view-sub">'+(NUMWORD[n]||n)+' lunch'+(n===1?'':'es')+(multi ? ' · '+esc(kid.name) : '')+'</p>'
-    + '<h2 class="view-title">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+'</h2></div>'
-    + (isHelper() ? '' : '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+'Shuffle all</button>')+'</div>'
-    + planBanner();
-  if(!kid.week)
-    return h + '<div class="empty"><p>Shuffle draws the week.</p></div></div>';
+    + '<p class="view-sub">'+(ahead ? 'Next week' : (NUMWORD[n]||n)+' lunch'+(n===1?'':'es'))+(multi ? ' · '+esc(kid.name) : '')+'</p>'
+    + '<h2 class="view-title" style="display:flex;align-items:center;gap:8px">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+arrows+'</h2></div>'
+    + (isHelper() ? '' : '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+(ahead && !wk ? 'Plan it' : 'Shuffle all')+'</button>')+'</div>'
+    + (ahead ? '' : planBanner());
+  if(!wk)
+    return h + '<div class="empty"><p>'+(ahead ? 'Nothing planned yet for the week after. Plan it now and it becomes this week when this one has gone.' : 'Shuffle draws the week.')+'</p></div></div>';
 
-  kid.week.days.forEach(function(day){
+  wk.days.forEach(function(day){
     var l = dayLabel(day.d);
     h += '<div class="daycard'+(l.diff<0?' past':'')+'"><div class="dayhead"><div class="dayname">'+esc(l.full)
       +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):(l.diff<0?' · gone':''))+'</em></div>'
@@ -2700,6 +2731,23 @@ function viewShop(){
     });
     h += '</div></div>';
   });
+  /* the week after, once it is planned: the same list, the same ticks */
+  var later = shoppingList(true);
+  if(later.length){
+    var lg = nullMap(); later.forEach(function(r){ (lg[r.aisle] = lg[r.aisle] || []).push(r); });
+    h += '<div class="sect-head" style="margin-top:8px"><h3>Next week</h3><span class="count">'+later.filter(function(r){ return !r.have; }).length+' to buy</span></div>';
+    AISLES.forEach(function(a){
+      if(!lg[a]) return;
+      h += '<div><div class="sect-head"><h3>'+AISLE_SHORT[a]+'</h3><span class="count">'+lg[a].length+'</span></div><div class="list">';
+      lg[a].forEach(function(r){
+        h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
+          +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
+          +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
+          +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
+      });
+      h += '</div></div>';
+    });
+  }
   return h+'</div>';
 }
 
@@ -3001,7 +3049,7 @@ function kidSheet(){
 }
 function slotSheet(kidId, dayStr, cat){
   var kid = kidById(kidId); if(!kid || !kid.week) return;
-  var day = kid.week.days.filter(function(d){ return d.d===dayStr; })[0]; if(!day) return;
+  var day = findWeekDay(kid, dayStr); if(!day) return;
   var c = ALL_CATS.filter(function(x){ return x.k===cat; })[0];
   var pool = foodsOf(kid).filter(function(f){ return f.c===cat; });
   var main = foodById(kid, day.slots.main);
@@ -3220,6 +3268,7 @@ var TABS = [
 ];
 function render(){
   if(!S) return;
+  rolloverAll();
   var kid = activeKid();
   var kidEl = document.getElementById('kid');
   document.body.style.overflow = (UI.kid || sheetEl.classList.contains('open')) ? 'hidden' : '';
@@ -3270,7 +3319,7 @@ function render(){
 var BOX_TABS = ['pack', 'week', 'foods'];
 
 /* ---------------------------------------------------------------- events */
-var HELPER_OK = ['tab','help','help-site','whats-new','whats-new-ok','home-ok','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
+var HELPER_OK = ['tab','help','help-site','whats-new','whats-new-ok','week-ahead','home-ok','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
   'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit'];
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
@@ -3364,7 +3413,7 @@ document.addEventListener('click', function(ev){
   }
 
   /* navigation */
-  if(act==='tab'){ if(el.getAttribute('data-tab')==='pack' && UI.tab==='pack' && reviewOwed()) UI.reviewLater = {};   /* the dot is a door: tapping Pack again brings the questions back */ if(UI.tab !== 'setup') UI.lastTab = UI.box ? 'lunchbox settings' : UI.tab; UI.tab = el.getAttribute('data-tab'); UI.box = false; render(); window.scrollTo(0,0); return; }
+  if(act==='tab'){ UI.weekAhead = 0; if(el.getAttribute('data-tab')==='pack' && UI.tab==='pack' && reviewOwed()) UI.reviewLater = {};   /* the dot is a door: tapping Pack again brings the questions back */ if(UI.tab !== 'setup') UI.lastTab = UI.box ? 'lunchbox settings' : UI.tab; UI.tab = el.getAttribute('data-tab'); UI.box = false; render(); window.scrollTo(0,0); return; }
   if(act==='box-settings'){ if(!UI.box) UI.boxScroll = window.scrollY; UI.box = !UI.box; render(); window.scrollTo(0, UI.box ? 0 : (UI.boxScroll || 0)); return; }
   if(act==='box-done'){ UI.box = false; render(); window.scrollTo(0, UI.boxScroll || 0); return; }
   if(act==='go-foods'){ UI.tab='foods'; UI.box = false; render(); window.scrollTo(0,0); return; }
@@ -3421,7 +3470,7 @@ document.addEventListener('click', function(ev){
     if(kids().length > 1){ shuffleSheet(null); return; }   /* whose boxes? the sheet asks */
     var snap1 = snapshotWeeks([kid]);
     prunePantry();
-    var short = planWeek(kid); render();
+    var short = planWeek(kid, null, UI.weekAhead === 1); render();
     toast(short.length ? 'No '+short.join(' or ').toLowerCase()+' available — check Foods' : 'Week drawn', function(){ restoreWeeks(snap1); });
     return;
   }
@@ -3433,7 +3482,7 @@ document.addEventListener('click', function(ev){
     if(dayS){
       var did = shuffleDayFor(picked, dayS); render();
       toast(did ? dayLabel(dayS).full+' shuffled for '+listNames(picked) : 'Nothing else to draw for '+dayLabel(dayS).full, did ? undoS : null);
-    } else planAllToast(picked, undoS);
+    } else planAllToast(picked, undoS, UI.weekAhead === 1);
     return;
   }
   if(act==='plan-all'){ planAllToast(); return; }
@@ -3449,7 +3498,7 @@ document.addEventListener('click', function(ev){
   if(act==='sheet-shuffle'){
     var k4 = kidById(el.getAttribute('data-kid')), cat = el.getAttribute('data-cat');
     if(!k4 || !k4.week){ closeSheet(); toast('That lunchbox is gone'); return; }
-    var day4 = k4.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
+    var day4 = findWeekDay(k4, el.getAttribute('data-day'));
     if(!day4){ closeSheet(); toast('That day is no longer planned'); return; }
     if(dayGone(day4)){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     var wasKept = !!(day4.lock[cat] || (day4.kidPick && day4.kidPick[cat]));
@@ -3460,7 +3509,7 @@ document.addEventListener('click', function(ev){
   if(act==='sheet-lock'){
     var k5 = kidById(el.getAttribute('data-kid')), cat5 = el.getAttribute('data-cat');
     if(!k5 || !k5.week){ closeSheet(); toast('That lunchbox is gone'); return; }
-    var day5 = k5.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
+    var day5 = findWeekDay(k5, el.getAttribute('data-day'));
     if(!day5){ closeSheet(); toast('That day is no longer planned'); return; }
     if(dayGone(day5)){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     day5.lock[cat5] = !day5.lock[cat5]; touch(k5.week); touch(k5); save();
@@ -3469,7 +3518,7 @@ document.addEventListener('click', function(ev){
   if(act==='pick'){
     var k6 = kidById(el.getAttribute('data-kid'));
     if(!k6 || !k6.week){ closeSheet(); toast('That lunchbox is gone'); return; }
-    var day6 = k6.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
+    var day6 = findWeekDay(k6, el.getAttribute('data-day'));
     if(!day6){ closeSheet(); toast('That day is no longer planned'); return; }
     if(dayGone(day6)){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     var cat6 = el.getAttribute('data-cat'), id6 = el.getAttribute('data-id');
@@ -3608,11 +3657,11 @@ document.addEventListener('click', function(ev){
     var f = foodById(kid, el.getAttribute('data-id')); if(!f) return;
     var wasIn = [];
     f.deletedAt = now(); touch(f);
-    if(kid.week) kid.week.days.forEach(function(d){
+    weeksOf(kid).forEach(function(w){ w.days.forEach(function(d){
       ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){
         wasIn.push({d:d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k], over:isOverride(kid, d, c.k)});
         d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); } });
-    });
+    }); });
     touch(kid); save(); render();
     var undoKid = kid;
     toast(f.n+' removed', function(){
@@ -3649,11 +3698,11 @@ document.addEventListener('click', function(ev){
       /* never hand back an empty compartment: seed a few and fill this week */
       var addedN = eligible(kid, sk).length ? 0
         : seedCategory(kid, sk, (BREADTH.some.n[sk] || 3), false);
-      if(kid.week){ kid.week.days.forEach(function(d){ if(!(sk in d.slots)) d.slots[sk] = null; if(!(sk in d.lock)) d.lock[sk] = false; });
-        fillCategory(kid, kid.week, sc); touch(kid.week); }
+      weeksOf(kid).forEach(function(w){ w.days.forEach(function(d){ if(!(sk in d.slots)) d.slots[sk] = null; if(!(sk in d.lock)) d.lock[sk] = false; });
+        fillCategory(kid, w, sc); touch(w); });
       toast(addedN ? addedN+' '+sc.plural.toLowerCase()+' added to the list' : sc.label+' compartment on');
     } else {
-      if(kid.week) kid.week.days.forEach(function(d){ d.slots[sk] = null; d.lock[sk] = false; if(d.kidPick) delete d.kidPick[sk]; setOverride(d, sk, null); });
+      weeksOf(kid).forEach(function(w){ w.days.forEach(function(d){ d.slots[sk] = null; d.lock[sk] = false; if(d.kidPick) delete d.kidPick[sk]; setOverride(d, sk, null); }); });
       toast(sc.label+' compartment off');
     }
     touch(kid); save(); render(); return;
@@ -3693,7 +3742,7 @@ document.addEventListener('click', function(ev){
   }
   if(act==='clear-week'){
     if(UI.armed!=='week'){ UI.armed='week'; render(); toast('That clears every lunchbox\u2019s plan for the week'); return; }
-    kids().forEach(function(k){ archiveWeek(k); k.week = null; k.packed = {}; touch(k); });
+    kids().forEach(function(k){ archiveWeek(k); k.week = null; k.next = null; k.packed = {}; touch(k); });
     UI.armed=''; save(); render(); toast('Plans cleared'); return;
   }
   if(act==='clear-all'){
@@ -3836,6 +3885,7 @@ document.addEventListener('click', function(ev){
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = {d:el.getAttribute('data-day'), at:Date.now()}; render(); return; }
+  if(act==='week-ahead'){ UI.weekAhead = +el.getAttribute('data-v') === 1 ? 1 : 0; render(); window.scrollTo(0,0); return; }
   if(act==='review-now'){ delete UI.reviewLater[el.getAttribute('data-kid')]; render(); return; }
   if(act==='review-later-all'){
     kids().forEach(function(k){ var rd = reviewDay(k); if(rd && !reviewComplete(k, rd)) UI.reviewLater[k.id] = {d:rd.d, at:Date.now()}; });

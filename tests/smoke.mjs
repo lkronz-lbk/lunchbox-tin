@@ -813,6 +813,43 @@ try {
   await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(400);
   const weeksUndone = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week.days.map(d => d.slots))));
   check('Undo puts the shuffled box back as it was', weeksUndone[1] === weeksBefore[1], {before: weeksBefore[1].slice(0,60), undone: weeksUndone[1].slice(0,60)});
+
+  /* ------------------------------------------- planning the week after */
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+  check('the week header carries arrows, and this week cannot go back further',
+    (await page.$$eval('[data-act="week-ahead"]', a => a.length)) === 2 && await page.$eval('[data-act="week-ahead"][data-v="0"]', b => b.disabled));
+  const thisWeekTitle = await page.$eval('.view-title', e => e.textContent.replace(/[‹›]/g, '').trim());
+  await page.click('[data-act="week-ahead"][data-v="1"]'); await page.waitForTimeout(300);
+  const nextTitle = await page.$eval('.view-title', e => e.textContent.replace(/[‹›]/g, '').trim());
+  check('the arrow shows the week after, unplanned, with a button to plan it',
+    nextTitle !== thisWeekTitle && /^Week of /.test(nextTitle) && /Plan it/.test(await page.textContent('#view')) && /Nothing planned yet/.test(await page.textContent('#view')), {thisWeekTitle, nextTitle});
+  const curBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week)));
+  await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300); await goShuffle(page);
+  const aheadPlan = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => ({days: k.next ? k.next.days.length : 0, start: k.next && k.next.start, packDays: k.settings.days.length, weekStart: k.week.start})));
+  check('planning it draws every pack day of the week after, for every box', aheadPlan.every(x => x.days === x.packDays && x.start > x.weekStart), aheadPlan);
+  const curAfter = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week)));
+  check('and this week is untouched by it', JSON.stringify(curAfter) === JSON.stringify(curBefore));
+  check('the week after has no gone days, so every compartment is a button', (await page.$$eval('.daycard .cmp[data-act="slot"]', a => a.length)) > 0 && (await page.$$eval('.daycard.past', a => a.length)) === 0);
+  await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
+  check('Shop adds a Next week section once it is planned', /Next week/.test(await page.textContent('#view')));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+  check('and coming back to Week lands on this week', await page.$eval('[data-act="week-ahead"][data-v="0"]', b => b.disabled));
+  /* when this week has gone, the week after becomes this week */
+  const rolled = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+    const back = (s, n) => { const [y,m,dd] = s.split('-').map(Number); const t = new Date(y, m-1, dd - n); return iso(t); };
+    d.kids.filter(k => !k.deletedAt).forEach(k => {
+      k.week.start = back(k.week.start, 14); k.week.days.forEach(x => x.d = back(x.d, 14));   /* this week was two weeks ago */
+      k.next.start = back(k.next.start, 14); k.next.days.forEach(x => x.d = back(x.d, 14));   /* the week after is last week... */
+      k.next.start = back(k.next.start, -7); k.next.days.forEach(x => x.d = back(x.d, -7));   /* ...no: this week */
+    });
+    localStorage.setItem('lunchsorted', JSON.stringify(d));
+    return d.kids.filter(k => !k.deletedAt).map(k => k.next.start);
+  });
+  await page.reload(); await page.waitForTimeout(700);
+  check('a week that has gone rolls over: the week after is now this week, and nothing is planned after it',
+    await page.evaluate(starts => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return d.kids.filter(k => !k.deletedAt).every((k, i) => k.week && k.week.start === starts[i] && !k.next); }, rolled), rolled);
   check('and only differs where a box\'s rules or its own list say otherwise', align.unexplained === 0, align);
 
 
