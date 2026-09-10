@@ -217,6 +217,8 @@ nav.tabs button{flex:1;border:0;background:none;min-height:52px;display:flex;fle
   justify-content:center;gap:3px;color:var(--ink-3);border-radius:var(--r-md)}
 nav.tabs button span{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
 nav.tabs button[aria-current="true"]{color:var(--accent)}
+nav.tabs button{position:relative}
+nav.tabs .due{position:absolute;top:8px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:var(--hot);border:2px solid var(--surface)}
 nav.tabs svg{width:21px;height:21px}
 
 .backdrop{position:fixed;inset:0;background:var(--scrim);z-index:30;opacity:0;pointer-events:none;transition:opacity .18s}
@@ -471,6 +473,7 @@ window.LSMerge = (function(){
       kids:unionById(a.kids, b.kids, function(x, y){ return mergeKid(x, y, today); }),
       activeKidId:a.activeKidId || b.activeKidId,
       align:(a.align && b.align) ? newer(a.align, b.align) : (a.align || b.align),
+      reviewReminder:(a.reviewReminder && b.reviewReminder) ? newer(a.reviewReminder, b.reviewReminder) : (a.reviewReminder || b.reviewReminder),
       pantry:mergeMap(a.pantry, b.pantry)
     };
   }
@@ -1176,7 +1179,7 @@ function newAccount(){
   var owner = newMember('Me','owner');
   var kid = newKid('Lunchbox', 0);
   return {schema:SCHEMA, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-    members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, pantry:nullMap(), tz:phoneTz()};
+    members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:true, updatedAt:now()}, pantry:nullMap(), tz:phoneTz()};
 }
 
 /* migrations: keyed by the schema they upgrade FROM */
@@ -1185,7 +1188,7 @@ var MIGRATIONS = {
     var owner = newMember('Me','owner');
     var kid = newKid((old.settings && old.settings.kid) || 'Lunchbox', 0);
     var acct = {schema:2, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-      members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, pantry:nullMap()};
+      members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:true, updatedAt:now()}, pantry:nullMap()};
     if(old.settings){
       kid.settings.days = old.settings.days || [1,2,3,4,5];
       kid.settings.noHeat = old.settings.noHeat !== false;
@@ -1348,7 +1351,7 @@ function normalizeAccount(doc){
   var acct = {schema:SCHEMA, id:safeId(doc.id,'acc'), name:safeStr(doc.name, 60, 'My household'),
     createdAt:safeStamp(doc.createdAt), updatedAt:safeStamp(doc.updatedAt),
     members:doc.members.slice(0, 50).map(normMember), kids:doc.kids.slice(0, 20).map(normKid),
-    activeKidId:null, align:normAlign(doc.align), pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
+    activeKidId:null, align:normAlign(doc.align), reviewReminder:normAlign(doc.reviewReminder), pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
   if(!acct.members.length) acct.members = [newMember('Me','owner')];
   if(!acct.members.some(function(m){ return m.role === 'owner' && !m.deletedAt; })) acct.members[0].role = 'owner';
   var live = acct.kids.filter(function(k){ return !k.deletedAt; });
@@ -1679,10 +1682,23 @@ function packedEvidence(kid, d){
   var created = kid.week.createdAt ? String(kid.week.createdAt).slice(0,10) : null;
   return !created || created <= d.d;
 }
+/* The box comes home around three. From then on today's box can be asked
+   about; before that, only a day already gone. A parent who taps Answer later
+   is left alone until the next three o'clock, or the next open. */
+var REVIEW_HOUR = 15;
+function afterSchool(){ return new Date().getHours() >= REVIEW_HOUR; }
+function laterHolds(kid, d){
+  var e = UI.reviewLater[kid.id]; if(!e || e.d !== d.d) return false;
+  var cut = today(); cut.setHours(REVIEW_HOUR, 0, 0, 0);
+  return !(e.at < cut.getTime() && Date.now() >= cut.getTime());   /* crossed three o'clock since: ask again */
+}
+function reviewOwed(){
+  return kids().some(function(k){ var rd = reviewDay(k); return !!(rd && !reviewComplete(k, rd)); });
+}
 function reviewDay(kid){
-  var t = iso(today()), floor = iso(addDays(today(), -7));
+  var t = iso(today()), floor = iso(addDays(today(), -7)), home = afterSchool();
   var cands = (kid.past || []).concat(kid.week ? kid.week.days : []).filter(function(d){
-    return d.d < t && d.d >= floor && packedEvidence(kid, d) && ALL_CATS.some(function(c){ return foodById(kid, d.slots[c.k]); });
+    return (d.d < t || (home && d.d === t)) && d.d >= floor && packedEvidence(kid, d) && ALL_CATS.some(function(c){ return foodById(kid, d.slots[c.k]); });
   });
   if(!cands.length) return null;
   cands.sort(function(a,b){ return b.d.localeCompare(a.d); });
@@ -2057,7 +2073,7 @@ function kidChooseBox(dateStr){
    schedule one. One notification per evening that has a box to pick tomorrow: a pack
    day for a lunchbox whose kid has a say, not yet picked, with more than one box left.
    Never on a Friday with nothing behind it. */
-var REMINDER_IDS = []; for(var ri = 1800; ri < 2000; ri++) REMINDER_IDS.push(ri);
+var REMINDER_IDS = []; for(var ri = 1800; ri < 2010; ri++) REMINDER_IDS.push(ri);   /* 1800-1999 the evening picks, 2000-2006 the three o'clock ask */
 function reminderEvenings(){
   var out = [], t0 = today(), nowMs = Date.now();
   kids().forEach(function(k, ki){
@@ -2075,19 +2091,37 @@ function reminderEvenings(){
   });
   return out;
 }
+/* One a day, at three, on a day any box was planned and none of it answered:
+   the box is home, the parent may not be looking at the app. */
+function reviewReminders(){
+  if(S.reviewReminder && S.reviewReminder.on === false) return [];
+  var out = [], t0 = today(), nowMs = Date.now();
+  for(var i = 0; i < 7; i++){
+    var day = new Date(t0.getTime() + i * 86400000), ds = iso(day);
+    var planned = kids().some(function(k){
+      var d = k.week && k.week.days.filter(function(x){ return x.d === ds; })[0];
+      return !!(d && catsFor(k).some(function(c){ return d.slots[c.k]; }) && !(k.eaten || {})[ds]);
+    });
+    if(!planned) continue;
+    var at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), REVIEW_HOUR, 0, 0);
+    if(at.getTime() <= nowMs) continue;
+    out.push({id:2000 + i, at:at, title:'How did the boxes go?', body:'Tap to say what came home.'});
+  }
+  return out;
+}
 var reminderTimer = null;
 function kidReminderSync(ask){
   var ln = nativePlugin('LocalNotifications'); if(!ln || !S) return;
   clearTimeout(reminderTimer);
   reminderTimer = setTimeout(function(){
-    var eves = gated() ? [] : reminderEvenings();
+    var eves = gated() ? [] : reminderEvenings().concat(reviewReminders());
     var cancel = ln.cancel({notifications:REMINDER_IDS.map(function(id){ return {id:id}; })}).catch(function(){});
     if(!eves.length) return;
     var perm = ask ? ln.requestPermissions() : ln.checkPermissions();   /* the dialog follows the parent's tap, never a launch */
     Promise.all([cancel, perm]).then(function(r){
       var p = r[1]; if(!p || p.display !== 'granted') return;
       return ln.schedule({notifications:eves.map(function(e){
-        return {id:e.id, title:'Time for '+e.name+' to pick tomorrow’s box', body:'Hand them the phone.', schedule:{at:e.at, allowWhileIdle:true}};
+        return {id:e.id, title:e.title || 'Time for '+e.name+' to pick tomorrow’s box', body:e.body || 'Hand them the phone.', schedule:{at:e.at, allowWhileIdle:true}};
       })});
     }).catch(function(){});
   }, 400);
@@ -2322,7 +2356,7 @@ function viewOnboard(){
 function reviewCard(kid, d){
   var l = dayLabel(d.d), row = (kid.eaten || {})[d.d] || {};
   var head = '<div class="spread" style="align-items:flex-start"><div>'
-    + '<p class="view-sub" style="margin:0 0 3px">'+esc(l.diff === -1 ? 'Yesterday' : l.full)+' · '+esc(l.date)+'</p>'
+    + '<p class="view-sub" style="margin:0 0 3px">'+esc(l.diff === 0 ? 'Today' : l.diff === -1 ? 'Yesterday' : l.full)+' · '+esc(l.date)+'</p>'
     + '<h3>How did '+(kidRef(kid) ? esc(kidRef(kid))+'&#8217;s' : 'the')+' box go?</h3>'
     + (premiumTag() ? '<div style="margin-top:6px">'+premiumTag()+'</div>' : '')+'</div>';
   if(gated()) return '<div class="card review">'+head+'</div>'
@@ -2422,7 +2456,7 @@ function kidPager(withState){
    still owed an answer, or today's is already in the bag. */
 function kidState(k, dateStr){
   var rd = reviewDay(k);
-  if(rd && !reviewComplete(k, rd) && UI.reviewLater[k.id] !== rd.d) return 'due';
+  if(rd && !reviewComplete(k, rd) && !laterHolds(k, rd)) return 'due';
   var day = nextPackDay(k);
   if(!day || (dateStr && day.d !== dateStr)) return '';    /* a different school day: not this morning's tick */
   return boxPacked(k, day) ? 'packed' : '';
@@ -2466,12 +2500,15 @@ function viewPack(){
   /* The review is the one thing that should stack: it exists once a day and then
      goes, and making a parent visit four boxes to answer four questions would be
      the whole cost of one box at a time. */
+  var asked = 0;
   ks.forEach(function(k){
     var rd = reviewDay(k); if(!rd) return;
-    if(UI.reviewLater[k.id] === rd.d) return;                       /* "Not now" on a locked card: gone for this open, the answers untouched */
-    if(!reviewComplete(k, rd) || UI.reviewEdit[k.id] === rd.d) h += (multi ? kidLine(k) : '') + reviewCard(k, rd);
+    if(laterHolds(k, rd)) return;                                   /* Answer later: gone until the next three o'clock, the answers untouched */
+    if(!reviewComplete(k, rd) || UI.reviewEdit[k.id] === rd.d){ h += (multi ? kidLine(k) : '') + reviewCard(k, rd); if(!reviewComplete(k, rd)) asked++; }
     else if(k === kid && reviewedToday(k, rd)) h += reviewSummary(k, rd.d);
   });
+  /* one way past the questions for the parent who only came to pack a box */
+  if(asked) h += '<button class="btn ghost wide" data-act="review-later-all">Answer later</button>';
 
   var lab = dayLabel(day.d);
   h += '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
@@ -2681,6 +2718,13 @@ function viewSetup(){
       +  '<div class="switch"><div><div class="t">Match the boxes</div>'
       +  '<div class="d">Plan the week gives every box the same lunches where its rules allow.</div></div>'
       +  '<button class="sw" data-act="align" aria-pressed="'+!(S.align && S.align.on === false)+'" aria-label="Match the boxes"></button>'
+      +  '</div></div></div>';
+  }
+  if(nativePlugin('LocalNotifications') && !isHelper() && !gated()){
+    h += '<div><div class="sect-head"><h3>Reminders</h3></div><div class="card">'
+      +  '<div class="switch"><div><div class="t">Ask at three how the boxes went</div>'
+      +  '<div class="d">One a day, when a box is home and nothing has been said about it.</div></div>'
+      +  '<button class="sw" data-act="review-reminder" aria-pressed="'+!(S.reviewReminder && S.reviewReminder.on === false)+'" aria-label="Ask at three how the boxes went"></button>'
       +  '</div></div></div>';
   }
   h += '<div><div class="sect-head"><h3>This phone</h3></div><div class="card stack" style="gap:12px">'
@@ -3085,9 +3129,10 @@ function render(){
     : UI.tab==='shop'  ? viewShop()
     : UI.tab==='foods' ? viewFoods()
     : viewSetup()) + '</div>');
+  var owed = !isHelper() && reviewOwed();
   document.getElementById('tabs').innerHTML = TABS.map(function(t){
-    return '<button data-act="tab" data-tab="'+t.k+'" aria-current="'+(UI.tab===t.k)+'">'
-      + svg(t.icon)+'<span>'+t.label+'</span></button>'; }).join('');
+    return '<button data-act="tab" data-tab="'+t.k+'" aria-current="'+(UI.tab===t.k)+'"'+(t.k==='pack' && owed ? ' aria-label="Pack — how did the boxes go?"' : '')+'>'
+      + svg(t.icon)+(t.k==='pack' && owed ? '<i class="due" aria-hidden="true"></i>' : '')+'<span>'+t.label+'</span></button>'; }).join('');
   if(UI.swipe){
     var vw = document.getElementById('view');
     vw.classList.remove('swipe-l','swipe-r');
@@ -3279,6 +3324,13 @@ document.addEventListener('click', function(ev){
   }
 
   /* planning */
+  if(act==='review-reminder'){
+    var rr = !(S.reviewReminder && S.reviewReminder.on === false);
+    S.reviewReminder = {on: !rr, updatedAt: now()};
+    save(); render(); kidReminderSync(true);
+    toast(S.reviewReminder.on ? 'A reminder at three, on days a box is home' : 'No three o\u2019clock reminder');
+    return;
+  }
   if(act==='align'){
     var on = !(S.align && S.align.on === false);
     S.align = {on: !on, updatedAt: now()};
@@ -3688,7 +3740,11 @@ document.addEventListener('click', function(ev){
   if(act==='notice-dismiss'){ UI.notice=''; markSeen(); render(); return; }
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
-  if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = el.getAttribute('data-day'); render(); return; }
+  if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = {d:el.getAttribute('data-day'), at:Date.now()}; render(); return; }
+  if(act==='review-later-all'){
+    kids().forEach(function(k){ var rd = reviewDay(k); if(rd && !reviewComplete(k, rd)) UI.reviewLater[k.id] = {d:rd.d, at:Date.now()}; });
+    render(); window.scrollTo(0,0); toast('Ask me again at three'); return;
+  }
   if(act==='trial-dismiss'){ try{ localStorage.setItem(TRIAL_SEEN_KEY, el.getAttribute('data-stage') || 'soon'); }catch(e){} render(); return; }
   if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }
 });
@@ -3872,7 +3928,7 @@ Store.load().then(function(r){
   window.addEventListener('online', function(){ if(signedIn()) Sync.resume(); else render(); });
   window.addEventListener('pageshow', function(e){ if(e.persisted && Account.buying){ Account.buying = false; closeSheet(); render(); } });
   window.addEventListener('offline', function(){ renderSyncLine(); });
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden) Sync.resume(); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ if(S && !UI.kid) render(); Sync.resume(); } });
 });
 })();
 </script>

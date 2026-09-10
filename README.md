@@ -73,9 +73,11 @@ food list from a 200-item library and produce a planned week immediately. From t
   it in place of the emoji; tapping it again offers "Take another" or "Remove the photo".
   Every food has an emoji icon derived from its name, so
   custom foods get a picture too.
-- **Did they eat it?** — the morning after a pack day, the Pack view asks about
-  yesterday's box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
-  stored against the food, so they survive re-plans. The draw leans toward foods that get
+- **Did they eat it?** — from 3pm on a pack day, or the morning after, the Pack view asks about
+  that box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
+  stored against the food, so they survive re-plans. "Answer later" hides the cards until the next
+  3pm or the next open; a red dot on the Pack tab says an answer is owed, and the iPhone app can
+  remind at 3pm (Account → Reminders). The draw leans toward foods that get
   eaten, and anything that came home twice running is rested for three weeks. Outgoing weeks
   are archived (`kid.past`) so Monday can still ask about Friday.
 - **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it

@@ -227,7 +227,8 @@ const pinnedDay = (() => {
 const pinClock = async c => c.addInitScript(day => {
   const Real = Date;
   const [y, m, dd] = day.split('-').map(Number);
-  const offset = new Real(y, m - 1, dd, 9, 0, 0).getTime() - Real.now();
+  let offset = new Real(y, m - 1, dd, 9, 0, 0).getTime() - Real.now();
+  window.__pinHour = h => { offset = new Real(y, m - 1, dd, h, 0, 0).getTime() - Real.now(); };   /* the suite moves within the pinned day */
   function Fake(...a){ return a.length ? new Real(...a) : new Real(Real.now() + offset); }
   Fake.prototype = Real.prototype;
   Fake.now = () => Real.now() + offset;
@@ -718,6 +719,28 @@ try {
   check('and stops at the last one rather than looping round',
     packAfter === await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).activeKidId));
 
+
+  /* --------------------------- three o'clock: the box is home, ask now */
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
+  check('before three, nothing is asked about a box that is still at school',
+    (await page.$$eval('.review', a => a.length)) === 0 && !(await page.$('nav.tabs .due')));
+  await page.evaluate(() => window.__pinHour(15));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  const askedToday = await page.$$eval('.review', a => a.length);
+  check('from three, it asks about today\'s box, for every lunchbox, and Pack carries the dot',
+    askedToday === 2 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)) && !!(await page.$('nav.tabs .due')), askedToday);
+  check('a pill shows the answer is owed', (await page.$$eval('.kidpager .pin.due', a => a.length)) === 2);
+  await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
+  check('Answer later clears every card at once and keeps the dot as the reminder',
+    (await page.$$eval('.review', a => a.length)) === 0 && !!(await page.$('nav.tabs .due')));
+  await page.evaluate(() => window.__pinHour(17));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  check('and stays out of the way for the rest of that afternoon', (await page.$$eval('.review', a => a.length)) === 0);
+  await page.evaluate(() => window.__pinHour(9));
+  await page.reload(); await page.waitForTimeout(600);
+  check('and a new open before three has nothing to ask yet: the box is back at school', (await page.$$eval('.review', a => a.length)) === 0 && !(await page.$('nav.tabs .due')));
 
   /* ------------------------------------ one plan across the two boxes */
   await page.click('[data-act="tab"][data-tab="setup"]');
