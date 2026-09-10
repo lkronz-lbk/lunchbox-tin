@@ -1129,7 +1129,7 @@ function whatsNew(){
   if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
   if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text && !UI.notice) UI.notice = WHATS_NEW.text;
 }
-var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function now(){ return new Date().toISOString(); }
@@ -2700,33 +2700,102 @@ function slotSheet(kidId, dayStr, cat){
   }
   openSheet(dayLabel(dayStr).full+' · '+c.label, h);
 }
+/* Which lunchboxes an added food lands in. One lunchbox: no question asked.
+   Several: all of them until the parent says otherwise, because the same food
+   usually goes in every box — the one weird food goes in one. */
+function addTargets(){
+  var ks = kids();
+  if(!UI.addTo) return ks;
+  var picked = ks.filter(function(k){ return UI.addTo.indexOf(k.id) > -1; });
+  return picked.length ? picked : ks;
+}
+function targetRow(re){
+  var ks = kids();
+  if(ks.length < 2) return '';
+  var on = addTargets();
+  return '<div class="field"><label>Add it to</label><div class="toggles">'
+    + ks.map(function(k){
+        return '<button class="tg" data-act="add-to" data-id="'+esc(k.id)+'"'+(re ? ' data-re="'+re+'"' : '')
+          + ' aria-pressed="'+(on.indexOf(k) > -1)+'">'+esc(k.name)+'</button>'; }).join('')
+    + '</div></div>';
+}
+/* Every compartment any target lunchbox has, in the order the app always shows
+   them, so a snack idea is offered when one of the boxes has a snack slot. */
+function addCats(){
+  var seen = nullMap(), out = [];
+  addTargets().forEach(function(k){ catsFor(k).forEach(function(c){ if(!seen[c.k]){ seen[c.k] = 1; out.push(c); } }); });
+  return out.sort(function(a, b){ return ALL_CATS.indexOf(a) - ALL_CATS.indexOf(b); });
+}
+/* Add one food to several lunchboxes at once. A lunchbox whose rules keep the
+   food out is skipped and named — nothing lands in a box it cannot go in. */
+function addFoodTo(targets, o){
+  var r = {added:[], skipped:[], already:[]};
+  targets.forEach(function(k){
+    /* already on the list first: a food a rule now flags is still on the list,
+       and saying the rules keep it out of a box that holds it is a lie */
+    if(foodsOf(k).some(function(f){ return normKey(f.n) === normKey(o.n); })){ r.already.push(k); return; }
+    if(violation(k, o)){ r.skipped.push(k); return; }
+    k.foods.push(newFood(k, o)); touch(k); r.added.push(k);
+  });
+  return r;
+}
+function listNames(ks){
+  var n = ks.map(function(k){ return k.name; });
+  return n.length < 2 ? (n[0] || '') : n.slice(0, -1).join(', ')+' and '+n[n.length-1];
+}
+function addedLine(name, r){
+  if(kids().length < 2) return name+' added';
+  return name+' added to '+listNames(r.added)
+    + (r.skipped.length ? ' \u2014 not '+listNames(r.skipped)+', the rules keep it out' : '');
+}
+function addFailLine(name, r){
+  if(!r.skipped.length) return 'Already on the list';
+  var line = name+' is kept out of '+listNames(r.skipped)+'\u2019s box by the rules';
+  return r.already.length ? line+'; the rest already had it' : line;
+}
 function ideasSheet(){
-  var kid = activeKid(), mine = nullMap();
-  foodsOf(kid).forEach(function(f){ mine[normKey(f.n)] = 1; });
-  var h = '<p class="hint" style="margin:0">Filtered to '+kidPoss(kid)+' school rules. Tap to add.</p>';
-  catsFor(kid).forEach(function(c){
-    var items = BANK.filter(function(b){ return b.c===c.k && !violation(kid,b); });
+  var targets = addTargets();
+  var have = targets.map(function(k){
+    var set = nullMap();
+    foodsOf(k).forEach(function(f){ set[normKey(f.n)] = 1; });
+    return set;
+  });
+  /* one walk: whether every target is already settled (has it, or its rules
+     keep it out), and whether no target could take it at all */
+  var done = nullMap(), shut = nullMap();
+  BANK.forEach(function(b){
+    var key = normKey(b.n), all = true, none = true;
+    targets.forEach(function(k, i){
+      var v = !!violation(k, b);
+      if(!v) none = false;
+      if(!v && !have[i][key]) all = false;
+    });
+    done[key] = all; shut[key] = none;
+  });
+  var cats = addCats(), on = cats.map(function(c){ return c.k; });
+  var h = targetRow('ideas') + '<p class="hint" style="margin:0">Tap to add.</p>';
+  cats.forEach(function(c){
+    var items = BANK.filter(function(b){ return b.c===c.k && !shut[normKey(b.n)]; });
     if(!items.length) return;
     h += '<div><div class="sect-head"><h3 style="color:var(--c-'+c.k+')">'+esc(c.plural)+'</h3>'
       +  '<span class="count">'+items.length+'</span></div><div class="list">';
     items.forEach(function(b){
-      h += '<button class="item'+(mine[normKey(b.n)]?' done':'')+'" data-act="add-idea" data-name="'+esc(b.n)+'">'
+      h += '<button class="item'+(done[normKey(b.n)]?' done':'')+'" data-act="add-idea" data-name="'+esc(b.n)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(b.n)+'</span>'
         +  '<span class="meta">'+esc(b.a)+(b.al.length?' · '+esc(b.al.join(', ')):'')+'</span></span></button>';
     });
     h += '</div></div>';
   });
-  var on = catsFor(kid).map(function(c){ return c.k; });
-  var hidden = BANK.filter(function(b){ return on.indexOf(b.c) > -1 && !!violation(kid,b); }).length;
+  var hidden = BANK.filter(function(b){ return on.indexOf(b.c) > -1 && shut[normKey(b.n)]; }).length;
   if(hidden) h += '<p class="hint">'+hidden+' idea'+(hidden>1?'s':'')+' hidden by the rules you set.</p>';
   openSheet('Idea bank', h);
 }
 function addOwnSheet(){
-  var kid = activeKid();
   var h = '<div class="field"><label for="nfName">Food</label>'
     + '<input type="text" id="nfName" placeholder="Grandma&#39;s zucchini muffins" autocomplete="off"></div>'
+    + targetRow('')
     + '<div class="field"><label>Goes in</label><div class="toggles" id="nfCat">'
-    + catsFor(kid).map(function(c,i){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(i===0)+'">'+c.label+'</button>'; }).join('')
+    + addCats().map(function(c,i){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(i===0)+'">'+c.label+'</button>'; }).join('')
     + '</div></div><div class="field"><label for="nfAisle">Store aisle</label><select id="nfAisle">'
     + AISLES.map(function(a){ return '<option value="'+a+'">'+AISLE_SHORT[a]+'</option>'; }).join('')
     + '</select></div><div class="field"><label for="nfBuy">To buy for it, if more than one thing</label>'
@@ -3058,11 +3127,25 @@ document.addEventListener('click', function(ev){
   if(act==='home-ok'){ try{ localStorage.setItem(HOME_KEY, '1'); }catch(e){} UI.homeHint = false; render(); return; }
   if(act==='beta-retry'){ claimBeta.tries = 0; claimBeta.failed = false; claimBeta(); render(); return; }
   if(act==='help-site'){ var hb = nativePlugin('Browser'), hp = el.getAttribute('data-url') || '/help.html'; if(hb && /^\/[a-z-]+\.html$/.test(hp)) hb.open({url: location.origin+hp}).catch(function(){}); return; }
+  if(act==='add-to'){
+    var ks9 = kids(), id9 = el.getAttribute('data-id');
+    var cur = addTargets().map(function(k){ return k.id; }), i9 = cur.indexOf(id9);
+    if(i9 > -1) cur.splice(i9, 1); else cur.push(id9);
+    if(!cur.length){ toast('Pick at least one lunchbox'); return; }
+    UI.addTo = cur.length === ks9.length ? null : cur;
+    /* the idea bank changes with the targets; the add-your-own form must not be
+       redrawn under a half-typed name, so that one flips in place */
+    if(el.getAttribute('data-re') === 'ideas') ideasSheet();
+    else el.setAttribute('aria-pressed', i9 > -1 ? 'false' : 'true');
+    return;
+  }
   if(act==='add-idea'){
     var b = BANK.filter(function(x){ return x.n===el.getAttribute('data-name'); })[0];
     if(!b) return;
-    if(foodsOf(kid).some(function(f){ return normKey(f.n)===normKey(b.n); })){ toast('Already on the list'); return; }
-    kid.foods.push(newFood(kid, b)); touch(kid); save(); ideasSheet(); render(); toast(b.n+' added'); return;
+    var r4 = addFoodTo(addTargets(), b);
+    if(!r4.added.length){ toast(addFailLine(b.n, r4)); return; }
+    var at4 = bodyEl.scrollTop;                    /* stay where they were reading */
+    save(); ideasSheet(); bodyEl.scrollTop = at4; render(); toast(addedLine(b.n, r4)); return;
   }
   if(act==='seed'){
     var added = seedLibrary(kid, 'some');
@@ -3073,15 +3156,16 @@ document.addEventListener('click', function(ev){
   if(act==='save-own'){
     var el2 = document.getElementById('nfName'), n = (el2.value||'').trim();
     if(!n){ el2.focus(); toast('Give it a name first'); return; }
-    kid.foods.push(newFood(kid, {
+    var r5 = addFoodTo(addTargets(), {
       n:n,
       c:document.querySelector('#nfCat .tg[aria-pressed="true"]').getAttribute('data-v'),
       a:document.getElementById('nfAisle').value,
       buy:(document.getElementById('nfBuy').value||'').split(',').map(function(x){ return x.trim().slice(0, 40); }).filter(Boolean).slice(0, 8),
       t:[].slice.call(document.querySelectorAll('#nfTags .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
       al:[].slice.call(document.querySelectorAll('#nfAl .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); })
-    }));
-    touch(kid); save(); closeSheet(); render(); toast(n+' added'); return;
+    });
+    if(!r5.added.length){ toast(addFailLine(n, r5)); return; }
+    save(); closeSheet(); render(); toast(addedLine(n, r5)); return;
   }
   if(act==='food-photo'){
     var pf = foodById(kid, el.getAttribute('data-id')); if(!pf) return;

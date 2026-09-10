@@ -440,6 +440,42 @@ try {
     .kids.filter(k => !k.deletedAt).map(k => k.settings.avoidAllergens.join('+')));
   check('each lunchbox keeps its own rules', rules[0] !== rules[1], rules);
 
+  /* ------------------------------------ a food goes in every box at once */
+  await page.click('[data-act="tab"][data-tab="foods"]');
+  await page.waitForTimeout(250);
+  await page.click('[data-act="ideas"]');
+  await page.waitForTimeout(350);
+  const targets = await page.$$eval('[data-act="add-to"]', a => a.map(b => b.getAttribute('aria-pressed')));
+  check('the idea bank asks which lunchboxes, with all of them on', targets.length === 2 && targets.every(v => v === 'true'), targets);
+
+  const idea = await page.$$eval('[data-act="add-idea"]:not(.done)',
+    a => (a.find(b => !/gluten|nuts|dairy|egg|soy|fish|sesame/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
+  await page.click('[data-act="add-idea"][data-name="' + idea + '"]');
+  await page.waitForTimeout(350);
+  const landed = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
+    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea);
+  check('one tap adds the food to every lunchbox', landed.length === 2 && landed.every(Boolean), [idea, landed]);
+
+  await page.click('[data-act="add-to"]');                     /* take the first box back out */
+  await page.waitForTimeout(350);
+  const only = await page.$$eval('[data-act="add-to"]', a => a.map(b => b.getAttribute('aria-pressed')));
+  check('a box can be taken out of the next add', only[0] === 'false' && only[1] === 'true', only);
+  const idea2 = await page.$$eval('[data-act="add-idea"]:not(.done)',
+    a => (a.find(b => !/gluten|nuts|dairy|egg|soy|fish|sesame/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
+  const hadIt = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
+    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea2);
+  await page.click('[data-act="add-idea"][data-name="' + idea2 + '"]');
+  await page.waitForTimeout(350);
+  const landed2 = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
+    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea2);
+  check('and then the one weird food lands in that one box only',
+    landed2[1] === true && landed2[0] === hadIt[0], [idea2, hadIt, landed2]);
+  await page.click('[data-act="add-to"]');                     /* put it back for the tests below */
+  await page.waitForTimeout(350);
+  await page.click('#sheetClose');
+  await page.waitForTimeout(300);
+
+
   await page.click('[data-act="tab"][data-tab="pack"]');
   await page.waitForTimeout(250);
   const lines = await page.$$eval('.kidline', a => a.length);
