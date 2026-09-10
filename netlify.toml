@@ -36,6 +36,15 @@
     Cache-Control = "no-store"
 
 [[headers]]
+  for = "/.well-known/apple-app-site-association"
+  # Served without an extension, so Netlify needs telling what it is. Only the
+  # sign-in link is claimed: claiming /app/* would pull every join and Stripe
+  # return out of Safari on a phone with the app installed.
+  [headers.values]
+    Content-Type = "application/json"
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
   for = "/icons/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
