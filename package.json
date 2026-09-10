@@ -11,7 +11,8 @@
     "migrate": "node scripts/migrate.mjs",
     "pretest": "node scripts/csp.mjs --check",
     "ios:sync": "npx cap sync ios",
-    "ios:open": "npx cap open ios"
+    "ios:open": "npx cap open ios",
+    "shots": "node scripts/shots.mjs"
   },
   "devDependencies": {
     "@capacitor/app": "^7.1.2",

@@ -29,6 +29,14 @@ food list from a 200-item library and produce a planned week immediately. From t
   (crunchy, soft, protein, tangy, sweet, salty, juicy, hearty, light), two at most. Keep a
   compartment and it survives the next shuffle; shuffling that one compartment on purpose
   un-keeps it. Every compartment that can change shows a small swap arrow; a kept one, a lock.
+- **More than one lunchbox** — Plan the week draws them together: the fullest food list leads,
+  and every other box starts from the same foods, swapping only where that box's school rules or
+  its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
+  box alone. Turn it off under Account (**Match the boxes**). Pack, Week and Foods carry a row of
+  lunchboxes to tap or swipe between; on Pack each pill shows whether that box is packed or
+  still owes yesterday's answer, and one line names who is left to pack. A food added from the
+  idea bank or by hand goes into every lunchbox unless you say otherwise; a box whose rules keep
+  it out is skipped and named.
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes. A dish
   goes on the list as what you buy for it (`buy` on the food: turkey and cheese pinwheels are
   deli turkey, cheese slices and tortillas; `ING_AISLE` puts each part in its aisle), one line
@@ -71,6 +79,12 @@ food list from a 200-item library and produce a planned week immediately. From t
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and "Erase everything"
   are two-tap, deleting a food offers Undo, and the shopping ticks survive a plan clear.
+- **A parent may override a rule** for one compartment: pick a flagged food from the
+  compartment sheet and it goes in, rule named, with Undo. The compartment carries a `!`, the day
+  an *Against your rules* chip, and the rules sweep leaves it alone. The override is recorded
+  against that exact food in that compartment (`day.over`), so a re-draw, another choice, the food
+  deleted or the compartment switched off ends it; when the kid's pick trades a part or a box, it
+  travels with its food.
 - **Rules re-check the plan.** Changing any rule sweeps the week on screen: a food that now
   breaks a rule leaves its compartment — locked, kid-picked or not — and the compartment is
   drawn again, with a toast saying how many changed. Switching a compartment off clears it
@@ -98,6 +112,7 @@ Built for more than one user from the start, though it runs today with no accoun
 account            one household — a server only ever has to filter by account id
 ├── members[]      the adults who use it; per-person actions record `by: memberId`
 ├── kids[]         lunchbox profiles, each with its OWN rules, foods, week, pack state
+├── align          household-wide: {on, updatedAt} — draw every lunchbox from the same foods
 └── pantry{}       household-wide, keyed by normalized food name
 ```
 
