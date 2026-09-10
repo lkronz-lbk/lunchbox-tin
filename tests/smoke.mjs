@@ -482,6 +482,106 @@ try {
     await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted'))
       .kids.filter(k => !k.deletedAt).every(k => k.week && k.week.days.length)));
 
+  /* ------------------------------ a parent may overrule their own rule */
+  await page.click('[data-act="tab"][data-tab="week"]');
+  await page.waitForTimeout(300);
+  /* Sam's list was filled before the gluten rule was set, so it holds foods the
+     rule now keeps out — exactly the case a parent overrules */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const sam = d.kids.filter(k => !k.deletedAt).find(k => k.name === 'Sam');
+    document.querySelector('.kidpager button[data-id="' + sam.id + '"]').click();
+  });
+  await page.waitForTimeout(350);
+  await page.click('.tin .cmp[data-cat="main"]');
+  await page.waitForTimeout(400);
+  const breaks = await page.$$eval('[data-act="pick"]', a => {
+    const hit = a.find(b => /tap to use it anyway/.test(b.textContent));
+    return hit ? {id: hit.getAttribute('data-id'), meta: hit.querySelector('.meta').textContent} : null;
+  });
+  check('a food a rule keeps out is still offered, with the rule named on it',
+    !!breaks && /gluten/i.test(breaks.meta), breaks);
+  await page.click('[data-act="pick"][data-id="' + breaks.id + '"]');
+  await page.waitForTimeout(400);
+  const over = () => page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const k = d.kids.filter(x => !x.deletedAt).find(x => x.id === d.activeKidId);
+    const day = k.week.days.find(x => (x.over || {}).main);
+    return day ? {live: day.over.main === day.slots.main, day: day.d} : null;
+  });
+  check('picking it puts it in the box and records the override', (await over()) && (await over()).live);
+  const flagged = await page.textContent('#view');
+  check('and the day says so where the parent will see it', /Against your rules/.test(flagged));
+  check('the compartment carries the mark too', (await page.$$eval('.tin .over', a => a.length)) > 0);
+
+  /* on main the rules live behind the gear beside the lunchbox name */
+  await page.click('[data-act="tab"][data-tab="week"]');
+  await page.waitForTimeout(250);
+  await page.click('[data-act="box-settings"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-act="rule"][data-k="noIce"]');           /* any rule change sweeps the plan */
+  await page.waitForTimeout(300);
+  await page.click('[data-act="box-done"]');
+  await page.waitForTimeout(400);
+  check('a later rule change does not quietly undo the parent\'s override', (await over()) && (await over()).live);
+  /* and leave the rule as it was found: with it on, this lunchbox has almost no
+     mains at all, which starves the matching checks further down */
+  await page.click('[data-act="box-settings"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-act="rule"][data-k="noIce"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-act="box-done"]');
+  await page.waitForTimeout(300);
+  check('and the override survives the rule going back off as well', (await over()) && (await over()).live);
+
+  await page.click('[data-act="tab"][data-tab="week"]');
+  await page.waitForTimeout(300);
+  const dayStr = (await over()).day;
+  await page.click('.tin .cmp[data-cat="main"]');
+  await page.waitForTimeout(400);
+  /* the override is recorded against the food, not the compartment: choose a
+     different one and the first food's permission does not come with it */
+  const other = await page.$$eval('[data-act="pick"]',
+    (a, id) => (a.find(b => b.getAttribute('data-id') !== id) || {getAttribute: () => null}).getAttribute('data-id'), breaks.id);
+  await page.click('[data-act="pick"][data-id="' + other + '"]');
+  await page.waitForTimeout(400);
+  check('swapping the compartment ends that food\'s override', await page.evaluate(d => {
+    const doc = JSON.parse(localStorage.getItem('lunchsorted'));
+    const k = doc.kids.filter(x => !x.deletedAt).find(x => x.id === doc.activeKidId);
+    const day = k.week.days.find(x => x.d === d.day);
+    const over = (day.over || {}).main;
+    /* the permission is gone, not merely pointing somewhere else: it is either
+       absent or it names the food that is actually in the box now */
+    return day.slots.main !== d.first && over !== d.first && (!over || over === day.slots.main);
+  }, {day: dayStr, first: breaks.id}));
+
+  /* a permission for one food must not survive that food leaving and coming back */
+  await page.click('[data-act="tab"][data-tab="week"]');
+  await page.waitForTimeout(300);
+  await page.click('.tin .cmp[data-cat="sweet"]');
+  await page.waitForTimeout(400);
+  const sweetBad = await page.$$eval('[data-act="pick"]', a => {
+    const hit = a.find(b => /tap to use it anyway/.test(b.textContent));
+    return hit ? hit.getAttribute('data-id') : null;
+  });
+  if (sweetBad) {
+    await page.click('[data-act="pick"][data-id="' + sweetBad + '"]');
+    await page.waitForTimeout(400);
+    await page.click('.tin .cmp[data-cat="sweet"]');
+    await page.waitForTimeout(400);
+    await page.click('[data-act="sheet-shuffle"][data-cat="sweet"]');
+    await page.waitForTimeout(400);
+    await page.click('#sheetClose');
+    await page.waitForTimeout(250);
+  }
+  check('and a re-draw hands the permission back rather than leaving it for the next food',
+    await page.evaluate(() => {
+      const doc = JSON.parse(localStorage.getItem('lunchsorted'));
+      return doc.kids.filter(k => !k.deletedAt).every(k => !k.week || k.week.days.every(day =>
+        Object.keys(day.over || {}).every(c => day.over[c] === day.slots[c])));
+    }), sweetBad || 'no rule-breaking sweet to override');
+
+
   /* ------------------------------------------- one week across two boxes */
   await page.click('[data-act="tab"][data-tab="week"]');
   await page.waitForTimeout(250);

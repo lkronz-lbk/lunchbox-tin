@@ -112,6 +112,9 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .packbox[aria-pressed="true"] .tick{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .packbox[aria-pressed="true"] .tick svg{opacity:1}
 .lock{opacity:.85}
+.marks{display:inline-flex;align-items:center;gap:5px;flex:none}
+.over{width:15px;height:15px;border-radius:50%;background:var(--warn-soft);color:var(--warn);flex:none;
+  display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;line-height:1}
 .swap{color:var(--ink-3);opacity:.9}
 .cmp:active .swap{opacity:1}
 
@@ -1274,14 +1277,15 @@ function ticked(row, k){ return !!(row && row[k] && !row[k].off); }
 function normDay(d){
   d = plainObj(d);
   var date = safeDate(d.d); if(!date) return null;
-  var slots = {}, lock = {}, kidPick = {};
-  var sl = plainObj(d.slots), lk = plainObj(d.lock), kp = plainObj(d.kidPick);
+  var slots = {}, lock = {}, kidPick = {}, over = {};
+  var sl = plainObj(d.slots), lk = plainObj(d.lock), kp = plainObj(d.kidPick), ov = plainObj(d.over);
   ALL_CATS.forEach(function(c){
     if(own(sl, c.k)) slots[c.k] = safeIdOrNull(sl[c.k]);
     if(own(lk, c.k)) lock[c.k] = !!lk[c.k];
     if(own(kp, c.k) && kp[c.k]){ var e = normStamped(kp[c.k]); e.picker = 'kid'; kidPick[c.k] = e; }
+    if(own(ov, c.k)){ var ovid = safeIdOrNull(ov[c.k]); if(ovid) over[c.k] = ovid; }
   });
-  return {d:date, dow:parseISO(date).getDay(), slots:slots, lock:lock, kidPick:kidPick};
+  return {d:date, dow:parseISO(date).getDay(), slots:slots, lock:lock, kidPick:kidPick, over:over};
 }
 function normDateRows(v, perRow, cap){
   var src = plainObj(v), out = {};
@@ -1502,6 +1506,7 @@ function avoidWords(s){
   return AVOID_CACHE.words;
 }
 function violation(kid, food){
+  if(!food) return null;
   var s = kid.settings;
   if(s.noHeat && has(food,'heat')) return 'needs heating';
   if(s.noIce && has(food,'ice')) return 'needs an ice pack';
@@ -1515,6 +1520,20 @@ function violation(kid, food){
 }
 function eligible(kid, cat){
   return foodsOf(kid).filter(function(f){ return f.c===cat && !violation(kid,f); });
+}
+/* A parent can put a food in a box that a rule keeps out — their kid, their
+   call. The override is recorded against the exact food, so it lasts only as
+   long as that food is in that compartment: a re-draw or another choice ends
+   it, and it never spreads to any other draw. */
+function isOverride(kid, day, cat){
+  return !!(day.over && day.over[cat] && day.over[cat] === day.slots[cat] && foodById(kid, day.slots[cat]));
+}
+function setOverride(day, cat, foodId){
+  day.over = day.over || {};
+  if(foodId) day.over[cat] = foodId; else delete day.over[cat];
+}
+function overrides(kid, day){
+  return catsFor(kid).filter(function(c){ return isOverride(kid, day, c.k); });
 }
 
 /* ------------------------------------------------ pairing (deterministic) */
@@ -1550,6 +1569,7 @@ function dayFlags(kid, day){
   if(items.some(function(i){ return has(i,'messy'); })) f.push({t:'Sealed container', cls:''});
   if(items.length && !items.some(function(i){ return has(i,'protein'); })) f.push({t:'No protein', cls:'warn'});
   if(day.kidPick && Object.keys(day.kidPick).length) f.push({t:kidLabel(kid) ? kidLabel(kid)+' picked' : 'Picked', cls:'picked'});
+  if(overrides(kid, day).length) f.push({t:'Against your rules', cls:'warn'});
   return f;
 }
 
@@ -1749,12 +1769,14 @@ function anchorWeek(kid){
    compartment is drawn again. Returns how many compartments changed. */
 function enforceRules(kid){
   if(!kid.week) return 0;
-  var hit = {}, n = 0;
+  var hit = {}, n = 0, t0 = iso(today());
   kid.week.days.forEach(function(d){
+    if(d.d < t0) return;                    /* a day that has gone is not ours to rewrite */
     catsFor(kid).forEach(function(c){
       var f = foodById(kid, d.slots[c.k]);
-      if(f && violation(kid, f)){
+      if(f && violation(kid, f) && !isOverride(kid, d, c.k)){
         d.slots[c.k] = null; d.lock[c.k] = false; if(d.kidPick) delete d.kidPick[c.k];
+        setOverride(d, c.k, null);
         hit[c.k] = 1; n++;
       }
     });
@@ -1814,11 +1836,14 @@ function planWeek(kid, align){
     var old = prev ? prev.days.filter(function(x){ return x.d===d; })[0] : null;
     var slots = old ? Object.assign({}, old.slots) : {}, lock = old ? Object.assign({}, old.lock) : {};
     catsFor(kid).forEach(function(c){ if(!(c.k in slots)) slots[c.k] = null; if(!(c.k in lock)) lock[c.k] = false; });
-    week.days.push({d:d, dow:dw, slots:slots, lock:lock, kidPick: old ? Object.assign({}, old.kidPick || {}) : {}});
+    week.days.push({d:d, dow:dw, slots:slots, lock:lock, kidPick: old ? Object.assign({}, old.kidPick || {}) : {},
+      over: old ? Object.assign({}, old.over || {}) : {}});
   });
   week.days.forEach(function(day){
     if(day.d < t0) return;                             /* already packed: not ours to change */
-    catsFor(kid).forEach(function(c){ if(!day.lock[c.k] || !foodById(kid, day.slots[c.k])) day.slots[c.k] = null; });
+    catsFor(kid).forEach(function(c){
+      if(!day.lock[c.k] || !foodById(kid, day.slots[c.k])){ day.slots[c.k] = null; setOverride(day, c.k, null); }
+    });
   });
   if(align) seedAligned(kid, week, align, t0);
   var shortfall = [];
@@ -1932,6 +1957,7 @@ function reshuffleSlot(kid, day, cat){
   }
   day.lock[cat] = false;                               /* re-drawn on purpose: no longer "kept" */
   if(day.kidPick) delete day.kidPick[cat];
+  setOverride(day, cat, null);                         /* and no longer excused */
   touch(kid.week); touch(kid); save();
   return true;
 }
@@ -1994,9 +2020,10 @@ function kidChoosePart(dateStr, foodId){
     UI.kid = null; render(); toast('That box has moved on — try again'); return;
   }
   if(other !== target){                                     /* the two days trade this one part, and a parent's hold goes with the food */
-    var mine = target.slots[cat], held = !!target.lock[cat];
+    var mine = target.slots[cat], held = !!target.lock[cat], excused = (target.over || {})[cat] || null;
     target.slots[cat] = other.slots[cat]; other.slots[cat] = mine;
     other.lock[cat] = held; if(other.kidPick) delete other.kidPick[cat];
+    setOverride(target, cat, (other.over || {})[cat] || null); setOverride(other, cat, excused);   /* the parent's say-so goes with the food */
   }
   markPicked(kid, target, cat);
   touch(kid.week); touch(kid); save();                     /* saved now: stopping early keeps what was chosen */
@@ -2012,9 +2039,9 @@ function kidChooseBox(dateStr){
     UI.kid = null; render(); toast('That box has moved on — try again'); return;
   }
   if(chosen !== target){                                    /* the two days trade boxes, locks and all */
-    var sl = target.slots, lk = target.lock, kp = target.kidPick;
-    target.slots = chosen.slots; target.lock = chosen.lock; target.kidPick = chosen.kidPick;
-    chosen.slots = sl; chosen.lock = lk; chosen.kidPick = kp;
+    var sl = target.slots, lk = target.lock, kp = target.kidPick, ov = target.over || {};
+    target.slots = chosen.slots; target.lock = chosen.lock; target.kidPick = chosen.kidPick; target.over = chosen.over || {};
+    chosen.slots = sl; chosen.lock = lk; chosen.kidPick = kp; chosen.over = ov;
     /* the box the kid passed on is no longer "picked", and no longer held by that pick */
     Object.keys(chosen.kidPick || {}).forEach(function(c){ chosen.lock[c] = false; });
     chosen.kidPick = {};
@@ -2133,9 +2160,11 @@ function tinHTML(kid, day, mode){
     var f = foodById(kid, day.slots[c.k]);
     var sub = f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '');
     var tr = f ? traitsOf(f) : [];
-    var mark = mode==='pack' ? ''
-             : (day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>'
-             : (dayLabel(day.d).diff < 0 || isHelper() ? '' : '<span class="swap">'+svg('swap',12)+'</span>'));  /* the tap cue: this box can be swapped */
+    var over = isOverride(kid, day, c.k);
+    var mark = over ? '<span class="over" title="'+esc(violation(kid, f) || 'against a rule')+'">!</span>' : '';
+    if(mode!=='pack') mark += day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>'
+             : (dayLabel(day.d).diff < 0 || isHelper() ? '' : '<span class="swap">'+svg('swap',12)+'</span>');  /* the tap cue: this box can be swapped */
+    if(mark) mark = '<span class="marks">'+mark+'</span>';
     var tag = mode==='pack' ? 'div' : 'button';                 /* on the Pack screen a compartment is not a button: only Week changes a box */
     h += '<'+tag+' class="cmp c-'+c.k+(f?'':' empty')+(c.minor?' minor':'')+'"'
       +  (mode==='pack' ? '' : ' data-act="slot" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'"')+'>'
@@ -2831,7 +2860,8 @@ function slotSheet(kidId, dayStr, cat){
     pool.forEach(function(f){
       var v = violation(kid, f);
       var sc = cat==='main' ? null : pairScore(main, f, cat).s;
-      var meta = v ? 'skipped — '+v : (eatLabel(kid, f.id) || (sc!==null && sc>=3 ? 'goes well with '+(main?main.n:'the main') : ''));
+      var meta = v ? (day.slots[cat]===f.id ? v+' — in the box anyway' : v+' — tap to use it anyway')
+        : (eatLabel(kid, f.id) || (sc!==null && sc>=3 ? 'goes well with '+(main?main.n:'the main') : ''));
       h += '<button class="item'+(day.slots[cat]===f.id?' done':'')+'" data-act="pick" data-kid="'+esc(kid.id)
         +  '" data-day="'+esc(dayStr)+'" data-cat="'+cat+'" data-id="'+esc(f.id)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(f.n)+'</span>'
@@ -3266,7 +3296,9 @@ document.addEventListener('click', function(ev){
   if(act==='slot'){ slotSheet(el.getAttribute('data-kid'), el.getAttribute('data-day'), el.getAttribute('data-cat')); return; }
   if(act==='sheet-shuffle'){
     var k4 = kidById(el.getAttribute('data-kid')), cat = el.getAttribute('data-cat');
+    if(!k4 || !k4.week){ closeSheet(); toast('That lunchbox is gone'); return; }
     var day4 = k4.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
+    if(!day4){ closeSheet(); toast('That day is no longer planned'); return; }
     var wasKept = !!(day4.lock[cat] || (day4.kidPick && day4.kidPick[cat]));
     if(reshuffleSlot(k4, day4, cat)){ slotSheet(k4.id, day4.d, cat); render(); if(wasKept) toast('Shuffled \u2014 it is no longer kept'); }
     else toast('Nothing else in that category');
@@ -3274,17 +3306,34 @@ document.addEventListener('click', function(ev){
   }
   if(act==='sheet-lock'){
     var k5 = kidById(el.getAttribute('data-kid')), cat5 = el.getAttribute('data-cat');
+    if(!k5 || !k5.week){ closeSheet(); toast('That lunchbox is gone'); return; }
     var day5 = k5.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
+    if(!day5){ closeSheet(); toast('That day is no longer planned'); return; }
     day5.lock[cat5] = !day5.lock[cat5]; touch(k5.week); touch(k5); save();
     el.setAttribute('aria-pressed', day5.lock[cat5]); render(); return;
   }
   if(act==='pick'){
     var k6 = kidById(el.getAttribute('data-kid'));
+    if(!k6 || !k6.week){ closeSheet(); toast('That lunchbox is gone'); return; }
     var day6 = k6.week.days.filter(function(x){ return x.d===el.getAttribute('data-day'); })[0];
-    var cat6 = el.getAttribute('data-cat');
-    if(day6.slots[cat6] !== el.getAttribute('data-id') && day6.kidPick) delete day6.kidPick[cat6];
-    day6.slots[cat6] = el.getAttribute('data-id');
-    touch(k6.week); touch(k6); save(); closeSheet(); render(); return;
+    if(!day6){ closeSheet(); toast('That day is no longer planned'); return; }
+    var cat6 = el.getAttribute('data-cat'), id6 = el.getAttribute('data-id');
+    var was6 = {slot:day6.slots[cat6], lock:day6.lock[cat6],
+      pick:day6.kidPick && day6.kidPick[cat6], over:(day6.over || {})[cat6] || null};
+    if(day6.slots[cat6] !== id6 && day6.kidPick) delete day6.kidPick[cat6];
+    day6.slots[cat6] = id6;
+    /* a rule does not lock the compartment: the parent chose, once, out loud —
+       so it goes in flagged, and stays flagged as long as that food is there */
+    var f6 = foodById(k6, id6), v6 = f6 && violation(k6, f6);
+    setOverride(day6, cat6, v6 ? id6 : null);
+    touch(k6.week); touch(k6); save(); closeSheet(); render();
+    if(v6) toast(f6.n+' is in the box \u2014 '+v6+', so it stays flagged', function(){
+      day6.slots[cat6] = was6.slot; day6.lock[cat6] = was6.lock;
+      if(was6.pick){ day6.kidPick = day6.kidPick || {}; day6.kidPick[cat6] = was6.pick; }
+      setOverride(day6, cat6, was6.over);
+      touch(k6.week); touch(k6); save(); render(); toast('Put back');
+    });
+    return;
   }
 
   /* packing */
@@ -3392,13 +3441,19 @@ document.addEventListener('click', function(ev){
     var wasIn = [];
     f.deletedAt = now(); touch(f);
     if(kid.week) kid.week.days.forEach(function(d){
-      ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){ wasIn.push({d:d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k]}); d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; } });
+      ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){
+        wasIn.push({d:d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k], over:isOverride(kid, d, c.k)});
+        d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); } });
     });
     touch(kid); save(); render();
     var undoKid = kid;
     toast(f.n+' removed', function(){
       f.deletedAt = null; touch(f);
-      wasIn.forEach(function(w){ w.d.slots[w.c] = f.id; w.d.lock[w.c] = w.lock; if(w.pick){ w.d.kidPick = w.d.kidPick || {}; w.d.kidPick[w.c] = w.pick; } });
+      wasIn.forEach(function(w){
+        w.d.slots[w.c] = f.id; w.d.lock[w.c] = w.lock;
+        if(w.pick){ w.d.kidPick = w.d.kidPick || {}; w.d.kidPick[w.c] = w.pick; }
+        if(w.over) setOverride(w.d, w.c, f.id);
+      });
       touch(undoKid); save(); render(); toast('Put back');
     });
     return;
@@ -3430,7 +3485,7 @@ document.addEventListener('click', function(ev){
         fillCategory(kid, kid.week, sc); touch(kid.week); }
       toast(addedN ? addedN+' '+sc.plural.toLowerCase()+' added to the list' : sc.label+' compartment on');
     } else {
-      if(kid.week) kid.week.days.forEach(function(d){ d.slots[sk] = null; d.lock[sk] = false; if(d.kidPick) delete d.kidPick[sk]; });
+      if(kid.week) kid.week.days.forEach(function(d){ d.slots[sk] = null; d.lock[sk] = false; if(d.kidPick) delete d.kidPick[sk]; setOverride(d, sk, null); });
       toast(sc.label+' compartment off');
     }
     touch(kid); save(); render(); return;
