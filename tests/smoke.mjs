@@ -481,6 +481,156 @@ try {
   const lines = await page.$$eval('.kidline', a => a.length);
   check('filling a new lunchbox\'s list also plans it, so the pack list covers every lunchbox', lines === 2, lines);
 
+  /* ------------------------------------ one plan across the two boxes */
+  await page.click('[data-act="tab"][data-tab="setup"]');
+  await page.waitForTimeout(250);
+  check('matching the boxes is on by default, and only offered once there are two',
+    await page.evaluate(() => document.querySelector('[data-act="align"]').getAttribute('aria-pressed') === 'true'));
+
+  /* planAll leads with the fullest food list, and the seeding is random — so
+     which box leads is a coin toss. Land it on the box without the extra
+     allergen: the strict one can be left with no eligible mains at all, and a
+     lead with an empty week gives the comparison below nothing to compare. */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const ks = d.kids.filter(k => !k.deletedAt);
+    const live = k => k.foods.filter(f => !f.deletedAt);
+    const strict = ks.slice().sort((a, b) => b.settings.avoidAllergens.length - a.settings.avoidAllergens.length)[0];
+    const lead = ks.find(k => k !== strict);
+    const stamp = new Date().toISOString();
+    while (live(strict).length >= live(lead).length) {
+      const drop = live(strict).find(f => f.c !== 'main');
+      if (!drop) break;
+      drop.deletedAt = stamp;
+    }
+    localStorage.setItem('lunchsorted', JSON.stringify(d));
+  });
+  await page.reload();
+  await page.waitForTimeout(700);
+  await page.click('[data-act="tab"][data-tab="setup"]');
+  await page.waitForTimeout(250);
+  await page.click('[data-act="clear-week"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-act="clear-week"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-act="tab"][data-tab="pack"]');
+  await page.waitForTimeout(250);
+  await page.click('[data-act="plan-all"]');
+  await page.waitForTimeout(400);
+  const align = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const t = new Date(); t.setHours(0,0,0,0);
+    const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+    const t0 = iso(t);
+    const key = s => String(s).trim().toLowerCase().replace(/\s+/g,' ');
+    const live = k => k.foods.filter(f => !f.deletedAt);
+    const ks = d.kids.filter(k => !k.deletedAt && k.week);
+    /* the fullest list leads, exactly as planAll picks it */
+    const lead = ks.slice().sort((a, b) => live(b).length - live(a).length || ks.indexOf(a) - ks.indexOf(b))[0];
+    const other = ks.filter(k => k !== lead)[0];
+    const name = (k, id) => { const f = live(k).find(f => f.id === id); return f ? key(f.n) : null; };
+    let same = 0, unexplained = 0; const miss = [];
+    lead.week.days.filter(x => x.d >= t0).forEach(da => {
+      const db = other.week.days.find(x => x.d === da.d);
+      if (!db) return;
+      Object.keys(da.slots).forEach(c => {
+        const want = name(lead, da.slots[c]);
+        if (!want || !(c in db.slots)) return;
+        if (name(other, db.slots[c]) === want) { same++; return; }
+        /* the only reasons to differ: this box has no such food, or its rules keep it out */
+        const mine = live(other).filter(f => f.c === c && key(f.n) === want);
+        const blocked = !mine.length || mine.every(f => (f.al || []).some(x => other.settings.avoidAllergens.includes(x)));
+        if (!blocked) { unexplained++; miss.push([da.d, c, want, name(other, db.slots[c])]); }
+      });
+    });
+    return {same, unexplained, boxes: ks.length, miss, lead: lead.name,
+      leadDrew: lead.week.days.filter(x => x.d >= t0 && x.slots.main).length};
+  });
+  check('the lead box drew a week at all, so the comparison means something',
+    align.leadDrew > 0, align);
+  check('planning the week gives both boxes the same foods', align.boxes === 2 && align.same > 0, align);
+  check('and only differs where a box\'s rules or its own list say otherwise', align.unexplained === 0, align);
+
+
+  /* --------------------- matching never overrides the three-week rest */
+  /* Rigged so the answer cannot come down to the draw: the lead box is left
+     with exactly one main, so every day it holds is that food; the follower
+     holds the same food (rested) and one other it can have instead. */
+  const rested = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const ks = d.kids.filter(k => !k.deletedAt);
+    const live = k => k.foods.filter(f => !f.deletedAt);
+    const key = s => String(s).trim().toLowerCase().replace(/\s+/g, ' ');
+    const lead = ks[0], other = ks[1];
+    /* the follower's own rules must allow both foods, or the test proves nothing.
+       An earlier check switched its no-ice-pack rule on, which leaves it almost
+       no mains at all — this is that lunchbox's fixture, so put it back. */
+    const st = other.settings;
+    st.noIce = false;
+    const blocked = f => (f.al || []).some(a => st.avoidAllergens.includes(a))
+      || (st.noHeat && (f.t || []).includes('heat'))
+      || (st.noIce && (f.t || []).includes('ice'))
+      || (st.shortWindow && (f.t || []).includes('messy'));
+    const mains = live(other).filter(f => f.c === 'main' && !blocked(f));
+    const shared = live(lead).filter(f => f.c === 'main')
+      .find(f => mains.some(g => key(g.n) === key(f.n)));
+    if (!shared) return null;
+    const mine = mains.find(f => key(f.n) === key(shared.n));
+    const spare = mains.find(f => f.id !== mine.id);
+    if (!spare) return null;
+    const stamp = new Date().toISOString();
+    /* the lead can draw nothing else */
+    lead.foods.forEach(f => { if (f.c === 'main' && f.id !== shared.id) f.deletedAt = stamp; });
+    /* The follower must be able to afford the rest: the rule itself allows a
+       rested food back when the list is too short for the week. Pad its allowed
+       mains well past the days ahead with copies of one it can have, and keep
+       the lead the fullest list by copying sides into it — thinning the
+       follower, as this rig once did, is what made the rule's exception fire. */
+    const clone = (f, k, i) => Object.assign({}, f, {id: 'food_rig' + i.toString(36), kidId: k.id, n: f.n + ' ' + (i + 1), createdAt: stamp, updatedAt: stamp});
+    let i = 0;
+    while (live(other).filter(f => f.c === 'main' && f.id !== mine.id && !blocked(f)).length < 8) other.foods.push(clone(spare, other, i++));
+    const filler = live(lead).find(f => f.c !== 'main') || live(other).find(f => f.c !== 'main');
+    while (filler && live(lead).length <= live(other).length) lead.foods.push(clone(filler, lead, i++));
+    const spares = live(other).filter(f => f.c === 'main' && f.id !== mine.id && !blocked(f)).length;
+    const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+    const back = n => { const t = new Date(); t.setDate(t.getDate() - n); return iso(t); };
+    other.eaten = other.eaten || {};
+    other.eaten[back(7)] = {main:{foodId:mine.id, r:'left', at:stamp, by:null}};
+    other.eaten[back(8)] = {main:{foodId:mine.id, r:'left', at:stamp, by:null}};
+    localStorage.setItem('lunchsorted', JSON.stringify(d));
+    return {restedId: mine.id, spareId: spare.id, otherId: other.id, leadId: lead.id,
+      leadMainId: shared.id, name: mine.n, spares: spares};
+  });
+  check('a came-home-twice food the lead box still holds can be set up', !!rested, rested);
+  await page.reload();
+  await page.waitForTimeout(800);
+  await page.click('[data-act="tab"][data-tab="setup"]');
+  await page.waitForTimeout(250);
+  await page.click('[data-act="clear-week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="clear-week"]'); await page.waitForTimeout(350);
+  await page.click('[data-act="tab"][data-tab="pack"]');
+  await page.waitForTimeout(250);
+  await page.click('[data-act="plan-all"]');
+  await page.waitForTimeout(600);
+  const restCheck = await page.evaluate(r => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const lead = d.kids.find(k => k.id === r.leadId), other = d.kids.find(k => k.id === r.otherId);
+    const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+    const t0 = iso(new Date());
+    const ahead = other.week.days.filter(x => x.d >= t0);
+    return {
+      leadHolds: lead.week.days.filter(x => x.d >= t0).every(x => x.slots.main === r.leadMainId),
+      days: ahead.length,
+      onRested: ahead.filter(x => x.slots.main === r.restedId).length,
+      filled: ahead.filter(x => !!x.slots.main).length,
+      spares: r.spares
+    };
+  }, rested);
+  check('the lead box really is holding that food every day, so the test can prove anything',
+    restCheck.leadHolds && restCheck.days > 0 && restCheck.spares >= restCheck.days, restCheck);
+  check('matching a lunchbox to the others never wakes a food that is resting',
+    restCheck.onRested === 0 && restCheck.filled === restCheck.days, restCheck);
+
   /* ------------------------------------------------- transfer round trip */
   const dump = await page.evaluate(() => localStorage.getItem('lunchsorted'));
   await page.click('[data-act="tab"][data-tab="setup"]');

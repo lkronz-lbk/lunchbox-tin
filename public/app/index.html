@@ -452,6 +452,7 @@ window.LSMerge = (function(){
       members:unionById(a.members, b.members, newer),
       kids:unionById(a.kids, b.kids, function(x, y){ return mergeKid(x, y, today); }),
       activeKidId:a.activeKidId || b.activeKidId,
+      align:(a.align && b.align) ? newer(a.align, b.align) : (a.align || b.align),
       pantry:mergeMap(a.pantry, b.pantry)
     };
   }
@@ -1157,7 +1158,7 @@ function newAccount(){
   var owner = newMember('Me','owner');
   var kid = newKid('Lunchbox', 0);
   return {schema:SCHEMA, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-    members:[owner], kids:[kid], activeKidId:kid.id, pantry:nullMap(), tz:phoneTz()};
+    members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, pantry:nullMap(), tz:phoneTz()};
 }
 
 /* migrations: keyed by the schema they upgrade FROM */
@@ -1166,7 +1167,7 @@ var MIGRATIONS = {
     var owner = newMember('Me','owner');
     var kid = newKid((old.settings && old.settings.kid) || 'Lunchbox', 0);
     var acct = {schema:2, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-      members:[owner], kids:[kid], activeKidId:kid.id, pantry:nullMap()};
+      members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, pantry:nullMap()};
     if(old.settings){
       kid.settings.days = old.settings.days || [1,2,3,4,5];
       kid.settings.noHeat = old.settings.noHeat !== false;
@@ -1316,12 +1317,19 @@ function normKid(k, i){
   }, 400);
   return kid;
 }
+/* Matching is a household setting, so it carries its own stamp and merges like
+   any other record. A document from before it existed says nothing and must lose
+   every tie; one carrying the old bare boolean said something, and outranks silence. */
+function normAlign(v){
+  if(v && typeof v === 'object') return {on: v.on !== false, updatedAt: safeStamp(v.updatedAt, '')};
+  return {on: v !== false, updatedAt: (v === undefined || v === null) ? '' : '0000'};
+}
 function normalizeAccount(doc){
   if(!isAccount(doc)) return null;
   var acct = {schema:SCHEMA, id:safeId(doc.id,'acc'), name:safeStr(doc.name, 60, 'My household'),
     createdAt:safeStamp(doc.createdAt), updatedAt:safeStamp(doc.updatedAt),
     members:doc.members.slice(0, 50).map(normMember), kids:doc.kids.slice(0, 20).map(normKid),
-    activeKidId:null, pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
+    activeKidId:null, align:normAlign(doc.align), pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
   if(!acct.members.length) acct.members = [newMember('Me','owner')];
   if(!acct.members.some(function(m){ return m.role === 'owner' && !m.deletedAt; })) acct.members[0].role = 'owner';
   var live = acct.kids.filter(function(k){ return !k.deletedAt; });
@@ -1765,7 +1773,7 @@ function archiveWeek(kid){
     .map(function(d){ return {d:d.d, dow:d.dow, slots:Object.assign({}, d.slots), kidPick:Object.assign({}, d.kidPick || {})}; });
   kid.past = (kid.past || []).concat(kept).slice(-40);
 }
-function planWeek(kid){
+function planWeek(kid, align){
   var days = packDaysSorted(kid);
   /* re-plan the week already on screen while it still has days ahead; otherwise anchor fresh */
   var ws = (kid.week && !weekIsStale(kid)) ? parseISO(kid.week.start) : anchorWeek(kid);
@@ -1790,6 +1798,7 @@ function planWeek(kid){
     if(day.d < t0) return;                             /* already packed: not ours to change */
     catsFor(kid).forEach(function(c){ if(!day.lock[c.k] || !foodById(kid, day.slots[c.k])) day.slots[c.k] = null; });
   });
+  if(align) seedAligned(kid, week, align, t0);
   var shortfall = [];
   catsFor(kid).forEach(function(c){ if(!fillCategory(kid, week, c)) shortfall.push(c.plural); });
   kid.week = week;
@@ -1798,21 +1807,85 @@ function planWeek(kid){
   return shortfall;
 }
 /* Keep the document bounded: packed ticks before this week, eat outcomes older
-   than a year, and tombstones older than ninety days are never read again. */
+   than a year, and tombstones older than ninety days are never read again. The
+   pantry is the household's, so it is swept once per plan, not once per box. */
+function prunePantry(){
+  var floor = iso(addDays(today(), -30));
+  Object.keys(S && S.pantry || {}).forEach(function(k){
+    var p = S.pantry[k];
+    if(p && !p.have && p.at && p.at < floor) delete S.pantry[k];
+  });
+}
 function prune(kid, ws){
   var floorPacked = iso(ws), floorEaten = iso(addDays(today(), -365)), floorTomb = addDays(today(), -90).getTime();
   Object.keys(kid.packed || {}).forEach(function(d){ if(d < floorPacked) delete kid.packed[d]; });
-  Object.keys(S && S.pantry || {}).forEach(function(k){ var p = S.pantry[k]; if(p && !p.have && p.at && p.at < iso(addDays(today(), -30))) delete S.pantry[k]; });
   Object.keys(kid.eaten || {}).forEach(function(d){ if(d < floorEaten) delete kid.eaten[d]; });
   kid.foods = kid.foods.filter(function(f){ return !f.deletedAt || new Date(f.deletedAt).getTime() > floorTomb; });
 }
-function planAll(){
-  var short = {};
-  kids().forEach(function(k){
-    if(!foodsOf(k).length) return;
-    planWeek(k).forEach(function(c){ short[c] = 1; });
+/* What one lunchbox's week holds, by name — the shape another lunchbox tries to
+   copy. Names, not ids: two kids who both eat cheese toastie have two food rows. */
+function alignMap(kid){
+  var out = nullMap();
+  if(!kid.week) return out;
+  kid.week.days.forEach(function(day){
+    var row = nullMap();
+    ALL_CATS.forEach(function(c){ var f = foodById(kid, day.slots[c.k]); if(f) row[c.k] = normKey(f.n); });
+    out[day.d] = row;
   });
-  return Object.keys(short);
+  return out;
+}
+/* Start this lunchbox from the same foods. A compartment is seeded only when
+   this lunchbox actually has that food and its own rules allow it; everything
+   else is left empty and drawn normally, which is the swap the parent wanted.
+   Days already gone and compartments held with Don't change are never touched. */
+function seedAligned(kid, week, align, t0){
+  var byName = nullMap();
+  foodsOf(kid).forEach(function(f){ var key = f.c+'|'+normKey(f.n); if(!byName[key]) byName[key] = f; });
+  week.days.forEach(function(day){
+    var want = align[day.d];
+    if(!want || day.d < t0) return;
+    catsFor(kid).forEach(function(c){
+      if(day.slots[c.k] || !want[c.k]) return;
+      var f = byName[c.k+'|'+want[c.k]];
+      if(f && !violation(kid, f) && !eatStats(kid, f.id).resting) day.slots[c.k] = f.id;
+    });
+  });
+}
+/* How many compartments could not match the lead lunchbox, so the app never
+   claims a week is aligned when a kid's rules pulled it apart. */
+function offMap(kid, align){
+  if(!kid.week) return 0;
+  var n = 0, t0 = iso(today());
+  kid.week.days.forEach(function(day){
+    var want = align[day.d];
+    if(!want || day.d < t0) return;              /* a day already gone was never up for matching */
+    catsFor(kid).forEach(function(c){
+      if(!want[c.k]) return;
+      var f = foodById(kid, day.slots[c.k]);
+      if(!f || normKey(f.n) !== want[c.k]) n++;
+    });
+  });
+  return n;
+}
+function alignOn(){ return !(S.align && S.align.on === false) && kids().length > 1; }
+/* One draw for the whole household. The fullest food list leads, because it
+   gives the others the most to match, and every other lunchbox starts from the
+   same foods. Per-lunchbox Shuffle and a single swap stay per-lunchbox: once a
+   parent has changed one box on purpose, the others are not dragged along. */
+function planAll(){
+  var short = {}, ready = kids().filter(function(k){ return foodsOf(k).length; });
+  var lead = (alignOn() && ready.length > 1) ? ready.slice().sort(function(a, b){
+    return foodsOf(b).length - foodsOf(a).length || ready.indexOf(a) - ready.indexOf(b);
+  })[0] : null;
+  var order = lead ? [lead].concat(ready.filter(function(k){ return k !== lead; })) : ready;
+  var map = null, swaps = 0;
+  prunePantry();
+  order.forEach(function(k){
+    planWeek(k, k === lead ? null : map).forEach(function(c){ short[c] = 1; });
+    if(k === lead) map = alignMap(k);
+    else if(map) swaps += offMap(k, map);
+  });
+  return {short:Object.keys(short), boxes:ready.length, aligned:!!lead, swaps:swaps};
 }
 /* Leave resting foods out whenever the list can afford it — the same rule the
    weekly draw applies, so a single re-draw or the kid's options never bring
@@ -2507,6 +2580,13 @@ function viewSetup(){
   var me = deviceMember();
   var h = '<div class="stack"><div><p class="view-sub">Account</p><h2 class="view-title">'+(signedIn() ? 'Your household' : 'This phone')+'</h2></div>';
   h += accountCard();
+  if(kids().length > 1){
+    h += '<div><div class="sect-head"><h3>All the lunchboxes</h3></div><div class="card">'
+      +  '<div class="switch"><div><div class="t">Match the boxes</div>'
+      +  '<div class="d">Everyone gets the same lunch where their own rules allow it.</div></div>'
+      +  '<button class="sw" data-act="align" aria-pressed="'+!(S.align && S.align.on === false)+'" aria-label="Match the boxes"></button>'
+      +  '</div></div></div>';
+  }
   h += '<div><div class="sect-head"><h3>This phone</h3></div><div class="card stack" style="gap:12px">'
     +  '<div class="field"><label for="memberName">Your name</label>'
     +  '<input type="text" id="memberName" value="'+esc(me?me.name:'')+'" placeholder="Who packed" maxlength="60"></div></div></div>';
@@ -3043,14 +3123,25 @@ document.addEventListener('click', function(ev){
   }
 
   /* planning */
+  if(act==='align'){
+    var on = !(S.align && S.align.on === false);
+    S.align = {on: !on, updatedAt: now()};
+    save(); render();
+    toast(S.align.on ? 'Lunchboxes will match where the rules allow' : 'Each lunchbox is drawn on its own');
+    return;
+  }
   if(act==='plan-kid'){
+    prunePantry();
     var short = planWeek(kid); render();
     toast(short.length ? 'No '+short.join(' or ').toLowerCase()+' available — check Foods' : 'Week drawn');
     return;
   }
   if(act==='plan-all'){
-    var short2 = planAll(); render();
-    toast(short2.length ? 'No '+short2.join(' or ').toLowerCase()+' available — check Foods' : 'Weeks drawn');
+    var r2 = planAll(); render();
+    toast(r2.short.length ? 'No '+r2.short.join(' or ').toLowerCase()+' available — check Foods'
+      : !r2.aligned ? (r2.boxes > 1 ? 'Weeks drawn' : 'Week drawn')
+      : r2.swaps ? 'Weeks drawn \u2014 '+r2.boxes+' boxes matched, '+r2.swaps+(r2.swaps===1 ? ' swap' : ' swaps')
+      : 'Weeks drawn \u2014 all '+r2.boxes+' boxes match');
     return;
   }
   if(act==='shuffle-day'){
