@@ -32,7 +32,12 @@ if (await page.$('[data-act="ob-later"]')) { await page.click('[data-act="ob-lat
 
 /* day 1: the week, planned */
 await page.click('[data-act="tab"][data-tab="week"]'); await wait(400);
-await shot('day1', 560);
+/* the draw varies run to run, so cut just below the first day's card rather than at a fixed height */
+const day1H = await page.evaluate(() => {
+  const c = document.querySelector('.daycard');
+  return c ? Math.ceil(c.getBoundingClientRect().bottom + window.scrollY + 14) : 560;
+});
+await shot('day1', day1H);
 
 /* day 3: the kid's pick */
 await page.click('[data-act="box-settings"]'); await wait(400);

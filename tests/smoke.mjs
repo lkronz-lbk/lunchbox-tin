@@ -866,12 +866,28 @@ try {
   /* ------------------------------------------- planning the week after */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
   check('the week header offers Next beside the title, one labelled button',
-    (await page.$$eval('[data-act="week-ahead"]', a => a.length)) === 1 && /Next/.test(await page.textContent('[data-act="week-ahead"]')));
-  const thisWeekTitle = await page.$eval('.view-title', e => e.textContent.replace(/[‹›]/g, '').trim());
+    (await page.$$eval('[data-act="week-ahead"]', a => a.length)) === 1 && /^Next \u203a$/.test((await page.textContent('[data-act="week-ahead"]')).trim()));
+  check('and the date, Next and Shuffle all share one line on a phone', await page.evaluate(() => {
+    const mid = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
+    const t = document.querySelector('.view-title'), n = document.querySelector('[data-act="week-ahead"]'), p = document.querySelector('[data-act="plan-kid"]');
+    return !!(t && n && p) && Math.abs(mid(t) - mid(n)) < 12 && Math.abs(mid(n) - mid(p)) < 12
+      && n.getBoundingClientRect().left > t.getBoundingClientRect().left
+      && p.getBoundingClientRect().left > n.getBoundingClientRect().left;
+  }));
+  check('every control in the week header is a 44px target',
+    await page.$$eval('.titlerow .btn', a => a.every(b => b.getBoundingClientRect().height >= 44)));
+  check('the week draw and a day\'s draw are named as a pair, the day\'s the smaller',
+    /^Shuffle all$/.test((await page.textContent('[data-act="plan-kid"]')).trim())
+    && /^Shuffle day$/.test((await page.textContent('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0')).trim())
+    && await page.evaluate(() => {
+      const a = document.querySelector('[data-act="plan-kid"]'), d = document.querySelector('.daycard:not(.past) [data-act="shuffle-day"]');
+      return d.getBoundingClientRect().width < a.getBoundingClientRect().width && d.getBoundingClientRect().height >= 44;
+    }));
+  const thisWeekTitle = await page.$eval('.view-title', e => e.textContent.trim());
   await page.click('[data-act="week-ahead"][data-v="1"]'); await page.waitForTimeout(300);
-  const nextTitle = await page.$eval('.view-title', e => e.textContent.replace(/[‹›]/g, '').trim());
+  const nextTitle = await page.$eval('.view-title', e => e.textContent.trim());
   check('the arrow shows the week after, unplanned, with a button to plan it',
-    nextTitle !== thisWeekTitle && /^Week of /.test(nextTitle) && /Plan it/.test(await page.textContent('#view')) && /Nothing planned for next week yet/.test(await page.textContent('#view')) && /This/.test(await page.textContent('[data-act="week-ahead"]')), {thisWeekTitle, nextTitle});
+    nextTitle !== thisWeekTitle && /^Week of /.test(nextTitle) && /Plan it/.test(await page.textContent('#view')) && /Nothing planned for next week yet/.test(await page.textContent('#view')) && /^\u2039 This$/.test((await page.textContent('[data-act="week-ahead"]')).trim()), {thisWeekTitle, nextTitle});
   const curBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week)));
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300); await goShuffle(page);
   const aheadPlan = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => ({days: k.next ? k.next.days.length : 0, start: k.next && k.next.start, packDays: k.settings.days.length, weekStart: k.week.start})));
@@ -882,7 +898,7 @@ try {
   await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   check('Shop adds a Next week section once it is planned', /Next week/.test(await page.textContent('#view')));
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
-  check('and coming back to Week lands on this week', /Next/.test(await page.textContent('[data-act="week-ahead"]')));
+  check('and coming back to Week lands on this week', /^Next \u203a$/.test((await page.textContent('[data-act="week-ahead"]')).trim()));
   /* when this week has gone, the week after becomes this week */
   const rolled = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
