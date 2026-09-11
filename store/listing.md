@@ -51,13 +51,13 @@ the enrolment, so settle it before launch.
 
 ### Promotional text (170; changes without a new build)
 
-- [ ] Pasted
+- [x] Pasted
 
 > A week of packed school lunches in about a minute, with no food list to build first. Always free to plan; everything else switched on for your first three weeks.
 
 ### Description (4000)
 
-- [ ] Pasted
+- [x] Pasted
 
 > Our daughter started kindergarten and the lunch packing nearly broke me. I wanted it balanced. I wanted it healthy. I also wanted her to eat it, in the twenty minutes she gets to sit down. Most nights I was standing at the counter with the fridge open, out of ideas.
 >
@@ -97,16 +97,16 @@ the enrolment, so settle it before launch.
 
 ### Keywords (100, comma-separated, no spaces after the commas)
 
-- [ ] Pasted
+- [x] Pasted
 
 > lunchbox,bento,packed,meal,planner,kids,picky,eater,snack,grocery,shopping,list,allergy,prep,ideas
 
 ### URLs and copyright
 
-- [ ] Support URL: `https://lunchsorted.app/help.html`. A reviewer following it should land
+- [x] Support URL: `https://lunchsorted.app/help.html`. A reviewer following it should land
       on answers, not the sales page.
-- [ ] Marketing URL: `https://lunchsorted.app/`
-- [ ] Copyright: `2026 Lila Bloom Enterprises`. This one sits lower down the version page
+- [x] Marketing URL: `https://lunchsorted.app/`
+- [x] Copyright: `2026 Lila Bloom Enterprises`. This one sits lower down the version page
       under General Information, beside the version number, not with the URLs.
 
 ### Screenshots (6.9-inch, in this order)
@@ -133,7 +133,7 @@ video for version 1.
 
 ## App Privacy (the questionnaire)
 
-- [ ] Answered and published
+- [x] Answered and published
 
 Answer **Yes, we collect data from this app**, then:
 
@@ -274,7 +274,10 @@ The one worth a look:
 - [ ] Privacy policy URL loads and matches the App Privacy answers above
 - [ ] Build attached to the version. Export compliance asks nothing: the build carries
       `ITSAppUsesNonExemptEncryption = NO`
-- [ ] Version 1.0, build 1; the workflow uses its run number, so every upload is newer
+- [ ] Version **1.0** in App Store Connect, matching `MARKETING_VERSION` in the Xcode
+      project. Both build routes read it from there. The build number is the workflow run
+      number, or `CURRENT_PROJECT_VERSION` when you archive in Xcode; it only has to be
+      unique within a version.
 - [ ] No risky deploy planned during review. The reviewer sees whatever is live on
       lunchsorted.app at the moment they look
 

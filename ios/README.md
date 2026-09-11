@@ -70,7 +70,10 @@ by `cap sync` and not committed.
 no certificate file and no provisioning profile: Xcode's cloud-managed signing makes
 and keeps those against an App Store Connect API key. Run it from GitHub → Actions →
 TestFlight → Run workflow, or push a tag such as `ios-v1.0.1`. The build number is the
-run number; the version is `package.json`'s.
+run number; the version is `MARKETING_VERSION` from the Xcode project, so a build from
+here and a build archived in Xcode stamp themselves identically. Build numbers only have
+to be unique within a version, so if you have already uploaded build 1 of the current
+version by hand, bump the version before the first run here.
 
 It needs four repository secrets (GitHub → Settings → Secrets and variables →
 Actions → New repository secret). Never put any of them in the repository, a chat,
