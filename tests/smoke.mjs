@@ -13,6 +13,9 @@ import { readPolicies } from '../scripts/csp.mjs';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 /* The test server enforces the same Content-Security-Policy Netlify will, so a
    policy that would break the app breaks the suite instead of the site. */
+/* the walk-through must have a card for every step this build claims, no more */
+const STEP_COUNT = (fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'app', 'index.html'), 'utf8')
+  .match(/steps:\[([\s\S]*?)\n  \]\};/) || [,''])[1].split('\n').filter(l => l.trim().startsWith('[')).length;
 const POLICIES = readPolicies(fs.readFileSync(path.join(ROOT, '..', 'netlify.toml'), 'utf8'));
 
 /* The API runs in-process against an in-memory Postgres, through the same
@@ -385,7 +388,7 @@ try {
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
     await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
-    check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .switch', a => a.length)) >= 5);
+    check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .switch', a => a.length)) === STEP_COUNT);
     await page.click('[data-act="whats-new-ok"]'); await page.waitForTimeout(300);
     check('Got it dismisses the note for good', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
     await page.reload(); await page.waitForTimeout(600);
@@ -2146,6 +2149,20 @@ try {
   await site.waitForTimeout(250);
   warn('the privacy page has a real contact address, not the placeholder',
     !(await site.content()).includes('hello@example.com'));
+  /* the sign-in link only opens the app if this file parses, carries the team, and claims
+     nothing but the verify route; all three fail silently in the wild */
+  {
+    const aasa = JSON.parse(fs.readFileSync(path.join(ROOT, '..', 'public', '.well-known', 'apple-app-site-association'), 'utf8'));
+    const det = aasa.applinks.details[0], comps = JSON.stringify(det.components);
+    const toml = fs.readFileSync(path.join(ROOT, '..', 'netlify.toml'), 'utf8');
+    check('the apple-app-site-association claims the sign-in route and nothing else',
+      /^[A-Z0-9]{10}\.app\.lunchsorted$/.test(det.appIDs[0]) && det.components.length === 1
+      && det.components[0]['/'] === '/api/auth/verify'
+      && !/\/app|back\.html/.test(comps),
+      comps);
+    check('and Netlify serves it as JSON, which iOS requires of an extensionless file',
+      /for = "\/\.well-known\/apple-app-site-association"[\s\S]{0,400}?Content-Type = "application\/json"/.test(toml));
+  }
   check('nothing renders as stray code text at the foot of the app', !/\}\);\s*\}\)\(\);/.test(await page.evaluate(() => document.body.innerText)));
   check('no javascript errors anywhere', errors.length === 0 && siteErrors.length === 0,
     errors.concat(siteErrors));

@@ -36,6 +36,15 @@
     Cache-Control = "no-store"
 
 [[headers]]
+  for = "/.well-known/apple-app-site-association"
+  # Served without an extension, so Netlify needs telling what it is. Only the
+  # sign-in link is claimed: claiming /app/* would pull every join and Stripe
+  # return out of Safari on a phone with the app installed.
+  [headers.values]
+    Content-Type = "application/json"
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
   for = "/icons/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
@@ -63,7 +72,7 @@
 [[headers]]
   for = "/app/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-he6aXNwJHBAtLN4SzsTGMvHWNyquhnMZrW2CHNWOIpg=' 'sha256-/YTMU6KCTeD4SK7ClG2FVnOsisVqcrfjcnrlhSDeuyk=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-he6aXNwJHBAtLN4SzsTGMvHWNyquhnMZrW2CHNWOIpg=' 'sha256-De/D+Q26hfj9Q2GTbzybPvPEaMgggVD0MKcZHG9gGnQ=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 [[headers]]
   for = "/"

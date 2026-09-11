@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lunch Sorted">
 <style>
 :root{color-scheme:light dark}
@@ -26,6 +26,10 @@ img{max-width:100%}
 <link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
 :root{
+  /* how much room the phone keeps for the clock and the home indicator. Safari and a
+     home-screen web app report it here; the iPhone shell runs full-bleed, where the
+     web view reports nothing, so it sets these two on <html> from UIKit instead. */
+  --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
   --ground:#E9EEE6; --surface:#FBFCF9; --surface-2:#F1F5EE; --sunk:#DFE7DB;
   --ink:#16241E; --ink-2:#4A5C53; --ink-3:#6E7F75;
   --line:#CFDACB; --line-strong:#1E3329;
@@ -65,11 +69,19 @@ img{max-width:100%}
 body{background:var(--ground);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
   -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 button,input,select,textarea{font:inherit;color:inherit}
+/* Under 16px iOS zooms the page when a field takes focus and never zooms back,
+   which leaves every screen slightly enlarged and scrolling sideways. */
+input,select,textarea{font-size:16px}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-.app{max-width:600px;margin:0 auto;padding:18px 16px calc(96px + env(safe-area-inset-bottom))}
+.app{max-width:600px;margin:0 auto;
+  padding:calc(18px + var(--sat)) 16px calc(96px + var(--sab))}
+/* The web view runs under the status bar, so the clock needs its own strip of ground to
+   sit on; without it a scrolled line of text runs straight through the time. */
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--sat);
+  background:var(--ground);z-index:29;pointer-events:none}
 .topbar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px}
 .brand{font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:-0.01em;white-space:nowrap}
 .brand span{color:var(--c-side)}
@@ -177,7 +189,7 @@ a.btn{text-decoration:none}
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
 input[type=text],input[type=email],input[type=time],select,textarea{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-md);
-  padding:11px 12px;min-height:44px;width:100%;font-size:15px}
+  padding:11px 12px;min-height:44px;width:100%}   /* the 16px above stands: under it iOS zooms */
 textarea{min-height:70px;resize:vertical}
 input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none}
 .btn:disabled{opacity:.55;cursor:default}
@@ -212,8 +224,8 @@ input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:foc
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--ground);background:color-mix(in srgb,var(--ground) 92%,transparent);
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;
-  padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:20}
-nav.tabs button{flex:1;border:0;background:none;min-height:52px;display:flex;flex-direction:column;align-items:center;
+  padding:4px 4px calc(4px + var(--sab));z-index:20}
+nav.tabs button{flex:1;border:0;background:none;min-height:48px;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:3px;color:var(--ink-3);border-radius:var(--r-md)}
 nav.tabs button span{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
 nav.tabs button[aria-current="true"]{color:var(--accent)}
@@ -230,10 +242,10 @@ nav.tabs svg{width:21px;height:21px}
 .sheet header{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;
   border-bottom:1px solid var(--line)}
 .sheet header h3{font-family:var(--f-display);font-size:17px;font-weight:700;margin:0}
-.sheet .body{overflow-y:auto;padding:14px 16px calc(20px + env(safe-area-inset-bottom));
+.sheet .body{overflow-y:auto;padding:14px 16px calc(20px + var(--sab));
   display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
 .grab{width:38px;height:4px;border-radius:999px;background:var(--line);margin:8px auto 0}
-.toast{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translate(-50%,14px);
+.toast{position:fixed;left:50%;bottom:calc(78px + var(--sab));transform:translate(-50%,14px);
   background:var(--toast-bg);color:var(--toast-fg);padding:10px 16px;border-radius:16px;font-size:13.5px;z-index:40;max-width:min(92vw,420px);text-align:center;
   opacity:0;pointer-events:none;transition:all .2s}
 .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -245,7 +257,8 @@ nav.tabs svg{width:21px;height:21px}
 
 /* --- first run --- */
 .ob{min-height:100svh;display:flex;flex-direction:column;justify-content:center;gap:22px;
-  max-width:600px;margin:0 auto;padding:34px 20px calc(34px + env(safe-area-inset-bottom))}
+  max-width:600px;margin:0 auto;
+  padding:calc(34px + var(--sat)) 20px calc(34px + var(--sab))}
 .ob h1{font-family:var(--f-display);font-size:clamp(30px,8.5vw,40px);font-weight:700;letter-spacing:-0.025em;
   line-height:1.08;margin:0;text-wrap:balance}
 .ob .lede{font-size:16.5px;color:var(--ink-2);margin:8px 0 0;max-width:38ch}
@@ -271,9 +284,9 @@ nav.tabs svg{width:21px;height:21px}
 .faq[open] summary::after{content:'\2212'}
 .more summary{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);cursor:pointer;min-height:44px;display:flex;align-items:center}
 .kidmode .top{display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:calc(12px + env(safe-area-inset-top)) 16px 6px}
+  padding:calc(12px + var(--sat)) 16px 6px}
 .kidmode .body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;
-  padding:8px 20px calc(28px + env(safe-area-inset-bottom));max-width:600px;width:100%;margin:0 auto}
+  padding:8px 20px calc(28px + var(--sab));max-width:600px;width:100%;margin:0 auto}
 .kidmode .catlab{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase}
 .kidmode h1{font-family:var(--f-display);font-size:clamp(28px,8vw,38px);font-weight:700;letter-spacing:-0.025em;
   line-height:1.08;margin:0;text-wrap:balance}
@@ -359,6 +372,7 @@ nav.tabs svg{width:21px;height:21px}
 .item.on .radio{border-color:var(--accent)}
 .item.on .radio::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--accent)}
 .codebox{font-family:var(--f-mono);font-size:11px;line-height:1.45;min-height:110px;word-break:break-all}
+textarea.codebox:not([readonly]){font-size:16px}   /* a parent types into this one; see the rule above */
 .kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:7px 0;border-top:1px solid var(--line)}
 .kv:first-child{border-top:0}
 .kv span:last-child{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
@@ -1142,10 +1156,10 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v12';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v13';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v12', text:'New: matched boxes, tabs across the lunchboxes, the week after, and a three o\u2019clock ask.',
+var WHATS_NEW = {build:'lunchsorted-v13', text:'New: matched boxes, tabs across the lunchboxes, the week after, and a three o\u2019clock ask.',
   steps:[
     ['Boxes that match', 'With more than one lunchbox, Shuffle all draws them from the same foods where each box\u2019s rules allow. It asks whose boxes first, and every shuffle can be undone. Switch it off under Account.'],
     ['Tabs, not a menu', 'On Pack, Week and Foods the lunchboxes are tabs along the top. One tap each.'],
@@ -3231,6 +3245,7 @@ function helpSheet(){
     ['Can I plan the week after?', 'Yes. On Week, tap Next week; Plan next week draws it. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
+    ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.']
   ];
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
