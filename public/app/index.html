@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lunch Sorted">
 <style>
 :root{color-scheme:light dark}
@@ -75,15 +75,6 @@ button{cursor:pointer}
    sit on; without it a scrolled line of text runs straight through the time. */
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);
   background:var(--ground);z-index:29;pointer-events:none}
-/* Saved to the home screen, iOS reports that inset as zero but still draws the page
-   under the clock, so on a phone tall enough to have a notch we floor it ourselves.
-   max() keeps the native shell, where the inset is real, exactly as it was. */
-@media (display-mode:standalone) and (min-height:800px){
-  .app{padding-top:max(calc(18px + env(safe-area-inset-top)),62px)}
-  .ob{padding-top:max(calc(34px + env(safe-area-inset-top)),74px)}
-  .kidmode .top{padding-top:max(calc(12px + env(safe-area-inset-top)),56px)}
-  body::before{height:max(env(safe-area-inset-top),50px)}
-}
 .topbar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px}
 .brand{font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:-0.01em;white-space:nowrap}
 .brand span{color:var(--c-side)}
