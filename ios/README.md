@@ -88,25 +88,47 @@ and creates the distribution certificate; if it fails on signing, the key's role
 the first thing to check. Each run leaves its logs as a workflow artifact and deletes
 the key from the runner.
 
-## Universal links (after the Team ID exists)
+## Universal links
 
-So the sign-in link in the email opens the app rather than Safari:
+So the sign-in link in the email opens the app rather than Safari. **All of this is
+already in the repository** — the pieces are listed here because when a tapped link
+lands in Safari anyway, one of them is what to check.
 
-1. Xcode → Signing & Capabilities → + Capability → Associated Domains →
-   `applinks:lunchsorted.app`.
-2. Serve `public/.well-known/apple-app-site-association` (no extension) as
-   `application/json`:
+1. `App.entitlements` carries `com.apple.developer.associated-domains` =
+   `applinks:lunchsorted.app`, and both build configurations point at that file.
+2. `public/.well-known/apple-app-site-association` (no extension) is served as
+   `application/json` by a `[[headers]]` block in `netlify.toml`:
 
    ```json
    {"applinks":{"details":[{"appIDs":["TNF9FG2U7G.app.lunchsorted"],"components":[{"/":"/api/auth/verify","?":{"t":"?*"}}]}]}}
    ```
 
-   plus a `[[headers]]` block in `netlify.toml` for that
-   path with `Content-Type = "application/json"`. Only the sign-in link: claiming
-   `/app/*` too would pull every `/app/?join=`, `?upgrade=1` and Stripe return on a
-   phone with the app installed out of Safari and the home-screen web app.
+   Only the sign-in link is claimed: claiming `/app/*` too would pull every
+   `/app/?join=`, `?upgrade=1` and Stripe return on a phone with the app installed
+   out of Safari and the home-screen web app. `tests/smoke.mjs` asserts both halves.
 3. Nothing to change in the app: `appUrlOpen` already loads any
    `https://lunchsorted.app/...` URL it is handed.
+
+**When a link opens Safari instead of the app**, in the order worth checking:
+
+- Is the association file actually live? It was written long before it first reached
+  production, and until it did, every tapped link went to Safari.
+
+  ```
+  curl -s -D- https://lunchsorted.app/.well-known/apple-app-site-association
+  ```
+
+  Expect `200` and `content-type: application/json`. A `404` is the whole answer.
+- Was the file live *before* the build on the phone was installed? iOS fetches the
+  association at install and update time, not at tap time. A phone that installed a
+  build while the file was missing keeps failing until the app is reinstalled or
+  replaced by a newer build.
+- Does the App ID have the Associated Domains capability in the developer portal?
+  `testflight.yml` passes `-allowProvisioningUpdates`, which registers it only if the
+  App Store Connect API key holds the **Admin** role.
+- Is the link still a raw `lunchsorted.app` URL? If Resend click tracking is ever
+  switched on, the link becomes a tracker URL on another host and the claim stops
+  matching. `api-auth.js` builds it raw today.
 
 The claim names the production host only, so a sign-in link from a branch deploy
 stays in Safari. That is expected; test universal links against production.
