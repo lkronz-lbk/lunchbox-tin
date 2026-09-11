@@ -304,6 +304,11 @@ text to `''` for a release with nothing to say.
   per-day tally, for children with diabetes, allergies beyond avoidance, or a prescribed
   diet. Needs nutrition data per food, portion sizes, and a clear "not medical advice"
   line.
+- **What the morning review is called.** The app and the emails both call it the morning
+  review, but it asks once the box is home, not the next morning, and the tester emails now
+  say "after your kid gets home". Settle on one name and change it everywhere at once: the
+  paywall line and the help sheet in `public/app/index.html`, the welcome and both trial
+  emails in `netlify/lib/mail.js`, the site, and the store listing.
 
 ## Accounts and sync
 
