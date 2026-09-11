@@ -18,6 +18,13 @@ What the shell adds, and where:
   never touch StoreKit.
 - **Icon and launch screen.** `App/App/Assets.xcassets`: the 1024 icon from
   `public/icons`, and a light and a dark launch image on the app's ground colours.
+- **The room the clock needs.** `contentInset: never` keeps the web view full height, which
+  is what lets the page paint its own strip behind the status bar in its own colours. WebKit
+  then reports `env(safe-area-inset-*)` as zero, so `App/SafeAreaViewController.swift` sets
+  `--sat` and `--sab` on `<html>` from UIKit instead. The stylesheet defines those two from
+  `env()` for Safari and for a home-screen web app, so one set of rules covers all three.
+  The storyboard points at that subclass; changing it back to `CAPBridgeViewController`
+  would put the top bar under the clock again.
 - **Offline.** `WKAppBoundDomains` in `Info.plist` and `limitsNavigationsToAppBoundDomains`
   in the config: that is what lets a remote page register its service worker in a
   WKWebView, so the app opens without a network once it has loaded once. Verify on a

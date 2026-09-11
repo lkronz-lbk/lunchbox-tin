@@ -14,8 +14,6 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lunch Sorted">
-<script>/* the shell reserves its own bottom; the stylesheet needs to know before it paints */
-if(/LunchSortedApp/.test(navigator.userAgent))document.documentElement.className+=' shell';</script>
 <style>
 :root{color-scheme:light dark}
 html{-webkit-text-size-adjust:100%}
@@ -28,6 +26,9 @@ img{max-width:100%}
 <link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
 :root{
+  /* how much room the phone keeps for the clock and the home indicator. Safari and a
+     home-screen web app report it here; the iPhone shell runs full-bleed, where the
+     web view reports nothing, so it sets these two on <html> from UIKit instead. */
   --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
   --ground:#E9EEE6; --surface:#FBFCF9; --surface-2:#F1F5EE; --sunk:#DFE7DB;
   --ink:#16241E; --ink-2:#4A5C53; --ink-3:#6E7F75;
@@ -65,9 +66,6 @@ img{max-width:100%}
   --toast-bg:#E6EEE7; --toast-fg:#0E1815;
 }
 *{box-sizing:border-box}
-/* Inside the iPhone shell the web view already stops above the home indicator,
-   so adding the inset again would leave a band of empty ground under the tabs. */
-html.shell{--sab:0px}
 body{background:var(--ground);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
   -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 button,input,select,textarea{font:inherit;color:inherit}
