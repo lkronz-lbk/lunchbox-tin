@@ -18,6 +18,13 @@ class SafeAreaViewController: CAPBridgeViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        /* the first painted frame has to know already, or the top bar lands under the clock
+           and drops a frame later; the observers below keep it right after that */
+        if let controller = webView?.configuration.userContentController {
+            let seed = WKUserScript(source: insetScript(view.safeAreaInsets),
+                                    injectionTime: .atDocumentStart, forMainFrameOnly: true)
+            controller.addUserScript(seed)
+        }
         progress = webView?.observe(\.estimatedProgress, options: [.new]) { [weak self] _, _ in
             self?.publishInsets()
         }
@@ -33,14 +40,26 @@ class SafeAreaViewController: CAPBridgeViewController {
         publishInsets()
     }
 
+    private var last: (CGFloat, CGFloat)?
+
+    private func insetScript(_ insets: UIEdgeInsets) -> String {
+        /* clamped and fixed to one decimal, so the only thing that can reach the page is a
+           plain number: nothing here can end the quoted value it sits in */
+        let top = String(format: "%.1f", min(max(insets.top, 0), 200))
+        let bottom = String(format: "%.1f", min(max(insets.bottom, 0), 200))
+        return "(function(){var d=document.documentElement;if(!d)return;"
+            + "d.style.setProperty('--sat','\(top)px');"
+            + "d.style.setProperty('--sab','\(bottom)px');})();"
+    }
+
     private func publishInsets() {
         guard let webView = webView else { return }
         let insets = view.safeAreaInsets
-        let js = """
-        (function(){var d=document.documentElement;if(!d)return;\
-        d.style.setProperty('--sat','\(insets.top)px');\
-        d.style.setProperty('--sab','\(insets.bottom)px');})();
-        """
-        webView.evaluateJavaScript(js, completionHandler: nil)
+        /* layout and load progress both fire many times a page; only talk to the web view
+           when the numbers actually moved, or after a load threw the inline values away */
+        let pair = (insets.top, insets.bottom)
+        if let last = last, last == pair, !webView.isLoading { return }
+        last = pair
+        webView.evaluateJavaScript(insetScript(insets), completionHandler: nil)
     }
 }

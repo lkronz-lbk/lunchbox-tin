@@ -83,8 +83,16 @@ export default async function handler(req, context) {
       const email = t && await peekMagicLink(t);
       if (!email) return page('Link expired', `<h1>That link has expired.</h1><p>Sign-in links work once and last fifteen minutes. Ask for a new one from the app.</p><p><a href="/app/">Back to Lunch Sorted</a></p>`, 410);
       const nonce = verifyNonce();
-      return page('Sign in', `<h1>Sign in as ${esc(email)}?</h1><p>One tap and you are signed in on this device. Building the week on your phone? Open the app there and type the code from the same email instead.</p>
-<form method="post" action="/api/auth/verify"><input type="hidden" name="t" value="${esc(t)}"><input type="hidden" name="n" value="${esc(nonce)}">${b ? '<input type="hidden" name="b" value="1">' : ''}<button type="submit">Continue to Lunch Sorted</button></form>`, 200, verifyCookie(nonce));
+      /* the link opens inside the iPhone app now, where a parent is primed to tap. If this
+         phone is already signed in as someone else, continuing would hand that household's
+         week to the other account on the next sync, so say whose it is and what is lost */
+      const already = await currentUser(req).catch(() => null);
+      const swap = already && already.email !== email;
+      const head = swap
+        ? `<h1>You are signed in as ${esc(already.email)}.</h1><p>This link signs this phone out and signs it in as <b>${esc(email)}</b>. The week on this phone would then belong to that account. If you did not ask for this link, close this page instead.</p>`
+        : `<h1>Sign in as ${esc(email)}?</h1><p>One tap and you are signed in on this device. Building the week on your phone? Open the app there and type the code from the same email instead.</p>`;
+      return page('Sign in', `${head}
+<form method="post" action="/api/auth/verify"><input type="hidden" name="t" value="${esc(t)}"><input type="hidden" name="n" value="${esc(nonce)}">${b ? '<input type="hidden" name="b" value="1">' : ''}<button type="submit">${swap ? 'Sign out and sign in as ' + esc(email) : 'Continue to Lunch Sorted'}</button></form>`, 200, verifyCookie(nonce));
     }
 
     if (req.method === 'POST' && action === 'verify') {

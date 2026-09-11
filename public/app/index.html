@@ -189,7 +189,7 @@ a.btn{text-decoration:none}
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
 input[type=text],input[type=email],input[type=time],select,textarea{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-md);
-  padding:11px 12px;min-height:44px;width:100%;font-size:15px}
+  padding:11px 12px;min-height:44px;width:100%}   /* the 16px above stands: under it iOS zooms */
 textarea{min-height:70px;resize:vertical}
 input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none}
 .btn:disabled{opacity:.55;cursor:default}
@@ -224,7 +224,7 @@ input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:foc
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--ground);background:color-mix(in srgb,var(--ground) 92%,transparent);
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;
-  padding:4px 4px calc(1px + var(--sab));z-index:20}
+  padding:4px 4px calc(4px + var(--sab));z-index:20}
 nav.tabs button{flex:1;border:0;background:none;min-height:48px;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:3px;color:var(--ink-3);border-radius:var(--r-md)}
 nav.tabs button span{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
@@ -372,6 +372,7 @@ nav.tabs svg{width:21px;height:21px}
 .item.on .radio{border-color:var(--accent)}
 .item.on .radio::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--accent)}
 .codebox{font-family:var(--f-mono);font-size:11px;line-height:1.45;min-height:110px;word-break:break-all}
+textarea.codebox{font-size:16px}   /* a paste target a parent types into; see the rule above */
 .kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:7px 0;border-top:1px solid var(--line)}
 .kv:first-child{border-top:0}
 .kv span:last-child{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
@@ -3244,7 +3245,7 @@ function helpSheet(){
     ['Can I plan the week after?', 'Yes. On Week, tap Next week; Plan next week draws it. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
-    ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code here. Either works once, for fifteen minutes.'],
+    ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.']
   ];
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
