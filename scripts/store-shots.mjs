@@ -28,6 +28,17 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 /* iPhone 16 Pro Max points; Apple wants 1320×2868 for the 6.9" slot, which is 440×956 at 3× */
 const ctx = await browser.newContext({ viewport:{width:440,height:956}, deviceScaleFactor:3, isMobile:true, hasTouch:true, colorScheme:'light',
   userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LunchSortedApp/1' });
+/* Run on a Thursday and the week shot shows two lunches. The app reads the clock in a
+   dozen places; pin it to a Monday once, the way scripts/shots.mjs does. */
+await ctx.addInitScript(() => {
+  const Real = Date;
+  const offset = new Real('2026-09-07T13:00:00Z').getTime() - Real.now();
+  function Fake(...a){ return a.length ? new Real(...a) : new Real(Real.now() + offset); }
+  Fake.prototype = Real.prototype;
+  Fake.now = () => Real.now() + offset;
+  Fake.parse = Real.parse; Fake.UTC = Real.UTC;
+  window.Date = Fake;
+});
 const page = await ctx.newPage();
 page.on('pageerror', e => console.error('page error:', e.message));
 const wait = ms => page.waitForTimeout(ms);
