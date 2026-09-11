@@ -1703,13 +1703,24 @@ try {
   const deleteWarning = await page.textContent('#view');
   check('deleting says it cannot be undone and names everything that goes', await page.evaluate(() => {
     const t = document.querySelector('#view').textContent;
-    return /not undoable/.test(t) && /no copy afterwards/.test(t) && /Your sign-in/.test(t) && /save a backup file/i.test(t);
+    return /not undoable/.test(t) && /no copy afterwards/.test(t) && /Your sign-in/.test(t) && /Copy your lunches/.test(t);
   }), deleteWarning.replace(/\s+/g, ' ').slice(0, 260));
+  check('and never names a backup button this browser does not have', await page.evaluate(() =>
+    !!document.querySelector('[data-act="save-file"]') === /save a backup file/i.test(document.querySelector('#view').textContent)));
+  check('signed in there is no erase-this-phone button to mistake for it',
+    (await page.$$eval('[data-act="clear-all"]', a => a.length)) === 0 && /nothing to erase from this phone alone/.test(await page.textContent('#view')));
   check('and the button will not fire until DELETE is typed', await page.$eval('[data-act="delete-account"]', b => b.disabled));
-  await page.fill('#deleteConfirm', 'delete me'); await page.waitForTimeout(250);
+  await page.fill('#deleteConfirm', 'delete me'); await page.waitForTimeout(120);
   check('a near miss does not arm it', await page.$eval('[data-act="delete-account"]', b => b.disabled));
-  await page.fill('#deleteConfirm', 'DELETE'); await page.waitForTimeout(300);
+  await page.fill('#deleteConfirm', 'DELETE'); await page.waitForSelector('[data-act="delete-account"]:not([disabled])');
   check('and the word itself does', !(await page.$eval('[data-act="delete-account"]', b => b.disabled)));
+  /* left standing, the word armed the page for the next visit and for the next person */
+  await page.click('[data-act="pane-done"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
+  await openPane(page, 'account'); await page.waitForTimeout(250);
+  check('leaving the page throws the typed word away rather than leaving it armed',
+    (await page.inputValue('#deleteConfirm')) === '' && await page.$eval('[data-act="delete-account"]', b => b.disabled));
+  await page.fill('#deleteConfirm', 'DELETE'); await page.waitForSelector('[data-act="delete-account"]:not([disabled])');
   await page.click('[data-act="delete-account"]'); await until(page, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));   /* the fresh document lands after the save debounce */
   const afterDelete = await page.evaluate(() => fetch('/api/household').then(r => r.status));
   check('deleting the account signs out, removes the household from the server, and starts this phone over',
@@ -1889,13 +1900,12 @@ try {
   check('and the idea bank still adds a food on a lapsed household',
     (await pb.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length)) > foodsBefore, foodsBefore);
   /* the sheet left open across the last night of the trial must refuse at save time */
-  const savedWhileGated = await pb.evaluate(() => {
-    const n = JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length;
-    document.querySelector('[data-act="upgrade"][data-why="food"]');
-    const b = document.createElement('button'); b.setAttribute('data-act','save-own'); document.body.appendChild(b); b.click(); b.remove();
-    return {before:n, after: JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length};
-  });
-  check('and a save that slips through while gated adds nothing', savedWhileGated.before === savedWhileGated.after, savedWhileGated);
+  const countFoods = () => pb.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length);
+  const beforeSave = await countFoods();
+  await pb.evaluate(() => { const b = document.createElement('button'); b.setAttribute('data-act','save-own'); document.body.appendChild(b); b.click(); b.remove(); });
+  await pb.waitForTimeout(500);   /* save() is debounced, so the read has to outlive it */
+  check('and a save that slips through while gated adds nothing, and says why', (await countFoods()) === beforeSave
+    && /own words/i.test(await pb.textContent('#sheetBody')), beforeSave);
   await pb.click('#sheetClose').catch(() => {}); await pb.waitForTimeout(250);
   await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
 
@@ -2208,7 +2218,7 @@ try {
   await openPane(pb, 'account');
   check('the delete warning says the yearly plan stops', /The yearly plan, which stops at once/.test(await pb.textContent('#view')),
     (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 240));
-  await pb.fill('#deleteConfirm', 'DELETE'); await pb.waitForTimeout(300);
+  await pb.fill('#deleteConfirm', 'DELETE'); await pb.waitForSelector('[data-act="delete-account"]:not([disabled])');
   await pb.click('[data-act="delete-account"]');
   await until(pb, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));
   check('deleting the account cancels the subscription at Stripe', stripeCalls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_pat'));

@@ -118,9 +118,11 @@ food list from a 200-item library and produce a planned week immediately. From t
 - **Account** — the fifth tab is a short list of rows, each opening its own page over the
   tab with a Done button that comes back to the row it left. **Account** (or **This phone**
   signed out): who this phone is signed in as, sign out, leave the household, backup and
-  copy-out/paste-in transfer between phones, clear, erase, delete the account.
+  copy-out/paste-in transfer between phones, clear the plans, delete the account, and
+  — only on a phone that has never signed in — erase everything.
   **Household**: the people, your name, and the two invites. **Subscription** (only where
-  Stripe is configured, and never for a caretaker): the plan, what it costs, the date it
+  Stripe is configured, and never for a caretaker): the plan, what it costs while there is
+  something to pay, the date it
   renews or ends, and how to stop it. **Lunchboxes**: the lunchbox settings, the same page
   the gear opens. **Contact support**: the help sheet, the same one the ? opens. Signed out
   the sign-in card stays on the tab itself, because that is the one thing that tab is for
@@ -250,7 +252,7 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
-- **Help** — the ? at the top of every tab opens a sheet: a dozen one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: twelve one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 

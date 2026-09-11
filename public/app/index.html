@@ -179,8 +179,7 @@ a.btn{text-decoration:none}
 .item .nm{display:block;font-size:14.5px;line-height:1.3}
 .item .meta{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.05em}
 .item .go{flex:none;display:inline-flex;align-items:center;color:var(--ink-3)}
-.item.done .nm{text-decoration:line-through;color:var(--ink-3)}
-.item.done .meta{color:var(--ink-3)}
+.item.done .nm{text-decoration:line-through;color:var(--ink-2)}
 .box{width:22px;height:22px;flex:none;border:1.5px solid var(--line-strong);border-radius:6px;
   display:flex;align-items:center;justify-content:center;color:transparent}
 .item.done .box{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
@@ -196,7 +195,8 @@ input[type=text],input[type=email],input[type=time],select,textarea{background:v
   padding:11px 12px;min-height:44px;width:100%}   /* the 16px above stands: under it iOS zooms */
 textarea{min-height:70px;resize:vertical}
 input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none}
-.btn:disabled{opacity:.55;cursor:default}
+.btn:disabled{cursor:default;background:var(--surface-2);border-color:var(--line-strong);color:var(--ink-3);box-shadow:none}
+.btn:disabled svg{opacity:.6}
 .item .nm,.item .meta,.kv span{overflow-wrap:anywhere}
 .toggles{display:flex;flex-wrap:wrap;gap:7px}
 .tg{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:0 13px;min-height:44px;
@@ -884,8 +884,11 @@ var Store = {
       localStorage.setItem(Store.BACKUP_PREFIX+Date.now(), raw); return true;
     }catch(e){ return false; }
   },
+  HAD_KEY:'lunchsorted-account',
+  hadAccount:function(){ try{ return localStorage.getItem(Store.HAD_KEY) === '1'; }catch(e){ return false; } },
+  markAccount:function(on){ try{ if(on) localStorage.setItem(Store.HAD_KEY, '1'); else localStorage.removeItem(Store.HAD_KEY); }catch(e){} },
   forget:function(){
-    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', SEEN_KEY, BETA_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
+    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, Store.HAD_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', SEEN_KEY, BETA_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
 };
@@ -1026,7 +1029,7 @@ function upgradeSheet(why){
         : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
         : why === 'review' ? 'The morning review — what came home, what to rest — is part of the Household plan.'
         : why === 'pantry' ? 'A pantry that remembers what you already have is part of the Household plan.'
-        : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.' : 'Planning and the shopping list are free for good. The Household plan is the rest.')
+        : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.' : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
         : forever ? 'You have the yearly plan. Pay once and it never renews: the year you have paid for runs to its end and is not charged again.'
         : 'The Household plan is everything the free planner is not.')+'</p>';
   if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Your own foods, in your own words, beyond the idea bank</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
@@ -1047,6 +1050,7 @@ function isHelper(){ return !!(Account.me && Account.me.role === 'helper'); }
 function canWrite(){ return signedIn() && !isHelper(); }
 function firstNameFrom(email){ var p = String(email || '').split('@')[0].split(/[._+-]/)[0]; return p ? p.charAt(0).toUpperCase() + p.slice(1) : 'Me'; }
 function applyState(st){
+  Store.markAccount(true);   /* so an offline boot knows this phone belongs to a household */
   Account.user = {id:st.me.userId, email:st.me.email}; Account.me = st.me; Account.members = st.members || [];
   Account.entitlement = st.entitlement || null; Account.version = st.version || 0; Account.household = st.household || null;
   if(betaWaiting()) setTimeout(claimBeta, 0);                       /* signed in with a beta code waiting: switch it on */
@@ -1173,10 +1177,10 @@ var WHATS_NEW = {build:'lunchsorted-v14', text:'New: matched boxes, tabs across 
   steps:[
     ['Boxes that match', 'With more than one lunchbox, Shuffle all draws them from the same foods where each box\u2019s rules allow. It asks whose boxes first, and every shuffle can be undone. Switch it off under Account \u2192 Lunchboxes.'],
     ['Tabs, not a menu', 'On Pack, Week and Foods the lunchboxes are tabs along the top. One tap each.'],
-    ['One food, every box', 'Add a food and it goes into every lunchbox; the button says where. Uncheck a name to leave one out.'],
+    ['One food, every box', 'Add a food and it goes into every lunchbox; the button says where. Tap a name to leave one out.'],
     ['The week after', 'On Week, tap Next week. Plan it, shop for it under Next week, and it becomes this week on its own.'],
     ['Overrule a rule', 'Tap a compartment, then a food a rule keeps out, and it goes in flagged with a \u201c!\u201d.'],
-    ['Ask at three', 'From three o\u2019clock Pack asks how today\u2019s box went; a dot on the Pack tab until you answer. Pack at night? Say so under Account \u2192 Lunchboxes and Pack shows tomorrow\u2019s box from three.']
+    ['Ask at three', 'From three o\u2019clock Pack asks how today\u2019s box went; a dot on the Pack tab until you answer. Pack at night? Say so in the lunchbox settings and Pack shows tomorrow\u2019s box from three.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
@@ -1194,6 +1198,7 @@ var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account
    also by a link from an email and by the return from Stripe, so the render asks
    this too: a row that was never drawn is not a check. */
 /* the one irreversible act in the app asks for the word, not for a second tap */
+function andList(xs){ return xs.length < 3 ? xs.join(' and ') : xs.slice(0,-1).join(', ')+' and '+xs[xs.length-1]; }
 function deleteArmed(){ return String(UI.deleteTyped || '').trim().toUpperCase() === 'DELETE'; }
 function paneOK(pn){
   if(!PANES[pn] || !activeKid()) return false;
@@ -2879,7 +2884,7 @@ function viewBox(){
   /* the page says what it is and offers the way out at the top, like every other
      pane; what holds for every box sits above the tabs, what is one box's own
      below them, so the reach of a switch is visible rather than guessed at */
-  var h = '<div class="stack">' + paneHead('Account', 'Lunchbox settings', 'box-done');
+  var h = '<div class="stack">' + paneHead(UI.tab === 'setup' ? 'Account' : 'Lunchbox', 'Lunchbox settings', 'box-done');
 
   var all = '';
   if(many && !isHelper()){
@@ -3029,25 +3034,34 @@ function paneAccount(){
        so. Signed in there is no such thing: this document is the household's, and wiping
        it reached the other parent's phone while the button talked about this one. The
        honest version of that is deleting the account, below, and there is only one of it. */
-    +  (signedIn() ? '' : '<button class="btn danger sm" data-act="clear-all">'+(UI.armed==='all'?'Tap again to erase':'Erase everything')+'</button>'
+    +  (signedIn() || Store.hadAccount() ? '' : '<button class="btn danger sm" data-act="clear-all">'+(UI.armed==='all'?'Tap again to erase':'Erase everything')+'</button>'
          + (UI.armed==='all' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : ''))
     +  '</div>'
-    +  (signedIn() ? '<p class="hint" style="margin:0">The lunches belong to the household, so there is nothing to erase from this phone alone. Sign out to leave them behind, or delete the account below.</p>' : '')
+    +  (signedIn() || Store.hadAccount() ? '<p class="hint" style="margin:0">The lunches belong to the household, so there is nothing to erase from this phone alone. Sign out to leave them behind, or end the account below.</p>' : '')
     +  '</div>';
-  if(signedIn() && Account.me && Account.me.role === 'owner'){
-    var others = Account.members.filter(function(m){ return m.userId !== Account.me.userId; });
-    h += '<div class="card stack" style="gap:10px"><h3>Delete your account and data</h3>'
-      +  '<p class="hint" style="margin:0">This is not undoable, and there is no copy afterwards. It removes:</p>'
-      +  '<ul class="hint" style="margin:0;padding-left:18px">'
-      +  '<li>Every lunchbox, food, plan, photo and answer, from our servers and from this phone</li>'
+  if(signedIn() && Account.me){
+    /* Everyone who has an account can end it. The server deletes only a household the
+       person owns, so for anyone else this ends their own sign-in and leaves the lunches
+       with the household — which is also the only way they can close the account we
+       opened for them. */
+    var owner = Account.me.role === 'owner';
+    var others = Account.members.filter(function(m){ return m.userId !== Account.me.userId; }).map(memberLabel);
+    h += '<div class="card stack" style="gap:10px;scroll-margin-bottom:320px"><h3>Delete your account and data</h3>'
+      +  '<p class="hint muted" style="margin:0">This is not undoable, and there is no copy afterwards. It removes:</p>'
+      +  '<ul class="hint muted" style="margin:0;padding-left:18px">'
       +  '<li>Your sign-in, and this email address</li>'
-      +  (others.length ? '<li>'+esc(others.map(memberLabel).join(' and '))+(others.length > 1 ? '’ access, and their copy of the lunches' : '’s access, and their copy of the lunches')+'</li>' : '')
-      +  (paid() ? '<li>'+(Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The yearly plan, which stops at once') +'</li>' : '')
+      +  (owner
+          ? '<li>Every lunchbox, food, plan, photo and answer, from our servers and from this phone</li>'
+            + (others.length ? '<li>'+esc(andList(others))+'’s sign-in to this household — whatever is already on their phone stays on it</li>' : '')
+            + (paid() ? '<li>'+(Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The yearly plan, which stops at once')+'</li>' : '')
+          : '<li>Your place in this household, and the lunches from this phone</li>')
       +  '</ul>'
-      +  '<p class="hint muted" style="margin:0">Want to keep a copy? Copy your lunches, or save a backup file, above first.</p>'
+      +  (owner ? '' : '<p class="hint" style="margin:0">The household and its lunches stay'+(others.length ? ' with '+esc(andList(others)) : '')+'. To keep your place and only clear this phone, sign out instead.</p>')
+      +  '<p class="hint" style="margin:0">Want to keep a copy? Copy your lunches'+(Downloads ? ', or save a backup file' : '')+', above first.</p>'
       +  '<div class="field"><label for="deleteConfirm">Type DELETE to confirm</label>'
-      +  '<input type="text" id="deleteConfirm" placeholder="DELETE" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="10" value="'+esc(UI.deleteTyped || '')+'" style="font-family:var(--f-mono);letter-spacing:.08em"></div>'
-      +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn danger sm" data-act="delete-account"'+(deleteArmed() ? '' : ' disabled')+'>Delete my account and data</button></div></div>';
+      +  '<input type="text" id="deleteConfirm" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="10" aria-describedby="deleteHint" value="'+esc(UI.deleteTyped || '')+'" style="font-family:var(--f-mono);letter-spacing:.08em"></div>'
+      +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn danger sm" data-act="delete-account"'+(deleteArmed() ? '' : ' disabled aria-disabled="true"')+'>Delete my account and data</button>'
+      +  (deleteArmed() ? '' : '<span class="hint" id="deleteHint" style="align-self:center">Type DELETE above to switch this on.</span>')+'</div></div>';
   }
   return h;
 }
@@ -3420,9 +3434,11 @@ function helpSheet(){
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
+    ['How do I clear a phone?', 'Signed out, Erase everything on the Account tab. Signed in the lunches are the household\u2019s \u2014 Sign out leaves them behind, and Delete my account and data ends the account itself. Clear the plans keeps your foods.'],
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from. Foods in your own words, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
     ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words is part of the Household plan. The idea bank stays free.']
   ];
+  if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.']);
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
     return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
   }).join('') + '</div>'
@@ -3516,7 +3532,7 @@ function render(){
      lunchbox only where there is one lunchbox to carry. */
   var multiKid = kids().length>1, pagerHere = multiKid && (UI.pane==='box' || (BOX_TABS.indexOf(UI.tab) > -1 && !UI.pane));
   var householdView = multiKid && UI.tab==='shop' && !UI.pane;
-  var gear = isHelper() ? '' : '<button class="iconbtn" data-act="box-settings" aria-label="Lunchbox settings" aria-pressed="'+(UI.pane==='box')+'">'+svg('setup',18)+'</button>';
+  var gear = (isHelper() || (signedIn() && !Account.me)) ? '' : '<button class="iconbtn" data-act="box-settings" aria-label="Lunchbox settings" aria-pressed="'+(UI.pane==='box')+'">'+svg('setup',18)+'</button>';
   var help = '<button class="iconbtn" data-act="help" aria-label="Help">'+svg('help',19)+'</button>';
   document.getElementById('who').innerHTML = (!kid ? ''
     : ((pagerHere || householdView) ? ''
@@ -3531,7 +3547,7 @@ var BOX_TABS = ['pack', 'week', 'foods'];
 /* ---------------------------------------------------------------- events */
 var HELPER_OK = ['tab','help','help-site','whats-new','whats-new-ok','week-ahead','home-ok','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
   'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit',
-  'pane','pane-done'];   /* without these a caretaker cannot reach Sign out or Leave, which now sit a pane deep */
+  'pane','pane-done','delete-account'];   /* without these a caretaker cannot reach Sign out or Leave, which now sit a pane deep */
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
   if(!el || !S) return;
@@ -3550,6 +3566,7 @@ document.addEventListener('click', function(ev){
   /* a caretaker sees the plan and checks the list off on this phone; changing the plan is for a parent */
   if(isHelper() && HELPER_OK.indexOf(act) < 0){ toast('Only a parent can change the plan'); return; }
   if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='delete-account' && act!=='member-remove' && act!=='disarm' && UI.armed) UI.armed = '';
+  if(act!=='delete-account' && UI.deleteTyped) UI.deleteTyped = '';   /* typing is an input event, so it can never clear itself */
 
   /* did they eat it? */
   if((act==='eat-set' || act==='eat-all') && gated()){ upgradeSheet('review'); return; }
@@ -3971,7 +3988,7 @@ document.addEventListener('click', function(ev){
     UI.armed=''; save(); render(); toast('Plans cleared'); return;
   }
   if(act==='clear-all'){
-    if(signedIn()){ toast('Signed in, the lunches are the household\u2019s \u2014 sign out, or delete the account'); return; }
+    if(signedIn() || Store.hadAccount()){ toast('These lunches are the household\u2019s \u2014 sign out, or delete the account'); return; }
     if(UI.armed!=='all'){ UI.armed='all'; render(); toast('That erases every lunchbox on this phone, with no copy left'); return; }
     Store.forget();
     S = newAccount(); DEVICE.memberId = S.members[0].id; UI.armed=''; UI.tab='setup'; UI.pane='';
@@ -4007,7 +4024,7 @@ document.addEventListener('click', function(ev){
     }).catch(offline);
     return;
   }
-  if(act==='signout'){
+  if(act==='signout'){ UI.deleteTyped = ''; Store.markAccount(false);
     /* the household lives on the server; signing out sends anything unsent, then leaves this
        phone blank, the way a signed-out app should be. Signing in again brings it all back. */
     clearTimeout(Account.timer);
@@ -4098,12 +4115,13 @@ document.addEventListener('click', function(ev){
   if(act==='join-dismiss'){ Account.join = null; try{ localStorage.removeItem('lunchsorted-join'); }catch(e){} render(); return; }
   if(act==='delete-account'){
     if(!deleteArmed()){ toast('Type DELETE to confirm'); return; }
+    el.disabled = true; el.textContent = 'Deleting\u2026';
     api('POST', '/api/auth/delete', {confirm:'DELETE'}).then(function(r){
-      if(r.status !== 200){ toast(r.error || 'Could not delete'); return; }
+      if(r.status !== 200){ el.disabled = false; el.textContent = 'Delete my account and data'; toast(r.error || 'Could not delete'); return; }
       Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; UI.armed = ''; UI.deleteTyped = ''; Account.first = false; Account.household = null;
       Store.forget(); S = newAccount(); DEVICE.memberId = S.members[0].id; UI.tab = 'pack';
       save(); render(); toast('Deleted');
-    }).catch(offline);
+    }).catch(function(e){ el.disabled = false; el.textContent = 'Delete my account and data'; offline(e); });
     return;
   }
   if(act==='notice-dismiss'){ UI.notice=''; markSeen(); render(); return; }
@@ -4157,8 +4175,10 @@ document.addEventListener('input', function(ev){
     var kb = document.querySelector('#who .kidbtn .nm'); if(kb) kb.textContent = nm;
   }
   if(ev.target.id==='deleteConfirm'){
-    var was = deleteArmed(); UI.deleteTyped = ev.target.value;
-    if(deleteArmed() !== was){ render(); var f = document.getElementById('deleteConfirm'); if(f){ f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }
+    UI.deleteTyped = ev.target.value;
+    var b = document.querySelector('[data-act="delete-account"]'), armed = deleteArmed();
+    if(b){ b.disabled = !armed; if(armed) b.removeAttribute('aria-disabled'); else b.setAttribute('aria-disabled','true'); }
+    var hint = document.getElementById('deleteHint'); if(hint) hint.hidden = armed;
     return;
   }
   if(ev.target.id==='obName'){ UI.ob.name = ev.target.value; }

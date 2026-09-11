@@ -153,7 +153,7 @@ and Apple's own crash logs are collected by Apple, not by the app, so they need 
 declaring. Data is collected only after the parent signs in; until then nothing leaves the
 phone, and App Store Connect has no way to say "optional", so answer as if signed in. The
 label on the store will read "Data Linked to You: Contact Info, User Content, Identifiers,
-Purchases". Deletion: "Delete my account and data" under Account → Account, confirmed by typing DELETE, documented on the privacy page.
+Purchases". Deletion: "Delete my account and data" under Account → Account, confirmed by typing DELETE, offered to every signed-in person and not only the owner, documented on the privacy page.
 
 ## Age rating questionnaire
 

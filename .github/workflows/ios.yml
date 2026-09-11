@@ -6,9 +6,9 @@ name: iOS
 on:
   push:
     branches: [main, dev]
-    paths: ['ios/**', 'capacitor.config.json', 'ios-www/**', 'package.json', 'package-lock.json', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'capacitor.config.json', 'ios-www/**', 'package-lock.json', '.github/workflows/ios.yml']
   pull_request:
-    paths: ['ios/**', 'capacitor.config.json', 'ios-www/**', 'package.json', 'package-lock.json', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'capacitor.config.json', 'ios-www/**', 'package-lock.json', '.github/workflows/ios.yml']
   workflow_dispatch:
 
 permissions:
