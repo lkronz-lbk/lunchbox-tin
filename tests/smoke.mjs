@@ -1974,6 +1974,20 @@ try {
     const testers = (await adminStats()).testers;
     check('the numbers page lists the beta testers by email, with when they came in and were last seen', testers.length === 1 && /pat@example\.com/.test(testers[0].emails) && testers[0].plan === 'lifetime' && !!testers[0].since && !!testers[0].lastSeen, testers);
   }
+  {
+    /* the bug: last seen only moved when someone signed in, so a parent who stays signed in
+       on their phone was stuck on the day they were invited forever */
+    await db.query(`UPDATE users SET last_seen_at = now() - interval '30 days' WHERE email = 'pat@example.com'`);
+    await db.query(`UPDATE sessions SET last_used_at = now() - interval '30 days' WHERE user_id = (SELECT id FROM users WHERE email = 'pat@example.com')`);
+    await pb.evaluate(() => fetch('/api/household').then(r => r.status));
+    const moved = (await db.query(`SELECT last_seen_at FROM users WHERE email = 'pat@example.com'`)).rows[0].last_seen_at;
+    check('using the app moves last seen without signing in again', new Date(moved).getTime() > Date.now() - 60000, moved);
+    check('and the numbers page shows that day, not the day they came in', new Date((await adminStats()).testers[0].lastSeen).getTime() > Date.now() - 60000);
+    await db.query(`UPDATE users SET last_seen_at = now() - interval '30 days' WHERE email = 'pat@example.com'`);
+    await pb.evaluate(() => fetch('/api/household').then(r => r.status));
+    const again = (await db.query(`SELECT last_seen_at FROM users WHERE email = 'pat@example.com'`)).rows[0].last_seen_at;
+    check('a second request within the hour writes nothing', new Date(again).getTime() < Date.now() - 60000, again);
+  }
   await hook({ id: 'evt_refund_t', type: 'charge.refunded', created: t0 + 9.6, data: { object: { id: 'ch_t', object: 'charge', customer: 'cus_pat', refunded: true } } });
   check('undoing it clears the tester mark too', (await ent()).plan === 'free' && (await ent()).source === 'none', await ent());
   /* who may manage billing: the owner, and whoever paid; a helper may buy nothing */
