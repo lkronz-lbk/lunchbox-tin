@@ -1013,18 +1013,20 @@ function resumeAfter(){
   if(why === 'lunchbox'){ UI.pane = 'box'; render(); addKidSheet(); }
   else if(why === 'share'){ UI.tab = 'setup'; UI.pane = 'household'; render(); }
   else if(why === 'week'){ UI.tab = 'week'; render(); }
+  else if(why === 'food'){ UI.tab = 'foods'; UI.pane = ''; render(); addOwnSheet(); }
 }
 function upgradeSheet(why){
   var pr = (Account.billing && Account.billing.prices) || {}, forever = why === 'forever';
   var h = '<p style="margin:0">'+(why === 'share' ? 'Sharing the lunches with the other parent’s phone, or a caretaker, is part of the Household plan.'
         : why === 'lunchbox' ? 'A second lunchbox is part of the Household plan. The first is free for as long as you like.'
+        : why === 'food' ? 'Adding a food in your own words is part of the Household plan. Every food you have added stays on the list, and the idea bank is free.'
         : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
         : why === 'review' ? 'The morning review — what came home, what to rest — is part of the Household plan.'
         : why === 'pantry' ? 'A pantry that remembers what you already have is part of the Household plan.'
         : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.' : 'Planning and the shopping list are free for good. The Household plan is the rest.')
         : forever ? 'You have the yearly plan. Pay once and it never renews: the year you have paid for runs to its end and is not charged again.'
         : 'The Household plan is everything the free planner is not.')+'</p>';
-  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
+  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Your own foods, in your own words, beyond the idea bank</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
   if(!signedIn()){
     h += '<p class="hint" style="margin:0">Sign in first — the Household plan belongs to the household, so it works on every phone.</p>'
       +  '<button class="btn primary wide" data-act="go-signin" data-why="'+esc(why || '')+'" data-close="1">Sign in</button>';
@@ -1161,12 +1163,13 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
 var APP_BUILD = 'lunchsorted-v14';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v14', text:'New: Account is five short pages, and the lunchbox settings carry the same tabs as Pack.',
+var WHATS_NEW = {build:'lunchsorted-v14', text:'New: Account is five short pages, and a food in your own words is part of the Household plan.',
   steps:[
     ['Five doors, not one list', 'Account, Household, Subscription, Lunchboxes and support each open their own short page. Tap one, then Done to come back.'],
     ['Tabs in the settings', 'The lunchbox settings carry the same name tabs as Pack and Week. One tap to change which box you are setting up.'],
     ['What the plan costs', 'Subscription now shows the price, the date it renews, and how to stop it.'],
-    ['Caretaker', 'A helper is now a caretaker: they see the week and check the box off, and nothing else.']
+    ['Caretaker', 'A helper is now a caretaker: they see the week and check the box off, and nothing else.'],
+    ['Your own foods', 'A food in your own words is part of the Household plan now. Everything already on your list stays there and keeps being planned, and the idea bank is free for good.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
@@ -2827,7 +2830,15 @@ function viewFoods(){
     if(n) h += '<p class="hint">'+n+' '+esc(n===1 ? c.label.toLowerCase() : c.plural.toLowerCase())
       + ' saved &mdash; switch the '+esc(c.label.toLowerCase())+' compartment on in Setup to use '+(n===1?'it':'them')+'.</p>';
   });
-  return h + '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button></div>';
+  /* a food in the parent's own words belongs to the Household plan; the button stays
+     on screen, locked, never hidden, and the idea bank stays free so a free list is
+     never stuck with what it has */
+  h += gated()
+    ? '<button class="btn wide" data-act="upgrade" data-why="food">'+svg('lock',17)+'Add your own</button>'
+      + '<p class="hint" style="margin:0">Every food here stays. Adding one in your own words is part of the Household plan; the idea bank is free.</p>'
+    : '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button>'
+      + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words.</span>'+premiumTag()+'</p>' : '');
+  return h + '</div>';
 }
 
 function viewBox(){
@@ -3326,14 +3337,15 @@ function betaBar(){
 function helpSheet(){
   var qa = [
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle a day, or tap a compartment to change one thing.'],
-    ['Why did a food stop showing up?', 'A school rule or allergen under the lunchbox settings button, the sliders at the top. Foods it skips are marked on the Foods tab.'],
+    ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
     ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
-    ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Shuffle all draws them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top.'],
+    ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Shuffle all draws them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top \u2014 in the settings too.'],
     ['Can I plan the week after?', 'Yes. On Week, tap Next week; Plan next week draws it. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
-    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.']
+    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from. Foods in your own words, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
+    ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words is part of the Household plan. The idea bank stays free.']
   ];
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
     return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
@@ -3758,8 +3770,9 @@ document.addEventListener('click', function(ev){
     planWeek(kid); UI.tab = 'week';
     save(); render(); window.scrollTo(0,0); toast(added+' foods added and the week drawn'); return;
   }
-  if(act==='add-own'){ addOwnSheet(); return; }
+  if(act==='add-own'){ if(gated()){ upgradeSheet('food'); return; } addOwnSheet(); return; }
   if(act==='save-own'){
+    if(gated()){ closeSheet(); upgradeSheet('food'); return; }        /* a sheet open across the last night of the trial */
     var el2 = document.getElementById('nfName'), n = (el2.value||'').trim();
     if(!n){ el2.focus(); toast('Give it a name first'); return; }
     var r5 = addFoodTo(addTargets(), {

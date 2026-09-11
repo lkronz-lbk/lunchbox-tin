@@ -372,19 +372,23 @@ writes the same one.
 ## Billing
 
 The plan is a row on the household (`entitlements`) that only Stripe's webhook writes.
-Free, for good, is one lunchbox, the week's plan, the shopping list and the pack list. The
-**Household** plan (yearly, or once forever) is the part that remembers and shares: kid's
-pick, the morning review and resting, a pantry that carries over, every lunchbox, the other
-parent's phone and a helper's pack list. **Every household gets all of it for its first 21
-days**, no card, counted from the account document's `createdAt` (the same clock on every
-phone and on the server), and then drops to free with the premium pieces locked in place,
-not hidden: the kid's-pick button, the review card and the pantry tick stay on screen with
-a lock and open the plan sheet. During the three weeks the same pieces wear a small
-"Household plan" tag so it is clear what is being tried; three days before the end a banner
-says when, and once after it says what changed, each dismissable once. With no `STRIPE_*`
-variables in a deploy nothing is gated or tagged and the app is exactly the free one.
+Free, for good, is one lunchbox, the week's plan, the shopping list, the pack list, and the
+built-in idea bank to build the food list from. The **Household** plan (yearly, or once
+forever) is the part that remembers and shares: a food written in the parent's own words,
+kid's pick, the morning review and resting, a pantry that carries over, every lunchbox, the
+other parent's phone and a caretaker's pack list. **Every household gets all of it for its
+first 21 days**, no card, counted from the account document's `createdAt` (the same clock on
+every phone and on the server), and then drops to free with the premium pieces locked in
+place, not hidden: the kid's-pick button, the review card, the pantry tick and "Add your
+own" on Foods stay on screen with a lock and open the plan sheet. During the three weeks the
+same pieces wear a small "Household plan" tag so it is clear what is being tried; three days
+before the end a banner says when, and once after it says what changed, each dismissable
+once. With no `STRIPE_*` variables in a deploy nothing is gated or tagged and the app is
+exactly the free one.
 Nothing is ever taken away: a household whose plan or trial ends keeps every lunchbox,
-member, tick and outcome it has, and cannot add more.
+member, tick, outcome and food it has, and cannot add more. A food already on the list is
+drawn, shopped for and packed exactly as before; only the writing of a new one is gated, and
+the idea bank stays free so a free list is never stuck with what it has.
 
 - **Checkout** (`POST /api/billing/checkout {plan, client?}`) opens Stripe's hosted page for the
   signed-in household (owner or adult; a helper cannot buy). The session carries the

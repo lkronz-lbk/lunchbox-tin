@@ -53,7 +53,7 @@ the enrolment, so settle it before launch.
 
 - [ ] Pasted
 
-> Five packed lunches in about a minute, from the foods your kid will actually eat. Everything free for your first three weeks. No card.
+> A week of packed school lunches in about a minute, with no food list to build first. Always free to plan; everything else switched on for your first three weeks.
 
 ### Description (4000)
 
@@ -67,7 +67,7 @@ the enrolment, so settle it before launch.
 > Answer three questions and you get five planned lunchboxes: a main, a side, a fruit and a sweet for every school day. Not a random shuffle. Something crunchy against a soft main, protein when the main is light, something sharp to cut the salt. Re-shuffle the whole week, or individual boxes if needed, or just switch out one item.
 >
 > NOTHING TO SET UP FIRST
-> There is no food library to build before you get anything back. It starts with foods most kids eat and you can adapt to your child from there. Add that pickle roll-up your kid loves, and take out the options they refuse.
+> There is no food library to build before you get anything back. It starts with foods most kids eat and you adapt from there. Take out the options they refuse, and add more from a long list of ideas. On the Household plan you can write in that pickle roll-up only your kid will eat.
 >
 > YOUR SCHOOL'S RULES BUILT IN
 > Nut free, seed free, dairy free, no microwave, no ice pack, a short eating window, no chocolate, or set your own. Set them per kid, per school. A food that breaks a rule gets flagged in your list, so you always know why something stopped showing up.
@@ -79,7 +79,7 @@ the enrolment, so settle it before launch.
 > Simplify shopping by matching all kids' lunchboxes, while honoring each school's rules with alternative options. Kids with wildly different preferences can have totally different lunchbox plans. You choose your setup, and one shopping list still covers them all.
 >
 > LET THEM PICK
-> Science shows kids who help plan their lunches eat more of them. Hand your kid the phone the night before and let them choose between two options within the week's plan. Everything they are choosing from is already on the shopping list, so there is nothing new to buy and nothing to renegotiate at seven in the morning.
+> Kids who help plan their lunches eat more of them. We have all seen it. Hand your kid the phone the night before and let them choose between two options within the week's plan. Everything they are choosing from is already on the shopping list, so there is nothing new to buy and nothing to renegotiate at seven in the morning.
 >
 > WHAT CAME HOME
 > Tell it what got eaten and what came back. Next week leans toward the things that actually get eaten and rests the ones that keep coming home untouched.
@@ -89,19 +89,17 @@ the enrolment, so settle it before launch.
 >
 > It works online and off, and nothing leaves your phone until you choose to sign in.
 >
-> FREE
-> Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Add your own foods, take out the ones they refuse, and set your school's rules.
+> FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, take out the ones they refuse, and set your school's rules.
 >
-> THE PAID HOUSEHOLD PLAN
-> The kid's pick, what came home, a pantry that remembers what is already home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. The plan is bought on our website, not in this app.
+> THE PAID HOUSEHOLD PLAN: Add your own foods, let them pick, track what came home, a shopping list that remembers what is already in your pantry, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. The plan is bought on our website, not in this app.
 >
-> Made by a mom in Maryland who is still packing lunches. hello@lunchsorted.app
+> Made by a mom who no longer dreads packing lunches. hello@lunchsorted.app
 
 ### Keywords (100, comma-separated, no spaces after the commas)
 
 - [ ] Pasted
 
-> school lunch,lunchbox,lunch planner,packed lunch,meal planner,kids lunch,bento,lunch ideas,picky eater,shopping list
+> lunchbox,bento,packed,meal,planner,kids,picky,eater,snack,grocery,shopping,list,allergy,prep,ideas
 
 ### URLs and copyright
 
