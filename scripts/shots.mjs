@@ -6,8 +6,8 @@
    the pager and the matched plan; a Monday, because a plan drawn on a Thursday
    is two days long; Emma's box finished and Noah's not, because that is what
    the household line is for. Change the app, look at the shots, and if they no
-   longer tell the truth, run this. The kid's-pick shot is taken by hand — it
-   needs a child's screen mid-choice — so it is left alone entirely. */
+   longer tell the truth, run this. The kid's-pick shot is taken here too: the
+   screen fills itself now, so there is nothing left to frame by hand. */
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 const OUT = '/Users/lizkronzek/lunch-sorted/public/img';
@@ -93,8 +93,27 @@ await shot('pack', 'screen-pack', async () => {
 });
 await shot('shop', 'screen-shop');
 
+/* The kid's pick: not a tab, and the switch has to go on first. Two options that look
+   alike sell the opposite of what this screen is for, so step past any part whose
+   pictures match before taking it. */
+await p.click('[data-act="tab"][data-tab="pack"]'); await wait(500);
+await toEmma();
+await p.click('[data-act="box-settings"]'); await wait(400);
+await p.click('[data-act="kidpick-on"]'); await wait(300);
+await p.click('[data-act="box-done"]'); await wait(400);
+await p.click('[data-act="kid-start"]'); await wait(600);
+const alike = () => p.evaluate(() => {
+  const f = [...document.querySelectorAll('.pick')].map(x => { const i = x.querySelector('.pic'); return i ? i.src : (x.querySelector('.ic') || {}).textContent; });
+  return f.length < 2 || f[0] === f[1];
+});
+for (let i = 0; i < 3 && await alike(); i++) { await p.locator('.pick').first().click(); await wait(500); }
+await hideToast();
+await p.screenshot({ path: `${OUT}/screen-kidpick.png` });
+console.log('shot', 'screen-kidpick');
+await p.click('[data-act="kid-exit"]', { force: true }); await wait(400);
+
 /* WebP twins: Chromium is the encoder, since sips on this machine will not write one */
-for (const name of ['screen-week','screen-pack','screen-shop']) {
+for (const name of ['screen-week','screen-pack','screen-shop','screen-kidpick']) {
   const png = fs.readFileSync(`${OUT}/${name}.png`).toString('base64');
   const out = await p.evaluate(async b64 => {
     const img = new Image();

@@ -44,7 +44,18 @@ await page.click('[data-act="box-settings"]'); await wait(400);
 await page.click('[data-act="kidpick-on"]'); await wait(300);
 await page.click('[data-act="box-done"]'); await wait(300);
 await page.click('[data-act="tab"][data-tab="pack"]'); await wait(400);
-if (await page.$('[data-act="kid-start"]')) { await page.click('[data-act="kid-start"]'); await wait(500); await shot('day3', 360, 250);   /* the pick sits low on the screen; the email wants the question and the two pictures, not the empty top */ await page.click('[data-act="kid-exit"]', { force: true }); await wait(400); }
+if (await page.$('[data-act="kid-start"]')) {
+  await page.click('[data-act="kid-start"]'); await wait(500);
+  /* two foods can share an emoji, and one picture shown twice sells the opposite of what this
+     screen is for: step past any part whose options look alike */
+  const alike = () => page.evaluate(() => {
+    const f = [...document.querySelectorAll('.pick')].map(x => { const i = x.querySelector('.pic'); return i ? i.src : (x.querySelector('.ic') || {}).textContent; });
+    return f.length < 2 || f[0] === f[1];
+  });
+  for (let i = 0; i < 3 && await alike(); i++) { await page.locator('.pick').first().click(); await wait(500); }
+  await shot('day3', 730, 72);   /* the picks fill the screen now: the question down past the second card */
+  await page.click('[data-act="kid-exit"]', { force: true }); await wait(400);
+}
 
 /* day 6: the morning after a packed box */
 await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);

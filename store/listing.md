@@ -91,7 +91,7 @@ the enrolment, so settle it before launch.
 >
 > FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, take out the ones they refuse, and set your school's rules.
 >
-> THE PAID HOUSEHOLD PLAN: Add your own foods, let them pick, track what came home, a shopping list that remembers what is already in your pantry, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. The plan is bought on our website, not in this app.
+> THE PAID HOUSEHOLD PLAN: Add your own foods, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. The plan is bought on our website, not in this app.
 >
 > Made by a mom who no longer dreads packing lunches. hello@lunchsorted.app
 
