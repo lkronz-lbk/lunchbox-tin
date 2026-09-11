@@ -171,14 +171,20 @@ export default async function handler(req, context) {
       const body = await req.json().catch(() => ({}));
       if (body.confirm !== 'DELETE') return fail('Confirmation missing');
       const q = sql();
-      /* a household the person owns goes with them, and its yearly plan stops charging; one they merely joined loses a member */
-      const subs = await q`SELECT e.stripe_subscription_id AS id FROM entitlements e JOIN households h ON h.id = e.household_id WHERE h.owner_user_id = ${user.id} AND e.stripe_subscription_id IS NOT NULL AND e.status IN ('active', 'past_due')`;
+      /* a household the person owns goes with them, and its yearly plan stops charging; one
+         they merely joined loses a member. The card is cancelled for whoever pays it, owner
+         or not: deleting the payer removes the membership the portal needs, so a plan left
+         running here could never be stopped from inside the app again. */
+      const subs = await q`SELECT e.stripe_subscription_id AS id FROM entitlements e JOIN households h ON h.id = e.household_id
+        WHERE (h.owner_user_id = ${user.id} OR e.paid_by = ${user.id}) AND e.stripe_subscription_id IS NOT NULL AND e.status IN ('active', 'past_due')`;
       for (const s of subs) await cancelSubscription(s.id);
       await q`DELETE FROM households WHERE owner_user_id = ${user.id}`;
       await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
       await q`DELETE FROM invites WHERE created_by = ${user.id}`;
       await destroyAllSessions(user.id);
       await q`DELETE FROM magic_links WHERE email = ${user.email}`;
+      /* the throttle keys carry the address in the clear, so they have to go with it */
+      await q`DELETE FROM rate_events WHERE key IN (${'link:' + user.email}, ${'code:' + user.email})`;
       await q`DELETE FROM users WHERE id = ${user.id}`;
       return json({ ok: true }, 200, sessionCookie('', true));
     }

@@ -6,9 +6,9 @@ name: iOS
 on:
   push:
     branches: [main, dev]
-    paths: ['ios/**', 'capacitor.config.json', 'ios-www/**', 'package.json', 'package-lock.json', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'capacitor.config.json', 'ios-www/**', 'package-lock.json', '.github/workflows/ios.yml']
   pull_request:
-    paths: ['ios/**', 'capacitor.config.json', 'ios-www/**', 'package.json', 'package-lock.json', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'capacitor.config.json', 'ios-www/**', 'package-lock.json', '.github/workflows/ios.yml']
   workflow_dispatch:
 
 permissions:
@@ -21,10 +21,18 @@ concurrency:
 jobs:
   build:
     name: Simulator build
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
+      - name: Use the newest Xcode on the runner
+        run: |
+          # Apple rejects any upload built against an older iOS SDK, so pin to the
+          # newest Xcode the image carries rather than trusting its default.
+          newest=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest"; fi
+          xcodebuild -version
 
       - uses: actions/setup-node@v4
         with:

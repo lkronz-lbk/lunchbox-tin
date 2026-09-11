@@ -59,14 +59,19 @@ async function state(user) {
   const members = await sql()`
     SELECT m.user_id AS "userId", m.role, m.member_id AS "memberId", u.email, u.name
     FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = ${h.id} ORDER BY m.joined_at`;
+  /* the price id travels so the app can say which of the plans this household is on,
+     rather than guessing the commonest one at it */
   const [ent] = await sql()`SELECT plan, source, status, current_period_end AS "currentPeriodEnd", cancel_at_period_end AS "cancelAtPeriodEnd",
+    stripe_price_id AS price,
     (stripe_customer_id IS NOT NULL AND (${h.owner_user_id} = ${user.id} OR paid_by = ${user.id})) AS portal FROM entitlements WHERE household_id = ${h.id}`;
   return {
     household: { id: h.id, name: h.name, createdAt: h.created_at },
     me: { userId: user.id, email: user.email, role: h.role, memberId: h.member_id },
     members: helper ? members.map(m => ({ userId: m.userId, role: m.role, memberId: m.memberId, name: m.name || (m.userId === user.id ? m.email : 'A parent') })) : members,
     doc: helper ? helperView(h.doc) : h.doc, version: h.version,
-    entitlement: ent || { plan: 'free', source: 'none', status: 'none', currentPeriodEnd: null, cancelAtPeriodEnd: false, portal: false },
+    /* a caretaker is never shown the plan, so they are never sent it either: what the
+       household pays, and when it renews, is not theirs to know */
+    entitlement: (helper || !ent) ? { plan: 'free', source: 'none', status: 'none', currentPeriodEnd: null, cancelAtPeriodEnd: false, price: null, portal: false } : ent,
     billing: billingEnabled()
   };
 }
@@ -98,7 +103,7 @@ export default async function handler(req) {
 
     if (req.method === 'PUT' && !action) {
       const h = await ensureHousehold(user);
-      if (h.role === 'helper') return fail('Helpers can tick the pack list but not change the plan', 403);
+      if (h.role === 'helper') return fail('A caretaker can check the pack list but not change the plan', 403);
       if (await throttled('put:' + user.id, 600, 3600)) return fail('Too many changes in an hour; try again shortly', 429);
       const raw = await req.text();
       if (Buffer.byteLength(raw, 'utf8') > MAX_DOC_BYTES) return fail('That is more than a household should hold', 413);

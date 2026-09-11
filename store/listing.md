@@ -1,82 +1,117 @@
 # App Store listing
 
-Everything App Store Connect asks for, in the order it asks. Paste from here. Character
-limits are Apple's. Screenshots are in `screenshots/`, regenerated with
-`CHROMIUM_PATH=… node scripts/store-shots.mjs`; they are 1320×2868, the 6.9-inch slot,
-and App Store Connect scales them for the smaller phones.
+Everything App Store Connect asks for, as a checklist, grouped by the page it asks on.
+Paste from here. Character limits are Apple's. Tick as you go.
 
-## App information
+## Where each field lives
 
-| Field | Value |
-|---|---|
-| Name (30) | Lunch Sorted |
-| Subtitle (30) | School lunches, planned | 
-| Bundle ID | app.lunchsorted |
-| SKU | lunchsorted |
-| Primary language | English (U.S.) |
-| Primary category | Food & Drink |
-| Secondary category | Productivity |
-| Content rights | Does not contain, show, or access third-party content |
-| Age rating | 4+ (every questionnaire answer is None / No; see below) |
-| Availability | United States only (Pricing and Availability → Availability). Linking out to Stripe is what the US storefront permits. |
-| Price | Free |
-| Copyright | 2026 Lila Bloom Enterprises |
-| Support URL | https://lunchsorted.app/ |
-| Marketing URL | https://lunchsorted.app/ |
-| Privacy policy URL | https://lunchsorted.app/privacy.html |
-| Seller / contact | your legal name (individual enrolment), hello@lunchsorted.app |
+App Store Connect splits one listing across four pages. Most of what looks missing is on
+the version page, which is a different page from App Information.
 
-## Version information
+| Page | How to reach it | What is on it |
+|---|---|---|
+| **App Information** | left sidebar, under General | Name, subtitle, categories, content rights, age rating, privacy policy URL |
+| **Pricing and Availability** | left sidebar, under General | Price, countries |
+| **App Privacy** | left sidebar, under General | The data questionnaire |
+| **The version page** | left sidebar, under the **iOS App** heading, reading **1.0 Prepare for Submission** | Screenshots, promotional text, description, keywords, support and marketing URLs, copyright, the build, App Review information |
 
-**Promotional text** (170; can change without a new build)
+The version page is where promotional text, description, support URL, marketing URL,
+copyright and the review contact all live. If there is no **1.0 Prepare for Submission**
+row under iOS App, use the **+** beside that heading to add the version, and the fields
+appear.
 
-> A week of packed school lunches in about a minute. Free to plan; everything on for your first three weeks, no card.
+The **seller name** on the finished product page is not a listing field at all. It is the
+legal entity name on the developer account, set under **Business** (Agreements, Tax and
+Banking). Individual enrolment publishes your legal name. Changing it later means changing
+the enrolment, so settle it before launch.
 
-**Description** (4000)
+## App Information
 
-> Answer three questions and get a week of packed school lunches: a main, a side, a fruit and a sweet for every school day, matched so each box goes together, with the shopping list built for you.
+- [x] Name (30): **Lunch Sorted**
+- [x] Subtitle (30): **School lunches, planned**
+- [x] Bundle ID: `app.lunchsorted`
+- [x] SKU: `lunchsorted`
+- [x] Primary language: English (U.S.)
+- [x] Primary category: Food & Drink
+- [x] Secondary category: Productivity
+- [x] Content rights: does not contain, show or access third-party content
+- [x] Age rating: 4+ (the questionnaire is below; every answer None or No)
+- [x] Privacy policy URL: `https://lunchsorted.app/privacy.html`
+
+## Pricing and Availability
+
+- [x] Price: Free
+- [x] Availability: United States only. Linking out to Stripe is what the US storefront
+      permits, and the product rule depends on it.
+- [ ] Pre-orders: leave off. Pre-order needs App Review approval first and then a delayed
+      release date, which trades launch speed for launch-day volume. Approval day should be
+      release day.
+
+## The version page: 1.0 Prepare for Submission
+
+### Promotional text (170; changes without a new build)
+
+- [x] Pasted
+
+> A week of packed school lunches in about a minute, with no food list to build first. Always free to plan; everything else switched on for your first three weeks.
+
+### Description (4000)
+
+- [x] Pasted
+
+> Our daughter started kindergarten and the lunch packing nearly broke me. I wanted it balanced. I wanted it healthy. I also wanted her to eat it, in the twenty minutes she gets to sit down. Most nights I was standing at the counter with the fridge open, out of ideas.
 >
-> Lunch Sorted is for the parent standing at the kitchen counter. No blank screen, no database of your child's foods to build before you get anything back. Tell it what can go in the box, what has to stay out, and how picky they are, and the week is planned before you have put the kettle on.
+> So I built this.
 >
-> THE WEEK
-> Not a random draw. Something crunchy against a soft main, protein when the main is light, something tangy to cut the salt, and each compartment says what its food brings: crunchy, soft, protein, tangy. Keep a compartment you like and it survives the next shuffle. A day that has gone is never rewritten.
+> A WEEK OF LUNCHES PLANNED IN A MINUTE
+> Answer three questions and you get five planned lunchboxes: a main, a side, a fruit and a sweet for every school day. Not a random shuffle. Something crunchy against a soft main, protein when the main is light, something sharp to cut the salt. Re-shuffle the whole week, or individual boxes if needed, or just switch out one item.
 >
-> YOUR SCHOOL'S RULES
-> Nut-free, seed-free, dairy-free, cold lunches only, no ice pack, a short eating window, no chocolate, plus anything else you list. Foods that break a rule are flagged in your list, never silently dropped, so you always know why something stopped appearing.
+> NOTHING TO SET UP FIRST
+> There is no food library to build before you get anything back. It starts with foods most kids eat and you adapt from there. Take out the options they refuse, and add more from a long list of ideas. On the Household plan you can write in that pickle roll-up only your kid will eat.
 >
-> THE SHOPPING LIST
-> Every planned box rolls into one list of what to buy, grouped by aisle: a pinwheel is deli turkey, cheese slices and tortillas. Check off what the pantry already has, shop the rest, or send the list to Notes or Reminders. More than one kid? One list covers them all.
+> YOUR SCHOOL'S RULES BUILT IN
+> Nut free, seed free, dairy free, no microwave, no ice pack, a short eating window, no chocolate, or set your own. Set them per kid, per school. A food that breaks a rule gets flagged in your list, so you always know why something stopped showing up.
 >
-> MORNINGS
-> The next school day's box, one check when it is packed, and a flag when it needs an ice pack, a sealed container, or is missing any protein.
+> THE SHOPPING LIST WRITES ITSELF
+> Everything you planned across all kids, in one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
 >
-> KID'S PICK
-> Switch on "They pick their box each day", then the night before hand them the phone. Part by part, two pictures at a time, or the whole box against the next one: either way the choice comes from the week you already shopped for, so there is nothing new to buy. On iPhone, an optional reminder at the time you choose. A lunch they chose tends to come home emptier.
+> BUILT FOR MULTIPLE KIDS
+> Simplify shopping by matching all kids' lunchboxes, while honoring each school's rules with alternative options. Kids with wildly different preferences can have totally different lunchbox plans. You choose your setup, and one shopping list still covers them all.
+>
+> LET THEM PICK
+> Kids who help plan their lunches eat more of them. We have all seen it. Hand your kid the phone the night before and let them choose between two options within the week's plan. Everything they are choosing from is already on the shopping list, so there is nothing new to buy and nothing to renegotiate at seven in the morning.
 >
 > WHAT CAME HOME
-> Tell it what was eaten, what came home, and what to rest. Next week's draw leans toward what actually gets eaten.
+> Tell it what got eaten and what came back. Next week leans toward the things that actually get eaten and rests the ones that keep coming home untouched.
 >
-> TWO PHONES, ONE PLAN
-> Sign in with your email, no password, and the other parent sees the same week. A helper can be given the pack list and nothing else.
+> EVERYONE WHO PACKS
+> Sign in with your email. No password to remember. Add your partner, a grandparent, a nanny, or anyone else who gets lunches out the door on a busy morning.
 >
-> Everything works offline and stays on your phone until you choose to sign in.
+> It works online and off, and nothing leaves your phone until you choose to sign in.
 >
-> FREE, AND THE HOUSEHOLD PLAN
-> Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Kid's pick, the morning review, a pantry that remembers, more lunchboxes and sharing with the other parent are the Household plan. Every new household gets the whole plan for three weeks, no card. The Household plan is bought on our website, not in this app.
+> FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, take out the ones they refuse, and set your school's rules.
 >
-> Made by a parent, in Maryland. Questions: hello@lunchsorted.app
+> THE PAID HOUSEHOLD PLAN: Add your own foods, let them pick, track what came home, a shopping list that remembers what is already in your pantry, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. The plan is bought on our website, not in this app.
+>
+> Made by a mom who no longer dreads packing lunches. hello@lunchsorted.app
 
-**Keywords** (100, comma-separated, no spaces after commas)
+### Keywords (100, comma-separated, no spaces after the commas)
 
-> school lunch,lunchbox,lunch planner,packed lunch,meal planner,kids lunch,bento,lunch ideas,picky eater,shopping list
+- [x] Pasted
 
-**What's New** (first version)
+> lunchbox,bento,packed,meal,planner,kids,picky,eater,snack,grocery,shopping,list,allergy,prep,ideas
 
-> The first release. A week of school lunches in about a minute, your school's rules respected, the shopping list built for you, and the kid's pick.
+### URLs and copyright
 
-**Support URL** https://lunchsorted.app/ · **Marketing URL** https://lunchsorted.app/
+- [x] Support URL: `https://lunchsorted.app/help.html`. A reviewer following it should land
+      on answers, not the sales page.
+- [x] Marketing URL: `https://lunchsorted.app/`
+- [x] Copyright: `2026 Lila Bloom Enterprises`. This one sits lower down the version page
+      under General Information, beside the version number, not with the URLs.
 
-## Screenshots (6.9-inch, in this order)
+### Screenshots (6.9-inch, in this order)
+
+- [ ] Uploaded, regenerated after the last interface change
 
 1. `01-week.png`: A week of lunches in about a minute.
 2. `02-pack.png`: Mornings: one box, one check.
@@ -85,9 +120,20 @@ and App Store Connect scales them for the smaller phones.
 5. `05-rules.png`: Your school's rules, respected.
 6. `06-foods.png`: Foods they'll actually eat.
 
-No iPad screenshots: the app is iPhone-only (`TARGETED_DEVICE_FAMILY = 1`). No app preview video for version 1.
+They live in `screenshots/`, 1320×2868, the 6.9-inch slot, and App Store Connect scales
+them for the smaller phones. Regenerate with `CHROMIUM_PATH=… node scripts/store-shots.mjs`.
+No iPad screenshots: the app is iPhone-only (`TARGETED_DEVICE_FAMILY = 1`). No app preview
+video for version 1.
+
+### What's New (first version)
+
+- [ ] Pasted
+
+> The first release. A week of school lunches in about a minute, your school's rules respected, the shopping list built for you, and the kid's pick.
 
 ## App Privacy (the questionnaire)
+
+- [x] Answered and published
 
 Answer **Yes, we collect data from this app**, then:
 
@@ -99,26 +145,34 @@ Answer **Yes, we collect data from this app**, then:
 | Purchases → Purchase History | Yes (which plan the household has; Stripe holds the card) | Yes | No | App Functionality |
 | Everything else (location, contacts, health, browsing, diagnostics, usage data, advertising data) | No | | | |
 
-Notes that back the answers: there are no analytics or advertising SDKs and no third-party
-cookies; the only network calls are to lunchsorted.app; Stripe runs on its own page in Safari.
-Data is collected only after the parent signs in; until then nothing leaves the phone, and
-App Store Connect has no way to say "optional", so answer as if signed in. The privacy label
-shown on the store will read "Data Linked to You: Contact Info, User Content, Identifiers,
-Purchases". Deletion: "Delete my account" on the Account tab, documented on the privacy page.
+Notes that back the answers: there are no analytics or advertising SDKs in the app and no
+third-party cookies; the site's analytics are on the marketing pages only and never inside
+`/app/`; the only network calls are to lunchsorted.app; Stripe runs on its own page in
+Safari. Diagnostics stays **No**: there is no crash or performance reporting of any kind,
+and Apple's own crash logs are collected by Apple, not by the app, so they need no
+declaring. Data is collected only after the parent signs in; until then nothing leaves the
+phone, and App Store Connect has no way to say "optional", so answer as if signed in. The
+label on the store will read "Data Linked to You: Contact Info, User Content, Identifiers,
+Purchases". Deletion: "Delete my account and data" under Account → Account, confirmed by typing DELETE, offered to every signed-in person and not only the owner, documented on the privacy page.
 
 ## Age rating questionnaire
+
+- [x] Answered: 4+
 
 Every question is **None** or **No**: no cartoon or realistic violence, no sexual content, no
 profanity, no horror, no medical or treatment information, no alcohol, tobacco or drug
 references, no gambling, no unrestricted web access (the WebView is bound to lunchsorted.app
-only), no user-generated content shared publicly, no contests. Result: 4+.
+only), no user-generated content shared publicly, no contests.
 
 **Made for Kids: No.** The parent is the user; the app is not in the Kids Category and does
 not target children. The one screen a child touches (kid's pick) asks nothing of them.
 
-## App Review information
+## App Review information (bottom of the version page)
 
-**Sign-in required: Yes.** Provide the review account:
+- [ ] Contact: your name, phone, hello@lunchsorted.app
+- [ ] Sign-in required: **Yes**, with the review account below
+- [ ] Notes pasted
+- [ ] Attachment: none needed
 
 | | |
 |---|---|
@@ -133,15 +187,14 @@ node -e "const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',b=require('crypto').randomBy
 ```
 
 The address must not be one of `ADMIN_EMAILS`; if it is, the account switches itself off and
-says so in the function log. Clear or change both variables once the app is approved. The reviewer enters the email on the sign-in screen, taps "Email me the link",
-then types the code on the same screen; that address gets no email and its code stands until
-you change the variable. Sign in once yourself with it first, answer the three questions and
-build a week, so the reviewer lands on a planned household rather than an empty one. Nothing
-else about that account is special: it gets the same three weeks of everything as any new
-household, so do this within a few days of submitting, and if review drags past the three
-weeks the reviewer will see the free tier with the plan's pieces locked, which is also fine.
-
-**Contact information:** your name, phone, hello@lunchsorted.app.
+says so in the function log. Clear or change both variables once the app is approved. The
+reviewer enters the email on the sign-in screen, taps "Email me the link", then types the code
+on the same screen; that address gets no email and its code stands until you change the
+variable. Sign in once yourself with it first, answer the three questions and build a week, so
+the reviewer lands on a planned household rather than an empty one. Nothing else about that
+account is special: it gets the same three weeks of everything as any new household, so do this
+within a few days of submitting, and if review drags past the three weeks the reviewer will see
+the free tier with the plan's pieces locked, which is also fine.
 
 **Notes** (paste)
 
@@ -155,14 +208,79 @@ weeks the reviewer will see the free tier with the plan's pieces locked, which i
 >
 > The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, Safari hand-off and URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
 
-**Attachment:** none needed.
+## Everything else in that sidebar: leave it alone
+
+Most of what App Store Connect offers is conditional on something this app is not. None of
+these block submission, and none need a decision now.
+
+- [ ] **App Accessibility** (the accessibility labels): optional, and it can be added any
+      time without a new build. Only tick a feature you have actually tested with it on.
+      Worth doing after launch, not before.
+- **In-App Events**: for a real, time-limited happening inside the app. There isn't one.
+- **Custom Product Pages** and **Product Page Optimization**: alternate screenshots and copy
+  for ad campaigns, and A/B tests of them. Both want traffic you do not have yet. Come back
+  when there is a paid campaign to point at one.
+- **Promo Codes**: unlocks paid downloads and in-app purchases. The app is free and has
+  neither, so a code would do nothing.
+- **Game Center**, **Vietnam Game License**: not a game.
+- **In-App Purchases** and **Subscriptions**: deliberately empty, and they stay empty. The
+  Household plan is a row on the household that Stripe flips. Adding a StoreKit product to
+  "look normal" would break the product rule and hand Apple a cut of a web subscription.
+- **App Store Server Notifications** and the **App-Specific Shared Secret**: both exist to
+  tell a server about in-app purchase events. With no in-app purchases they have nothing to
+  report. Leave both unset.
+- **Regulated Medical Devices**: required for the Medical or Health and Fitness categories,
+  or if the age rating says medical information is frequent. This app is Food & Drink and
+  answered None. It does not apply. Keep it that way: allergens in this app are a filter a
+  parent sets, never advice, and the copy must never read as medical guidance.
+- **Digital Services Act**: the EU trader declaration. It applies to apps distributed in the
+  European Union, and this listing is United States only, so there is nothing to file. Know
+  before expanding: completing it as an individual publishes your name, address, phone and
+  email on the EU product page.
+
+The one worth a look:
+
+- [ ] **Nominations**: how you tell Apple's editorial team a launch or a notable update is
+      coming. It is free, it is the only route to being featured, and Apple wants roughly
+      three weeks' notice, so a nomination aimed at launch day needs filing before you
+      submit. If that window has gone, aim one at the 1.1 update instead.
+
+## Account level, once each
+
+- [ ] Developer Program membership active, two-factor on
+- [ ] Free Apps agreement showing **Active** under Business. No bank or tax forms: the app
+      is free and the plan is sold on the web.
+- [ ] Seller name settled. Individual enrolment publishes your legal name on the product page.
+- [ ] `app.lunchsorted` registered under Identifiers with Associated Domains enabled
+- [ ] `hello@lunchsorted.app` actually delivers. Apple mails it and reviewers use it.
+
+## Getting a build up
+
+- [ ] App Store Connect API key, role **Admin** (cloud signing needs Admin to make the
+      certificate)
+- [ ] The four repository secrets from `ios/README.md`: `APPSTORE_KEY_ID`,
+      `APPSTORE_ISSUER_ID`, `APPSTORE_KEY_P8`, `APPLE_TEAM_ID`
+- [ ] TestFlight workflow run once and the build showing in App Store Connect. Do this early:
+      first uploads are where signing surprises live.
+- [ ] Installed on your own phone as an internal tester. External testing needs a beta review
+      and is not on the path to launch; skip it if speed matters.
+- [ ] Airplane mode opens the app, and a sign-in email link opens the app rather than Safari
 
 ## Before you press Submit
 
-- [ ] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated; signed in with them once and a week built, within a few days of submitting.
-- [ ] After approval: clear both variables.
-- [ ] Availability set to United States only.
-- [ ] Privacy policy URL loads and matches the App Privacy answers above.
-- [ ] Build uploaded from Xcode (Product → Archive) and attached to the version.
-- [ ] Export compliance: the build carries `ITSAppUsesNonExemptEncryption = NO`, so no question is asked.
-- [ ] Version 1.0, build 1; bump `CURRENT_PROJECT_VERSION` in Xcode for every upload.
+- [ ] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated;
+      signed in with them once and a week built, within a few days of submitting
+- [ ] Screenshots regenerated since the last interface change
+- [ ] Privacy policy URL loads and matches the App Privacy answers above
+- [ ] Build attached to the version. Export compliance asks nothing: the build carries
+      `ITSAppUsesNonExemptEncryption = NO`
+- [ ] Version **1.0** in App Store Connect, matching `MARKETING_VERSION` in the Xcode
+      project. Both build routes read it from there. The build number is the workflow run
+      number, or `CURRENT_PROJECT_VERSION` when you archive in Xcode; it only has to be
+      unique within a version.
+- [ ] No risky deploy planned during review. The reviewer sees whatever is live on
+      lunchsorted.app at the moment they look
+
+## After approval
+
+- [ ] Clear `REVIEW_EMAIL` and `REVIEW_CODE`

@@ -32,7 +32,7 @@ food list from a 200-item library and produce a planned week immediately. From t
 - **More than one lunchbox** — Plan the week draws them together: the fullest food list leads,
   and every other box starts from the same foods, swapping only where that box's school rules or
   its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
-  box alone. Turn it off under Account (**Match the boxes**). Pack, Week and Foods carry the
+  box alone. Turn it off under Account → Lunchboxes (**Match the boxes**), or the gear. Pack, Week and Foods carry the
   lunchboxes as folder tabs, one tap each; on Pack each tab shows whether that box is packed or
   still owes an answer, and one line names who is left to pack. With matching on, Shuffle all
   on Week is the household draw; with more than one box, Shuffle all on Week and a day's Shuffle first ask
@@ -56,8 +56,8 @@ food list from a 200-item library and produce a planned week immediately. From t
   sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
   Share plugin in the iPhone app.
 - **Pack** — the next school day's box with ice-pack, sealed-container and no-protein
-  flags, and one **Packed** tick per box that fills every compartment's tick at once (the
-  ticks stay per compartment underneath, so sync and the other phone are unchanged). The
+  flags, and one **Packed** check per box that fills every compartment at once (the packed
+  rows stay per compartment underneath, so sync and the other phone are unchanged). The
   compartments there are not buttons: only Week changes a box, and only Week shows the swap
   arrows. **Kid's pick** lives here, behind the lunchbox's "They pick their box
   each day" switch (Household plan), for the next box not yet in the bag. Two ways, chosen
@@ -79,20 +79,20 @@ food list from a 200-item library and produce a planned week immediately. From t
   re-checked on every import and merge), and the kid's-pick screens and the Foods list show
   it in place of the emoji; tapping it again offers "Take another" or "Remove the photo".
   Every food has an emoji icon derived from its name, so
-  custom foods get a picture too. A household that packs the night before (Account → When do you
-  pack?) sees tomorrow's box from 3pm.
+  custom foods get a picture too. A household that packs the night before (Account →
+  Lunchboxes → **When do you pack?**) sees tomorrow's box from 3pm.
 - **Did they eat it?** — from 3pm on a pack day, or the morning after, the Pack view asks about
   that box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
   stored against the food, so they survive re-plans. "Answer later" replaces the card with a one-line "Answer now" until the next
   3pm or the next open; a red dot on the Pack tab says an answer is owed, and the iPhone app can
-  remind at 3pm (Account → Reminders, off until switched on). From 3pm today's box has gone:
+  remind at 3pm (Account → Lunchboxes → **Remind us at three**, off until switched on). From 3pm today's box has gone:
   no re-draw, swap, kid's pick, shopping line or merge touches it. The draw leans toward foods that get
   eaten, and anything that came home twice running is rested for three weeks. Outgoing weeks
   are archived (`kid.past`) so Monday can still ask about Friday.
 - **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
-  under a dated backup key rather than overwritten; "Clear the plans" and "Erase everything"
-  are two-tap, deleting a food offers Undo, and the shopping ticks survive a plan clear.
+  under a dated backup key rather than overwritten; "Clear the plans" and, signed out, "Erase everything"
+  are two-tap, deleting a food offers Undo, and the shopping checks survive a plan clear.
 - **A parent may override a rule** for one compartment: pick a flagged food from the
   compartment sheet and it goes in, rule named, with Undo. The compartment carries a `!`, the day
   an *Against the rules* chip, and the rules sweep leaves it alone. The override is recorded
@@ -107,16 +107,29 @@ food list from a 200-item library and produce a planned week immediately. From t
   are still ahead and only covers the days still to come; otherwise it goes into next week. An
   existing plan is re-drawn in place until its last day has gone by, and a shuffle never touches
   a day that has already gone: what was packed stays exactly as it was, for the review and the
-  pack ticks. The shopping list likewise skips days already gone. The morning review only asks about a
-  day the plan already existed on, or that had something ticked into the bag.
+  pack checks. The shopping list likewise skips days already gone. The morning review only asks about a
+  day the plan already existed on, or that had something checked into the bag.
 - **Lunchbox settings** — the gear beside the lunchbox name on Week, Pack, Shop and Foods:
   lunchboxes, name, pack days, per-lunchbox school rules (cold-only, no ice pack, short
   eating time, no chocolate or candy), allergen exclusions (including seeds & sesame), a
   free-text avoid list, the kid's say. Optional **snack** and **drink** compartments per
   lunchbox: switching one on seeds a few foods and fills the current week, so the tin never
   grows an empty cell.
-- **Account** — the fifth tab: sign-in, the Household plan, the people, your name, backup
-  and copy-out/paste-in transfer between phones, clear and erase.
+- **Account** — the fifth tab is a short list of rows, each opening its own page over the
+  tab with a Done button that comes back to the row it left. **Account** (or **This phone**
+  signed out): who this phone is signed in as, sign out, leave the household, backup and
+  copy-out/paste-in transfer between phones, clear the plans, delete the account, and
+  — only on a phone that has never signed in — erase everything.
+  **Household**: the people, your name, and the two invites. **Subscription** (only where
+  Stripe is configured, and never for a caretaker): the plan, what it costs while there is
+  something to pay, the date it
+  renews or ends, and how to stop it. **Lunchboxes**: the lunchbox settings, the same page
+  the gear opens. **Contact support**: the help sheet, the same one the ? opens. Signed out
+  the sign-in card stays on the tab itself, because that is the one thing that tab is for
+  and a `?join=` link lands there. The open page is `UI.pane`, which never reaches the
+  account document, so a tap is never read as a change; `paneOK()` is the single test for
+  whether a pane may be on screen and the render asks it too, because a pane is opened by a
+  link from an email and by the return from Stripe as well as by a tap.
 
 ## Data model
 
@@ -239,7 +252,7 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
-- **Help** — the ? at the top of every tab opens a sheet: nine one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: twelve one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 
@@ -259,7 +272,7 @@ emails in its first week (days 1, 3, 6 after it switched on; `notices` kinds `te
 each in Liz's voice with one feature, the steps, a screenshot (`public/img/mail-day*.png`, made by
 `scripts/mail-shots.mjs`; rerun it when those screens change) and the form; the last one lists
 `PLANNED` (mail.js) and asks what they would add. The form asks the same: an ideas box and the
-planned list as tick boxes. "No more of these" is honoured.
+planned list as check boxes. "No more of these" is honored.
 
 
 `/beta` (netlify/functions/beta.js; `/tester` is the short link with a source tag for GA4) is the page to hand out: it shows the spots left and one
@@ -350,7 +363,10 @@ writes the same one.
   their ticks stay on their phone.
 - **Leaving** a household leaves the lunches with it: the phone starts fresh in its own
   empty household. Being removed signs that person's phones out; whatever is on their phone
-  stays there. **Delete my account** removes the household from the server and from that
+  stays there. **Delete my account and data** — the only irreversible control, gated on
+  typing DELETE rather than a second tap, and the only destructive one offered at all once
+  signed in, because a document that belongs to the household cannot be erased from one
+  phone — removes the household from the server and from that
   phone, and cannot be undone.
 - **Environment**: production reads `NETLIFY_DATABASE_URL` (Netlify DB / Neon); branch
   deploys and previews read `STAGING_DATABASE_URL` and refuse to run without it, so they
@@ -372,22 +388,26 @@ writes the same one.
 ## Billing
 
 The plan is a row on the household (`entitlements`) that only Stripe's webhook writes.
-Free, for good, is one lunchbox, the week's plan, the shopping list and the pack list. The
-**Household** plan (yearly, or once forever) is the part that remembers and shares: kid's
-pick, the morning review and resting, a pantry that carries over, every lunchbox, the other
-parent's phone and a helper's pack list. **Every household gets all of it for its first 21
-days**, no card, counted from the account document's `createdAt` (the same clock on every
-phone and on the server), and then drops to free with the premium pieces locked in place,
-not hidden: the kid's-pick button, the review card and the pantry tick stay on screen with
-a lock and open the plan sheet. During the three weeks the same pieces wear a small
-"Household plan" tag so it is clear what is being tried; three days before the end a banner
-says when, and once after it says what changed, each dismissable once. With no `STRIPE_*`
-variables in a deploy nothing is gated or tagged and the app is exactly the free one.
+Free, for good, is one lunchbox, the week's plan, the shopping list, the pack list, and the
+built-in idea bank to build the food list from. The **Household** plan (yearly, or once
+forever) is the part that remembers and shares: a food written in the parent's own words,
+kid's pick, the morning review and resting, a pantry that carries over, every lunchbox, the
+other parent's phone and a caretaker's pack list. **Every household gets all of it for its
+first 21 days**, no card, counted from the account document's `createdAt` (the same clock on
+every phone and on the server), and then drops to free with the premium pieces locked in
+place, not hidden: the kid's-pick button, the review card, the pantry tick and "Add your
+own" on Foods stay on screen with a lock and open the plan sheet. During the three weeks the
+same pieces wear a small "Household plan" tag so it is clear what is being tried; three days
+before the end a banner says when, and once after it says what changed, each dismissable
+once. With no `STRIPE_*` variables in a deploy nothing is gated or tagged and the app is
+exactly the free one.
 Nothing is ever taken away: a household whose plan or trial ends keeps every lunchbox,
-member, tick and outcome it has, and cannot add more.
+member, tick, outcome and food it has, and cannot add more. A food already on the list is
+drawn, shopped for and packed exactly as before; only the writing of a new one is gated, and
+the idea bank stays free so a free list is never stuck with what it has.
 
 - **Checkout** (`POST /api/billing/checkout {plan, client?}`) opens Stripe's hosted page for the
-  signed-in household (owner or adult; a helper cannot buy). The session carries the
+  signed-in household (owner or adult; a caretaker cannot buy). The session carries the
   household id, comes back to `/app/?paid=1` or `/app/?paid=0` (to `/back.html?paid=…` when
   `client` is `ios`: the iPhone app opens Stripe in Safari, and that page hands the parent
   back to the app through the `lunchsorted://` scheme), allows promotion codes,
@@ -413,9 +433,15 @@ member, tick and outcome it has, and cannot add more.
   the iPhone app). It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
   available after a plan ends, for the invoices.
-- **In the app**, the Account tab's card has a "Household plan" line (Free, Renews DATE,
-  Ends DATE, Payment failed, Forever, or Switching on… while the webhook lands), "Get the
-  Household plan" or "Switch to forever", and "Manage billing" (the main button when a
+- **In the app**, the Account tab carries a **Subscription** row whose caption is the same
+  one-line state (Free, On for N more days, Renews DATE, Ends DATE, Payment failed, Forever,
+  Switching on…). The page behind it names the plan, what it costs — matched from the price
+  id the entitlement carries, so a monthly household is not quoted the yearly price — the
+  date it renews or ends, and a card saying how to stop it, which differs for a parent who
+  cannot open the portal. Straight after paying it says only that the payment arrived and
+  the plan is switching on, because the webhook has not landed and every other row would
+  still read Free. It also offers "Get the Household plan" or "Switch to forever", and
+  "Manage billing" (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan
   sheet with both prices (read from Stripe, cached an hour, never typed into the app);
   signed out it offers sign-in first, and remembers what you were doing so the sheet, or
@@ -425,7 +451,7 @@ member, tick and outcome it has, and cannot add more.
   alone (a parent who edits their own document's birthday extends their own trial, and
   nothing more).
   Coming back from Checkout the app pulls up to eight times over about twenty seconds until
-  the webhook has landed; a helper sees none of this.
+  the webhook has landed; a caretaker sees none of this.
 - **Environment**, per deploy context, test keys everywhere but production:
   `STRIPE_SECRET_KEY` (production refuses a test key, every other context refuses a live
   one), `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
@@ -455,4 +481,4 @@ member, tick and outcome it has, and cannot add more.
   emails → send the renewal reminder and failed-payment emails (the terms promise both),
   and after the retries "cancel the subscription" rather than leave it unpaid; Stripe Tax
   on, with the origin address. Never add a Payment Link for the product: a link accepts a
-  `client_reference_id` from anyone, and the webhook would honour it.
+  `client_reference_id` from anyone, and the webhook would honor it.

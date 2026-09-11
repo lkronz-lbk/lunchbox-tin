@@ -57,6 +57,7 @@ await p.click('[data-act="seed"]'); await wait(800);
 
 /* draw them together */
 await p.click('[data-act="tab"][data-tab="setup"]'); await wait(400);
+await p.click('[data-act="pane"][data-pane="account"]'); await wait(400);
 await p.click('[data-act="clear-week"]'); await wait(250);
 await p.click('[data-act="clear-week"]'); await wait(500);
 await p.click('[data-act="tab"][data-tab="pack"]'); await wait(400);
