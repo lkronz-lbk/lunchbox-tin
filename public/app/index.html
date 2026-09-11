@@ -1188,11 +1188,13 @@ function whatsNew(){
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
    Account categories. It is view state and never reaches S, or the merge would
    read a tap as a change and push on every one. */
-var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'});
 /* the one test for whether a pane may be on screen. A pane is opened by a tap but
    also by a link from an email and by the return from Stripe, so the render asks
    this too: a row that was never drawn is not a check. */
+/* the one irreversible act in the app asks for the word, not for a second tap */
+function deleteArmed(){ return String(UI.deleteTyped || '').trim().toUpperCase() === 'DELETE'; }
 function paneOK(pn){
   if(!PANES[pn] || !activeKid()) return false;
   /* signed in, isHelper() is false until /api/household answers, so a caretaker's cold
@@ -3023,16 +3025,29 @@ function paneAccount(){
     +  (Store.ok ? '' : '<p class="hint" style="margin:0"><b>Storage is blocked '+(native() ? 'on this phone' : 'in this browser')+', so changes will not survive a reload.</b></p>')
     +  '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:4px">'
     +  '<button class="btn ghost sm" data-act="clear-week">'+(UI.armed==='week'?'Tap again to clear':'Clear the plans')+'</button>'
-    +  '<button class="btn danger sm" data-act="clear-all">'+(UI.armed==='all'?'Tap again to erase':'Erase everything')+'</button>'
-    +  (UI.armed==='all' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : '')
-    +  '</div></div>';
+    /* Signed out the lunches are only here, so erasing them is a phone-local act and says
+       so. Signed in there is no such thing: this document is the household's, and wiping
+       it reached the other parent's phone while the button talked about this one. The
+       honest version of that is deleting the account, below, and there is only one of it. */
+    +  (signedIn() ? '' : '<button class="btn danger sm" data-act="clear-all">'+(UI.armed==='all'?'Tap again to erase':'Erase everything')+'</button>'
+         + (UI.armed==='all' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : ''))
+    +  '</div>'
+    +  (signedIn() ? '<p class="hint" style="margin:0">The lunches belong to the household, so there is nothing to erase from this phone alone. Sign out to leave them behind, or delete the account below.</p>' : '')
+    +  '</div>';
   if(signedIn() && Account.me && Account.me.role === 'owner'){
-    h += '<div class="card stack" style="gap:10px"><h3>Delete your account</h3>'
-      +  '<p class="hint" style="margin:0">Deleting removes the household from our servers, from this phone'
-      +  (Account.members.length > 1 ? ', and from '+esc(Account.members.filter(function(m){ return m.userId !== Account.me.userId; }).map(memberLabel).join(' and '))+'’s sign-in' : '')
-      +  '. It cannot be undone'+(paid() ? (Account.entitlement.plan === 'lifetime' ? ', and the forever purchase goes with it' : ', and the yearly plan stops at once') : '')+'.</p>'
-      +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn danger sm" data-act="delete-account">'+(UI.armed==='delete-account' ? 'Tap again to delete everything' : 'Delete my account')+'</button>'
-      +  (UI.armed==='delete-account' ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : '')+'</div></div>';
+    var others = Account.members.filter(function(m){ return m.userId !== Account.me.userId; });
+    h += '<div class="card stack" style="gap:10px"><h3>Delete your account and data</h3>'
+      +  '<p class="hint" style="margin:0">This is not undoable, and there is no copy afterwards. It removes:</p>'
+      +  '<ul class="hint" style="margin:0;padding-left:18px">'
+      +  '<li>Every lunchbox, food, plan, photo and answer, from our servers and from this phone</li>'
+      +  '<li>Your sign-in, and this email address</li>'
+      +  (others.length ? '<li>'+esc(others.map(memberLabel).join(' and '))+(others.length > 1 ? '’ access, and their copy of the lunches' : '’s access, and their copy of the lunches')+'</li>' : '')
+      +  (paid() ? '<li>'+(Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The yearly plan, which stops at once') +'</li>' : '')
+      +  '</ul>'
+      +  '<p class="hint muted" style="margin:0">Want to keep a copy? Copy your lunches, or save a backup file, above first.</p>'
+      +  '<div class="field"><label for="deleteConfirm">Type DELETE to confirm</label>'
+      +  '<input type="text" id="deleteConfirm" placeholder="DELETE" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="10" value="'+esc(UI.deleteTyped || '')+'" style="font-family:var(--f-mono);letter-spacing:.08em"></div>'
+      +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn danger sm" data-act="delete-account"'+(deleteArmed() ? '' : ' disabled')+'>Delete my account and data</button></div></div>';
   }
   return h;
 }
@@ -3956,7 +3971,8 @@ document.addEventListener('click', function(ev){
     UI.armed=''; save(); render(); toast('Plans cleared'); return;
   }
   if(act==='clear-all'){
-    if(UI.armed!=='all'){ UI.armed='all'; render(); toast('That erases every lunchbox on this phone'); return; }
+    if(signedIn()){ toast('Signed in, the lunches are the household\u2019s \u2014 sign out, or delete the account'); return; }
+    if(UI.armed!=='all'){ UI.armed='all'; render(); toast('That erases every lunchbox on this phone, with no copy left'); return; }
     Store.forget();
     S = newAccount(); DEVICE.memberId = S.members[0].id; UI.armed=''; UI.tab='setup'; UI.pane='';
     save(); render(); toast('Everything erased'); return;
@@ -4081,10 +4097,10 @@ document.addEventListener('click', function(ev){
   }
   if(act==='join-dismiss'){ Account.join = null; try{ localStorage.removeItem('lunchsorted-join'); }catch(e){} render(); return; }
   if(act==='delete-account'){
-    if(UI.armed!=='delete-account'){ UI.armed='delete-account'; render(); toast('That deletes the household everywhere'); return; }
+    if(!deleteArmed()){ toast('Type DELETE to confirm'); return; }
     api('POST', '/api/auth/delete', {confirm:'DELETE'}).then(function(r){
       if(r.status !== 200){ toast(r.error || 'Could not delete'); return; }
-      Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; UI.armed = ''; Account.first = false; Account.household = null;
+      Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; UI.armed = ''; UI.deleteTyped = ''; Account.first = false; Account.household = null;
       Store.forget(); S = newAccount(); DEVICE.memberId = S.members[0].id; UI.tab = 'pack';
       save(); render(); toast('Deleted');
     }).catch(offline);
@@ -4139,6 +4155,11 @@ document.addEventListener('input', function(ev){
     var tab = document.querySelector('.boxtabs [aria-current="true"]');
     if(tab && tab.lastChild && tab.lastChild.nodeType === 3) tab.lastChild.nodeValue = nm;
     var kb = document.querySelector('#who .kidbtn .nm'); if(kb) kb.textContent = nm;
+  }
+  if(ev.target.id==='deleteConfirm'){
+    var was = deleteArmed(); UI.deleteTyped = ev.target.value;
+    if(deleteArmed() !== was){ render(); var f = document.getElementById('deleteConfirm'); if(f){ f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }
+    return;
   }
   if(ev.target.id==='obName'){ UI.ob.name = ev.target.value; }
   if(ev.target.id==='signinEmail'){ UI.obDraft = ev.target.value; }

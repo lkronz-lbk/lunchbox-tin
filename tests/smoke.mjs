@@ -1699,7 +1699,17 @@ try {
   check('signing out sends the last change, then leaves the phone blank at onboarding', cleared && !!onServer && onServer.doc.kids.some(k => k.name === 'Ollie Unsent'), [cleared, onServer && onServer.doc.kids.map(k => k.name)]);
   await ctx2.close();
   await openPane(page, 'account');
-  await page.click('[data-act="delete-account"]'); await page.waitForTimeout(150);
+  /* the one irreversible act asks for the word, and says what goes before it asks */
+  const deleteWarning = await page.textContent('#view');
+  check('deleting says it cannot be undone and names everything that goes', await page.evaluate(() => {
+    const t = document.querySelector('#view').textContent;
+    return /not undoable/.test(t) && /no copy afterwards/.test(t) && /Your sign-in/.test(t) && /save a backup file/i.test(t);
+  }), deleteWarning.replace(/\s+/g, ' ').slice(0, 260));
+  check('and the button will not fire until DELETE is typed', await page.$eval('[data-act="delete-account"]', b => b.disabled));
+  await page.fill('#deleteConfirm', 'delete me'); await page.waitForTimeout(250);
+  check('a near miss does not arm it', await page.$eval('[data-act="delete-account"]', b => b.disabled));
+  await page.fill('#deleteConfirm', 'DELETE'); await page.waitForTimeout(300);
+  check('and the word itself does', !(await page.$eval('[data-act="delete-account"]', b => b.disabled)));
   await page.click('[data-act="delete-account"]'); await until(page, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));   /* the fresh document lands after the save debounce */
   const afterDelete = await page.evaluate(() => fetch('/api/household').then(r => r.status));
   check('deleting the account signs out, removes the household from the server, and starts this phone over',
@@ -2196,8 +2206,10 @@ try {
   /* deleting the account stops the money */
   stripeCalls.length = 0;
   await openPane(pb, 'account');
-  check('the delete warning says the yearly plan stops', /yearly plan stops at once/.test(await pb.textContent('#view')));
-  await pb.click('[data-act="delete-account"]'); await pb.waitForTimeout(150); await pb.click('[data-act="delete-account"]');
+  check('the delete warning says the yearly plan stops', /The yearly plan, which stops at once/.test(await pb.textContent('#view')),
+    (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 240));
+  await pb.fill('#deleteConfirm', 'DELETE'); await pb.waitForTimeout(300);
+  await pb.click('[data-act="delete-account"]');
   await until(pb, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));
   check('deleting the account cancels the subscription at Stripe', stripeCalls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_pat'));
   const unpaidSession = await hook({ id: 'evt_8', type: 'checkout.session.completed', created: t0 + 7, data: { object: { id: 'cs_test_4', mode: 'subscription', payment_status: 'unpaid', client_reference_id: '999999', metadata: {} } } });

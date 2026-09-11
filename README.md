@@ -91,7 +91,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   are archived (`kid.past`) so Monday can still ask about Friday.
 - **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
-  under a dated backup key rather than overwritten; "Clear the plans" and "Erase everything"
+  under a dated backup key rather than overwritten; "Clear the plans" and, signed out, "Erase everything"
   are two-tap, deleting a food offers Undo, and the shopping checks survive a plan clear.
 - **A parent may override a rule** for one compartment: pick a flagged food from the
   compartment sheet and it goes in, rule named, with Undo. The compartment carries a `!`, the day
@@ -361,7 +361,10 @@ writes the same one.
   their ticks stay on their phone.
 - **Leaving** a household leaves the lunches with it: the phone starts fresh in its own
   empty household. Being removed signs that person's phones out; whatever is on their phone
-  stays there. **Delete my account** removes the household from the server and from that
+  stays there. **Delete my account and data** — the only irreversible control, gated on
+  typing DELETE rather than a second tap, and the only destructive one offered at all once
+  signed in, because a document that belongs to the household cannot be erased from one
+  phone — removes the household from the server and from that
   phone, and cannot be undone.
 - **Environment**: production reads `NETLIFY_DATABASE_URL` (Netlify DB / Neon); branch
   deploys and previews read `STAGING_DATABASE_URL` and refuse to run without it, so they
