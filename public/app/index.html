@@ -14,6 +14,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lunch Sorted">
+<script>/* the shell reserves its own bottom; the stylesheet needs to know before it paints */
+if(/LunchSortedApp/.test(navigator.userAgent))document.documentElement.className+=' shell';</script>
 <style>
 :root{color-scheme:light dark}
 html{-webkit-text-size-adjust:100%}
@@ -26,6 +28,7 @@ img{max-width:100%}
 <link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
 :root{
+  --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
   --ground:#E9EEE6; --surface:#FBFCF9; --surface-2:#F1F5EE; --sunk:#DFE7DB;
   --ink:#16241E; --ink-2:#4A5C53; --ink-3:#6E7F75;
   --line:#CFDACB; --line-strong:#1E3329;
@@ -62,18 +65,24 @@ img{max-width:100%}
   --toast-bg:#E6EEE7; --toast-fg:#0E1815;
 }
 *{box-sizing:border-box}
+/* Inside the iPhone shell the web view already stops above the home indicator,
+   so adding the inset again would leave a band of empty ground under the tabs. */
+html.shell{--sab:0px}
 body{background:var(--ground);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
   -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 button,input,select,textarea{font:inherit;color:inherit}
+/* Under 16px iOS zooms the page when a field takes focus and never zooms back,
+   which leaves every screen slightly enlarged and scrolling sideways. */
+input,select,textarea{font-size:16px}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 .app{max-width:600px;margin:0 auto;
-  padding:calc(18px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom))}
+  padding:calc(18px + var(--sat)) 16px calc(96px + var(--sab))}
 /* The web view runs under the status bar, so the clock needs its own strip of ground to
    sit on; without it a scrolled line of text runs straight through the time. */
-body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--sat);
   background:var(--ground);z-index:29;pointer-events:none}
 .topbar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px}
 .brand{font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:-0.01em;white-space:nowrap}
@@ -217,8 +226,8 @@ input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:foc
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--ground);background:color-mix(in srgb,var(--ground) 92%,transparent);
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;
-  padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:20}
-nav.tabs button{flex:1;border:0;background:none;min-height:52px;display:flex;flex-direction:column;align-items:center;
+  padding:4px 4px calc(1px + var(--sab));z-index:20}
+nav.tabs button{flex:1;border:0;background:none;min-height:48px;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:3px;color:var(--ink-3);border-radius:var(--r-md)}
 nav.tabs button span{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
 nav.tabs button[aria-current="true"]{color:var(--accent)}
@@ -235,10 +244,10 @@ nav.tabs svg{width:21px;height:21px}
 .sheet header{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;
   border-bottom:1px solid var(--line)}
 .sheet header h3{font-family:var(--f-display);font-size:17px;font-weight:700;margin:0}
-.sheet .body{overflow-y:auto;padding:14px 16px calc(20px + env(safe-area-inset-bottom));
+.sheet .body{overflow-y:auto;padding:14px 16px calc(20px + var(--sab));
   display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
 .grab{width:38px;height:4px;border-radius:999px;background:var(--line);margin:8px auto 0}
-.toast{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translate(-50%,14px);
+.toast{position:fixed;left:50%;bottom:calc(78px + var(--sab));transform:translate(-50%,14px);
   background:var(--toast-bg);color:var(--toast-fg);padding:10px 16px;border-radius:16px;font-size:13.5px;z-index:40;max-width:min(92vw,420px);text-align:center;
   opacity:0;pointer-events:none;transition:all .2s}
 .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -251,7 +260,7 @@ nav.tabs svg{width:21px;height:21px}
 /* --- first run --- */
 .ob{min-height:100svh;display:flex;flex-direction:column;justify-content:center;gap:22px;
   max-width:600px;margin:0 auto;
-  padding:calc(34px + env(safe-area-inset-top)) 20px calc(34px + env(safe-area-inset-bottom))}
+  padding:calc(34px + var(--sat)) 20px calc(34px + var(--sab))}
 .ob h1{font-family:var(--f-display);font-size:clamp(30px,8.5vw,40px);font-weight:700;letter-spacing:-0.025em;
   line-height:1.08;margin:0;text-wrap:balance}
 .ob .lede{font-size:16.5px;color:var(--ink-2);margin:8px 0 0;max-width:38ch}
@@ -277,9 +286,9 @@ nav.tabs svg{width:21px;height:21px}
 .faq[open] summary::after{content:'\2212'}
 .more summary{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);cursor:pointer;min-height:44px;display:flex;align-items:center}
 .kidmode .top{display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:calc(12px + env(safe-area-inset-top)) 16px 6px}
+  padding:calc(12px + var(--sat)) 16px 6px}
 .kidmode .body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;
-  padding:8px 20px calc(28px + env(safe-area-inset-bottom));max-width:600px;width:100%;margin:0 auto}
+  padding:8px 20px calc(28px + var(--sab));max-width:600px;width:100%;margin:0 auto}
 .kidmode .catlab{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase}
 .kidmode h1{font-family:var(--f-display);font-size:clamp(28px,8vw,38px);font-weight:700;letter-spacing:-0.025em;
   line-height:1.08;margin:0;text-wrap:balance}
