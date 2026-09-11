@@ -303,14 +303,14 @@ nav.tabs svg{width:21px;height:21px}
 .dots{display:flex;gap:7px}
 .dots i{width:9px;height:9px;border-radius:50%;background:var(--line-strong);opacity:.35;display:block}
 .dots i.on{background:var(--accent);opacity:1} .dots i.did{background:var(--accent);opacity:.45}
-.picks{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
-.pick{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:24px;min-height:210px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px 12px;
+.picks{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:minmax(0,1fr);gap:14px;flex:1;min-height:0}
+.pick{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:24px;min-height:88px;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;gap:clamp(6px,1.4svh,14px);padding:20px 12px;padding:clamp(10px,2svh,20px) 12px;
   font:inherit;color:var(--ink);transition:transform .12s ease,background .12s ease}
 .pick:active{transform:scale(.96)}
-.pick .ic{font-size:84px;line-height:1;filter:drop-shadow(var(--shadow-lift))}
+.pick .ic{font-size:84px;font-size:clamp(52px,19svh,186px);line-height:1;filter:drop-shadow(var(--shadow-lift))}
 .pic{display:block;object-fit:cover;background:var(--surface-2)}
-.pick .pic{width:104px;height:104px;border-radius:18px;filter:drop-shadow(var(--shadow-lift))}
+.pick .pic{width:104px;height:104px;width:clamp(64px,21svh,160px);height:clamp(64px,21svh,160px);border-radius:18px;filter:drop-shadow(var(--shadow-lift))}
 .pickbox .pic{width:44px;height:44px;border-radius:10px}
 .kiddone .pic{width:44px;height:44px;border-radius:10px}
 .pic.big{width:104px;height:104px;border-radius:18px;margin:0 auto}
@@ -318,7 +318,9 @@ nav.tabs svg{width:21px;height:21px}
   display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;font:inherit}
 .thumb .ic{font-size:22px;line-height:1}
 .thumb .pic{width:100%;height:100%}
-.pick .nm{font-family:var(--f-display);font-size:17px;font-weight:600;line-height:1.2;text-align:center;text-wrap:balance;overflow-wrap:break-word;hyphens:auto}
+.pick .nm{font-family:var(--f-display);font-size:17px;font-size:clamp(17px,2.2svh,21px);font-weight:600;line-height:1.2;text-align:center;text-wrap:balance;overflow-wrap:break-word;hyphens:auto}
+/* a short phone, or a long nickname wrapping the heading: give the two choices the room back */
+@media (max-height:620px){.kidmode h1{font-size:clamp(24px,7vw,30px)}.kidmode .body{gap:10px;padding-bottom:calc(12px + var(--sab))}}
 .boxes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
 .boxes.tall{grid-template-columns:minmax(0,1fr);max-width:340px;width:100%;margin:0 auto}
 .pickbox{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:22px;padding:10px;font:inherit;color:var(--ink);
@@ -1172,13 +1174,13 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v15';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v16';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved, so
    this build keeps the last feature release's note rather than spending it on a layout.
-   Two lines in it named a word and a route this build changed. */
-var WHATS_NEW = {build:'lunchsorted-v15', text:'New: matched boxes, tabs across the lunchboxes, the week after, and a three o\u2019clock ask.',
+   All this build changed is how big the kid's two choices are. */
+var WHATS_NEW = {build:'lunchsorted-v16', text:'New: matched boxes, tabs across the lunchboxes, the week after, and a three o\u2019clock ask.',
   steps:[
     ['Boxes that match', 'With more than one lunchbox, Shuffle all draws them from the same foods where each box\u2019s rules allow. It asks whose boxes first, and every shuffle can be undone. Switch it off under Account \u2192 Lunchboxes.'],
     ['Tabs, not a menu', 'On Pack, Week and Foods the lunchboxes are tabs along the top. One tap each.'],

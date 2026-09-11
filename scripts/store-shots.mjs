@@ -66,7 +66,17 @@ await page.click('[data-act="box-done"]'); await wait(300);
 
 /* 3 · the pack list, then the kid's pick from it */
 await page.click('[data-act="tab"][data-tab="pack"]'); await wait(400);
-if(await page.$('[data-act="kid-start"]')) { await page.click('[data-act="kid-start"]'); await wait(500); await shot('kidpick'); await page.click('[data-act="kid-exit"]', { force: true }); await wait(400); }
+if(await page.$('[data-act="kid-start"]')) {
+  await page.click('[data-act="kid-start"]'); await wait(500);
+  /* two foods can share an emoji, and a shot of one picture twice sells the opposite of what this screen is for:
+     step past any part whose two options look alike, then take it */
+  const alike = () => page.evaluate(() => {
+    const f = [...document.querySelectorAll('.pick')].map(p => { const i = p.querySelector('.pic'); return i ? i.src : (p.querySelector('.ic') || {}).textContent; });
+    return f.length < 2 || f[0] === f[1];
+  });
+  for (let i = 0; i < 3 && await alike(); i++) { await page.locator('.pick').first().click(); await wait(500); }
+  await shot('kidpick'); await page.click('[data-act="kid-exit"]', { force: true }); await wait(400);
+}
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('pack');
 
