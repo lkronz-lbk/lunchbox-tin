@@ -93,6 +93,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .spread{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .muted{color:var(--ink-2)}
 .hint{font-size:13px;color:var(--ink-3)}
+.hint.muted{color:var(--ink-2)}
 .hint a{color:var(--accent)}
 
 /* ---- the tin ---- */
@@ -146,6 +147,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
   display:inline-flex;align-items:center;gap:5px}
 .chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .chip.good{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.chip.lock{background:var(--warn-soft);color:var(--warn);border-color:transparent;opacity:1}
 .chip.picked{background:var(--accent-soft);color:var(--accent);border-color:transparent;margin-left:6px;vertical-align:middle}
 .chip{white-space:nowrap}
 .chip.lock svg{stroke-width:2.2}
@@ -178,6 +180,7 @@ a.btn{text-decoration:none}
 .item .meta{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.05em}
 .item .go{flex:none;display:inline-flex;align-items:center;color:var(--ink-3)}
 .item.done .nm{text-decoration:line-through;color:var(--ink-3)}
+.item.done .meta{color:var(--ink-3)}
 .box{width:22px;height:22px;flex:none;border:1.5px solid var(--line-strong);border-radius:6px;
   display:flex;align-items:center;justify-content:center;color:transparent}
 .item.done .box{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
@@ -980,10 +983,10 @@ function trialBanner(){
   if(!billingOn() || paid() || !S.onboardedAt) return '';
   var left = trialDaysLeft(), seen = trialSeen();
   if(left > 0 && left <= 3 && seen !== 'soon' && seen !== 'ended')
-    return '<div class="banner wrap"><span>Your three weeks of everything end '+esc(trialWhen())+'. The lunches stay; kid\u2019s pick, the after-school review and the pantry pause.</span>'
+    return '<div class="banner wrap"><span>Your three weeks of everything end '+esc(trialWhen())+'. The lunches stay; writing in your own foods, kid\u2019s pick, the after-school review and the pantry pause.</span>'
       + '<span class="row" style="gap:8px"><button class="btn sm primary" data-act="upgrade" data-why="keep">Keep everything</button><button class="btn sm ghost" data-act="trial-dismiss" data-stage="soon">Later</button></span></div>';
   if(left === 0 && seen !== 'ended')
-    return '<div class="banner wrap"><span>Your three weeks are up. Lunches and the list stay free; kid\u2019s pick, the review and the pantry are waiting.</span>'
+    return '<div class="banner wrap"><span>Your three weeks are up. Lunches, the list and the idea bank stay free; your own foods, kid\u2019s pick, the review and the pantry are waiting.</span>'
       + '<span class="row" style="gap:8px"><button class="btn sm primary" data-act="upgrade" data-why="keep">Household plan</button><button class="btn sm ghost" data-act="trial-dismiss" data-stage="ended">OK</button></span></div>';
   return '';
 }
@@ -1163,13 +1166,17 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
 var APP_BUILD = 'lunchsorted-v14';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v14', text:'New: Account is a short list of rows now, and Subscription says what you pay and when.',
+/* The banner is for something a parent gained or lost, not for a screen that moved, so
+   this build keeps the last feature release's note rather than spending it on a layout.
+   Two lines in it named a word and a route this build changed. */
+var WHATS_NEW = {build:'lunchsorted-v14', text:'New: matched boxes, tabs across the lunchboxes, the week after, and a three o\u2019clock ask.',
   steps:[
-    ['A row, not a scroll', 'Account, Household, Lunchboxes and Subscription each open their own short page \u2014 tap Done to come back. Contact support opens the answers and an email to us.'],
-    ['Settings, two ways', 'The lunchbox settings are still the sliders at the top of Pack, Week and Foods, and now Account \u2192 Lunchboxes as well. Match the boxes and When do you pack sit at the top of that page.'],
-    ['What the plan costs', 'Subscription shows the price, the date it renews or ends, and how to stop it.'],
-    ['Caretaker', 'What we called a helper is now a caretaker: they see the week and check the box off, and nothing else.'],
-    ['Your own foods', 'A food in your own words is part of the Household plan now. Everything already on your list stays there and keeps being planned, and the idea bank is free for good.']
+    ['Boxes that match', 'With more than one lunchbox, Shuffle all draws them from the same foods where each box\u2019s rules allow. It asks whose boxes first, and every shuffle can be undone. Switch it off under Account \u2192 Lunchboxes.'],
+    ['Tabs, not a menu', 'On Pack, Week and Foods the lunchboxes are tabs along the top. One tap each.'],
+    ['One food, every box', 'Add a food and it goes into every lunchbox; the button says where. Uncheck a name to leave one out.'],
+    ['The week after', 'On Week, tap Next week. Plan it, shop for it under Next week, and it becomes this week on its own.'],
+    ['Overrule a rule', 'Tap a compartment, then a food a rule keeps out, and it goes in flagged with a \u201c!\u201d.'],
+    ['Ask at three', 'From three o\u2019clock Pack asks how today\u2019s box went; a dot on the Pack tab until you answer. Pack at night? Say so under Account \u2192 Lunchboxes and Pack shows tomorrow\u2019s box from three.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
@@ -1188,6 +1195,9 @@ var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account
    this too: a row that was never drawn is not a check. */
 function paneOK(pn){
   if(!PANES[pn] || !activeKid()) return false;
+  /* signed in, isHelper() is false until /api/household answers, so a caretaker's cold
+     start would pass this for one round trip. Wait for the answer before believing it. */
+  if(signedIn() && !Account.me) return pn !== 'plan' && pn !== 'box';
   if(pn === 'box') return !isHelper();
   if(pn === 'plan') return billingOn();
   return true;
@@ -1202,7 +1212,8 @@ function openPane(name){
 function closePane(){
   var was = UI.pane, y = UI.paneScroll || 0;
   UI.pane = ''; render(); window.scrollTo(0, y);
-  var row = document.querySelector('#view .item[data-pane="'+was+'"]'); if(row) row.focus();
+  var row = document.querySelector('#view .item[data-pane="'+was+'"]') || document.querySelector('#who [data-act="box-settings"]');
+  if(row) row.focus({preventScroll:true});   /* focus() scrolls by default, which would fight the restore above */
 }
 /* where a bug report says the parent was */
 function paneLabel(){ return UI.pane && PANES[UI.pane] ? (UI.pane === 'box' ? 'lunchbox settings' : PANES[UI.pane].toLowerCase()) : UI.tab; }
@@ -2847,14 +2858,15 @@ function viewFoods(){
     if((kid.settings.slots||{})[c.k]) return;
     var n = foodsOf(kid).filter(function(f){ return f.c===c.k; }).length;
     if(n) h += '<p class="hint">'+n+' '+esc(n===1 ? c.label.toLowerCase() : c.plural.toLowerCase())
-      + ' saved &mdash; switch the '+esc(c.label.toLowerCase())+' compartment on in Setup to use '+(n===1?'it':'them')+'.</p>';
+      + ' saved &mdash; switch the '+esc(c.label.toLowerCase())+' compartment on in the lunchbox settings to use '+(n===1?'it':'them')+'.</p>';
   });
   /* a food in the parent's own words belongs to the Household plan; the button stays
      on screen, locked, never hidden, and the idea bank stays free so a free list is
      never stuck with what it has */
   h += gated()
-    ? '<button class="btn wide" data-act="upgrade" data-why="food">'+svg('lock',17)+'Add your own</button>'
-      + '<p class="hint" style="margin:0">Every food here stays. Adding one in your own words is part of the Household plan; the idea bank is free.</p>'
+    ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add your own \u2014 part of the Household plan">'+svg('lock',17)+'Add your own</button>'
+      + '<button class="btn wide" data-act="ideas">'+svg('plus',17)+'Browse the idea bank</button>'
+      + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank is free.</span>'+premiumTag()+'</p>'
     : '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button>'
       + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words.</span>'+premiumTag()+'</p>' : '');
   return h + '</div>';
@@ -2865,7 +2877,7 @@ function viewBox(){
   /* the page says what it is and offers the way out at the top, like every other
      pane; what holds for every box sits above the tabs, what is one box's own
      below them, so the reach of a switch is visible rather than guessed at */
-  var h = '<div class="stack">' + paneHead('Lunchbox settings', many ? 'Every lunchbox' : kid.name, 'box-done');
+  var h = '<div class="stack">' + paneHead('Account', 'Lunchbox settings', 'box-done');
 
   var all = '';
   if(many && !isHelper()){
@@ -2881,7 +2893,7 @@ function viewBox(){
   if(!isHelper()){
     /* adding belongs to the household, so it sits with the household-wide switches
        rather than under one box's tab */
-    h += '<div><div class="sect-head"><h3>'+(many ? 'All the lunchboxes' : 'However you pack')+'</h3>'
+    h += '<div><div class="sect-head"><h3>'+(many ? 'All the lunchboxes' : 'Your lunchboxes')+'</h3>'
       +  (many ? '<span class="count">'+kids().length+'</span>' : '')+'</div><div class="card">'
       +  all
       +  '<div class="switch"><div><div class="t">When do you pack?</div></div>'
@@ -2892,12 +2904,12 @@ function viewBox(){
       +  '<div class="row" style="gap:8px;align-items:center;flex:none">'+premiumTag()
       +  '<button class="btn sm" data-act="add-kid">'+svg('plus',15)+'Add</button></div></div>'
       +  '</div>'
-      +  (packsAtNight() ? '<p class="hint" style="margin:8px 0 0">Pack shows tomorrow&#8217;s box from three o&#8217;clock.</p>' : '')
+      +  '<p class="hint" style="margin:8px 0 0">Pack the night before and Pack shows tomorrow&#8217;s box from three o&#8217;clock.</p>'
       +  '</div>';
   }
 
   h += kidPager()
-    +  (many ? '<div><p class="view-sub">This lunchbox</p><h2 class="view-title">'+esc(kid.name)+'</h2></div>' : '');
+    +  '<div><p class="view-sub">This lunchbox</p><h2 class="view-title">'+esc(kid.name)+'</h2></div>';
 
   /* this lunchbox */
   h += '<div class="card stack" style="gap:14px">'
@@ -2958,7 +2970,7 @@ function viewBox(){
    that tab is for, and a join link lands here expecting it. */
 function viewSetup(){
   var h = '<div class="stack"><div><p class="view-sub">Account</p><h2 class="view-title">'+(signedIn() ? 'Your household' : 'This phone')+'</h2>'
-    +  '<p class="hint" style="margin:6px 0 0" id="syncLine">'+esc(syncLine())+'</p></div>';
+    +  (syncLine() ? '<p class="hint" style="margin:6px 0 0" id="syncLine">'+esc(syncLine())+'</p>' : '')+'</div>';   /* only one of these renders at a time: the tab, or the Account page */
   if(Account.join) h += '<div class="card stack" style="gap:12px">'+joinBlock()+'</div>';
   if(!signedIn()) h += signInCard();
   var row = function(pane, act, label, caption){
@@ -2991,7 +3003,7 @@ function paneAccount(){
   if(signedIn()){
     h += '<div class="card stack" style="gap:12px">'
       +  '<div class="kv"><span>Signed in as</span><span style="overflow-wrap:anywhere;white-space:normal;text-align:right">'+esc(Account.user.email)+'</span></div>'
-      +  '<p class="hint" style="margin:0">'+esc(syncLine())+'</p>'
+      +  '<p class="hint" style="margin:0" id="syncLine">'+esc(syncLine())+'</p>'
       +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="signout">Sign out</button>'
       +  (Account.me && Account.me.role !== 'owner' ? '<button class="btn danger sm" data-act="leave">Leave this household</button>' : '')+'</div>'
       +  '</div>';
@@ -3091,7 +3103,7 @@ function panePlan(){
     +  (paid() ? (e.plan !== 'lifetime' ? '<button class="btn sm" data-act="upgrade" data-why="forever">Switch to forever</button>' : '') : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
     +  (e.portal ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '')+'</div></div>';
   /* what free looks like, said once, in the two places a parent is about to meet it */
-  var freeAgain = 'one lunchbox, the week, the shopping list and the pack list stay free. What you have added stays.';
+  var freeAgain = 'one lunchbox, the week, the shopping list, the pack list and the idea bank stay free. What you have added stays.';
   if(trialing()){
     h += '<div class="card stack" style="gap:10px"><h3>When the three weeks end</h3>'
       +  '<p class="hint" style="margin:0">No card, and nothing to cancel. From '+esc(trialEnd() ? fmtDay(trialEnd()) : 'then')+', '+freeAgain+'</p></div>';
@@ -3114,7 +3126,7 @@ function panePlan(){
 function planCost(){
   var e = Account.entitlement || {}, pr = (Account.billing && Account.billing.prices) || {};
   /* a household whose three weeks are over is not waiting for a trial to end */
-  if(!paid()){ return pr.year ? money(pr.year)+' a year'+(trialing() ? ' when the three weeks end' : '') : ''; }
+  if(!paid()) return trialing() && pr.year ? money(pr.year)+' a year when the three weeks end' : '';
   if(e.plan === 'lifetime') return pr.lifetime ? money(pr.lifetime)+', once' : '';
   var k = ['year','month'].filter(function(n){ return pr[n] && pr[n].id && pr[n].id === e.price; })[0];
   return k ? money(pr[k])+' a '+k : (pr.year ? money(pr.year)+' a year' : '');
@@ -3386,13 +3398,13 @@ function helpSheet(){
   var qa = [
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle a day, or tap a compartment to change one thing.'],
     ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
+    ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
     ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
     ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Shuffle all draws them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top \u2014 in the settings too.'],
     ['Can I plan the week after?', 'Yes. On Week, tap Next week; Plan next week draws it. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
-    ['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.'],
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from. Foods in your own words, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
     ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words is part of the Household plan. The idea bank stays free.']
   ];
@@ -3599,7 +3611,7 @@ document.addEventListener('click', function(ev){
 
   /* navigation */
   if(act==='tab'){ UI.weekAhead = 0; if(el.getAttribute('data-tab')==='pack' && UI.tab==='pack' && reviewOwed()) UI.reviewLater = {};   /* the dot is a door: tapping Pack again brings the questions back */ if(UI.tab !== 'setup') UI.lastTab = paneLabel(); UI.tab = el.getAttribute('data-tab'); UI.pane = ''; render(); window.scrollTo(0,0); return; }
-  if(act==='box-settings'){ if(UI.pane==='box') closePane(); else openPane('box'); return; }
+  if(act==='box-settings'){ if(UI.pane==='box') closePane(); else if(paneOK('box')) openPane('box'); return; }
   if(act==='pane'){ var pn = el.getAttribute('data-pane'); if(!paneOK(pn)) return; openPane(pn); return; }
   if(act==='pane-done' || act==='box-done'){ closePane(); return; }
   if(act==='go-foods'){ UI.tab='foods'; UI.pane = ''; render(); window.scrollTo(0,0); return; }
@@ -4122,7 +4134,8 @@ document.addEventListener('input', function(ev){
        the old hand-patch dropped the gear and the help button until the next
        render, and would now put a lunchbox button back over the tab strip */
     var nm = kid.name || 'Lunchbox';
-    var t = document.querySelector('#view .view-title'); if(t) t.textContent = nm;
+    var titles = document.querySelectorAll('#view .view-title');
+    var t = titles[titles.length - 1]; if(t && t.id !== 'paneTitle') t.textContent = nm;   /* the last one names the box; the first names the page */
     var tab = document.querySelector('.boxtabs [aria-current="true"]');
     if(tab && tab.lastChild && tab.lastChild.nodeType === 3) tab.lastChild.nodeValue = nm;
     var kb = document.querySelector('#who .kidbtn .nm'); if(kb) kb.textContent = nm;

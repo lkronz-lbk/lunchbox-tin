@@ -13,9 +13,11 @@ import { readPolicies } from '../scripts/csp.mjs';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 /* The test server enforces the same Content-Security-Policy Netlify will, so a
    policy that would break the app breaks the suite instead of the site. */
-/* the walk-through must have a card for every step this build claims, no more */
-const STEP_COUNT = (fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'app', 'index.html'), 'utf8')
-  .match(/steps:\[([\s\S]*?)\n  \]\};/) || [,''])[1].split('\n').filter(l => l.trim().startsWith('[')).length;
+/* the walk-through must have a card for every step this build claims, no more — and a
+   build that claims nothing must say nothing, which is the usual case */
+const APP_SRC = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'app', 'index.html'), 'utf8');
+const NOTE_TEXT = (APP_SRC.match(/var WHATS_NEW = \{build:'[^']*', text:'([^']*)'/) || [,''])[1];
+const STEP_COUNT = (APP_SRC.match(/steps:\[([\s\S]*?)\n  \]\};/) || [,''])[1].split('\n').filter(l => l.trim().startsWith('[')).length;
 const POLICIES = readPolicies(fs.readFileSync(path.join(ROOT, '..', 'netlify.toml'), 'utf8'));
 
 /* The API runs in-process against an in-memory Postgres, through the same
@@ -241,8 +243,9 @@ const pinClock = async c => c.addInitScript(day => {
 /* the lunchbox gear lives on a lunchbox tab, never on the household's Shop: step to Week first if needed */
 /* Account is five rows now; each opens a pane over the tab */
 const openPane = async (pg, name) => {
-  await pg.click('[data-act="tab"][data-tab="setup"]'); await pg.waitForTimeout(250);
-  await pg.click(`[data-act="pane"][data-pane="${name}"]`); await pg.waitForTimeout(250);
+  await pg.click('[data-act="tab"][data-tab="setup"]');
+  await pg.click(`[data-act="pane"][data-pane="${name}"]`);
+  await pg.waitForSelector('#paneTitle');   /* the render is synchronous; wait for the thing, not for a guess at how long it takes */
 };
 const openGear = async pg => { if (!(await pg.$('[data-act="box-settings"]'))) { await pg.click('[data-act="tab"][data-tab="week"]'); await pg.waitForTimeout(250); } await pg.click('[data-act="box-settings"]'); };
 /* a shuffle asks whose boxes when there is more than one; answer "all of them" */
@@ -387,17 +390,25 @@ try {
     });
     await page.reload(); await page.waitForTimeout(600); await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('a food seeded before parts existed takes the bank\'s parts', fromBank && await page.evaluate((n) => { const f = JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.find(x => x.n === n); return !!(f.buy && f.buy.length); }, fromBank), fromBank);
-    /* an update says what changed, once, and only to a phone that already had the app */
-    check('a phone that had the app is told what changed on the first open after an update', await page.evaluate(() => { localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'); return true; })
-      && (await page.reload(), await page.waitForTimeout(600), /New: /.test(await page.textContent('#view'))) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1);
-    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
-    check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
-    await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
-    check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .switch', a => a.length)) === STEP_COUNT);
-    await page.click('[data-act="whats-new-ok"]'); await page.waitForTimeout(300);
-    check('Got it dismisses the note for good', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+    /* an update says what changed, once, and only to a phone that already had the app —
+       and only when this build has something to say */
+    await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
     await page.reload(); await page.waitForTimeout(600);
-    check('and once dismissed it stays gone', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+    if (!NOTE_TEXT) {
+      check('a build with no note interrupts nobody', !/New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0);
+      check('and carries no walk-through to open', STEP_COUNT === 0, STEP_COUNT);
+    } else {
+      check('a phone that had the app is told what changed on the first open after an update',
+        /New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1);
+      await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
+      check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
+      await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
+      check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .switch', a => a.length)) === STEP_COUNT);
+      await page.click('[data-act="whats-new-ok"]'); await page.waitForTimeout(300);
+      check('Got it dismisses the note for good', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+      await page.reload(); await page.waitForTimeout(600);
+      check('and once dismissed it stays gone', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+    }
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
     await page.context().grantPermissions(['clipboard-read','clipboard-write']);
@@ -1845,6 +1856,39 @@ try {
   await openPane(pb, 'plan');
   check('and the Subscription page offers the plan with no billing to manage', /Your plan\s*Free/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) >= 1);
   await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200);
+
+  /* a food in the parent's own words is the plan; the idea bank is free for good, and
+     nothing a household already added is ever taken off the list */
+  await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(300);
+  const foodsBefore = await pb.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length);
+  check('lapsed, Add your own wears a lock and keeps its place on the page',
+    (await pb.$$eval('[data-act="upgrade"][data-why="food"]', a => a.length)) === 1 && (await pb.$$eval('[data-act="add-own"]', a => a.length)) === 0);
+  check('and the free way in sits beside it, not three screens back',
+    (await pb.$$eval('[data-act="ideas"]', a => a.filter(b => /idea bank/i.test(b.textContent)).length)) >= 1);
+  check('and every food already on the list is still there and still planned', foodsBefore > 0 &&
+    (await pb.$$eval('.item .nm', a => a.length)) > 0 && !/no foods/i.test(await pb.textContent('#view')), foodsBefore);
+  await pb.click('[data-act="upgrade"][data-why="food"]'); await pb.waitForTimeout(350);
+  check('tapping the lock opens the plan sheet, not the form',
+    (await pb.$$eval('#nfName', a => a.length)) === 0 && /own words/i.test(await pb.textContent('#sheetBody')));
+  await pb.click('#sheetClose'); await pb.waitForTimeout(250);
+  /* the idea bank must still add, or "free for good" is not true */
+  await pb.click('[data-act="ideas"]'); await pb.waitForTimeout(350);
+  const freeIdea = await pb.$('#sheetBody [data-act="add-idea"]:not(.done)');
+  if (freeIdea) { await freeIdea.click(); await pb.waitForTimeout(500); }
+  await pb.click('#sheetClose').catch(() => {}); await pb.waitForTimeout(250);
+  check('and the idea bank still adds a food on a lapsed household',
+    (await pb.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length)) > foodsBefore, foodsBefore);
+  /* the sheet left open across the last night of the trial must refuse at save time */
+  const savedWhileGated = await pb.evaluate(() => {
+    const n = JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length;
+    document.querySelector('[data-act="upgrade"][data-why="food"]');
+    const b = document.createElement('button'); b.setAttribute('data-act','save-own'); document.body.appendChild(b); b.click(); b.remove();
+    return {before:n, after: JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length};
+  });
+  check('and a save that slips through while gated adds nothing', savedWhileGated.before === savedWhileGated.after, savedWhileGated);
+  await pb.click('#sheetClose').catch(() => {}); await pb.waitForTimeout(250);
+  await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
+
   await pb.goto(BASE+'/app/?upgrade=1'); await pb.waitForLoadState('load');
   const viaMail = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetBody').textContent));
   check('the link in a reminder email opens the plan sheet on arrival', viaMail && !pb.url().includes('upgrade='));
@@ -2131,7 +2175,8 @@ try {
     (await ph.textContent('#view')).replace(/\s+/g, ' ').slice(0, 200));
   await ph.click('[data-act="pane-done"]'); await ph.waitForTimeout(250);
   await db.query(`UPDATE entitlements SET plan='free', status='none' WHERE household_id=${patState.household.id}`);
-  await ph.reload(); await ph.waitForLoadState('load'); await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
+  await ph.reload(); await ph.waitForLoadState('load'); await ph.click('[data-act="tab"][data-tab="setup"]');
+  await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
   await ph.click('[data-act="tab"][data-tab="pack"]'); await ph.waitForTimeout(250);
   check('and on a lapsed household a helper sees no locks, tags or banners either', (await ph.$$eval('.chip.lock, .chip.good, [data-act="upgrade"], [data-act="trial-dismiss"]', a => a.filter(x => /Household|three weeks/.test(x.textContent)).length)) === 0);
   await db.query(`UPDATE entitlements SET plan='household', status='active' WHERE household_id=${patState.household.id}`);

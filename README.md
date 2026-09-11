@@ -250,7 +250,7 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
-- **Help** — the ? at the top of every tab opens a sheet: nine one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: a dozen one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 
@@ -402,7 +402,7 @@ drawn, shopped for and packed exactly as before; only the writing of a new one i
 the idea bank stays free so a free list is never stuck with what it has.
 
 - **Checkout** (`POST /api/billing/checkout {plan, client?}`) opens Stripe's hosted page for the
-  signed-in household (owner or adult; a helper cannot buy). The session carries the
+  signed-in household (owner or adult; a caretaker cannot buy). The session carries the
   household id, comes back to `/app/?paid=1` or `/app/?paid=0` (to `/back.html?paid=…` when
   `client` is `ios`: the iPhone app opens Stripe in Safari, and that page hands the parent
   back to the app through the `lunchsorted://` scheme), allows promotion codes,
@@ -446,7 +446,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   alone (a parent who edits their own document's birthday extends their own trial, and
   nothing more).
   Coming back from Checkout the app pulls up to eight times over about twenty seconds until
-  the webhook has landed; a helper sees none of this.
+  the webhook has landed; a caretaker sees none of this.
 - **Environment**, per deploy context, test keys everywhere but production:
   `STRIPE_SECRET_KEY` (production refuses a test key, every other context refuses a live
   one), `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
