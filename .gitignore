@@ -2,3 +2,6 @@ node_modules
 .netlify/
 .DS_Store
 *.log
+
+# Xcode resolves these on first open, per machine
+ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
