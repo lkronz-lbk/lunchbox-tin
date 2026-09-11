@@ -98,7 +98,7 @@ export default async function handler(req) {
 
     if (req.method === 'PUT' && !action) {
       const h = await ensureHousehold(user);
-      if (h.role === 'helper') return fail('Helpers can tick the pack list but not change the plan', 403);
+      if (h.role === 'helper') return fail('A caretaker can check the pack list but not change the plan', 403);
       if (await throttled('put:' + user.id, 600, 3600)) return fail('Too many changes in an hour; try again shortly', 429);
       const raw = await req.text();
       if (Buffer.byteLength(raw, 'utf8') > MAX_DOC_BYTES) return fail('That is more than a household should hold', 413);

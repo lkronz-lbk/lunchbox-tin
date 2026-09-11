@@ -239,6 +239,11 @@ const pinClock = async c => c.addInitScript(day => {
   window.Date = Fake;
 }, pinnedDay);
 /* the lunchbox gear lives on a lunchbox tab, never on the household's Shop: step to Week first if needed */
+/* Account is five rows now; each opens a pane over the tab */
+const openPane = async (pg, name) => {
+  await pg.click('[data-act="tab"][data-tab="setup"]'); await pg.waitForTimeout(250);
+  await pg.click(`[data-act="pane"][data-pane="${name}"]`); await pg.waitForTimeout(250);
+};
 const openGear = async pg => { if (!(await pg.$('[data-act="box-settings"]'))) { await pg.click('[data-act="tab"][data-tab="week"]'); await pg.waitForTimeout(250); } await pg.click('[data-act="box-settings"]'); };
 /* a shuffle asks whose boxes when there is more than one; answer "all of them" */
 const goShuffle = async pg => {
@@ -644,6 +649,22 @@ try {
   check('a tab is one tap to the next lunchbox', await page.evaluate(() => document.querySelector('.boxtabs [aria-current="true"]') === document.querySelector('.boxtabs button:last-child')));
   await page.click('.boxtabs button:first-child'); await page.waitForTimeout(300);
 
+  /* the settings carry the same strip, so switching which box you are setting
+     up is the same gesture as switching which box you are planning */
+  await openGear(page); await page.waitForTimeout(300);
+  const boxPills = await page.$$eval('.boxtabs button', a => a.map(b => b.textContent.trim()));
+  check('the lunchbox settings carry the same tabs as Pack and Week', boxPills.length === 2, boxPills);
+  check('and no state pins on them: packed and owed are a Pack concern', (await page.$$eval('.boxtabs .pin', a => a.length)) === 0);
+  check('and the header does not repeat the name the strip already carries', (await page.$$eval('#who .kidbtn', a => a.length)) === 0);
+  const firstName = await page.inputValue('#kidName');
+  await page.click('.boxtabs button:last-child'); await page.waitForTimeout(350);
+  check('a tab changes which lunchbox is being set up', (await page.inputValue('#kidName')) !== firstName);
+  check('and Add a lunchbox and Remove sit below the settings, not above them', await page.evaluate(() => {
+    const add = document.querySelector('[data-act="add-kid"]'), rules = [...document.querySelectorAll('#view h3')].find(h => /School rules/.test(h.textContent));
+    return !!add && !!rules && add.getBoundingClientRect().top > rules.getBoundingClientRect().top;
+  }));
+  await page.click('.boxtabs button:first-child'); await page.waitForTimeout(300);
+  await page.click('[data-act="box-done"]'); await page.waitForTimeout(250);
 
   /* ------------------------------------- shop is the household's, always */
   await page.click('[data-act="tab"][data-tab="shop"]');
@@ -715,7 +736,7 @@ try {
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
   /* a night-before household is packing tomorrow's box by now */
   check('a household that packs in the morning still sees today\'s box in the evening', /Today/.test(await page.$eval('#view .view-title', e => e.textContent)));
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  await openPane(page, 'box');
   await page.click('[data-act="pack-when"][data-v="evening"]'); await page.waitForTimeout(300);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('say you pack the night before and, from three, Pack shows tomorrow\'s box', /Tomorrow/.test(await page.$eval('#view .view-title', e => e.textContent)));
@@ -730,7 +751,7 @@ try {
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('but in the morning, before the box has gone, it is still today\'s', /Today/.test(await page.$eval('#view .view-title', e => e.textContent)));
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  await openPane(page, 'box');
   await page.click('[data-act="pack-when"][data-v="morning"]'); await page.waitForTimeout(300);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   await page.evaluate(() => window.__pinHour(9));
@@ -738,8 +759,7 @@ try {
   check('and a new open before three has nothing to ask yet: the box is back at school', (await page.$$eval('.review', a => a.length)) === 0 && !(await page.$('nav.tabs .due')));
 
   /* ------------------------------------ one plan across the two boxes */
-  await page.click('[data-act="tab"][data-tab="setup"]');
-  await page.waitForTimeout(250);
+  await openPane(page, 'box');
   check('matching the boxes is on by default, and only offered once there are two',
     await page.evaluate(() => document.querySelector('[data-act="align"]').getAttribute('aria-pressed') === 'true'));
 
@@ -763,8 +783,7 @@ try {
   });
   await page.reload();
   await page.waitForTimeout(700);
-  await page.click('[data-act="tab"][data-tab="setup"]');
-  await page.waitForTimeout(250);
+  await openPane(page, 'account');
   await page.click('[data-act="clear-week"]');
   await page.waitForTimeout(150);
   await page.click('[data-act="clear-week"]');
@@ -917,8 +936,7 @@ try {
   check('a came-home-twice food the lead box still holds can be set up', !!rested, rested);
   await page.reload();
   await page.waitForTimeout(800);
-  await page.click('[data-act="tab"][data-tab="setup"]');
-  await page.waitForTimeout(250);
+  await openPane(page, 'account');
   await page.click('[data-act="clear-week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="clear-week"]'); await page.waitForTimeout(350);
   await page.click('[data-act="tab"][data-tab="pack"]');
@@ -946,8 +964,7 @@ try {
 
   /* ------------------------------------------------- transfer round trip */
   const dump = await page.evaluate(() => localStorage.getItem('lunchsorted'));
-  await page.click('[data-act="tab"][data-tab="setup"]');
-  await page.waitForTimeout(200);
+  await openPane(page, 'account');
   await page.click('[data-act="import-open"]');
   await page.waitForTimeout(350);
   await page.fill('#impText', '{"hello":"world"}');
@@ -1070,6 +1087,37 @@ try {
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   const smallSetup = await small();
   check('every tappable control on Account is at least 44px tall', smallSetup.length === 0, smallSetup);
+  /* Subscription only exists where billing is switched on; the rest always are, in this order */
+  check('Account is a short list of named rows, in order', await page.evaluate(() =>
+    [...document.querySelectorAll('#view .item')].filter(e => e.dataset.act === 'pane' || e.dataset.act === 'help')
+      .map(e => e.querySelector('.nm').textContent).filter(t => t !== 'Subscription').join('|') === 'Account|Household|Lunchboxes|Contact support'),
+    await page.evaluate(() => [...document.querySelectorAll('#view .item .nm')].map(e => e.textContent)));
+  check('and every row clears 44px', await page.$$eval('#view .item', a => a.every(e => e.getBoundingClientRect().height >= 44)));
+  for (const pane of ['account', 'household']) {   /* Subscription needs billing switched on; it gets its own sweep there */
+    await openPane(page, pane);
+    const smallPane = await small();
+    check('every tappable control on the ' + pane + ' page is at least 44px tall', smallPane.length === 0, smallPane);
+    await page.click('[data-act="pane-done"]'); await page.waitForTimeout(200);
+    check('Done on the ' + pane + ' page comes back to the rows', (await page.$$eval('#view .item[data-act="pane"]', a => a.length)) >= 3);
+  }
+  /* Contact support is the same door as the "?" in the corner */
+  await page.click('[data-act="help"]'); await page.waitForTimeout(300);
+  const fromCorner = await page.textContent('#sheetBody');
+  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  await page.click('#view .item[data-act="help"]'); await page.waitForTimeout(300);
+  check('Contact support opens the same help sheet as the "?" in the corner', (await page.textContent('#sheetBody')) === fromCorner && /Something is wrong/.test(fromCorner));
+  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  /* Lunchboxes is the settings, reached without leaving Account */
+  await openPane(page, 'box');
+  check('Account \u2192 Lunchboxes opens the lunchbox settings and leaves the bottom bar on Account', await page.evaluate(() =>
+    /School rules/.test(document.querySelector('#view').textContent) &&
+    document.querySelector('nav.tabs [data-tab="setup"]').getAttribute('aria-current') === 'true'));
+  await page.click('[data-act="box-done"]'); await page.waitForTimeout(250);
+  check('and Done comes back to the Account rows, not to Week', (await page.$$eval('#view .item[data-act="pane"]', a => a.length)) >= 3);
+  await openPane(page, 'household');
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  check('tapping a bottom tab closes an open page', (await page.$$eval('#view .item[data-act="pane"]', a => a.length)) >= 3);
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await openGear(page); await page.waitForTimeout(250);
   check('the day-of-week chips are named in full for a screen reader', (await page.$$eval('.dow .tg[aria-label]', a => a.length)) === 7);
@@ -1314,7 +1362,7 @@ try {
   check('the review never asks about a box that was planned after the day', (await page.$$eval('.review', a => a.length)) === 0);
 
   /* a fresh plan started mid-week only covers days still ahead */
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await openPane(page, 'account');
   await page.click('[data-act="clear-week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="clear-week"]'); await page.waitForTimeout(250);
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
@@ -1391,7 +1439,7 @@ try {
 
   /* destructive actions */
   await page.click('.list .item'); await page.waitForTimeout(150);            /* tick one pantry row */
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
+  await openPane(page, 'account');
   await page.click('[data-act="clear-week"]'); await page.waitForTimeout(200);
   check('"Clear the plans" needs a second tap', (await page.textContent('[data-act="clear-week"]')).includes('again'));
   await page.click('[data-act="clear-week"]'); await page.waitForTimeout(250);
@@ -1410,11 +1458,14 @@ try {
   await page.evaluate(() => { localStorage.setItem('lunchbox-tin', localStorage.getItem('lunchsorted')); localStorage.setItem('lunchbox-tin-v1', '{"foods":[],"settings":{}}'); localStorage.setItem('fiveboxes-backup-1', '{"old":1}'); localStorage.setItem('lunchsorted-backup-2', '{"old":2}'); });
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
   {
-    const href = await page.getAttribute('[data-feedback]', 'href');
+    await page.click('[data-act="help"]'); await page.waitForTimeout(300);
+    const href = await page.getAttribute('#sheetBody [data-feedback]', 'href');
     const body = decodeURIComponent((href.split('body=')[1] || ''));
-    check('the Account tab has a "tell us" link that opens an email with the build, the phone and the household shape filled in, and never a food name',
+    check('Contact support opens the help sheet, whose bug report carries the build, the phone and the household shape, and never a food name',
       /^mailto:hello@lunchsorted\.app\?subject=/.test(href) && /Build: lunchsorted-v\d+ \(web\)/.test(body) && /Phone: Mozilla/.test(body) && /Lunchboxes: \d+ · foods: \d+/.test(body) && /What happened:/.test(body) && !/grape|banana|cracker|yogurt/i.test(body.replace(/^Phone:.*$/m, '')), body.slice(0, 300));
   }
+  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  await openPane(page, 'account');
   await page.click('[data-act="clear-all"]'); await page.waitForTimeout(150);
   await page.click('[data-act="clear-all"]'); await page.waitForTimeout(300);
   check('"Erase everything" also removes the copies saved under the old name, and the backups',
@@ -1474,9 +1525,9 @@ try {
   await page.goto(devLink); await page.waitForTimeout(200);
   check('following the link twice does not spend it', /Sign in as/.test(await page.content()));
   await page.click('button[type="submit"]'); await page.waitForURL(/\/app\//); await page.waitForLoadState('load');
-  await until(page, () => /Signed in as\s*liz@example\.com/.test(document.querySelector('#view').textContent));
-  check('one tap signs in, lands back in the app, and the account card is at the top', page.url().endsWith('/app/') &&
-    await page.evaluate(() => { const v = document.querySelector('#view'); return /Signed in as/.test(v.textContent) && v.querySelector('.sect-head h3').textContent === 'Account'; }), page.url());
+  await until(page, () => /liz@example\.com/.test(document.querySelector('#view').textContent));
+  check('one tap signs in and lands back on the Account tab, whose rows name the household', page.url().endsWith('/app/') &&
+    await page.evaluate(() => { const v = document.querySelector('#view'); return /liz@example\.com/.test(v.textContent) && v.querySelectorAll('[data-act="pane"]').length >= 3; }), page.url());
   const welcomes = (to) => mails.filter(m => m.to === to && /Everything is on for three weeks/.test(m.subject));
   check('a first sign-in gets one welcome email, with a way to stop reminders', welcomes('liz@example.com').length === 1 && /\/api\/auth\/mail-stop\?t=[a-f0-9]{32}/.test(welcomes('liz@example.com')[0].text) && /\/app\//.test(welcomes('liz@example.com')[0].text));
   {
@@ -1495,6 +1546,7 @@ try {
   check('a push with a stale version is refused with 409', stale === 409, stale);
 
   /* the other parent already uses the app on their own phone */
+  await openPane(page, 'household');
   await page.click('[data-act="invite"]'); await until(page, () => !!document.querySelector('#inviteUrl'));
   const inviteUrl = await page.inputValue('#inviteUrl');
   check('an invite link is made', /\/app\/\?join=/.test(inviteUrl), inviteUrl);
@@ -1534,7 +1586,7 @@ try {
   const ownerKids = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name).sort());
   const samKids = await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name).sort());
   check("joining with lunches of his own brings Ollie into the household on both phones", JSON.stringify(samKids) === JSON.stringify(ownerKids) && samKids.includes('Ollie') && samKids.length >= 2, {ownerKids, samKids});
-  await p2.click('[data-act="tab"][data-tab="setup"]'); await p2.waitForTimeout(300);
+  await openPane(p2, 'household');
   const memberText = await p2.textContent('#view');
   check('both parents are listed, by name, with the address as the small print', /Parent/.test(memberText) && /sam@example\.com/.test(memberText) && /liz@example\.com/.test(memberText) && !/sam\.example/.test(memberText));
   check('Sam kept the member he already was', await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return d.members.filter(m => !m.deletedAt).length === 2 && d.members.some(m => m.id === localStorage.getItem('lunchsorted-device')); }));
@@ -1566,7 +1618,7 @@ try {
   check('an un-tick on the other phone holds here instead of coming back', held, holdDetail ? {pantryKey, first, ...holdDetail, pageErrors: errors.slice(-3)} : {pantryKey, first});
 
   /* a helper sees the pack list and cannot change the plan */
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  await openPane(page, 'household');
   await page.click('[data-act="invite-helper"]'); await until(page, () => !!document.querySelector('#inviteUrl'));
   const helperUrl = await page.inputValue('#inviteUrl');
   const ctx3 = await phone();
@@ -1613,13 +1665,13 @@ try {
   /* sign out clears the phone and sends anything unsent first; delete removes the household everywhere */
   await p2.click('[data-act="tab"][data-tab="setup"]'); await p2.waitForTimeout(250);
   await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].name = 'Ollie Unsent'; d.kids[0].updatedAt = new Date().toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); });
-  await p2.reload(); await p2.waitForLoadState('load'); await p2.click('[data-act="tab"][data-tab="setup"]'); await until(p2, () => !!document.querySelector('[data-act="signout"]'));
+  await p2.reload(); await p2.waitForLoadState('load'); await openPane(p2, 'account'); await until(p2, () => !!document.querySelector('[data-act="signout"]'));
   await p2.click('[data-act="signout"]'); await until(p2, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));
   const cleared = await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return !d.onboardedAt && !d.kids.some(k => k.foods.length) && !d.kids.some(k => k.name === 'Ollie'); });
   const onServer = (await db.query(`SELECT h.doc FROM households h JOIN household_members m ON m.household_id = h.id JOIN users u ON u.id = m.user_id WHERE u.email = 'sam@example.com'`)).rows[0];
   check('signing out sends the last change, then leaves the phone blank at onboarding', cleared && !!onServer && onServer.doc.kids.some(k => k.name === 'Ollie Unsent'), [cleared, onServer && onServer.doc.kids.map(k => k.name)]);
   await ctx2.close();
-  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
+  await openPane(page, 'account');
   await page.click('[data-act="delete-account"]'); await page.waitForTimeout(150);
   await page.click('[data-act="delete-account"]'); await until(page, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));   /* the fresh document lands after the save debounce */
   const afterDelete = await page.evaluate(() => fetch('/api/household').then(r => r.status));
@@ -1718,7 +1770,10 @@ try {
   /* the first three weeks: everything on, the premium pieces wearing a tag */
   const setBorn = (daysAgo) => pb.evaluate(n => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.createdAt = new Date(Date.now() - n * 86400000).toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); }, daysAgo);
   await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
-  check('a new household has everything on for 21 days and Setup says so', /Household plan\s*On for 21 more days/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) === 1);
+  check('a new household has everything on for 21 days and the Subscription row says so', /Subscription\s*On for 21 more days/.test(await pb.textContent('#view')));
+  await openPane(pb, 'plan');
+  check('and the Subscription page offers the plan', (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) === 1);
+  await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   check('the premium pieces wear a tag while they are on', await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length) >= 1 && (await pb.$$eval('.chip.lock', a => a.length)) === 0);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
@@ -1762,14 +1817,17 @@ try {
   await pb.fill('#signinEmail', 'pat@example.com'); await pb.press('#signinEmail', 'Enter');
   await until(pb, () => !!document.querySelector('[data-dev-link]'));
   await pb.goto(await pb.getAttribute('[data-dev-link]', 'href')); await pb.click('button[type="submit"]'); await pb.waitForURL(/\/app\//); await pb.waitForLoadState('load');
-  await until(pb, () => /Signed in as\s*pat@example\.com/.test(document.querySelector('#view').textContent) && !!document.querySelector('[data-act="upgrade"]'));
+  await until(pb, () => /pat@example\.com/.test(document.querySelector('#view').textContent) && !!document.querySelector('[data-act="pane"][data-pane="plan"]'));
   check('signed in from a phone\'s Safari, the app says how to put it on the home screen, step by step, once', /bottom right/.test(await pb.textContent('#view')) && /Add to Home Screen/.test(await pb.textContent('#view')) && !!(await pb.$('.banner.hot [data-act="home-ok"]')));
   await pb.$eval('[data-act="home-ok"]', b => b.click()); await pb.waitForTimeout(200);   /* the resumed sheet sits over it in this flow; the tap itself is what is under test */
   check('and OK puts it away for good', !/Add to Home Screen/.test(await pb.textContent('#view')) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-home-seen'))) === '1');
   const resumed = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /second lunchbox/i.test(document.querySelector('#sheetBody').textContent));
   check('after signing in, the plan sheet comes back on its own for the lunchbox they were adding', resumed);
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
-  check('signed in and free, Setup says Free and offers the plan', /Household plan\s*Not on/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 0 && (await pb.$$eval('.chip.lock', a => a.length)) >= 1);
+  check('signed in and free, the Subscription row says Not on', /Subscription\s*Not on/.test(await pb.textContent('#view')));
+  await openPane(pb, 'plan');
+  check('and the Subscription page offers the plan with no billing to manage', /Your plan\s*Free/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) >= 1);
+  await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200);
   await pb.goto(BASE+'/app/?upgrade=1'); await pb.waitForLoadState('load');
   const viaMail = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetBody').textContent));
   check('the link in a reminder email opens the plan sheet on arrival', viaMail && !pb.url().includes('upgrade='));
@@ -1842,6 +1900,7 @@ try {
     check('the server takes the earlier of the document\'s birthday and its own row, so a phone can only shorten its trial, and a household older than billing starts its three weeks the day billing began',
       a.toISOString() === old && b.toISOString() === old && c.toISOString() === fresh && d.toISOString() === fresh, [a, b, c, d]);
   }
+  await openPane(pb, 'household');
   await pb.click('[data-act="invite"]'); await pb.waitForTimeout(300);
   check('and the app opens the plan sheet instead, with all three prices', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$29 a year/.test(await pb.textContent('#sheetBody')) && /\$3\.99 a month/.test(await pb.textContent('#sheetBody')) && /\$79, once, forever/.test(await pb.textContent('#sheetBody')));
   const monthly = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"month"}'}).then(r => r.json()));
@@ -1874,7 +1933,7 @@ try {
     check('inside the iPhone app, the email step leads with the code, since a tapped link opens Safari', /Type the code/.test(await pa.textContent('#view')));
     await pa.click('[data-act="ob-later"]'); await pa.waitForTimeout(200);
     await pa.click('[data-act="ob-skip"]'); await pa.waitForTimeout(300);
-    await pa.click('[data-act="tab"][data-tab="setup"]'); await pa.waitForTimeout(250);
+    await openPane(pa, 'account');
     check('and Setup does not tell an app to add itself to the Home Screen', !/Add to Home Screen/.test(await pa.textContent('#view')) && /on this phone/.test(await pa.textContent('#view')));
     await ctxApp.close();
   }
@@ -1913,10 +1972,19 @@ try {
   check('an older event arriving late cannot undo a newer one', staleHook.status === 200 && (await ent()).status === 'active');
 
   await pb.goto(BASE+'/app/?paid=1'); await pb.waitForLoadState('load');
-  const backOk = await until(pb, () => /Renews Jan 15, 2027/.test(document.querySelector('#view').textContent));
+  /* they were inviting the other parent when the paywall stopped them, so paying
+     puts them back on that, not on a receipt */
+  const resumedInvite = await until(pb, () => /Invite the other parent/.test(document.querySelector('#view').textContent));
+  check('back from Stripe, the parent lands on the invite they were making', resumedInvite && !pb.url().includes('paid='));
+  await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(250);
+  await openPane(pb, 'plan');
+  const backOk = await until(pb, () => /Renews\s*Jan 15, 2027/.test(document.querySelector('#view').textContent));
   if (!backOk) console.log('  (diag) url=' + pb.url() + ' view=' + (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 400) + ' errors=' + JSON.stringify(errors.slice(-3)));
-  check('back from Stripe, the account card is at the top with the renewal date, Manage billing, and no second buy button', backOk && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1 && !pb.url().includes('paid=') &&
-    await pb.evaluate(() => document.querySelector('#view .sect-head h3').textContent === 'Account') && (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0, (await pb.textContent('#view')).match(/Household plan[^\n]{0,60}/));
+  check('and Subscription carries the renewal date, what it costs, Manage billing, and no second buy button', backOk &&
+    /\$29 a year/.test(await pb.textContent('#view')) && /Cancel any time in Manage billing/.test(await pb.textContent('#view')) &&
+    (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1 &&
+    (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0, (await pb.textContent('#view')).match(/Renews[^\n]{0,60}/));
+  await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('a paid household can add a second lunchbox', (await pb.$$eval('#nkName', a => a.length)) === 1);
@@ -1925,6 +1993,7 @@ try {
   check('and invite the other parent', invitePaid === 200, invitePaid);
   const dupYear = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
   check('a household that already has the yearly plan is not sold it again', dupYear === 409);
+  await openPane(pb, 'plan');
   await pb.click('[data-act="upgrade"][data-why="forever"]'); await pb.waitForTimeout(300);
   check('Switch to forever offers only the forever price', (await pb.$$eval('[data-act="buy"][data-plan="year"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="buy"][data-plan="lifetime"]', a => a.length)) === 1 && /never renews/.test(await pb.textContent('#sheetBody')));
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
@@ -1933,18 +2002,18 @@ try {
 
   await hook(subEv('evt_3', 'customer.subscription.updated', t0 + 2, { cancel_at_period_end: true }));
   await pb.goto(BASE+'/app/?portal=1'); await pb.waitForLoadState('load');
-  await until(pb, () => /Ends Jan 15, 2027/.test(document.querySelector('#view').textContent));
-  check('a cancellation shows as the plan ending on its date, still paid until then', /Ends Jan 15, 2027/.test(await pb.textContent('#view')) && (await ent()).cape === true && (await ent()).status === 'active');
+  await until(pb, () => /Ends\s*Jan 15, 2027/.test(document.querySelector('#view').textContent));
+  check('a cancellation shows as the plan ending on its date, still paid until then', /Ends\s*Jan 15, 2027/.test(await pb.textContent('#view')) && (await ent()).cape === true && (await ent()).status === 'active');
   await hook(subEv('evt_3b', 'customer.subscription.updated', t0 + 2, { status: 'past_due' }));
-  await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]');
+  await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
   await until(pb, () => /Payment failed/.test(document.querySelector('#view').textContent));
   check('a failed payment says so with the date, keeps the plan for now, and makes Manage billing the main button', /update the card in Manage billing, or the Household plan ends on Jan 15, 2027/i.test(await pb.textContent('#view')) && await pb.$eval('[data-act="portal"]', b => b.classList.contains('primary')) && (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0);
   const pastDueYear = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
   check('and a second yearly checkout is refused while the first is unpaid', pastDueYear === 409);
   await hook(subEv('evt_4', 'customer.subscription.deleted', t0 + 3, { status: 'canceled' }));
   check('when the subscription ends the household is free again', (await ent()).plan === 'free' && (await ent()).status === 'canceled' && (await ent()).cust === 'cus_pat');
-  await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]');
-  await until(pb, () => /Household plan\s*Not on/.test(document.querySelector('#view').textContent));
+  await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
+  await until(pb, () => /Your plan\s*Free/.test(document.querySelector('#view').textContent));
   const portalStill = (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1;
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
@@ -1958,9 +2027,9 @@ try {
   check('and an old subscription ending later does not touch it', (await ent()).plan === 'lifetime');
   const lifeAgain = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"lifetime"}'}).then(r => r.status));
   check('nor is forever sold twice', lifeAgain === 409);
-  await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]');
-  const forever = await until(pb, () => /Household plan\s*Forever/.test(document.querySelector('#view').textContent));
-  check('Setup says forever and offers no upgrade', forever && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
+  await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
+  const forever = await until(pb, () => /Household, forever/.test(document.querySelector('#view').textContent));
+  check('Subscription says forever and offers no upgrade', forever && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
   /* a yearly household that buys forever stops its subscription so nobody pays twice */
   await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_old', event_at=NULL WHERE household_id=${patState.household.id}`);
   stripeCalls.length = 0;
@@ -1995,7 +2064,7 @@ try {
   check('undoing it clears the tester mark too', (await ent()).plan === 'free' && (await ent()).source === 'none', await ent());
   /* who may manage billing: the owner, and whoever paid; a helper may buy nothing */
   await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_pat', paid_by=NULL WHERE household_id=${patState.household.id}`);
-  await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
+  await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'household');
   await pb.click('[data-act="invite-helper"]'); await until(pb, () => !!document.querySelector('#inviteUrl'));
   const sitterUrl = await pb.inputValue('#inviteUrl');
   const ctxH = await phone(); const ph = await ctxH.newPage(); ph.on('pageerror', e => errors.push(String(e.message)));
@@ -2005,7 +2074,28 @@ try {
   await until(ph, () => !!document.querySelector('[data-act="join-accept"]')); await ph.click('[data-act="join-accept"]');
   await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
   const helperBuy = await ph.evaluate(() => Promise.all([fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status), fetch('/api/billing/portal', {method:'POST'}).then(r => r.status)]));
-  check('a helper can neither buy nor manage billing, and sees no plan line', helperBuy[0] === 403 && helperBuy[1] === 403 && !/Household plan/.test(await ph.textContent('#view')), helperBuy);
+  check('a caretaker can neither buy nor manage billing, and sees no plan line', helperBuy[0] === 403 && helperBuy[1] === 403 && !/Household plan/.test(await ph.textContent('#view')), helperBuy);
+  /* the Account tab a caretaker gets: no plan, no lunchbox settings, and still a way out */
+  await ph.click('[data-act="tab"][data-tab="setup"]'); await ph.waitForTimeout(300);
+  const sitterRows = await ph.evaluate(() => [...document.querySelectorAll('#view .item')].map(e => e.querySelector('.nm').textContent));
+  check('a caretaker sees Account, Household and support, and no Subscription or Lunchboxes row',
+    sitterRows.join('|') === 'Account|Household|Contact support', sitterRows);
+  check('and no gear in the corner', (await ph.$$eval('#who [data-act="box-settings"]', a => a.length)) === 0);
+  const sitterForced = await ph.evaluate(() => {
+    const mk = (p) => { const b = document.createElement('button'); b.setAttribute('data-act','pane'); b.setAttribute('data-pane',p); document.body.appendChild(b); b.click(); b.remove(); return document.querySelector('#view').textContent; };
+    return { box: mk('box'), plan: mk('plan') };
+  });
+  check('and a forced tap on either refuses rather than opening it',
+    !/School rules/.test(sitterForced.box) && !/Your plan/.test(sitterForced.plan), sitterForced);
+  await ph.click('[data-act="pane"][data-pane="account"]'); await ph.waitForTimeout(300);
+  check('a caretaker can still reach Sign out and Leave this household',
+    (await ph.$$eval('[data-act="signout"]', a => a.length)) === 1 && (await ph.$$eval('[data-act="leave"]', a => a.length)) === 1);
+  await ph.click('[data-act="pane-done"]'); await ph.waitForTimeout(250);
+  await ph.click('[data-act="pane"][data-pane="household"]'); await ph.waitForTimeout(300);
+  check('and sees who else is in it, named a caretaker, with no invite of their own',
+    /Caretaker \u2014 sees the week and checks the box off/.test(await ph.textContent('#view')) && (await ph.$$eval('[data-act="invite"], [data-act="invite-helper"]', a => a.length)) === 0,
+    (await ph.textContent('#view')).replace(/\s+/g, ' ').slice(0, 200));
+  await ph.click('[data-act="pane-done"]'); await ph.waitForTimeout(250);
   await db.query(`UPDATE entitlements SET plan='free', status='none' WHERE household_id=${patState.household.id}`);
   await ph.reload(); await ph.waitForLoadState('load'); await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
   await ph.click('[data-act="tab"][data-tab="pack"]'); await ph.waitForTimeout(250);
@@ -2025,7 +2115,7 @@ try {
   await ctxA.close();
   /* deleting the account stops the money */
   stripeCalls.length = 0;
-  await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
+  await openPane(pb, 'account');
   check('the delete warning says the yearly plan stops', /yearly plan stops at once/.test(await pb.textContent('#view')));
   await pb.click('[data-act="delete-account"]'); await pb.waitForTimeout(150); await pb.click('[data-act="delete-account"]');
   await until(pb, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));

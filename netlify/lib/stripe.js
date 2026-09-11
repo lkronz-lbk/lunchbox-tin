@@ -69,7 +69,8 @@ export async function priceInfo() {
   if (priceCache.value && Date.now() - priceCache.at < 3600 * 1000) return priceCache.value;
   const p = prices();
   const [year, lifetime, month] = await Promise.all([stripe('GET', `/prices/${p.year}`), stripe('GET', `/prices/${p.lifetime}`), p.month ? stripe('GET', `/prices/${p.month}`) : null]);
-  const one = (x) => ({ amount: x.unit_amount, currency: x.currency, interval: x.recurring ? x.recurring.interval : null });
+  /* the id travels so the app can say which of these the household is actually on */
+  const one = (x) => ({ id: x.id, amount: x.unit_amount, currency: x.currency, interval: x.recurring ? x.recurring.interval : null });
   priceCache = { at: Date.now(), value: { year: one(year), lifetime: one(lifetime), month: month ? one(month) : null } };
   return priceCache.value;
 }
