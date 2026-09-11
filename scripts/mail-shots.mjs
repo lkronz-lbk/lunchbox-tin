@@ -19,10 +19,10 @@ const ctx = await browser.newContext({ viewport:{width:375,height:812}, deviceSc
 const page = await ctx.newPage();
 page.on('pageerror', e => console.error('page error:', e.message));
 const wait = ms => page.waitForTimeout(ms);
-const shot = async (name, height) => {
+const shot = async (name, height, top = 0) => {
   const f = path.join(ROOT, 'img', 'mail-' + name + '.png');
   await page.evaluate(() => window.scrollTo(0, 0)); await wait(200);
-  await page.screenshot({ path: f, clip: { x: 0, y: 0, width: 375, height } }); console.log('captured', name);
+  await page.screenshot({ path: f, clip: { x: 0, y: top, width: 375, height } }); console.log('captured', name);
 };
 await page.goto(BASE + '/app/'); await wait(500);
 await page.addStyleTag({ content: '#toast{display:none!important}' });
@@ -39,7 +39,7 @@ await page.click('[data-act="box-settings"]'); await wait(400);
 await page.click('[data-act="kidpick-on"]'); await wait(300);
 await page.click('[data-act="box-done"]'); await wait(300);
 await page.click('[data-act="tab"][data-tab="pack"]'); await wait(400);
-if (await page.$('[data-act="kid-start"]')) { await page.click('[data-act="kid-start"]'); await wait(500); await shot('day3', 620); await page.click('[data-act="kid-exit"]', { force: true }); await wait(400); }
+if (await page.$('[data-act="kid-start"]')) { await page.click('[data-act="kid-start"]'); await wait(500); await shot('day3', 360, 250);   /* the pick sits low on the screen; the email wants the question and the two pictures, not the empty top */ await page.click('[data-act="kid-exit"]', { force: true }); await wait(400); }
 
 /* day 6: the morning after a packed box */
 await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);
