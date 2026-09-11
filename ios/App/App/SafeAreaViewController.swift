@@ -18,13 +18,6 @@ class SafeAreaViewController: CAPBridgeViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        /* the first painted frame has to know already, or the top bar lands under the clock
-           and drops a frame later; the observers below keep it right after that */
-        if let controller = webView?.configuration.userContentController {
-            let seed = WKUserScript(source: insetScript(view.safeAreaInsets),
-                                    injectionTime: .atDocumentStart, forMainFrameOnly: true)
-            controller.addUserScript(seed)
-        }
         progress = webView?.observe(\.estimatedProgress, options: [.new]) { [weak self] _, _ in
             self?.publishInsets()
         }
@@ -42,15 +35,32 @@ class SafeAreaViewController: CAPBridgeViewController {
 
     private var last: (CGFloat, CGFloat)?
 
+    /* An inline value on <html> outranks the stylesheet's env() fallback, so a zero must
+       clear the property rather than set it: a web view that has not been laid out yet
+       would otherwise pin the page to no room at all. Values are clamped and fixed to one
+       decimal, so nothing but a plain number can reach the page. */
     private func insetScript(_ insets: UIEdgeInsets) -> String {
-        /* clamped and fixed to one decimal, so the only thing that can reach the page is a
-           plain number: nothing here can end the quoted value it sits in */
-        let top = String(format: "%.1f", min(max(insets.top, 0), 200))
-        let bottom = String(format: "%.1f", min(max(insets.bottom, 0), 200))
+        func set(_ name: String, _ value: CGFloat) -> String {
+            guard value > 0 else { return "d.style.removeProperty('\(name)');" }
+            return "d.style.setProperty('\(name)','\(String(format: "%.1f", min(value, 200)))px');"
+        }
         return "(function(){var d=document.documentElement;if(!d)return;"
-            + "d.style.setProperty('--sat','\(top)px');"
-            + "d.style.setProperty('--sab','\(bottom)px');})();"
+            + set("--sat", insets.top) + set("--sab", insets.bottom) + "})();"
     }
+
+    /* Added once the phone has told us its insets, and it applies to every document loaded
+       after that: the sign-in round trip and any reload then start out with the right room
+       instead of a frame of the top bar under the clock. */
+    private func seedNextDocuments(_ insets: UIEdgeInsets) {
+        guard !seeded, insets.top > 0 || insets.bottom > 0,
+              let controller = webView?.configuration.userContentController else { return }
+        seeded = true
+        controller.addUserScript(WKUserScript(source: insetScript(insets),
+                                              injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true))
+    }
+
+    private var seeded = false
 
     private func publishInsets() {
         guard let webView = webView else { return }
@@ -58,6 +68,7 @@ class SafeAreaViewController: CAPBridgeViewController {
         /* layout and load progress both fire many times a page; only talk to the web view
            when the numbers actually moved, or after a load threw the inline values away */
         let pair = (insets.top, insets.bottom)
+        seedNextDocuments(insets)
         if let last = last, last == pair, !webView.isLoading { return }
         last = pair
         webView.evaluateJavaScript(insetScript(insets), completionHandler: nil)

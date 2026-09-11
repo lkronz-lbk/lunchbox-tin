@@ -88,11 +88,14 @@ export default async function handler(req, context) {
          week to the other account on the next sync, so say whose it is and what is lost */
       const already = await currentUser(req).catch(() => null);
       const swap = already && already.email !== email;
+      /* the association file opens this page inside the iPhone app, so the sentence sending a
+         parent to the app would be sending them where they already are */
+      const inApp = /LunchSortedApp/.test(req.headers.get('user-agent') || '');
       const head = swap
-        ? `<h1>You are signed in as ${esc(already.email)}.</h1><p>This link signs this phone out and signs it in as <b>${esc(email)}</b>. The week on this phone would then belong to that account. If you did not ask for this link, close this page instead.</p>`
-        : `<h1>Sign in as ${esc(email)}?</h1><p>One tap and you are signed in on this device. Building the week on your phone? Open the app there and type the code from the same email instead.</p>`;
+        ? `<h1>You are signed in as ${esc(already.email)}.</h1><p>Carrying on signs this device in as <b>${esc(email)}</b>, and the week on it joins that household. If you did not ask for this link, close this page instead.</p>`
+        : `<h1>Sign in as ${esc(email)}?</h1><p>One tap and you are signed in on this device.${inApp ? '' : ' Building the week on your phone? Open the app there and type the code from the same email instead.'}</p>`;
       return page('Sign in', `${head}
-<form method="post" action="/api/auth/verify"><input type="hidden" name="t" value="${esc(t)}"><input type="hidden" name="n" value="${esc(nonce)}">${b ? '<input type="hidden" name="b" value="1">' : ''}<button type="submit">${swap ? 'Sign out and sign in as ' + esc(email) : 'Continue to Lunch Sorted'}</button></form>`, 200, verifyCookie(nonce));
+<form method="post" action="/api/auth/verify"><input type="hidden" name="t" value="${esc(t)}"><input type="hidden" name="n" value="${esc(nonce)}">${b ? '<input type="hidden" name="b" value="1">' : ''}<button type="submit">${swap ? 'Sign in as them instead' : 'Continue to Lunch Sorted'}</button></form>`, 200, verifyCookie(nonce));
     }
 
     if (req.method === 'POST' && action === 'verify') {

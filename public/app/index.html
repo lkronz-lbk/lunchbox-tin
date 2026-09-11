@@ -372,7 +372,7 @@ nav.tabs svg{width:21px;height:21px}
 .item.on .radio{border-color:var(--accent)}
 .item.on .radio::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--accent)}
 .codebox{font-family:var(--f-mono);font-size:11px;line-height:1.45;min-height:110px;word-break:break-all}
-textarea.codebox{font-size:16px}   /* a paste target a parent types into; see the rule above */
+textarea.codebox:not([readonly]){font-size:16px}   /* a parent types into this one; see the rule above */
 .kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:7px 0;border-top:1px solid var(--line)}
 .kv:first-child{border-top:0}
 .kv span:last-child{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}

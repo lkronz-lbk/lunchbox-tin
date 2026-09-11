@@ -239,7 +239,7 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
-- **Help** — the ? at the top of every tab opens a sheet: five one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: nine one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 
@@ -322,6 +322,11 @@ writes the same one.
   posted from anywhere else is refused. The code (`POST /api/auth/code`) signs in the phone
   where the app is installed when the link would open in another browser. Each works once,
   on its own, for fifteen minutes: a link opened in the wrong browser does not spend the code.
+  On a phone with the iPhone app installed the link opens the app itself, because
+  `public/.well-known/apple-app-site-association` claims that one route and its token and
+  nothing else; a join link, a Stripe return and the planner on a home screen all stay in
+  Safari. If the device is already signed in as someone else, the page says so and names
+  both, because carrying on would join that phone's week to the other household.
   A browser the link signs in that has never built a week says so and points back to the
   code, and never pushes its empty household over the phone that did. Sessions are HttpOnly cookies for 180 days; links, codes and
   sessions are stored as hashes. No passwords anywhere.
