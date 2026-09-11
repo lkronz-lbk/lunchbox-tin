@@ -659,9 +659,16 @@ try {
   const firstName = await page.inputValue('#kidName');
   await page.click('.boxtabs button:last-child'); await page.waitForTimeout(350);
   check('a tab changes which lunchbox is being set up', (await page.inputValue('#kidName')) !== firstName);
-  check('and Add a lunchbox and Remove sit below the settings, not above them', await page.evaluate(() => {
-    const add = document.querySelector('[data-act="add-kid"]'), rules = [...document.querySelectorAll('#view h3')].find(h => /School rules/.test(h.textContent));
-    return !!add && !!rules && add.getBoundingClientRect().top > rules.getBoundingClientRect().top;
+  check('Add a lunchbox sits with the household switches above the tabs, and Remove with the box it removes', await page.evaluate(() => {
+    const add = document.querySelector('[data-act="add-kid"]'), del = document.querySelector('[data-act="del-kid"]');
+    const strip = document.querySelector('.boxtabs'), rules = [...document.querySelectorAll('#view h3')].find(h => /School rules/.test(h.textContent));
+    return !!add && !!del && !!strip && !!rules
+      && add.getBoundingClientRect().top < strip.getBoundingClientRect().top
+      && del.getBoundingClientRect().top > rules.getBoundingClientRect().top;
+  }));
+  check('and the settings say what they are, with the way out, at the very top', await page.evaluate(() => {
+    const done = document.querySelector('[data-act="box-done"]'), strip = document.querySelector('.boxtabs');
+    return !!done && done.getBoundingClientRect().top < strip.getBoundingClientRect().top && done.getBoundingClientRect().top < 200;
   }));
   await page.click('.boxtabs button:first-child'); await page.waitForTimeout(300);
   await page.click('[data-act="box-done"]'); await page.waitForTimeout(250);
@@ -1087,11 +1094,16 @@ try {
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   const smallSetup = await small();
   check('every tappable control on Account is at least 44px tall', smallSetup.length === 0, smallSetup);
-  /* Subscription only exists where billing is switched on; the rest always are, in this order */
+  /* Subscription only exists where billing is switched on; the rest always are, in this
+     order, and the first and fourth name what is behind them rather than a fixed word */
   check('Account is a short list of named rows, in order', await page.evaluate(() =>
     [...document.querySelectorAll('#view .item')].filter(e => e.dataset.act === 'pane' || e.dataset.act === 'help')
-      .map(e => e.querySelector('.nm').textContent).filter(t => t !== 'Subscription').join('|') === 'Account|Household|Lunchboxes|Contact support'),
+      .map(e => e.querySelector('.nm').textContent).filter(t => t !== 'Subscription').join('|') === 'This phone|Household|Lunchbox|Contact support'),
     await page.evaluate(() => [...document.querySelectorAll('#view .item .nm')].map(e => e.textContent)));
+  check('signed out, the first row offers this phone rather than an account there is none of', await page.evaluate(() => {
+    const r = document.querySelector('#view .item[data-pane="account"]');
+    return !!r && r.querySelector('.nm').textContent === 'This phone' && /Backup/.test(r.querySelector('.meta').textContent);
+  }));
   check('and every row clears 44px', await page.$$eval('#view .item', a => a.length >= 4 && a.every(e => e.getBoundingClientRect().height >= 44)));
   /* Subscription is absent without STRIPE_*, so it is swept in the billing run instead */
   for (const pane of ['account', 'household']) {
@@ -1634,6 +1646,7 @@ try {
   await p3.goto(link3); await p3.click('button[type="submit"]'); await p3.waitForURL(/\/app\//); await p3.waitForLoadState('load');
   await until(p3, () => /Join their household/.test(document.querySelector('#view').textContent));
   await p3.click('[data-act="join-accept"]'); await until(p3, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
+  check('a caretaker is told why the app will not let them change anything, on the tab they land on', /Read-only on this phone — checkmarks stay here/.test(await p3.textContent('#view')));
   const helperState = await p3.evaluate(() => fetch('/api/household').then(r => r.json()));
   check('a helper gets the plan and the foods in it, and nothing else', helperState.me.role === 'helper' && helperState.doc.kids.every(k => k.settings.avoidAllergens.length === 0 && k.foods.every(f => f.al.length === 0)) && helperState.members.every(m => !m.email || m.userId === helperState.me.userId));
   const helperPut = await p3.evaluate(v => fetch('/api/household', {method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify({doc: JSON.parse(localStorage.getItem('lunchsorted')), version:v})}).then(r => r.status), helperState.version);
@@ -1775,7 +1788,8 @@ try {
   await pb.reload(); await pb.waitForLoadState('load'); await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(300);
   check('a new household has everything on for 21 days and the Subscription row says so', /Subscription\s*On for 21 more days/.test(await pb.textContent('#view')));
   await openPane(pb, 'plan');
-  check('and the Subscription page offers the plan', (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) === 1);
+  check('and the Subscription page offers the plan', (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) === 1,
+    (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 240));
   await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   check('the premium pieces wear a tag while they are on', await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length) >= 1 && (await pb.$$eval('.chip.lock', a => a.length)) === 0);
@@ -1984,7 +1998,7 @@ try {
   const backOk = await until(pb, () => /Renews\s*Jan 15, 2027/.test(document.querySelector('#view').textContent));
   if (!backOk) console.log('  (diag) url=' + pb.url() + ' view=' + (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 400) + ' errors=' + JSON.stringify(errors.slice(-3)));
   check('and Subscription carries the renewal date, what it costs, Manage billing, and no second buy button', backOk &&
-    /\$29 a year/.test(await pb.textContent('#view')) && /Cancel any time in Manage billing/.test(await pb.textContent('#view')) &&
+    /\$29 a year/.test(await pb.textContent('#view')) && /Cancel it any time in Manage billing/.test(await pb.textContent('#view')) &&
     (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1 &&
     (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0, (await pb.textContent('#view')).match(/Renews[^\n]{0,60}/));
   /* a household on the monthly price must be told the monthly price, which only
@@ -2020,7 +2034,7 @@ try {
   check('a cancellation shows as the plan ending on its date, still paid until then', /Ends\s*Jan 15, 2027/.test(await pb.textContent('#view')) && (await ent()).cape === true && (await ent()).status === 'active');
   await hook(subEv('evt_3b', 'customer.subscription.updated', t0 + 2, { status: 'past_due' }));
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
-  await until(pb, () => /Payment failed/.test(document.querySelector('#view').textContent));
+  await until(pb, () => /payment failed/i.test(document.querySelector('#view').textContent));
   check('a failed payment says so with the date, keeps the plan for now, and makes Manage billing the main button', /update the card in Manage billing, or the Household plan ends on Jan 15, 2027/i.test(await pb.textContent('#view')) && await pb.$eval('[data-act="portal"]', b => b.classList.contains('primary')) && (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0);
   const pastDueYear = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
   check('and a second yearly checkout is refused while the first is unpaid', pastDueYear === 409);
@@ -2129,7 +2143,8 @@ try {
   await pa.fill('#signinEmail', 'other@example.com'); await pa.press('#signinEmail', 'Enter'); await until(pa, () => !!document.querySelector('[data-dev-link]'));
   await pa.goto(await pa.getAttribute('[data-dev-link]', 'href')); await pa.click('button[type="submit"]'); await pa.waitForURL(/\/app\//); await pa.waitForLoadState('load');
   await until(pa, () => !!document.querySelector('[data-act="join-accept"]')); await pa.click('[data-act="join-accept"]');
-  await until(pa, () => /Household plan/.test(document.querySelector('#view').textContent));
+  await until(pa, () => !!document.querySelector('[data-act="pane"][data-pane="plan"]'));
+  await openPane(pa, 'plan');
   const otherPortal = await pa.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('the other parent sees the plan but cannot open the payer\'s billing', otherPortal === 403 && (await pa.$$eval('[data-act="portal"]', a => a.length)) === 0, otherPortal);
   await ctxA.close();

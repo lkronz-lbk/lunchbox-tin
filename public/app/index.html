@@ -175,7 +175,7 @@ a.btn{text-decoration:none}
 .item:first-child{border-top:0}
 .item .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .item .nm{display:block;font-size:14.5px;line-height:1.3}
-.item .meta{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.05em}
+.item .meta{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.05em}
 .item .go{flex:none;display:inline-flex;align-items:center;color:var(--ink-3)}
 .item.done .nm{text-decoration:line-through;color:var(--ink-3)}
 .box{width:22px;height:22px;flex:none;border:1.5px solid var(--line-strong);border-radius:6px;
@@ -376,7 +376,7 @@ nav.tabs svg{width:21px;height:21px}
 textarea.codebox:not([readonly]){font-size:16px}   /* a parent types into this one; see the rule above */
 .kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:7px 0;border-top:1px solid var(--line)}
 .kv:first-child{border-top:0}
-.kv span:last-child{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.kv span:last-child{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -1163,12 +1163,12 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
 var APP_BUILD = 'lunchsorted-v14';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v14', text:'New: Account is five short pages, and a food in your own words is part of the Household plan.',
+var WHATS_NEW = {build:'lunchsorted-v14', text:'New: Account is a short list of rows now, and Subscription says what you pay and when.',
   steps:[
-    ['Five doors, not one list', 'Account, Household, Subscription, Lunchboxes and support each open their own short page. Tap one, then Done to come back.'],
-    ['Tabs in the settings', 'The lunchbox settings carry the same name tabs as Pack and Week. One tap to change which box you are setting up.'],
-    ['What the plan costs', 'Subscription now shows the price, the date it renews, and how to stop it.'],
-    ['Caretaker', 'A helper is now a caretaker: they see the week and check the box off, and nothing else.'],
+    ['A row, not a scroll', 'Account, Household, Lunchboxes and Subscription each open their own short page \u2014 tap Done to come back. Contact support opens the answers and an email to us.'],
+    ['Settings, two ways', 'The lunchbox settings are still the sliders at the top of Pack, Week and Foods, and now Account \u2192 Lunchboxes as well. Match the boxes and When do you pack sit at the top of that page.'],
+    ['What the plan costs', 'Subscription shows the price, the date it renews or ends, and how to stop it.'],
+    ['Caretaker', 'What we called a helper is now a caretaker: they see the week and check the box off, and nothing else.'],
     ['Your own foods', 'A food in your own words is part of the Household plan now. Everything already on your list stays there and keeps being planned, and the idea bank is free for good.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
@@ -1182,14 +1182,33 @@ function whatsNew(){
    Account categories. It is view state and never reaches S, or the merge would
    read a tap as a change and push on every one. */
 var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
-var PANES = {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'};
-function openPane(name){ if(!UI.pane) UI.paneScroll = window.scrollY; UI.pane = name; render(); window.scrollTo(0,0); }
-function closePane(){ var y = UI.paneScroll || 0; UI.pane = ''; render(); window.scrollTo(0, y); }
+var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'});
+/* the one test for whether a pane may be on screen. A pane is opened by a tap but
+   also by a link from an email and by the return from Stripe, so the render asks
+   this too: a row that was never drawn is not a check. */
+function paneOK(pn){
+  if(!PANES[pn] || !activeKid()) return false;
+  if(pn === 'box') return !isHelper();
+  if(pn === 'plan') return billingOn();
+  return true;
+}
+function openPane(name){
+  if(!UI.pane) UI.paneScroll = window.scrollY;
+  UI.pane = name; render(); window.scrollTo(0,0);
+  /* the tapped row is gone with the innerHTML, so focus would fall to the body and a
+     screen reader would never hear that a new page had opened */
+  var t = document.getElementById('paneTitle'); if(t) t.focus();
+}
+function closePane(){
+  var was = UI.pane, y = UI.paneScroll || 0;
+  UI.pane = ''; render(); window.scrollTo(0, y);
+  var row = document.querySelector('#view .item[data-pane="'+was+'"]'); if(row) row.focus();
+}
 /* where a bug report says the parent was */
-function paneLabel(){ return UI.pane ? (UI.pane === 'box' ? 'lunchbox settings' : PANES[UI.pane].toLowerCase()) : UI.tab; }
-function paneHead(sub, title){
-  return '<div class="spread"><div><p class="view-sub">'+sub+'</p><h2 class="view-title">'+title+'</h2></div>'
-    +  '<button class="btn sm" data-act="pane-done">Done</button></div>';
+function paneLabel(){ return UI.pane && PANES[UI.pane] ? (UI.pane === 'box' ? 'lunchbox settings' : PANES[UI.pane].toLowerCase()) : UI.tab; }
+function paneHead(sub, title, act){
+  return '<div class="spread"><div><p class="view-sub">'+esc(sub)+'</p><h2 class="view-title" id="paneTitle" tabindex="-1">'+esc(title)+'</h2></div>'
+    +  '<button class="btn sm" data-act="'+(act || 'pane-done')+'">Done</button></div>';
 }
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -2842,13 +2861,14 @@ function viewFoods(){
 }
 
 function viewBox(){
-  var kid = activeKid(), s = kid.settings;
-  var h = '<div class="stack">';
+  var kid = activeKid(), s = kid.settings, many = kids().length > 1;
+  /* the page says what it is and offers the way out at the top, like every other
+     pane; what holds for every box sits above the tabs, what is one box's own
+     below them, so the reach of a switch is visible rather than guessed at */
+  var h = '<div class="stack">' + paneHead('Lunchbox settings', many ? 'Every lunchbox' : kid.name, 'box-done');
 
-  /* What holds for every box sits above the tabs; what is one box's own sits
-     below them, so the reach of a switch is visible rather than guessed at. */
   var all = '';
-  if(kids().length > 1 && !isHelper()){
+  if(many && !isHelper()){
     all += '<div class="switch"><div><div class="t">Match the boxes</div>'
       +  '<div class="d">Shuffle all draws every box from the same foods where its rules allow. Boxes can only match on foods both lists have.</div></div>'
       +  '<button class="sw" data-act="align" aria-pressed="'+!(S.align && S.align.on === false)+'" aria-label="Match the boxes"></button></div>';
@@ -2859,18 +2879,25 @@ function viewBox(){
       +  '<button class="sw" data-act="review-reminder" aria-pressed="'+!!(S.reviewReminder && S.reviewReminder.on === true)+'" aria-label="Remind us at three"></button></div>';
   }
   if(!isHelper()){
-    h += '<div><div class="sect-head"><h3>All the lunchboxes</h3></div><div class="card stack" style="gap:14px">'
+    /* adding belongs to the household, so it sits with the household-wide switches
+       rather than under one box's tab */
+    h += '<div><div class="sect-head"><h3>'+(many ? 'All the lunchboxes' : 'However you pack')+'</h3>'
+      +  (many ? '<span class="count">'+kids().length+'</span>' : '')+'</div><div class="card">'
       +  all
-      +  '<div class="field"><label>When do you pack?</label><div class="toggles">'
-      +  '<button class="tg" data-act="pack-when" data-v="morning" aria-pressed="'+!packsAtNight()+'">In the morning</button>'
-      +  '<button class="tg" data-act="pack-when" data-v="evening" aria-pressed="'+packsAtNight()+'">The night before</button>'
-      +  '</div><span class="hint">If you pack at night, Pack shows tomorrow&#8217;s box from three o&#8217;clock.</span></div>'
-      +  '</div></div>';
+      +  '<div class="switch"><div><div class="t">When do you pack?</div></div>'
+      +  '<div class="seg two"><button data-act="pack-when" data-v="morning" aria-pressed="'+!packsAtNight()+'">Morning</button>'
+      +  '<button data-act="pack-when" data-v="evening" aria-pressed="'+packsAtNight()+'">Night before</button></div></div>'
+      +  '<div class="switch"><div><div class="t">Another lunchbox</div>'
+      +  '<div class="d">Its own rules, its own foods, its own tab.</div></div>'
+      +  '<div class="row" style="gap:8px;align-items:center;flex:none">'+premiumTag()
+      +  '<button class="btn sm" data-act="add-kid">'+svg('plus',15)+'Add</button></div></div>'
+      +  '</div>'
+      +  (packsAtNight() ? '<p class="hint" style="margin:8px 0 0">Pack shows tomorrow&#8217;s box from three o&#8217;clock.</p>' : '')
+      +  '</div>';
   }
 
   h += kidPager()
-    +  '<div class="spread"><div><p class="view-sub">Lunchbox settings</p><h2 class="view-title">'+esc(kid.name)+'</h2></div>'
-    +  '<button class="btn sm" data-act="box-done">Done</button></div>';   /* the settings keep their own name: the shot scripts drive it */
+    +  (many ? '<div><p class="view-sub">This lunchbox</p><h2 class="view-title">'+esc(kid.name)+'</h2></div>' : '');
 
   /* this lunchbox */
   h += '<div class="card stack" style="gap:14px">'
@@ -2916,13 +2943,12 @@ function viewBox(){
          + (s.kidReminder !== false ? '<div class="switch"><div><div class="t">At</div></div><input type="time" id="kidReminderAt" value="'+esc(s.kidReminderAt || '18:00')+'" style="width:auto;min-height:44px"></div>' : '') : '')
     +  '</div></div>';
 
-  /* adding is rare and removing is destructive, so neither sits above the box
-     the parent came here to change */
-  h += '<div><div class="sect-head"><h3>Lunchboxes</h3><span class="count">'+kids().length+'</span></div><div class="card"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'
-    +  '<button class="btn sm" data-act="add-kid">'+svg('plus',15)+'Add a lunchbox</button>'+premiumTag()
-    +  (kids().length>1 ? '<button class="btn danger sm" data-act="del-kid" data-id="'+esc(kid.id)+'">'
-         +(UI.armed==='kid:'+kid.id?'Tap again to remove '+esc(kid.name):'Remove '+esc(kid.name))+'</button>' : '')
-    +  '</div></div></div>';
+  /* removing is destructive, so it sits at the end of the box it removes */
+  if(many && !isHelper()) h += '<div class="card"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'
+    +  '<button class="btn danger sm" data-act="del-kid" data-id="'+esc(kid.id)+'">'
+    +  (UI.armed==='kid:'+kid.id?'Tap again to remove '+esc(kid.name):'Remove '+esc(kid.name))+'</button>'
+    +  (UI.armed==='kid:'+kid.id ? '<button class="btn ghost sm" data-act="disarm">Keep it</button>' : '')
+    +  '</div></div>';
   return h+'</div>';
 }
 
@@ -2931,7 +2957,8 @@ function viewBox(){
    Signed out, the sign-in card stays on this surface: it is the only thing
    that tab is for, and a join link lands here expecting it. */
 function viewSetup(){
-  var h = '<div class="stack"><div><p class="view-sub">Account</p><h2 class="view-title">'+(signedIn() ? 'Your household' : 'This phone')+'</h2></div>';
+  var h = '<div class="stack"><div><p class="view-sub">Account</p><h2 class="view-title">'+(signedIn() ? 'Your household' : 'This phone')+'</h2>'
+    +  '<p class="hint" style="margin:6px 0 0" id="syncLine">'+esc(syncLine())+'</p></div>';
   if(Account.join) h += '<div class="card stack" style="gap:12px">'+joinBlock()+'</div>';
   if(!signedIn()) h += signInCard();
   var row = function(pane, act, label, caption){
@@ -2940,18 +2967,20 @@ function viewSetup(){
       +  (caption ? '<span class="meta">'+esc(caption)+'</span>' : '')+'</span>'
       +  '<span class="go">'+svg('chev',16)+'</span></button>';
   };
-  var people = Account.members.length;
+  var people = Account.members.length, many = kids().length, kid = activeKid();
   h += '<div class="list">'
-    +  row('account', 'pane', 'Account', signedIn() ? Account.user.email : 'Not signed in')
+    +  row('account', 'pane', signedIn() ? 'Account' : 'This phone', signedIn() ? Account.user.email : 'Backup, or erase everything')
     +  row('household', 'pane', 'Household', !signedIn() ? 'Just this phone' : people > 1 ? people+' people' : 'Just you')
     +  (billingOn() && !isHelper() ? row('plan', 'pane', 'Subscription', planLabel()) : '')
-    +  (isHelper() ? '' : row('box', 'pane', 'Lunchboxes', kids().length > 1 ? kids().length+' lunchboxes' : (activeKid() ? activeKid().name : '')))
+    +  (isHelper() ? '' : row('box', 'pane', many > 1 ? 'Lunchboxes' : 'Lunchbox', many > 1 ? many+' lunchboxes' : (kid ? kid.name : '')))
     +  row('', 'help', 'Contact support', 'Answers, and how to reach us')
     +  '</div>';
   return h+'</div>';
 }
+var PANE_TITLE = {account:'Your account', household:'Household', plan:'Subscription'};
 function viewPane(){
-  return '<div class="stack">'+paneHead('Account', PANES[UI.pane])
+  return '<div class="stack">'
+    + paneHead('Account', UI.pane === 'account' && !signedIn() ? 'This phone' : (PANE_TITLE[UI.pane] || PANES[UI.pane]))
     + (UI.pane === 'household' ? paneHousehold() : UI.pane === 'plan' ? panePlan() : paneAccount())+'</div>';
 }
 
@@ -2962,12 +2991,10 @@ function paneAccount(){
   if(signedIn()){
     h += '<div class="card stack" style="gap:12px">'
       +  '<div class="kv"><span>Signed in as</span><span style="overflow-wrap:anywhere;white-space:normal;text-align:right">'+esc(Account.user.email)+'</span></div>'
-      +  '<p class="hint" style="margin:0" id="syncLine">'+esc(syncLine())+'</p>'
+      +  '<p class="hint" style="margin:0">'+esc(syncLine())+'</p>'
       +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="signout">Sign out</button>'
       +  (Account.me && Account.me.role !== 'owner' ? '<button class="btn danger sm" data-act="leave">Leave this household</button>' : '')+'</div>'
       +  '</div>';
-  } else {
-    h += signInCard();
   }
   h += '<div><div class="sect-head"><h3>'+(signedIn() ? 'Backup' : 'Move to another phone')+'</h3></div><div class="card stack" style="gap:12px">'
     +  '<div class="row" style="gap:8px;flex-wrap:wrap">'
@@ -3009,7 +3036,8 @@ function paneHousehold(){
     +  '<p class="hint" style="margin:0">It goes beside the box you packed, so the other phone can see who did.</p></div>';
   if(!signedIn()){
     return h + '<div class="card stack" style="gap:10px"><h3>Nobody else yet</h3>'
-      +  '<p class="hint" style="margin:0">Sign in on the Account page and you can invite the other parent, or a caretaker.</p></div>';
+      +  '<p class="hint" style="margin:0">Sign in and you can invite the other parent, or a caretaker who sees the week and checks the box off.</p>'
+      +  '<button class="btn sm" data-act="pane" data-pane="account">Sign in</button></div>';
   }
   if(Account.members.length){
     h += '<div><div class="sect-head"><h3>In this household</h3><span class="count">'+Account.members.length+'</span></div><div class="list">' + Account.members.map(function(m){
@@ -3040,33 +3068,53 @@ function paneHousehold(){
 /* Subscription: what you are on, what it costs, when it renews, and how to
    stop it — in that order, because that is the order a parent asks. */
 function panePlan(){
-  var e = Account.entitlement || {}, pr = (Account.billing && Account.billing.prices) || {};
+  var e = Account.entitlement || {};
   var lapsing = paid() && e.status === 'past_due', d = planDate();
+  /* the moment after paying: the webhook has not landed, so every row below would
+     still say Free. One line is the honest thing to show. */
+  if(Account.settling){
+    return '<div class="card stack" style="gap:10px"><h3>Thank you</h3>'
+      +  '<p class="hint" style="margin:0">Payment received. Switching the Household plan on now — it takes a few seconds.</p></div>';
+  }
   var h = '<div class="card stack" style="gap:12px">'
-    +  '<div class="kv"><span>Your plan</span><span>'+esc(paid() ? (e.plan === 'lifetime' ? 'Household, forever' : 'Household') : trialing() ? 'Household, free trial' : 'Free')+'</span></div>';
+    +  '<div class="kv"><span>Your plan</span><span>'+esc(lapsing ? 'Household — payment failed' : paid() ? (e.plan === 'lifetime' ? 'Household, forever' : 'Household') : trialing() ? 'Household, free trial' : 'Free')+'</span></div>';
   var cost = planCost();
   if(cost) h += '<div class="kv"><span>Cost</span><span>'+esc(cost)+'</span></div>';
-  h += '<div class="kv"><span>'+(paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : paid() ? 'Renews' : 'Trial')+'</span><span>'+esc(paid() ? (e.plan === 'lifetime' ? 'Paid once, never renews' : d || 'Yearly') : planLabel())+'</span></div>';
+  h += '<div class="kv"><span>'
+    +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
+    +  '</span><span>'
+    +  esc(paid() ? (e.plan === 'lifetime' ? 'Paid once, never renews' : d || 'Yearly')
+        : trialing() ? (trialEnd() ? fmtDay(trialEnd()) : planLabel()) : 'Not on')
+    +  '</span></div>';
   if(lapsing) h += '<p class="hint" style="margin:0;color:var(--warn)">The last payment did not go through. Update the card in Manage billing'+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
   h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
-    +  (Account.settling ? '' : paid() ? (e.plan !== 'lifetime' ? '<button class="btn sm" data-act="upgrade" data-why="forever">Switch to forever</button>' : '') : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
+    +  (paid() ? (e.plan !== 'lifetime' ? '<button class="btn sm" data-act="upgrade" data-why="forever">Switch to forever</button>' : '') : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
     +  (e.portal ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '')+'</div></div>';
-  if(paid() && e.plan !== 'lifetime'){
+  /* what free looks like, said once, in the two places a parent is about to meet it */
+  var freeAgain = 'one lunchbox, the week, the shopping list and the pack list stay free. What you have added stays.';
+  if(trialing()){
+    h += '<div class="card stack" style="gap:10px"><h3>When the three weeks end</h3>'
+      +  '<p class="hint" style="margin:0">No card, and nothing to cancel. From '+esc(trialEnd() ? fmtDay(trialEnd()) : 'then')+', '+freeAgain+'</p></div>';
+  } else if(paid() && e.plan !== 'lifetime' && signedIn()){
     h += '<div class="card stack" style="gap:10px"><h3>Stopping it</h3>'
       +  '<p class="hint" style="margin:0">'
-      +  (e.cancelAtPeriodEnd ? 'Canceled already. It keeps working until '+esc(d || 'the end of the period')+', then the household goes back to the free planner. What you have added stays.'
-        : 'Cancel any time in Manage billing. It keeps working until '+esc(d || 'the end of the period')+', then the household goes back to the free planner. What you have added stays.')
-      +  '</p>'
-      +  (e.portal ? '' : '<p class="hint" style="margin:0">Manage billing opens for whoever paid. Ask them, or write to us and we will do it.</p>')
-      +  '</div>';
+      +  (e.cancelAtPeriodEnd ? 'You have canceled it. '
+        : e.portal ? 'Cancel it any time in Manage billing. '
+        : 'Whoever paid can cancel it in Manage billing on their own phone, or write to us and we will do it. ')
+      +  'It works until '+esc(d || 'the end of the period')+', then '+freeAgain+'</p></div>';
   }
-  if(!signedIn()) h += '<p class="hint" style="margin:0">Sign in on the Account page first — the plan belongs to the household, so it works on every phone.</p>';
+  /* the plan belongs to the household, not to the phone, so it needs a sign-in and
+     this is the page that has to say so — with the button, not just the sentence */
+  if(!signedIn()) h += '<div class="card stack" style="gap:10px"><h3>Sign in first</h3>'
+    +  '<p class="hint" style="margin:0">The plan belongs to the household, so it works on every phone you sign in on.</p>'
+    +  '<button class="btn sm" data-act="pane" data-pane="account">Sign in</button></div>';
   return h;
 }
 /* what the household is actually charged, matched from the price it is on */
 function planCost(){
   var e = Account.entitlement || {}, pr = (Account.billing && Account.billing.prices) || {};
-  if(!paid()){ return pr.year ? money(pr.year)+' a year after the trial' : ''; }
+  /* a household whose three weeks are over is not waiting for a trial to end */
+  if(!paid()){ return pr.year ? money(pr.year)+' a year'+(trialing() ? ' when the three weeks end' : '') : ''; }
   if(e.plan === 'lifetime') return pr.lifetime ? money(pr.lifetime)+', once' : '';
   var k = ['year','month'].filter(function(n){ return pr[n] && pr[n].id && pr[n].id === e.price; })[0];
   return k ? money(pr[k])+' a '+k : (pr.year ? money(pr.year)+' a year' : '');
@@ -3344,6 +3392,7 @@ function helpSheet(){
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
+    ['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.'],
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from. Foods in your own words, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
     ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words is part of the Household plan. The idea bank stays free.']
   ];
@@ -3414,8 +3463,10 @@ function render(){
   }
   document.getElementById('tabs').style.display = '';
   document.querySelector('.topbar').style.display = '';
-  if(UI.pane && (!kid || (UI.pane !== 'box' && UI.tab !== 'setup'))) UI.pane = '';   /* a pane needs a lunchbox; only the settings sit over a lunchbox tab */
-  document.getElementById('view').innerHTML = betaBar() + (
+  if(UI.pane && (!paneOK(UI.pane) || (UI.pane !== 'box' && UI.tab !== 'setup'))) UI.pane = '';   /* only the settings sit over a lunchbox tab */
+  /* the banners belong to the app, not to a tab: a pane that hid the storage warning
+     would let a parent change settings that were never going to survive the reload */
+  document.getElementById('view').innerHTML = betaBar() + (UI.pane ? noticeBanner() : '') + (
       UI.pane==='box'  ? viewBox()
     : UI.pane          ? viewPane()
     : UI.tab==='pack'  ? viewPack()
@@ -3549,9 +3600,7 @@ document.addEventListener('click', function(ev){
   /* navigation */
   if(act==='tab'){ UI.weekAhead = 0; if(el.getAttribute('data-tab')==='pack' && UI.tab==='pack' && reviewOwed()) UI.reviewLater = {};   /* the dot is a door: tapping Pack again brings the questions back */ if(UI.tab !== 'setup') UI.lastTab = paneLabel(); UI.tab = el.getAttribute('data-tab'); UI.pane = ''; render(); window.scrollTo(0,0); return; }
   if(act==='box-settings'){ if(UI.pane==='box') closePane(); else openPane('box'); return; }
-  if(act==='pane'){ var pn = el.getAttribute('data-pane');
-    if(!PANES[pn] || (pn==='box' && isHelper()) || (pn==='plan' && (isHelper() || !billingOn()))) return;   /* a row that is not drawn is not a control; this is the check that counts */
-    openPane(pn); return; }
+  if(act==='pane'){ var pn = el.getAttribute('data-pane'); if(!paneOK(pn)) return; openPane(pn); return; }
   if(act==='pane-done' || act==='box-done'){ closePane(); return; }
   if(act==='go-foods'){ UI.tab='foods'; UI.pane = ''; render(); window.scrollTo(0,0); return; }
   if(act==='go-kid-foods'){ S.activeKidId = el.getAttribute('data-id'); UI.tab='foods'; UI.pane = ''; save(); render(); window.scrollTo(0,0); return; }
@@ -4066,6 +4115,7 @@ document.addEventListener('keydown', function(ev){
 document.addEventListener('input', function(ev){
   if(!S) return;
   var kid = activeKid();
+  if(isHelper() && (ev.target.id==='kidName' || ev.target.id==='avoidText')) return;   /* a write that can never sync is worse than no write */
   if(ev.target.id==='kidName'){
     kid.name = ev.target.value.slice(0,40); touch(kid); save();
     /* echo the new name where it already shows, without rebuilding the header:

@@ -32,7 +32,7 @@ food list from a 200-item library and produce a planned week immediately. From t
 - **More than one lunchbox** — Plan the week draws them together: the fullest food list leads,
   and every other box starts from the same foods, swapping only where that box's school rules or
   its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
-  box alone. Turn it off under Account (**Match the boxes**). Pack, Week and Foods carry the
+  box alone. Turn it off under Account → Lunchboxes (**Match the boxes**), or the gear. Pack, Week and Foods carry the
   lunchboxes as folder tabs, one tap each; on Pack each tab shows whether that box is packed or
   still owes an answer, and one line names who is left to pack. With matching on, Shuffle all
   on Week is the household draw; with more than one box, Shuffle all on Week and a day's Shuffle first ask
@@ -56,8 +56,8 @@ food list from a 200-item library and produce a planned week immediately. From t
   sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
   Share plugin in the iPhone app.
 - **Pack** — the next school day's box with ice-pack, sealed-container and no-protein
-  flags, and one **Packed** tick per box that fills every compartment's tick at once (the
-  ticks stay per compartment underneath, so sync and the other phone are unchanged). The
+  flags, and one **Packed** check per box that fills every compartment at once (the packed
+  rows stay per compartment underneath, so sync and the other phone are unchanged). The
   compartments there are not buttons: only Week changes a box, and only Week shows the swap
   arrows. **Kid's pick** lives here, behind the lunchbox's "They pick their box
   each day" switch (Household plan), for the next box not yet in the bag. Two ways, chosen
@@ -79,20 +79,20 @@ food list from a 200-item library and produce a planned week immediately. From t
   re-checked on every import and merge), and the kid's-pick screens and the Foods list show
   it in place of the emoji; tapping it again offers "Take another" or "Remove the photo".
   Every food has an emoji icon derived from its name, so
-  custom foods get a picture too. A household that packs the night before (Account → When do you
-  pack?) sees tomorrow's box from 3pm.
+  custom foods get a picture too. A household that packs the night before (Account →
+  Lunchboxes → **When do you pack?**) sees tomorrow's box from 3pm.
 - **Did they eat it?** — from 3pm on a pack day, or the morning after, the Pack view asks about
   that box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
   stored against the food, so they survive re-plans. "Answer later" replaces the card with a one-line "Answer now" until the next
   3pm or the next open; a red dot on the Pack tab says an answer is owed, and the iPhone app can
-  remind at 3pm (Account → Reminders, off until switched on). From 3pm today's box has gone:
+  remind at 3pm (Account → Lunchboxes → **Remind us at three**, off until switched on). From 3pm today's box has gone:
   no re-draw, swap, kid's pick, shopping line or merge touches it. The draw leans toward foods that get
   eaten, and anything that came home twice running is rested for three weeks. Outgoing weeks
   are archived (`kid.past`) so Monday can still ask about Friday.
 - **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and "Erase everything"
-  are two-tap, deleting a food offers Undo, and the shopping ticks survive a plan clear.
+  are two-tap, deleting a food offers Undo, and the shopping checks survive a plan clear.
 - **A parent may override a rule** for one compartment: pick a flagged food from the
   compartment sheet and it goes in, rule named, with Undo. The compartment carries a `!`, the day
   an *Against the rules* chip, and the rules sweep leaves it alone. The override is recorded
@@ -107,16 +107,27 @@ food list from a 200-item library and produce a planned week immediately. From t
   are still ahead and only covers the days still to come; otherwise it goes into next week. An
   existing plan is re-drawn in place until its last day has gone by, and a shuffle never touches
   a day that has already gone: what was packed stays exactly as it was, for the review and the
-  pack ticks. The shopping list likewise skips days already gone. The morning review only asks about a
-  day the plan already existed on, or that had something ticked into the bag.
+  pack checks. The shopping list likewise skips days already gone. The morning review only asks about a
+  day the plan already existed on, or that had something checked into the bag.
 - **Lunchbox settings** — the gear beside the lunchbox name on Week, Pack, Shop and Foods:
   lunchboxes, name, pack days, per-lunchbox school rules (cold-only, no ice pack, short
   eating time, no chocolate or candy), allergen exclusions (including seeds & sesame), a
   free-text avoid list, the kid's say. Optional **snack** and **drink** compartments per
   lunchbox: switching one on seeds a few foods and fills the current week, so the tin never
   grows an empty cell.
-- **Account** — the fifth tab: sign-in, the Household plan, the people, your name, backup
-  and copy-out/paste-in transfer between phones, clear and erase.
+- **Account** — the fifth tab is a short list of rows, each opening its own page over the
+  tab with a Done button that comes back to the row it left. **Account** (or **This phone**
+  signed out): who this phone is signed in as, sign out, leave the household, backup and
+  copy-out/paste-in transfer between phones, clear, erase, delete the account.
+  **Household**: the people, your name, and the two invites. **Subscription** (only where
+  Stripe is configured, and never for a caretaker): the plan, what it costs, the date it
+  renews or ends, and how to stop it. **Lunchboxes**: the lunchbox settings, the same page
+  the gear opens. **Contact support**: the help sheet, the same one the ? opens. Signed out
+  the sign-in card stays on the tab itself, because that is the one thing that tab is for
+  and a `?join=` link lands there. The open page is `UI.pane`, which never reaches the
+  account document, so a tap is never read as a change; `paneOK()` is the single test for
+  whether a pane may be on screen and the render asks it too, because a pane is opened by a
+  link from an email and by the return from Stripe as well as by a tap.
 
 ## Data model
 
@@ -259,7 +270,7 @@ emails in its first week (days 1, 3, 6 after it switched on; `notices` kinds `te
 each in Liz's voice with one feature, the steps, a screenshot (`public/img/mail-day*.png`, made by
 `scripts/mail-shots.mjs`; rerun it when those screens change) and the form; the last one lists
 `PLANNED` (mail.js) and asks what they would add. The form asks the same: an ideas box and the
-planned list as tick boxes. "No more of these" is honoured.
+planned list as check boxes. "No more of these" is honored.
 
 
 `/beta` (netlify/functions/beta.js; `/tester` is the short link with a source tag for GA4) is the page to hand out: it shows the spots left and one
@@ -417,9 +428,15 @@ the idea bank stays free so a free list is never stuck with what it has.
   the iPhone app). It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
   available after a plan ends, for the invoices.
-- **In the app**, the Account tab's card has a "Household plan" line (Free, Renews DATE,
-  Ends DATE, Payment failed, Forever, or Switching on… while the webhook lands), "Get the
-  Household plan" or "Switch to forever", and "Manage billing" (the main button when a
+- **In the app**, the Account tab carries a **Subscription** row whose caption is the same
+  one-line state (Free, On for N more days, Renews DATE, Ends DATE, Payment failed, Forever,
+  Switching on…). The page behind it names the plan, what it costs — matched from the price
+  id the entitlement carries, so a monthly household is not quoted the yearly price — the
+  date it renews or ends, and a card saying how to stop it, which differs for a parent who
+  cannot open the portal. Straight after paying it says only that the payment arrived and
+  the plan is switching on, because the webhook has not landed and every other row would
+  still read Free. It also offers "Get the Household plan" or "Switch to forever", and
+  "Manage billing" (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan
   sheet with both prices (read from Stripe, cached an hour, never typed into the app);
   signed out it offers sign-in first, and remembers what you were doing so the sheet, or
@@ -459,4 +476,4 @@ the idea bank stays free so a free list is never stuck with what it has.
   emails → send the renewal reminder and failed-payment emails (the terms promise both),
   and after the retries "cancel the subscription" rather than leave it unpaid; Stripe Tax
   on, with the origin address. Never add a Payment Link for the product: a link accepts a
-  `client_reference_id` from anyone, and the webhook would honour it.
+  `client_reference_id` from anyone, and the webhook would honor it.
