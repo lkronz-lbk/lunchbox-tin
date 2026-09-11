@@ -69,7 +69,8 @@ export async function stats(now = Date.now()) {
   /* the beta testers: every household that came in on a 100%-off code, with the people in it */
   const testers = await q`SELECT e.household_id AS id, e.plan, e.status, e.event_at AS since,
       (SELECT string_agg(u.email, ', ' ORDER BY (m.role = 'owner') DESC, u.email) FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = e.household_id) AS emails,
-      (SELECT max(u.last_seen_at) FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = e.household_id) AS last_seen
+      /* the session rows carry activity from before last_seen_at was kept up to date */
+      (SELECT max(greatest(u.last_seen_at, (SELECT max(s.last_used_at) FROM sessions s WHERE s.user_id = u.id))) FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = e.household_id) AS last_seen
     FROM entitlements e WHERE e.source = 'code' ORDER BY e.event_at DESC NULLS LAST LIMIT 500`;
   return {
     households: { total: h.total, week: h.week, month: h.month, shared: m.shared, helpers: helpers.n },

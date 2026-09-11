@@ -110,8 +110,17 @@ export async function currentUser(req) {
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ${hash(token)} AND s.expires_at > now()`;
   if (!rows[0]) return null;
-  /* a coarse "last used": one write an hour per session, not one per request */
-  await sql()`UPDATE sessions SET last_used_at = now() WHERE token_hash = ${rows[0].token_hash} AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')`;
+  /* a coarse "last seen": one write an hour per session, not one per request. the user row
+     is touched in the same statement, because a parent who stays signed in never signs in
+     again and the session row goes when they sign out; the hour test stays inside the write
+     so two requests crossing the hour together cannot both do it */
+  await sql()`
+    WITH touched AS (
+      UPDATE sessions SET last_used_at = now()
+      WHERE token_hash = ${rows[0].token_hash}
+        AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')
+      RETURNING user_id)
+    UPDATE users SET last_seen_at = now() WHERE id IN (SELECT user_id FROM touched)`;
   return { id: rows[0].id, email: rows[0].email, name: rows[0].name };
 }
 

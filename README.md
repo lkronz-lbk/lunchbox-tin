@@ -268,7 +268,8 @@ code on the phone until a parent is signed in, then `POST /api/billing/beta` swi
 household to forever for good, refused once `BETA_CAP` (default 25; 0 closes it) households
 carry `source = 'code'`. A household that checks out with a 100%-off Stripe code (TESTER) is
 written the same way and kept so through later Stripe events; `/admin` lists them under
-"Beta testers" with every email in the household, when they came in and when last seen,
+"Beta testers" with every email in the household, when they came in and when last seen
+(the last request any of them made, kept to the hour, not the last sign-in),
 plus a sheet-ready line per household.
 
 ### Releasing an app change
