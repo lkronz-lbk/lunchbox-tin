@@ -91,15 +91,18 @@ So the sign-in link in the email opens the app rather than Safari:
    `application/json`:
 
    ```json
-   {"applinks":{"details":[{"appIDs":["TEAMID.app.lunchsorted"],"components":[{"/":"/api/auth/verify*"}]}]}}
+   {"applinks":{"details":[{"appIDs":["TNF9FG2U7G.app.lunchsorted"],"components":[{"/":"/api/auth/verify","?":{"t":"?*"}}]}]}}
    ```
 
-   with the real Team ID, plus a `[[headers]]` block in `netlify.toml` for that
+   plus a `[[headers]]` block in `netlify.toml` for that
    path with `Content-Type = "application/json"`. Only the sign-in link: claiming
    `/app/*` too would pull every `/app/?join=`, `?upgrade=1` and Stripe return on a
    phone with the app installed out of Safari and the home-screen web app.
 3. Nothing to change in the app: `appUrlOpen` already loads any
    `https://lunchsorted.app/...` URL it is handed.
+
+The claim names the production host only, so a sign-in link from a branch deploy
+stays in Safari. That is expected; test universal links against production.
 
 ## App Review notes
 

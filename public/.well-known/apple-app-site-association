@@ -1,1 +1,1 @@
-{"applinks":{"details":[{"appIDs":["TNF9FG2U7G.app.lunchsorted"],"components":[{"/":"/api/auth/verify*"}]}]}}
+{"applinks":{"details":[{"appIDs":["TNF9FG2U7G.app.lunchsorted"],"components":[{"/":"/api/auth/verify","?":{"t":"?*"}}]}]}}

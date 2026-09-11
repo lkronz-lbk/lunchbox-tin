@@ -74,7 +74,7 @@ button{cursor:pointer}
 /* The web view runs under the status bar, so the clock needs its own strip of ground to
    sit on; without it a scrolled line of text runs straight through the time. */
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);
-  background:var(--ground);z-index:70;pointer-events:none}
+  background:var(--ground);z-index:29;pointer-events:none}
 .topbar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px}
 .brand{font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:-0.01em;white-space:nowrap}
 .brand span{color:var(--c-side)}
@@ -1151,9 +1151,9 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
 var APP_BUILD = 'lunchsorted-v13';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v13', text:'New: the top of every screen now clears the clock on your phone.',
+var WHATS_NEW = {build:'lunchsorted-v13', text:'New: nothing sits under your phone\u2019s clock any more.',
   steps:[
-    ['Room for the clock', 'On a phone the app used to run under the time and the camera notch, so a scrolled line of text ran through them. Every screen now starts below them.'],
+    ['Room for the clock', 'Nothing sits under your phone\u2019s clock any more.'],
     ['Boxes that match', 'With more than one lunchbox, Shuffle all draws them from the same foods where each box\u2019s rules allow. It asks whose boxes first, and every shuffle can be undone. Switch it off under Account.'],
     ['Tabs, not a menu', 'On Pack, Week and Foods the lunchboxes are tabs along the top. One tap each.'],
     ['One food, every box', 'Add a food and it goes into every lunchbox; the button says where. Untick a name to leave one out.'],
@@ -3238,6 +3238,7 @@ function helpSheet(){
     ['Can I plan the week after?', 'Yes. On Week, tap Next week; Plan next week draws it. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
+    ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code here. Either works once, for fifteen minutes.'],
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox. Kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.']
   ];
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
