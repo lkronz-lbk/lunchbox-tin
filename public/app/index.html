@@ -1151,9 +1151,8 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
 var APP_BUILD = 'lunchsorted-v13';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v13', text:'New: nothing sits under your phone\u2019s clock any more.',
+var WHATS_NEW = {build:'lunchsorted-v13', text:'New: matched boxes, tabs across the lunchboxes, the week after, and a three o\u2019clock ask.',
   steps:[
-    ['Room for the clock', 'Nothing sits under your phone\u2019s clock any more.'],
     ['Boxes that match', 'With more than one lunchbox, Shuffle all draws them from the same foods where each box\u2019s rules allow. It asks whose boxes first, and every shuffle can be undone. Switch it off under Account.'],
     ['Tabs, not a menu', 'On Pack, Week and Foods the lunchboxes are tabs along the top. One tap each.'],
     ['One food, every box', 'Add a food and it goes into every lunchbox; the button says where. Untick a name to leave one out.'],
