@@ -106,12 +106,18 @@ export async function currentUser(req) {
   const token = tokenFrom(req);
   if (!token) return null;
   const rows = await sql()`
-    SELECT u.id, u.email, u.name, s.token_hash
+    SELECT u.id, u.email, u.name, s.token_hash,
+      (s.last_used_at IS NULL OR s.last_used_at < now() - interval '1 hour') AS stale
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ${hash(token)} AND s.expires_at > now()`;
   if (!rows[0]) return null;
-  /* a coarse "last used": one write an hour per session, not one per request */
-  await sql()`UPDATE sessions SET last_used_at = now() WHERE token_hash = ${rows[0].token_hash} AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')`;
+  /* a coarse "last seen": one pair of writes an hour per session, not one per request.
+     a parent who stays signed in never signs in again, so the user row has to be
+     touched here too or the admin page shows the day they first signed in forever */
+  if (rows[0].stale) {
+    await sql()`UPDATE sessions SET last_used_at = now() WHERE token_hash = ${rows[0].token_hash}`;
+    await sql()`UPDATE users SET last_seen_at = now() WHERE id = ${rows[0].id}`;
+  }
   return { id: rows[0].id, email: rows[0].email, name: rows[0].name };
 }
 
