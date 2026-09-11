@@ -865,13 +865,13 @@ try {
 
   /* ------------------------------------------- planning the week after */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
-  check('the week header offers Next week, one labelled button',
-    (await page.$$eval('[data-act="week-ahead"]', a => a.length)) === 1 && /Next week/.test(await page.textContent('[data-act="week-ahead"]')));
+  check('the week header offers Next beside the title, one labelled button',
+    (await page.$$eval('[data-act="week-ahead"]', a => a.length)) === 1 && /Next/.test(await page.textContent('[data-act="week-ahead"]')));
   const thisWeekTitle = await page.$eval('.view-title', e => e.textContent.replace(/[‹›]/g, '').trim());
   await page.click('[data-act="week-ahead"][data-v="1"]'); await page.waitForTimeout(300);
   const nextTitle = await page.$eval('.view-title', e => e.textContent.replace(/[‹›]/g, '').trim());
   check('the arrow shows the week after, unplanned, with a button to plan it',
-    nextTitle !== thisWeekTitle && /^Week of /.test(nextTitle) && /Plan next week/.test(await page.textContent('#view')) && /Nothing planned for next week yet/.test(await page.textContent('#view')) && /This week/.test(await page.textContent('[data-act="week-ahead"]')), {thisWeekTitle, nextTitle});
+    nextTitle !== thisWeekTitle && /^Week of /.test(nextTitle) && /Plan it/.test(await page.textContent('#view')) && /Nothing planned for next week yet/.test(await page.textContent('#view')) && /This/.test(await page.textContent('[data-act="week-ahead"]')), {thisWeekTitle, nextTitle});
   const curBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week)));
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300); await goShuffle(page);
   const aheadPlan = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => ({days: k.next ? k.next.days.length : 0, start: k.next && k.next.start, packDays: k.settings.days.length, weekStart: k.week.start})));
@@ -882,7 +882,7 @@ try {
   await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   check('Shop adds a Next week section once it is planned', /Next week/.test(await page.textContent('#view')));
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
-  check('and coming back to Week lands on this week', /Next week/.test(await page.textContent('[data-act="week-ahead"]')));
+  check('and coming back to Week lands on this week', /Next/.test(await page.textContent('[data-act="week-ahead"]')));
   /* when this week has gone, the week after becomes this week */
   const rolled = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));

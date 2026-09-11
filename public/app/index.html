@@ -91,6 +91,9 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .stack{display:flex;flex-direction:column;gap:16px}
 .row{display:flex;align-items:center;gap:10px}
 .spread{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.titlerow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.titlerow .btn{white-space:nowrap;flex:none}
+.titlerow .plan{margin-left:auto}
 .muted{color:var(--ink-2)}
 .hint{font-size:13px;color:var(--ink-3)}
 .hint.muted{color:var(--ink-2)}
@@ -1178,7 +1181,7 @@ var WHATS_NEW = {build:'lunchsorted-v14', text:'New: matched boxes, tabs across 
     ['Boxes that match', 'With more than one lunchbox, Shuffle all draws them from the same foods where each box\u2019s rules allow. It asks whose boxes first, and every shuffle can be undone. Switch it off under Account \u2192 Lunchboxes.'],
     ['Tabs, not a menu', 'On Pack, Week and Foods the lunchboxes are tabs along the top. One tap each.'],
     ['One food, every box', 'Add a food and it goes into every lunchbox; the button says where. Tap a name to leave one out.'],
-    ['The week after', 'On Week, tap Next week. Plan it, shop for it under Next week, and it becomes this week on its own.'],
+    ['The week after', 'On Week, tap Next beside the date. Plan it, shop for it under Next week, and it becomes this week on its own.'],
     ['Overrule a rule', 'Tap a compartment, then a food a rule keeps out, and it goes in flagged with a \u201c!\u201d.'],
     ['Ask at three', 'From three o\u2019clock Pack asks how today\u2019s box went; a dot on the Pack tab until you answer. Pack at night? Say so in the lunchbox settings and Pack shows tomorrow\u2019s box from three.']
   ]};
@@ -2759,12 +2762,11 @@ function viewWeek(){
   var ahead = UI.weekAhead === 1, wk = ahead ? kid.next : kid.week;
   var ws = ahead ? nextStart(kid) : (kid.week ? parseISO(kid.week.start) : anchorWeek(kid));
   var n = wk ? wk.days.length : packDaysSorted(kid).length;
-  var nav = '<button class="btn ghost sm" data-act="week-ahead" data-v="'+(ahead ? 0 : 1)+'">'+(ahead ? '\u2039 This week' : 'Next week \u203a')+'</button>';
-  var h = '<div class="stack">'+kidPager()+'<div class="spread"><div>'
+  var nav = '<button class="btn ghost sm" data-act="week-ahead" data-v="'+(ahead ? 0 : 1)+'">'+(ahead ? '\u2039 This' : 'Next \u203a')+'</button>';
+  var h = '<div class="stack">'+kidPager()+'<div>'
     + '<p class="view-sub">'+(ahead ? 'Next week' : (NUMWORD[n]||n)+' lunch'+(n===1?'':'es'))+(multi ? ' · '+esc(kid.name) : '')+'</p>'
-    + '<h2 class="view-title">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+'</h2></div>'
-    + (isHelper() ? '' : '<button class="btn primary" data-act="plan-kid">'+svg('dice',18)+(ahead && !wk ? 'Plan next week' : 'Shuffle all')+'</button>')+'</div>'
-    + '<div class="row" style="justify-content:flex-end">'+nav+'</div>'
+    + '<div class="titlerow"><h2 class="view-title">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+'</h2>'+nav
+    + (isHelper() ? '' : '<button class="btn primary sm plan" data-act="plan-kid">'+(ahead && !wk ? 'Plan it' : 'Shuffle all')+'</button>')+'</div></div>'
     + (ahead ? '' : planBanner());
   if(!wk)
     return h + '<div class="empty"><p>'+(ahead ? 'Nothing planned for next week yet.' : 'Shuffle draws the week.')+'</p></div></div>';
@@ -3430,7 +3432,7 @@ function helpSheet(){
     ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
     ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
     ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Shuffle all draws them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top \u2014 in the settings too.'],
-    ['Can I plan the week after?', 'Yes. On Week, tap Next week; Plan next week draws it. Shop lists it under Next week, and it becomes this week on its own.'],
+    ['Can I plan the week after?', 'Yes. On Week, tap Next beside the date; Plan it draws the week. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
