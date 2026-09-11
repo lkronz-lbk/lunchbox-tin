@@ -42,8 +42,10 @@
 
 [[headers]]
   for = "/img/*"
+  # Not content-hashed: a reshoot has to be able to reach a returning visitor,
+  # so this revalidates rather than promising the file will never change.
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+    Cache-Control = "public, max-age=3600"
 
 [[headers]]
   for = "/*"
@@ -61,7 +63,7 @@
 [[headers]]
   for = "/app/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-+jgZeLps/uCjhvlmQAgNp9X13SChidm0yWX+eXfYt4E=' 'sha256-FBUO4Aa4c67+qW4l84vux52Z9z2REsUMkwkBb9i1Ek4=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-he6aXNwJHBAtLN4SzsTGMvHWNyquhnMZrW2CHNWOIpg=' 'sha256-/YTMU6KCTeD4SK7ClG2FVnOsisVqcrfjcnrlhSDeuyk=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 [[headers]]
   for = "/"

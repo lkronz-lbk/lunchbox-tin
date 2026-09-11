@@ -17,10 +17,18 @@ author and the Netlify + Neon stack. Read `README.md` first; it is the product s
 - The parent is the user. A child only ever sees the kid's-pick screen, handed over by the
   parent, and is never asked for anything. Stay out of Apple's Kids Category and out of COPPA
   scope: nickname or initials are enough, allergens are optional, no analytics SDKs.
-- School rules flag foods; they never delete them. A rule change re-checks the live plan.
+- School rules flag foods; they never delete them. A rule change re-checks the live plan. A
+  parent may override a rule for one compartment; it stays flagged, ends when that food leaves
+  the compartment, and travels with the food when the kid's pick trades it.
 - Pairing is deterministic (`pairScore`, `bestAssignment`). Randomness lives only in draws.
-- A day that has gone is never rewritten by a re-draw. What was packed stays as it was.
-- Two "came home" in a row rests a food for three weeks, everywhere a food can be drawn.
+- Lunchboxes are aligned, never merged. Plan the week starts every box from the lead box's
+  foods and swaps only where a box's own rules or its own food list say otherwise; a
+  per-lunchbox shuffle or a single swap never reaches the other boxes.
+- A day that has gone — any day before today, and today from 3pm once the box is home — is
+  never rewritten by a re-draw, a swap, the kid's pick, a rules sweep or a merge. What was packed stays.
+- Two "came home" in a row rests a food for three weeks, everywhere a food can be drawn —
+  including the aligned draw. The rule's own exception: a list too short to fill the week may
+  draw a resting food rather than leave a compartment empty.
 - Signed out, everything stays on the phone. Signed in, the household document is the unit
   of sync; merge by record timestamp (`LSMerge`), the local copy wins ties.
 - Payments happen on the web, never through the App Store. The entitlement is a row on the
@@ -35,11 +43,28 @@ npm ci
 npm run dev           # static server on :8099 (no API)
 npm test              # CSP check, then the Playwright smoke suite with an in-process Postgres
 npm run csp           # regenerate the CSP hashes in netlify.toml after any change to public/app/index.html
+npm run shots         # regenerate public/img/screen-*.png|webp (needs `npm run dev` running)
 npm run migrate       # apply netlify/database/migrations/*.sql (needs NETLIFY_DATABASE_URL)
 ```
 
 Run `npm run csp` before every commit that touches the app; `npm test` refuses a stale hash.
 Bump `VERSION` in `public/app/sw.js` and `APP_BUILD` in `public/app/index.html` on every deploy that changes the app, and write that build's `WHATS_NEW` line beside `APP_BUILD` (`npm run csp` refuses a stale one).
+
+## Before any change, on every machine
+
+Work lands on `main` from more than one place — this machine, and Claude on Liz's phone — so a
+checkout can be days behind without anything looking wrong. The multi-lunchbox work of
+2026-09-10 was built on a `dev` that was 69 commits behind production and could not be merged.
+Never again:
+
+1. `git fetch origin` first, every session, before reading any code.
+2. Bring local `main` level: `git branch -f main origin/main` (or `git pull --ff-only` on it).
+   Everything pushed from the phone must come back onto this machine.
+3. Build only on a branch that contains `origin/main`. If `dev` is behind, bring it level first
+   (`git merge --ff-only origin/main` from `dev`). If that refuses, `dev` has diverged: stop and
+   say so rather than build on it.
+4. Commit before the session ends. Uncommitted work left across sessions interleaves with the
+   next session's and cannot be split apart afterwards.
 
 ## Layout
 
@@ -81,5 +106,8 @@ Before merging to `main`, or when the user says the work is ready, run the revie
 - **security-reviewer**: if the change touches `netlify/`, sign-in, sync, imports, or the CSP.
 - **ux-reviewer**: if the change touches `public/app/index.html` markup or CSS, or the site.
 - **efficiency-reviewer**: if the change adds a function, a query, a fetch, a cron, or a build step.
+- **release-reviewer**: if the change alters what a parent sees or how the app behaves — it checks
+  the marketing screenshots in `public/img/`, the in-app `helpSheet()` and `public/help.html`, and
+  drafts the replacements.
 
 Do not deploy with unresolved findings unless the user waves them off.

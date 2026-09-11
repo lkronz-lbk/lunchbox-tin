@@ -29,6 +29,24 @@ food list from a 200-item library and produce a planned week immediately. From t
   (crunchy, soft, protein, tangy, sweet, salty, juicy, hearty, light), two at most. Keep a
   compartment and it survives the next shuffle; shuffling that one compartment on purpose
   un-keeps it. Every compartment that can change shows a small swap arrow; a kept one, a lock.
+- **More than one lunchbox** — Plan the week draws them together: the fullest food list leads,
+  and every other box starts from the same foods, swapping only where that box's school rules or
+  its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
+  box alone. Turn it off under Account (**Match the boxes**). Pack, Week and Foods carry the
+  lunchboxes as folder tabs, one tap each; on Pack each tab shows whether that box is packed or
+  still owes an answer, and one line names who is left to pack. With matching on, Shuffle all
+  on Week is the household draw; with more than one box, Shuffle all on Week and a day's Shuffle first ask
+  whose boxes (a day's starts with the box on screen), leave the rest untouched, and offer Undo; the
+  "Plan the week" banner draws everything with no sheet. A food added from the
+  idea bank or by hand goes into every lunchbox unless you say otherwise; a box whose rules keep
+  it out is skipped and named when another box takes it, and gets it flagged when it is the only
+  box. The "Add it to" choice sticks for the rest of the session. A lunchbox filled with "Fill the
+  list for me" is planned on its own until the next Plan the week matches it in; the toast after
+  Plan the week says how many compartments had to differ.
+- **Plan ahead** — one more week (`kid.next`), reached by the Next week button under the Week header, drawn and
+  shuffled like this one, listed on Shop under *Next week*, and rolled into `kid.week` the moment this
+  week has gone. Pack, the kid's pick and the review read only this week. Merged and normalised like
+  the first week.
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes. A dish
   goes on the list as what you buy for it (`buy` on the food: turkey and cheese pinwheels are
   deli turkey, cheese slices and tortillas; `ING_AISLE` puts each part in its aisle), one line
@@ -61,16 +79,26 @@ food list from a 200-item library and produce a planned week immediately. From t
   re-checked on every import and merge), and the kid's-pick screens and the Foods list show
   it in place of the emoji; tapping it again offers "Take another" or "Remove the photo".
   Every food has an emoji icon derived from its name, so
-  custom foods get a picture too.
-- **Did they eat it?** — the morning after a pack day, the Pack view asks about
-  yesterday's box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
-  stored against the food, so they survive re-plans. The draw leans toward foods that get
+  custom foods get a picture too. A household that packs the night before (Account → When do you
+  pack?) sees tomorrow's box from 3pm.
+- **Did they eat it?** — from 3pm on a pack day, or the morning after, the Pack view asks about
+  that box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
+  stored against the food, so they survive re-plans. "Answer later" replaces the card with a one-line "Answer now" until the next
+  3pm or the next open; a red dot on the Pack tab says an answer is owed, and the iPhone app can
+  remind at 3pm (Account → Reminders, off until switched on). From 3pm today's box has gone:
+  no re-draw, swap, kid's pick, shopping line or merge touches it. The draw leans toward foods that get
   eaten, and anything that came home twice running is rested for three weeks. Outgoing weeks
   are archived (`kid.past`) so Monday can still ask about Friday.
 - **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and "Erase everything"
   are two-tap, deleting a food offers Undo, and the shopping ticks survive a plan clear.
+- **A parent may override a rule** for one compartment: pick a flagged food from the
+  compartment sheet and it goes in, rule named, with Undo. The compartment carries a `!`, the day
+  an *Against the rules* chip, and the rules sweep leaves it alone. The override is recorded
+  against that exact food in that compartment (`day.over`), so a re-draw, another choice, the food
+  deleted or the compartment switched off ends it; when the kid's pick trades a part or a box, it
+  travels with its food.
 - **Rules re-check the plan.** Changing any rule sweeps the week on screen: a food that now
   breaks a rule leaves its compartment — locked, kid-picked or not — and the compartment is
   drawn again, with a toast saying how many changed. Switching a compartment off clears it
@@ -98,6 +126,7 @@ Built for more than one user from the start, though it runs today with no accoun
 account            one household — a server only ever has to filter by account id
 ├── members[]      the adults who use it; per-person actions record `by: memberId`
 ├── kids[]         lunchbox profiles, each with its OWN rules, foods, week, pack state
+├── align          household-wide: {on, updatedAt} — draw every lunchbox from the same foods
 └── pantry{}       household-wide, keyed by normalized food name
 ```
 
@@ -166,6 +195,10 @@ npm install
 npx playwright install chromium
 npm test
 ```
+
+Every browser the suite opens has its clock pinned to the most recent Tuesday, so the week it
+plans is the same week whatever day it runs on (a Thursday used to leave the kid's pick with
+nothing to offer). `SMOKE_TODAY=2026-09-14 npm test` pins another day.
 
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
 onboarding, the week draw and its trait words, packing, the kid's pick, the morning review
