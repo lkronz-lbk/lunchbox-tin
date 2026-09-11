@@ -1082,7 +1082,7 @@ try {
   await page.waitForTimeout(400);
 
   /* ------------------------------------------------ friction: targets, sheet, words */
-  const small = async () => page.$$eval('.btn.sm, .tg, .kidbtn, .seg button, .x, .cmp[data-act], nav.tabs button', a =>
+  const small = async () => page.$$eval('.btn.sm, .tg, .kidbtn, .seg button, .x, .cmp[data-act], nav.tabs button, .item[data-act]', a =>
     a.filter(e => e.checkVisibility()).map(e => ({h: Math.round(e.getBoundingClientRect().height), t: e.textContent.trim().slice(0,20)})).filter(x => x.h < 44));
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   const smallSetup = await small();
@@ -1092,8 +1092,9 @@ try {
     [...document.querySelectorAll('#view .item')].filter(e => e.dataset.act === 'pane' || e.dataset.act === 'help')
       .map(e => e.querySelector('.nm').textContent).filter(t => t !== 'Subscription').join('|') === 'Account|Household|Lunchboxes|Contact support'),
     await page.evaluate(() => [...document.querySelectorAll('#view .item .nm')].map(e => e.textContent)));
-  check('and every row clears 44px', await page.$$eval('#view .item', a => a.every(e => e.getBoundingClientRect().height >= 44)));
-  for (const pane of ['account', 'household']) {   /* Subscription needs billing switched on; it gets its own sweep there */
+  check('and every row clears 44px', await page.$$eval('#view .item', a => a.length >= 4 && a.every(e => e.getBoundingClientRect().height >= 44)));
+  /* Subscription is absent without STRIPE_*, so it is swept in the billing run instead */
+  for (const pane of ['account', 'household']) {
     await openPane(page, pane);
     const smallPane = await small();
     check('every tappable control on the ' + pane + ' page is at least 44px tall', smallPane.length === 0, smallPane);
@@ -1101,7 +1102,7 @@ try {
     check('Done on the ' + pane + ' page comes back to the rows', (await page.$$eval('#view .item[data-act="pane"]', a => a.length)) >= 3);
   }
   /* Contact support is the same door as the "?" in the corner */
-  await page.click('[data-act="help"]'); await page.waitForTimeout(300);
+  await page.click('.topbar [data-act="help"], #who [data-act="help"]'); await page.waitForTimeout(300);
   const fromCorner = await page.textContent('#sheetBody');
   await page.click('#sheetClose'); await page.waitForTimeout(250);
   await page.click('#view .item[data-act="help"]'); await page.waitForTimeout(300);
@@ -1114,10 +1115,12 @@ try {
     document.querySelector('nav.tabs [data-tab="setup"]').getAttribute('aria-current') === 'true'));
   await page.click('[data-act="box-done"]'); await page.waitForTimeout(250);
   check('and Done comes back to the Account rows, not to Week', (await page.$$eval('#view .item[data-act="pane"]', a => a.length)) >= 3);
-  await openPane(page, 'household');
+  await openPane(page, 'box');   /* the one pane a bottom tab has to clear from under a lunchbox tab */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+  check('tapping a bottom tab closes an open page there and then', await page.evaluate(() =>
+    !/School rules/.test(document.querySelector('#view').textContent) && !document.querySelector('[data-act="box-done"]')));
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
-  check('tapping a bottom tab closes an open page', (await page.$$eval('#view .item[data-act="pane"]', a => a.length)) >= 3);
+  check('and the tab it lands on is the one that was tapped, with its rows back', (await page.$$eval('#view .item[data-act="pane"]', a => a.length)) >= 3);
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await openGear(page); await page.waitForTimeout(250);
   check('the day-of-week chips are named in full for a screen reader', (await page.$$eval('.dow .tg[aria-label]', a => a.length)) === 7);
@@ -1458,7 +1461,7 @@ try {
   await page.evaluate(() => { localStorage.setItem('lunchbox-tin', localStorage.getItem('lunchsorted')); localStorage.setItem('lunchbox-tin-v1', '{"foods":[],"settings":{}}'); localStorage.setItem('fiveboxes-backup-1', '{"old":1}'); localStorage.setItem('lunchsorted-backup-2', '{"old":2}'); });
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
   {
-    await page.click('[data-act="help"]'); await page.waitForTimeout(300);
+    await page.click('#view .item[data-act="help"]'); await page.waitForTimeout(300);
     const href = await page.getAttribute('#sheetBody [data-feedback]', 'href');
     const body = decodeURIComponent((href.split('body=')[1] || ''));
     check('Contact support opens the help sheet, whose bug report carries the build, the phone and the household shape, and never a food name',
@@ -1984,7 +1987,18 @@ try {
     /\$29 a year/.test(await pb.textContent('#view')) && /Cancel any time in Manage billing/.test(await pb.textContent('#view')) &&
     (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1 &&
     (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0, (await pb.textContent('#view')).match(/Renews[^\n]{0,60}/));
-  await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(250);
+  /* a household on the monthly price must be told the monthly price, which only
+     works if the entitlement's price id reaches the app at all */
+  await db.query(`UPDATE entitlements SET stripe_price_id='price_month' WHERE household_id=${patState.household.id}`);
+  await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
+  const monthlyShown = await until(pb, () => /\$3\.99 a month/.test(document.querySelector('#view').textContent));
+  check('a monthly household is told the monthly price, not the yearly one', monthlyShown &&
+    !/\$29 a year/.test(await pb.textContent('#view')), (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 200));
+  const smallPlan = await pb.$$eval('.btn.sm, .tg, .kidbtn, .seg button, .x, nav.tabs button, .item[data-act]', a =>
+    a.filter(e => e.checkVisibility()).map(e => ({h: Math.round(e.getBoundingClientRect().height), t: e.textContent.trim().slice(0,20)})).filter(x => x.h < 44));
+  check('every tappable control on the Subscription page is at least 44px tall', smallPlan.length === 0, smallPlan);
+  await db.query(`UPDATE entitlements SET stripe_price_id='price_year' WHERE household_id=${patState.household.id}`);
+  await pb.reload(); await pb.waitForLoadState('load');
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('a paid household can add a second lunchbox', (await pb.$$eval('#nkName', a => a.length)) === 1);
@@ -2075,12 +2089,18 @@ try {
   await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
   const helperBuy = await ph.evaluate(() => Promise.all([fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status), fetch('/api/billing/portal', {method:'POST'}).then(r => r.status)]));
   check('a caretaker can neither buy nor manage billing, and sees no plan line', helperBuy[0] === 403 && helperBuy[1] === 403 && !/Household plan/.test(await ph.textContent('#view')), helperBuy);
+  /* and is not sent what the household pays in the first place */
+  const sitterEnt = await ph.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => j.entitlement));
+  check('and the server never hands a caretaker the household\'s plan, price or renewal date',
+    sitterEnt.plan === 'free' && sitterEnt.currentPeriodEnd === null && !sitterEnt.price && sitterEnt.portal === false, sitterEnt);
   /* the Account tab a caretaker gets: no plan, no lunchbox settings, and still a way out */
   await ph.click('[data-act="tab"][data-tab="setup"]'); await ph.waitForTimeout(300);
   const sitterRows = await ph.evaluate(() => [...document.querySelectorAll('#view .item')].map(e => e.querySelector('.nm').textContent));
   check('a caretaker sees Account, Household and support, and no Subscription or Lunchboxes row',
     sitterRows.join('|') === 'Account|Household|Contact support', sitterRows);
-  check('and no gear in the corner', (await ph.$$eval('#who [data-act="box-settings"]', a => a.length)) === 0);
+  await ph.click('[data-act="tab"][data-tab="week"]'); await ph.waitForTimeout(300);
+  check('and no gear in the corner on the tabs that carry one for a parent', (await ph.$$eval('#who [data-act="box-settings"]', a => a.length)) === 0);
+  await ph.click('[data-act="tab"][data-tab="setup"]'); await ph.waitForTimeout(300);
   const sitterForced = await ph.evaluate(() => {
     const mk = (p) => { const b = document.createElement('button'); b.setAttribute('data-act','pane'); b.setAttribute('data-pane',p); document.body.appendChild(b); b.click(); b.remove(); return document.querySelector('#view').textContent; };
     return { box: mk('box'), plan: mk('plan') };
