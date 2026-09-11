@@ -69,7 +69,12 @@ button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-.app{max-width:600px;margin:0 auto;padding:18px 16px calc(96px + env(safe-area-inset-bottom))}
+.app{max-width:600px;margin:0 auto;
+  padding:calc(18px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom))}
+/* The web view runs under the status bar, so the clock needs its own strip of ground to
+   sit on; without it a scrolled line of text runs straight through the time. */
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);
+  background:var(--ground);z-index:70;pointer-events:none}
 .topbar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px}
 .brand{font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:-0.01em;white-space:nowrap}
 .brand span{color:var(--c-side)}
@@ -245,7 +250,8 @@ nav.tabs svg{width:21px;height:21px}
 
 /* --- first run --- */
 .ob{min-height:100svh;display:flex;flex-direction:column;justify-content:center;gap:22px;
-  max-width:600px;margin:0 auto;padding:34px 20px calc(34px + env(safe-area-inset-bottom))}
+  max-width:600px;margin:0 auto;
+  padding:calc(34px + env(safe-area-inset-top)) 20px calc(34px + env(safe-area-inset-bottom))}
 .ob h1{font-family:var(--f-display);font-size:clamp(30px,8.5vw,40px);font-weight:700;letter-spacing:-0.025em;
   line-height:1.08;margin:0;text-wrap:balance}
 .ob .lede{font-size:16.5px;color:var(--ink-2);margin:8px 0 0;max-width:38ch}
@@ -1142,11 +1148,12 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v12';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v13';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
-var WHATS_NEW = {build:'lunchsorted-v12', text:'New: matched boxes, tabs across the lunchboxes, the week after, and a three o\u2019clock ask.',
+var WHATS_NEW = {build:'lunchsorted-v13', text:'New: the top of every screen now clears the clock on your phone.',
   steps:[
+    ['Room for the clock', 'On a phone the app used to run under the time and the camera notch, so a scrolled line of text ran through them. Every screen now starts below them.'],
     ['Boxes that match', 'With more than one lunchbox, Shuffle all draws them from the same foods where each box\u2019s rules allow. It asks whose boxes first, and every shuffle can be undone. Switch it off under Account.'],
     ['Tabs, not a menu', 'On Pack, Week and Foods the lunchboxes are tabs along the top. One tap each.'],
     ['One food, every box', 'Add a food and it goes into every lunchbox; the button says where. Untick a name to leave one out.'],
