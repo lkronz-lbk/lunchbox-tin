@@ -1545,13 +1545,17 @@ var APP_BUILD = 'lunchsorted-v20';     /* the same tag as VERSION in sw.js; npm 
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
-   This build is a loss as much as a gain — sixty-eight recipes went — so the note says
-   so plainly, and the second card is the part that stops it reading as a week of
-   planning taken away, because nothing about planning, shopping or packing moved. */
-var WHATS_NEW = {build:'lunchsorted-v20', text:'New: two recipes school kitchens actually tested. The sixty-eight we had written ourselves are gone — Import a recipe brings in the ones you trust.',
+   Production is on v17, so nobody has seen any of the recipe work: v18, v19 and v20 go
+   out together and the note is the whole launch as it actually is now, not the last
+   build's delta. Rewrite it that way again if these ship in one go. */
+var WHATS_NEW = {build:'lunchsorted-v20', text:'New: recipes. A tab of their own, two kid-tested ones to cook from, and any other you want brought in from a page or a reel.',
   steps:[
-    ['Two we can stand behind', 'A quinoa salad cup and a bean & avocado wrap, both written and taste-tested by school teams of cooks, chefs, parents and students for the USDA. We had written the rest ourselves and nobody had cooked them, which is not something to hand a parent at six in the morning.'],
-    ['Everything else is where it was', 'Every other dish in the idea bank is still planned, still goes on the shopping list with what to buy for it, and is still packed. What it no longer has is a recipe we made up. Recipes → Import a recipe brings in the one you already use.']
+    ['A tab of their own', 'Recipes is on the bottom bar now. Foods belong to each lunchbox; recipes belong to the household, so they are one list however many kids you pack for.'],
+    ['Two we can stand behind', 'A quinoa salad cup and a bean and avocado wrap come with the app, free to cook from. Both were written and taste-tested by school teams of cooks, chefs, parents and students for the USDA. We do not write our own \u2014 a recipe nobody has cooked is not something to hand you at six in the morning.'],
+    ['Bring in the ones you use', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it; for a reel or a pin, copy the words under it and paste those instead. It is kept and named on the tab, and putting it on a lunchbox\u2019s food list is offered after rather than done for you.'],
+    ['One step at a time', 'Cook it step by step puts one step on the screen, with the amount of everything that step calls for underneath it and a box to tick as each one goes in.'],
+    ['Cups or grams', 'Switch the measures over and a cup of flour is weighed, an oven carries its Celsius, and a spoonful of salt is left as a spoonful. Ask for more lunches and every amount scales.'],
+    ['Where you need it', 'A Recipe tag on the Foods list, the recipe on the compartment when you tap it on Week, and named under the box on Pack, which is where you are standing the night before.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
