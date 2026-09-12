@@ -1549,19 +1549,18 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v17';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v18';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
    This build is a feature release: recipes, in the app and importable. */
-var WHATS_NEW = {build:'lunchsorted-v17', text:'New: recipes. The idea bank\u2019s cooked dishes come with one, and you can bring your own in.',
+var WHATS_NEW = {build:'lunchsorted-v18', text:'New: a Recipes tab. Every recipe in one place, for the whole household, not one lunchbox at a time.',
   steps:[
-    ['A recipe on the list', 'Tap a food on the Foods tab \u2014 the ones that have a recipe carry a Recipe tag. Most of what you cook rather than buy does now, free with the idea bank.'],
-    ['One step at a time', 'Cook it step by step walks through it, one step on the screen, with the ingredients a tap away and a box to tick as each one goes in.'],
-    ['Cups or grams', 'Switch the measures over and a cup of flour is weighed, the oven carries its Celsius, and the salt is left as a spoonful. Ask for more lunches and every amount scales.'],
-    ['Bring a recipe in', 'Foods \u2192 Import a recipe. Paste the address of a recipe page and the app reads it. For a reel or a pin, copy the words under it and paste those instead.'],
-    ['It lands as a food', 'What comes in becomes a food on the list, with its shopping line and what it contains already filled in \u2014 check that part before you save it, because the school rules go by it.'],
-    ['Where you need it', 'The recipe is on the compartment on Week, and named on Pack under the box, which is where you are standing the night before.']
+    ['A tab of their own', 'Recipes is on the bottom bar now. Foods are each lunchbox\u2019s own; recipes are the household\u2019s, so they all live in one list however many kids you pack for.'],
+    ['Yours, and the idea bank\u2019s', 'Everything you have kept sits above the seventy the idea bank brings. Those stay free to cook from whether the food is on a list or not.'],
+    ['Find one', 'Search by name, or by something in the cupboard \u2014 type "oats" and see what you could make with them.'],
+    ['Keep a recipe for its own sake', 'Import a recipe and it is kept, named, on the Recipes tab. Putting it on a lunchbox\u2019s food list is offered after, not done for you, so you can keep one you have no plans to pack.'],
+    ['One recipe, every box', 'A dish in three lunchboxes used to hold three copies of the same recipe. Now they all point at one, so changing it changes it everywhere.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
@@ -4313,8 +4312,8 @@ function helpSheet(){
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle day redraws one day, or tap a compartment to change one thing.'],
     ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
     ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
-    ['Where is the recipe?', 'Tap a food on the Foods tab, then Open the recipe \u2014 the ones that have one carry a Recipe tag on the list. Most of the idea bank\u2019s cooked dishes do, free. It is on the compartment on Week too, and named under the box on Pack.'],
-    ['Can I bring a recipe in from somewhere else?', 'Foods \u2192 Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read \u2014 copy the words under it and paste those in, which never leaves the phone. Either way it lands as a food to check over, so like writing one by hand it is part of the Household plan.'],
+    ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then the idea bank\u2019s, free to cook from. They also reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
+    ['Can I bring a recipe in from somewhere else?', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read \u2014 copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox\u2019s food list is offered after. Keeping one of your own is part of the Household plan.'],
     ['Can I see it in grams?', 'Open a recipe and tap Grams, or tap Cups for one that came in written in grams. A cup of flour is weighed, the oven carries its Celsius, and a spoonful of salt is left as a spoonful. The + and \u2212 make more or less and scale every amount.'],
     ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
     ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Shuffle all draws them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top \u2014 in the settings too.'],

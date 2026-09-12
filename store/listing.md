@@ -76,7 +76,7 @@ the enrolment, so settle it before launch.
 > Everything you planned across all kids, in one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
 >
 > THE RECIPE COMES WITH IT
-> The dishes you cook rather than buy come with the recipe built in, free. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in cups or in grams, scaled to how many lunches you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it becomes a food on your list with its shopping line already written.
+> A Recipes tab of its own, for the whole household rather than one lunchbox. The dishes you cook rather than buy come with the recipe built in, free, and you can search them by name or by what is already in the cupboard. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in cups or in grams, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
 
 > BUILT FOR MULTIPLE KIDS
 > Simplify shopping by matching all kids' lunchboxes, while honoring each school's rules with alternative options. Kids with wildly different preferences can have totally different lunchbox plans. You choose your setup, and one shopping list still covers them all.
