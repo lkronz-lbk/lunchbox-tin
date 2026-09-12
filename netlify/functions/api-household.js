@@ -42,20 +42,27 @@ async function ensureHousehold(user, withDoc) {
 /* a helper sees the pack list and nothing else: the lunchboxes' names, this week's
    plan, the foods it names, and the ticks; no rules, allergens, history or addresses.
    A recipe goes with the food, because whoever is packing the box may be the one
-   making it — but only what to do, never where the parent found it. */
+   making it — but only the ones this week's boxes actually use, and only what to
+   do: never the household's whole library, and never where the parent found it. */
 function recipeForHelper(r) {
-  return r ? { m: r.m, y: r.y, ing: r.ing, steps: r.steps, src: '', url: null } : null;
+  return { id: r.id, n: r.n, m: r.m, y: r.y, ing: r.ing, steps: r.steps, src: '', url: null,
+    createdAt: r.createdAt, updatedAt: r.updatedAt, deletedAt: r.deletedAt || null };
 }
 function helperView(doc) {
   if (!doc) return doc;
+  const wanted = new Set();
   const kids = (doc.kids || []).filter(k => !k.deletedAt).map(k => {
     const used = new Set(); (k.week && k.week.days || []).forEach(d => Object.values(d.slots || {}).forEach(id => id && used.add(id)));
     return { id: k.id, name: k.name, hue: k.hue, createdAt: k.createdAt, updatedAt: k.updatedAt, deletedAt: null,
       settings: { days: (k.settings || {}).days || [1,2,3,4,5], noHeat: true, avoidAllergens: [], avoidText: '', slots: (k.settings || {}).slots || {}, updatedAt: (k.settings || {}).updatedAt },
-      foods: (k.foods || []).filter(f => used.has(f.id)).map(f => ({ id: f.id, kidId: f.kidId, n: f.n, c: f.c, t: f.t, a: f.a, al: [], buy: Array.isArray(f.buy) ? f.buy : null, recipe: recipeForHelper(f.recipe), img: f.img || null, createdAt: f.createdAt, updatedAt: f.updatedAt, deletedAt: f.deletedAt })),
+      foods: (k.foods || []).filter(f => used.has(f.id)).map(f => {
+        if (f.recipeId) wanted.add(f.recipeId);
+        return { id: f.id, kidId: f.kidId, n: f.n, c: f.c, t: f.t, a: f.a, al: [], buy: Array.isArray(f.buy) ? f.buy : null, recipeId: f.recipeId || null, img: f.img || null, createdAt: f.createdAt, updatedAt: f.updatedAt, deletedAt: f.deletedAt };
+      }),
       week: k.week, packed: k.packed || {}, eaten: {}, past: [] };
   });
-  return { ...doc, kids, members: (doc.members || []).map(m => ({ id: m.id, name: m.name, role: m.role, createdAt: m.createdAt, updatedAt: m.updatedAt, deletedAt: m.deletedAt })), pantry: {} };
+  const recipes = (doc.recipes || []).filter(r => r && wanted.has(r.id)).map(recipeForHelper);
+  return { ...doc, kids, recipes, members: (doc.members || []).map(m => ({ id: m.id, name: m.name, role: m.role, createdAt: m.createdAt, updatedAt: m.updatedAt, deletedAt: m.deletedAt })), pantry: {} };
 }
 
 async function state(user) {

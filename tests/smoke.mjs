@@ -1696,6 +1696,13 @@ try {
   check('a caretaker is told why the app will not let them change anything, on the tab they land on', /Read-only on this phone — checkmarks stay here/.test(await p3.textContent('#view')));
   const helperState = await p3.evaluate(() => fetch('/api/household').then(r => r.json()));
   check('a helper gets the plan and the foods in it, and nothing else', helperState.me.role === 'helper' && helperState.doc.kids.every(k => k.settings.avoidAllergens.length === 0 && k.foods.every(f => f.al.length === 0)) && helperState.members.every(m => !m.email || m.userId === helperState.me.userId));
+  /* the library is the household's, so a caretaker is sent only the recipes for the
+     boxes they can see, and never where a parent found one */
+  check('a caretaker gets the recipes for the boxes they are packing, not the whole library, and not their sources',
+    Array.isArray(helperState.doc.recipes)
+    && helperState.doc.recipes.every(r => !r.src && !r.url)
+    && helperState.doc.recipes.every(r => helperState.doc.kids.some(k => k.foods.some(f => f.recipeId === r.id))),
+    (helperState.doc.recipes || []).map(r => r.n));
   const helperPut = await p3.evaluate(v => fetch('/api/household', {method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify({doc: JSON.parse(localStorage.getItem('lunchsorted')), version:v})}).then(r => r.status), helperState.version);
   check("a helper's push is refused", helperPut === 403, helperPut);
   await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
