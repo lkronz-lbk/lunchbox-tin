@@ -17,6 +17,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'publ
    build that claims nothing must say nothing, which is the usual case */
 const APP_SRC = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'app', 'index.html'), 'utf8');
 const NOTE_TEXT = (APP_SRC.match(/var WHATS_NEW = \{build:'[^']*', text:'([^']*)'/) || [,''])[1];
+const APP_BUILD = (APP_SRC.match(/var APP_BUILD = '([^']+)'/) || [,''])[1];
 const STEP_COUNT = (APP_SRC.match(/steps:\[([\s\S]*?)\n  \]\};/) || [,''])[1].split('\n').filter(l => l.trim().startsWith('[')).length;
 const POLICIES = readPolicies(fs.readFileSync(path.join(ROOT, '..', 'netlify.toml'), 'utf8'));
 
@@ -424,16 +425,26 @@ try {
       check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
       await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
       check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .switch', a => a.length)) === STEP_COUNT);
+      /* the backdrop is the whole screen while the sheet slides in: a thumb that lands there
+         has read nothing, so it puts the sheet away and leaves the note where it was */
+      await page.click('#backdrop', {position:{x:10, y:10}}); await page.waitForTimeout(350);   /* the strip above the sheet, where a hurried thumb lands */
+      check('a tap beside the sheet closes it without spending the note',
+        !(await page.$('.sheet.open')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1
+        && await page.evaluate(() => localStorage.getItem('lunchsorted-seen') === 'lunchsorted-v0'));
+      await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
       await page.click('#sheetClose'); await page.waitForTimeout(300);
-      check('Done at the top of the walk-through dismisses the note too',
-        !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+      check('Done at the top of the walk-through dismisses the note',
+        !/New: /.test(await page.textContent('#view')) && await page.evaluate((b) => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
+      await page.reload(); await page.waitForTimeout(600);
+      check('and it stays gone after Done, rather than coming back on the next open', !/New: /.test(await page.textContent('#view')));
       await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
       await page.reload(); await page.waitForTimeout(600);
+      check('a phone that has not seen this build gets the note back', (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1);
       await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
       await page.click('[data-act="whats-new-ok"]'); await page.waitForTimeout(300);
-      check('Got it dismisses the note for good', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+      check('Got it dismisses the note for good', !/New: /.test(await page.textContent('#view')) && await page.evaluate((b) => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
       await page.reload(); await page.waitForTimeout(600);
-      check('and once dismissed it stays gone', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+      check('and once dismissed it stays gone', !/New: /.test(await page.textContent('#view')) && await page.evaluate((b) => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
     }
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));

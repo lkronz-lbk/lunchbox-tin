@@ -395,7 +395,11 @@ roster of everyone else.
 
 Bump `APP_BUILD` in `public/app/index.html` and `VERSION` in `public/app/sw.js` together, and
 write that build's `WHATS_NEW` line beside them: one sentence a parent sees once, on the first
-open after the update, with an OK (a phone new to the app is never shown it). `npm run csp`
+open after the update (a phone new to the app is never shown it). The sentence sits in a banner
+whose one button, Show me, opens the walk-through of `WHATS_NEW.steps`; coming out of that by
+Got it at its foot or Done at its head retires the note for that build. A tap on the backdrop
+only puts the sheet away, so a mis-tap during the slide-in does not spend a note that is only
+ever shown once. `npm run csp`
 refuses a build whose note names an older build, so the note cannot be forgotten; set the
 text to `''` for a release with nothing to say.
 

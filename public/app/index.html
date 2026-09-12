@@ -231,6 +231,11 @@ input[type=search]::-webkit-search-decoration,input[type=search]::-webkit-search
 .banner.good{background:var(--accent-soft);color:var(--accent)}
 .banner.hot{background:var(--hot-soft);color:var(--hot);border:1.5px solid var(--hot)}
 .banner.hot b{display:block;margin-bottom:2px}
+/* a ghost button's --line edge all but vanishes on a banner's own background (1.1:1);
+   the button on a banner takes the banner's colour, the way the beta bar's already does */
+.banner .btn{border-color:var(--warn);color:var(--warn)}
+.banner.good .btn{border-color:var(--accent);color:var(--accent)}
+.banner.hot .btn{border-color:var(--hot);color:var(--hot)}
 .betabar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 14px;padding:6px 6px 6px 13px;border-radius:var(--r-md);background:var(--hot-soft);color:var(--hot);font-size:13px;font-weight:600}
 .betabar .btn{min-height:40px;padding:0 12px;font-size:13px;border-color:var(--hot);color:var(--hot);background:transparent}
 .banner{background:var(--warn-soft);color:var(--warn);border-radius:var(--r-md);padding:11px 13px;font-size:13.5px;
@@ -1551,7 +1556,7 @@ var APP_BUILD = 'lunchsorted-v20';     /* the same tag as VERSION in sw.js; npm 
 var WHATS_NEW = {build:'lunchsorted-v20', text:'New: recipes. A tab of their own, two kid-tested ones to cook from, and any other you want brought in from a page or a reel.',
   steps:[
     ['A tab of their own', 'Recipes is on the bottom bar now. Foods belong to each lunchbox; recipes belong to the household, so they are one list however many kids you pack for.'],
-    ['Two we can stand behind', 'A quinoa salad cup and a bean and avocado wrap come with the app, free to cook from. Both were written and taste-tested by school teams of cooks, chefs, parents and students for the USDA. We do not write our own \u2014 a recipe nobody has cooked is not something to hand you at six in the morning.'],
+    ['Two we can stand behind', 'A Mediterranean quinoa salad and a bean and avocado wrap come with the app, free to cook from. Both were written and taste-tested by school teams of cooks, chefs, parents and students for the USDA. We do not write our own \u2014 a recipe nobody has cooked is not something to hand you at six in the morning.'],
     ['Bring in the ones you use', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it; for a reel or a pin, copy the words under it and paste those instead. It is kept and named on the tab, and putting it on a lunchbox\u2019s food list is offered after rather than done for you.'],
     ['One step at a time', 'Cook it step by step puts one step on the screen, with the amount of everything that step calls for underneath it and a box to tick as each one goes in.'],
     ['Cups or grams', 'Switch the measures over and a cup of flour is weighed, an oven carries its Celsius, and a spoonful of salt is left as a spoonful. Ask for more lunches and every amount scales.'],
@@ -2847,19 +2852,26 @@ var sheetEl = document.getElementById('sheet'),
     bodyEl  = document.getElementById('sheetBody'),
     titleEl = document.getElementById('sheetTitle');
 var sheetState = null;
-/* the what’s new sheet is on screen. Reading it is the dismissal: Got it, Done, the
-   backdrop — whichever door the parent leaves by, the banner has done its job. */
-var newsSheet = false;
 function openSheet(title, html, state){
-  titleEl.textContent = title; bodyEl.innerHTML = html; sheetState = state || null; newsSheet = false;
+  titleEl.textContent = title; bodyEl.innerHTML = html; sheetState = state || null;
   sheetEl.classList.add('open'); backEl.classList.add('open'); bodyEl.scrollTop = 0;
   document.body.style.overflow = 'hidden';
 }
 function closeSheet(){ sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
-  UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = '';
-  if(newsSheet){ newsSheet = false; UI.notice = ''; markSeen(); render(); } }
+  UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = ''; }
+/* The what’s new note is retired by the parent coming out of the walk-through the way
+   it is left when it has been read: Got it at its foot, or Done at its head. A tap on the
+   backdrop puts the sheet away and leaves the note alone — the backdrop is the whole
+   screen for the 220ms the sheet is still sliding in, and a thumb that lands there has
+   read nothing. The note can only be shown once, so it is not a thing to lose to a mis-tap. */
+function newsSheetOpen(){ return !!(sheetState && sheetState.news); }
+function newsRead(){
+  if(!newsSheetOpen()) return false;
+  if(UI.notice === WHATS_NEW.text) UI.notice = '';   /* a message that arrived while it was open is not ours to clear */
+  markSeen(); return true;
+}
 backEl.addEventListener('click', closeSheet);
-document.getElementById('sheetClose').addEventListener('click', closeSheet);
+document.getElementById('sheetClose').addEventListener('click', function(){ var read = newsRead(); closeSheet(); if(read) render(); });
 
 /* ---------------------------------------------------------- fragments */
 /* what a food brings to the box, in the words the pairing uses; two at most, the ones that matter to a pairing first */
@@ -4429,7 +4441,7 @@ function helpSheet(){
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle day redraws one day, or tap a compartment to change one thing.'],
     ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
     ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
-    ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with \u2014 a quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
+    ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with \u2014 a Mediterranean quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
     ['Can I bring a recipe in from somewhere else?', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read \u2014 copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox\u2019s food list is offered after. Keeping one of your own is part of the Household plan.'],
     ['Can I see it in grams?', 'Open a recipe and tap Grams, or tap Cups for one that came in written in grams. A cup of flour is weighed, the oven carries its Celsius, and a spoonful of salt is left as a spoonful. The + and \u2212 make more or less and scale every amount.'],
     ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
@@ -4851,7 +4863,7 @@ document.addEventListener('click', function(ev){
     var wn = '<div class="card stack" style="gap:14px">' + WHATS_NEW.steps.map(function(st, i){
       return '<div class="switch" style="align-items:flex-start"><span class="count" style="min-width:22px;margin-top:2px">'+(i+1)+'</span><div><div class="t">'+esc(st[0])+'</div><div class="d">'+esc(st[1])+'</div></div></div>';
     }).join('') + '</div><button class="btn primary wide" data-act="whats-new-ok" style="margin-top:14px">Got it</button>';
-    openSheet('What\u2019s new', wn); newsSheet = true; return;
+    openSheet('What\u2019s new', wn, {news:true}); return;
   }
   if(act==='home-ok'){ try{ localStorage.setItem(HOME_KEY, '1'); }catch(e){} UI.homeHint = false; render(); return; }
   if(act==='beta-retry'){ claimBeta.tries = 0; claimBeta.failed = false; claimBeta(); render(); return; }
@@ -5309,7 +5321,7 @@ document.addEventListener('click', function(ev){
     return;
   }
   if(act==='notice-dismiss'){ UI.notice=''; markSeen(); render(); return; }
-  if(act==='whats-new-ok'){ closeSheet(); return; }   /* closing the sheet is what clears the banner, by this door or any other */
+  if(act==='whats-new-ok'){ newsRead(); closeSheet(); render(); return; }
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = {d:el.getAttribute('data-day'), at:Date.now()}; render(); return; }
