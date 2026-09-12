@@ -2632,6 +2632,26 @@ try {
     await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
     check('and it goes on and back a step at a time', /Step 2 of 5/.test(await cooking())
       && (await pr2.$$eval('[data-act="cook-step"][data-i="0"]', a => a.length)) === 1);
+    /* the amounts belong beside the step that calls for them, not three taps back */
+    check('a step carries the amount of everything it names, and nothing it does not',
+      (await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent))).join('|') === '1 cup quinoa|2 cups water|½ tsp salt',
+      await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent)));
+    /* the step view moves a step at a time, so walk to the last one */
+    for (const n of [2, 3, 4]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
+    check('and a step that calls for nothing carries no amounts at all',
+      /Step 5 of 5/.test(await cooking()) && (await pr2.$$eval('ul.steping li', a => a.length)) === 0,
+      await pr2.textContent('.cookstep'));
+    await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
+    await pr2.click('[data-act="cook-units"][data-v="metric"]'); await pr2.waitForTimeout(250);
+    await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
+    await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
+    check('and they are in the measures and the quantity the parent chose, like every other amount',
+      (await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent))).join('|') === '170 g quinoa|470 ml water|½ tsp salt',
+      await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent)));
+    await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
+    await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
+    await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
+    await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
     check('none of the cooking is written into the household: a half-made recipe is not something the other phone needs',
       await pr2.evaluate(() => !/"ticked"|"step":/.test(localStorage.getItem('lunchsorted') || '')));

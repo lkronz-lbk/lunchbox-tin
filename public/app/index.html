@@ -327,6 +327,10 @@ nav.tabs svg{width:21px;height:21px}
 .prog{height:5px;border-radius:999px;background:var(--line);outline:1px solid var(--line-strong);overflow:hidden}
 .prog span{display:block;height:100%;background:var(--accent)}
 .cookstep{margin:0;font-size:19px;line-height:1.5}
+/* the amounts this step calls for, under the step itself */
+ul.steping{list-style:none;margin:14px 0 0;padding:12px 0 0;border-top:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:6px 16px}
+ul.steping li{font-family:var(--f-mono);font-size:13.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .cookstep:focus{outline:none}
 .btn.sm.step{min-width:44px;padding:0 10px;font-size:17px}
 /* a label a screen reader reads and a sighted parent does not need, because the
@@ -871,7 +875,7 @@ function R(m, y, ing, steps){ return {m:m, y:y, l:1, ing:ing.split('|'), steps:s
 var RECIPE = {
   /* ---- mains */
   'quinoa salad cup': R(25, 4, '1 cup quinoa|2 cups water|1/2 tsp salt|1 cucumber, diced small|1 cup cherry tomatoes, halved|3 tbsp olive oil|2 tbsp lemon juice|1/4 cup crumbled feta',
-    'Rinse the quinoa in a sieve under cold water for half a minute — this is what keeps it from tasting bitter.|Bring the quinoa, water and salt to a boil, then cover and turn the heat right down for 15 minutes.|Take it off the heat, leave the lid on for 5 more minutes, then fluff it with a fork and spread it on a plate to cool.|Stir the cooled quinoa together with the cucumber, tomatoes, oil, lemon juice and feta.|Spoon into cups. It keeps for four days in the fridge, and it is better on day two.'),
+    'Rinse the quinoa in a sieve under the cold tap for half a minute — this is what keeps it from tasting bitter.|Bring the quinoa, water and salt to a boil, then cover and turn the heat right down for 15 minutes.|Take it off the heat, leave the lid on for 5 more minutes, then fluff it with a fork and spread it on a plate to cool.|Stir the cooled quinoa together with the cucumber, tomatoes, oil, lemon juice and feta.|Spoon into cups. It keeps for four days in the fridge, and it is better on day two.'),
   'pasta salad cup': R(20, 4, '8 oz small pasta|1 cup cherry tomatoes, halved|1/2 cup diced mozzarella|1/3 cup Italian dressing|1/4 tsp salt',
     'Boil the pasta in well-salted water until just tender, then drain and rinse it under cold water to stop it cooking.|Toss the cold pasta with the dressing while it is still slightly damp — it soaks it up better.|Fold through the tomatoes and mozzarella and taste for salt.|Pack into cups. Keeps four days; add a splash more dressing before packing on the last day.'),
   'chicken salad in a pita': R(15, 4, '2 cups cooked chicken, chopped|1/3 cup mayonnaise|1 stalk celery, diced small|1 tbsp lemon juice|1/4 tsp salt|4 pita breads',
@@ -973,7 +977,7 @@ var RECIPE = {
   'blondie bite': R(35, 24, '1/2 cup melted butter|1 cup brown sugar|1 egg|1 tsp vanilla|1 cup flour|1/2 tsp baking powder|1/4 tsp salt|1/2 cup chocolate chips',
     'Heat the oven to 350F and line a 24-hole mini muffin tin.|Stir the melted butter into the brown sugar, then beat in the egg and vanilla.|Fold in the flour, baking powder and salt, then the chocolate chips.|Fill each hole two-thirds and bake 13 minutes, until the tops have set and cracked.'),
   'rice crispy treat': R(15, 16, '3 tbsp butter|10 oz marshmallows|6 cups crisped rice cereal|1/4 tsp salt',
-    'Melt the butter over low heat, then the marshmallows, stirring until smooth.|Take the pan off the heat before the cereal goes in — cooked-on marshmallow is what makes them hard.|Stir in the cereal and salt quickly.|Press into a lined tray with buttered hands, firmly but not tightly.|Cool an hour, then cut into squares.'),
+    'Melt the butter over low heat, then the marshmallows, stirring until smooth.|Take the pan off the heat before the cereal goes in — cooking it on is what makes them hard.|Stir in the cereal and salt quickly.|Press into a lined tray with buttered hands, firmly but not tightly.|Cool an hour, then cut into squares.'),
   'granola cluster': R(45, 12, '3 cups rolled oats|1/2 cup honey|1/3 cup oil|1 egg white|1 tsp vanilla|1/2 tsp salt|1 tsp cinnamon',
     'Heat the oven to 300F and line a tray.|Whisk the honey, oil, egg white, vanilla, salt and cinnamon; the egg white is what binds the clusters.|Stir in the oats until every one is coated.|Press the mixture into one firm slab on the tray, about half an inch thick.|Bake 30 minutes, turning the tray once, until golden at the edges.|Let it cool completely without touching it, then break it into clusters.'),
   'trail mix': R(5, 10, '2 cups mixed nuts|1 cup raisins|1 cup pretzel sticks|1/2 cup chocolate chips|1/2 cup dried cranberries',
@@ -1209,6 +1213,38 @@ function unitWord(u, q){
   var many = q > 1.01;
   return u === 'tbsp' ? 'tbsp' : u === 'tsp' ? 'tsp' : u === 'cup' ? (many ? 'cups' : 'cup')
     : u === 'floz' ? 'fl oz' : u === 'lb' ? (many ? 'lbs' : 'lb') : u;
+}
+/* ------------------------------------------------- what a step calls for
+   Reading "bring the quinoa, water and salt to a boil" is no use if how much of
+   each is three taps back, so a step carries the amounts of whatever it names.
+   The match is on the thing itself and on its last word, either singular or
+   plural, at a word boundary — enough for "cherry tomatoes" to answer to
+   "tomatoes" and for "2 eggs" to answer to "egg", and tight enough that "oats"
+   does not answer to "oatmeal". */
+function esc4re(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function singular(w){
+  if(/(ss|us|is)$/.test(w)) return w;
+  return w.replace(/ies$/, 'y').replace(/(ch|sh|x|z|s)es$/, '$1').replace(/s$/, '');
+}
+function stepNames(head){
+  var k = normKey(head);
+  if(!k || k.length < 2) return [];
+  var words = k.split(' '), out = [k];
+  if(words.length > 1) out.push(words[words.length - 1]);
+  return out.map(singular).filter(function(w){ return w.length > 2; });
+}
+/* the ingredient lines this step names, in this step's own words */
+function stepIng(r, i, scale, metric){
+  var text = ' ' + normKey(r.steps[i] || '') + ' ', out = [], seen = nullMap();
+  (r.ing || []).forEach(function(line){
+    var names = stepNames(ingHead(line));
+    var hit = names.some(function(w){ return new RegExp('\\b' + esc4re(w) + '(?:e?s)?\\b').test(text); });
+    if(!hit) return;
+    var said = ingLine(line, scale, metric);
+    if(seen[said]) return; seen[said] = 1;
+    out.push(said);
+  });
+  return out;
 }
 /* a step reads the same in both, except that an oven has two scales */
 function stepLine(text, metric){
@@ -1568,18 +1604,15 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v18';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v19';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
    This build is a feature release: recipes, in the app and importable. */
-var WHATS_NEW = {build:'lunchsorted-v18', text:'New: a Recipes tab. Every recipe in one place, for the whole household, not one lunchbox at a time.',
+var WHATS_NEW = {build:'lunchsorted-v19', text:'New: cooking step by step now shows how much of each thing a step calls for, beside the step.',
   steps:[
-    ['A tab of their own', 'Recipes is on the bottom bar now. Foods are each lunchbox\u2019s own; recipes are the household\u2019s, so they all live in one list however many kids you pack for.'],
-    ['Yours, and the idea bank\u2019s', 'Everything you have kept sits above the seventy the idea bank brings. Those stay free to cook from whether the food is on a list or not.'],
-    ['Find one', 'Search by name, or by something in the cupboard \u2014 type "oats" and see what you could make with them.'],
-    ['Keep a recipe for its own sake', 'Import a recipe and it is kept, named, on the Recipes tab. Putting it on a lunchbox\u2019s food list is offered after, not done for you, so you can keep one you have no plans to pack.'],
-    ['One recipe, every box', 'A dish in three lunchboxes used to hold three copies of the same recipe. Now they all point at one, so changing it changes it everywhere.']
+    ['The amount, where you need it', 'A step that says "stir in the butter, sugar, egg and vanilla" now says how much of each, under the step itself, so you are not tapping back to the ingredients mid-mix.'],
+    ['In your measures', 'They follow the Cups or Grams switch and the number of servings, like every other amount in the recipe.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
@@ -4115,12 +4148,17 @@ function guessAllergens(lines){
 var TRIM_FRONT = /^(?:of|fresh|freshly|finely|thinly|roughly|coarsely|chopped|diced|grated|shredded|sliced|minced|ground|crushed|large|small|medium|ripe|cold|warm|hot|melted|softened|packed|heaping|plain|whole|raw|cooked|good|extra|optional|slices?|cloves?|cans?|tins?|jars?|packs?|packets?|sticks?|strips?|pieces?|handfuls?|bunch(?:es)?|sprigs?)\s+/i;
 var TRIM_BACK = /[,\s]+(?:chopped|diced|grated|shredded|sliced|minced|melted|softened|divided|drained|rinsed|halved|quartered|cubed|to taste|for serving|for garnish|optional|if needed|plus more)\s*$/i;
 /* the shopping line for an imported dish: the things, not the amounts */
+/* the thing itself, with the amount and the preparation stripped off:
+   "1 cucumber, diced small" is a cucumber, "3 tbsp olive oil" is olive oil */
+function ingHead(line){
+  var n = parseIng(line).n.replace(/\([^)]*\)/g, ' ').split(/,| or /)[0], was = '';
+  while(n !== was){ was = n; n = n.replace(TRIM_FRONT, '').replace(TRIM_BACK, '').trim(); }
+  return n;
+}
 function buyFrom(ing){
   var seen = nullMap(), out = [];
   ing.forEach(function(line){
-    var n = parseIng(line).n.replace(/\([^)]*\)/g, ' ').split(/,| or /)[0];
-    var was = '';
-    while(n !== was){ was = n; n = n.replace(TRIM_FRONT, '').replace(TRIM_BACK, '').trim(); }
+    var n = ingHead(line);
     if(!n || n.length < 2 || n.length > 40 || /^(?:to taste|water|salt|pepper|salt and pepper)$/i.test(n)) return;
     var k = normKey(n); if(seen[k]) return; seen[k] = 1;
     out.push(n.charAt(0).toUpperCase() + n.slice(1));
@@ -4299,7 +4337,7 @@ function cookIngList(r, tickable){
 function cookSheet(keepScroll){
   var c = UI.cook, r = cookRecipe(), f = cookFood(), title = cookTitle();
   if(!c || !r || !title){ closeSheet(); return; }
-  var at = keepScroll ? bodyEl.scrollTop : 0;
+  var scale = cookScale(r), at = keepScroll ? bodyEl.scrollTop : 0;
   var h;
   if(c.step < 0){
     h = '<div class="stack" style="gap:14px">';
@@ -4347,7 +4385,14 @@ function cookSheet(keepScroll){
       + '<div class="spread"><p class="hint muted" style="margin:0">Step '+(i + 1)+' of '+r.steps.length+'</p>'
       + '<button class="linkbtn" data-act="cook-step" data-i="-1">The whole recipe</button></div>'
       + '<div class="prog"><span style="width:'+Math.round((i + 1) / r.steps.length * 100)+'%"></span></div>'
-      + '<div class="card"><p class="cookstep" tabindex="-1">Step '+(i + 1)+'. '+esc(stepLine(r.steps[i], c.metric))+'</p></div>'
+      + '<div class="card"><p class="cookstep" tabindex="-1">Step '+(i + 1)+'. '+esc(stepLine(r.steps[i], c.metric))+'</p>'
+      + (function(){
+          /* how much of what this step names, at the moment it is being read, rather
+             than three taps back behind "What you need" */
+          var mine = stepIng(r, i, scale, c.metric);
+          return mine.length ? '<ul class="steping">'+mine.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>' : '';
+        })()
+      + '</div>'
       + (last ? '<button class="btn primary wide" data-act="cook-done">'+svg('check',17)+'That is lunch sorted</button>'
               : '<button class="btn primary wide" data-act="cook-step" data-i="'+(i + 1)+'">Next step</button>')
       + (i > 0 ? '<button class="btn ghost wide" data-act="cook-step" data-i="'+(i - 1)+'">Back a step</button>' : '')

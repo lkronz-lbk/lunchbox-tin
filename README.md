@@ -77,7 +77,9 @@ food list from a 200-item library and produce a planned week immediately. From t
   from the name (`liftedId`), not minted at random, so two phones normalising the same v17
   document agree on it and the merge collapses them instead of keeping both.
 - **Cooking one** — **Cook it step by step** is one step on the screen at a time with a
-  progress bar, the ingredients behind a summary, and a box to tick per ingredient —
+  progress bar, the amounts of whatever that step names underneath it (`stepIng` matches an
+  ingredient's own name, and its last word, singular or plural, at a word boundary), the
+  full list behind a summary, and a box to tick per ingredient —
   none of which is written to the document, because a half-made recipe is not something
   the other phone needs. **Cups or grams** converts what can honestly be converted, both
   ways: a cup of a thing whose density we know is weighed, a pourable thing is given in
