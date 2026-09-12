@@ -153,7 +153,11 @@ third-party cookies; the site's analytics are on the marketing pages only and ne
 `/app/`; the only network calls are to lunchsorted.app; Stripe runs on its own page in
 Safari. Diagnostics stays **No**: there is no crash or performance reporting of any kind,
 and Apple's own crash logs are collected by Apple, not by the app, so they need no
-declaring. Data is collected only after the parent signs in; until then nothing leaves the
+declaring. Usage Data stays **No** on the same footing: the servers keep the day a person
+last used the app and a count of the days they have used it, both of which run the service
+(the three-week trial, the reminder emails, and knowing whether an account is live) rather
+than measuring behaviour, and nothing about what anyone does inside the app is recorded.
+Revisit this answer if a count of anything narrower than a day is ever kept. Data is collected only after the parent signs in; until then nothing leaves the
 phone, and App Store Connect has no way to say "optional", so answer as if signed in. The
 label on the store will read "Data Linked to You: Contact Info, User Content, Identifiers,
 Purchases". Deletion: "Delete my account and data" under Account → Account, confirmed by typing DELETE, offered to every signed-in person and not only the owner, documented on the privacy page.

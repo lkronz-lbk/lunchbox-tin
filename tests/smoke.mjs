@@ -1700,9 +1700,11 @@ try {
       /gran@example\.com \(caretaker, last active [A-Z]/.test(sam.others) && /sam@example\.com \(parent, last active [A-Z]/.test(gran.others),
       [sam, gran]);
     check('and every row of that household says the same thing was added to it',
-      standard.filter(x => x.hh === sam.hh).every(x => x.sharing === 'A parent and a caretaker'),
-      standard.filter(x => x.hh === sam.hh).map(x => x.sharing));
-    check('while someone who has signed in and never made a household is marked as having none', standard.some(x => x.role === 'No household' && x.plan === '' && x.sharing === ''), standard.map(x => [x.email, x.role]));
+      standard.filter(x => x.hh === sam.hh).every(x => x.household === 'A parent and a caretaker'),
+      standard.filter(x => x.hh === sam.hh).map(x => x.household));
+    const granDays = (await db.query(`SELECT days_seen AS n FROM users WHERE email = 'gran@example.com'`)).rows[0].n;
+    check('signing in counts that day straight away, without waiting for the hourly touch', granDays === 1, granDays);
+    check('while someone who has signed in and never made a household is marked as having none', standard.some(x => x.role === 'No household' && x.plan === '' && x.household === ''), standard.map(x => [x.email, x.role]));
   }
   await ctx3.close();
 
@@ -2176,6 +2178,22 @@ try {
   check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
   {
     const { testers, standard } = (await adminStats()).roster;
+    /* the backfill in migration 0005 runs once, against a database that is empty in this
+       suite, so run it here over seeded history: it is the only part of the change that
+       touches production rows on deploy */
+    {
+      const sqlText = fs.readFileSync(path.join(ROOT, '..', 'netlify', 'database', 'migrations', '0005_days.sql'), 'utf8');
+      const backfill = sqlText.replace(/--[^\n]*/g, '').split(';').map(x => x.trim()).filter(x => x.startsWith('UPDATE'));
+      check('the migration carries one backfill statement', backfill.length === 1, backfill.length);
+      const [old] = (await db.query(`INSERT INTO users (email, last_seen_at) VALUES ('history@example.com', now() - interval '9 days') RETURNING id`)).rows;
+      await db.query(`INSERT INTO sessions (token_hash, user_id, expires_at, created_at, last_used_at) VALUES
+        ('h1', ${old.id}, now() + interval '1 day', now() - interval '5 days', now() - interval '3 days'),
+        ('h2', ${old.id}, now() + interval '1 day', now() - interval '5 days', now() - interval '2 days')`);
+      await db.query(backfill[0]);
+      const back = (await db.query(`SELECT days_seen, last_day FROM users WHERE id = ${old.id}`)).rows[0];
+      check('and it reads a floor for the days before the counter existed, counting each day once', back.days_seen === 4 && !!back.last_day, back);
+      await db.query(`DELETE FROM users WHERE email = 'history@example.com'`);
+    }
     check('the numbers page lists the beta testers by email, with when they came in and were last seen', testers.length === 1 && testers[0].email === 'pat@example.com' && testers[0].plan === 'Forever' && !!testers[0].since && !!testers[0].lastSeen, testers);
     check('and everyone who did not come in on a code is on the other roster instead', standard.length > 1 && !standard.some(x => x.email === 'pat@example.com'), standard.map(x => x.email));
   }
@@ -2194,13 +2212,15 @@ try {
     check('a second request within the hour writes nothing', new Date(again).getTime() < Date.now() - 60000, again);
   }
   {
-    /* days in the app: one row a person a day, written by the same hourly touch */
+    /* days seen: one to a New York day, moved by the same hourly touch */
     const uid = (await db.query(`SELECT id FROM users WHERE email = 'pat@example.com'`)).rows[0].id;
-    await db.query(`DELETE FROM user_days WHERE user_id = ${uid}`);
-    await db.query(`INSERT INTO user_days (user_id, day) VALUES (${uid}, (now() AT TIME ZONE 'America/New_York')::date - 30)`);
+    await db.query(`UPDATE users SET days_seen = 1, last_day = (now() AT TIME ZONE 'America/New_York')::date - 30 WHERE id = ${uid}`);
     await db.query(`UPDATE sessions SET last_used_at = now() - interval '2 hours' WHERE user_id = ${uid}`);
     await pb.evaluate(() => fetch('/api/household').then(r => r.status));
-    check('a new day in the app is counted, on top of the days already there', (await adminStats()).roster.testers[0].days === 2, (await adminStats()).roster.testers[0].days);
+    const after = (await adminStats()).roster.testers[0].days;
+    check('a new day in the app is counted, on top of the days already there', after === 2, after);
+    /* put the session back over the hour so the write is really attempted a second time */
+    await db.query(`UPDATE sessions SET last_used_at = now() - interval '2 hours' WHERE user_id = ${uid}`);
     await pb.evaluate(() => fetch('/api/household').then(r => r.status));
     check('and a second visit the same day is not counted twice', (await adminStats()).roster.testers[0].days === 2);
   }
@@ -2239,16 +2259,19 @@ try {
       head[7].querySelector('button').click();
       out.sorted = head[7].getAttribute('aria-sort');
       out.topDays = box.querySelector('tbody tr').cells[7].textContent;
+      out.sheetBeforeOpen = box.querySelector('[data-sheet]').textContent;
+      var fold = box.querySelector('details'); fold.open = true; fold.dispatchEvent(new Event('toggle'));
       out.sheetLines = box.querySelector('[data-sheet]').textContent.split('\n').length;
       return out;
     });
     check('the numbers page carries both rosters, every column with a sort button and the four filters',
-      t.tables === 2 && t.toolsShown && t.filters.join('|') === 'Role: all|Plan: all|Status: all|Added: all' &&
-      t.columns.join('|') === 'Email|Household|Role|Plan|Status|Joined|Last seen|Days in app|Who they added|Who else is on it', t);
+      t.tables === 2 && t.toolsShown && t.filters.join('|') === 'Role: all|Plan: all|Status: all|Household has: all' &&
+      t.columns.join('|') === 'Email|Household|Role|Plan|Status|Joined|Last seen|Days seen|Household has|Who else is on it', t);
     check('it shows the first thirty people and pages through the rest', t.first === 30 && /^1–30 of \d\d/.test(t.firstCount) && t.second > 0 && t.second <= 30 && /^31–/.test(t.secondCount), t);
     check('searching narrows it to the one person, and Clear brings everyone back', t.searched === 1 && /filler7@example\.com/.test(t.searchedEmail) && t.cleared === 30, t);
     check('a filter counts only the rows it keeps, and a sort puts the largest first',
-      /^1–\d+ of \d+ \(of 40\)$/.test(t.filtered) && t.filtered !== t.firstCount && t.sorted === 'descending' && Number(t.topDays) >= 1 && t.sheetLines === 40, t);
+      /^1–\d+ of \d+ matching · 40 in all$/.test(t.filtered) && t.filtered !== t.firstCount && t.sorted === 'descending' && Number(t.topDays) >= 1, t);
+    check('the sheet block is empty until it is opened, and then carries every filtered row', t.sheetBeforeOpen === '' && t.sheetLines === 40, [t.sheetBeforeOpen.length, t.sheetLines]);
     await pa.close();
     await db.query(`DELETE FROM users WHERE email LIKE 'filler%@example.com'`);
     process.env.ADMIN_EMAILS = admins;

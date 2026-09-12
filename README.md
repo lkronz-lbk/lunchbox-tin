@@ -325,9 +325,8 @@ code on the phone until a parent is signed in, then `POST /api/billing/beta` swi
 household to forever for good, refused once `BETA_CAP` (default 25; 0 closes it) households
 carry `source = 'code'`. A household that checks out with a 100%-off Stripe code (TESTER) is
 written the same way and kept so through later Stripe events; `/admin` lists them under
-"Beta testers" with every email in the household, when they came in and when last seen
-(the last request any of them made, kept to the hour, not the last sign-in),
-plus a sheet-ready line per household.
+"Beta testers", a row a person rather than a row a household, beside the "Standard users"
+roster of everyone else.
 
 ### Releasing an app change
 
@@ -516,8 +515,19 @@ the idea bank stays free so a free list is never stuck with what it has.
   `globalThis.__LS_MAIL`; nothing reaches Resend from a test.
 - **The numbers**, at `/admin`, for the emails in `ADMIN_EMAILS` (comma-separated) and nobody
   else: households, on trial, lapsed, paying by plan, sign-ins, reminder emails sent, invites.
-  Counts from the database, rendered as a page with no script; a stranger is asked to sign
-  in, a signed-in parent who is not listed gets not-found.
+  Counts from the database; a stranger is asked to sign in, a signed-in parent who is not
+  listed gets not-found. Below the counts are two rosters, "Standard users" and "Beta
+  testers", a row a person: email, household, role (owner, parent, caretaker), plan, status,
+  joined (or the day a beta code was used), last seen, days seen, what the household has on
+  it besides the owner, and who those people are with the day each was last active. Every
+  column sorts, role, plan, status and the household column filter, there is a search box,
+  and thirty rows show at a time; a fold under each table lists whatever is filtered as
+  comma-separated lines for a spreadsheet. The rows are rendered into the page and the one
+  inline script only reorders them, allowed by its own sha256 and nothing else. `days_seen`
+  and `last_day` on `users` (migration 0005) are what "days seen" counts: the same hourly
+  touch that moves `last_seen_at` adds one when the New York day turns over, so signed-out
+  use never reaches it, and the days from before the counter are read back from the session
+  rows as a floor.
 - **Stripe setup, once per mode:** one product, two prices; Developers → Webhooks → add
   `https://<site>/api/billing/webhook` with the six event types above and paste the
   signing secret; Settings → Billing → Customer portal → save the default configuration
