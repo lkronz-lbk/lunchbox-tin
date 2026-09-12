@@ -1575,8 +1575,15 @@ try {
   {
     const anonAdmin = await fetch(NODE_BASE + '/api/admin');
     const adminPage = await page.evaluate(() => fetch('/api/admin').then(r => r.text().then(t => ({ status: r.status, text: t, csp: r.headers.get('content-security-policy') }))));
-    check('the numbers page asks a stranger to sign in, and shows the person in ADMIN_EMAILS real counts with no script allowed',
-      anonAdmin.status === 401 && adminPage.status === 200 && /by the numbers/i.test(adminPage.text) && /households/.test(adminPage.text) && /default-src 'none'/.test(adminPage.csp) && !/<script/.test(adminPage.text), [anonAdmin.status, adminPage.status]);
+    check('the numbers page asks a stranger to sign in, and shows the person in ADMIN_EMAILS real counts',
+      anonAdmin.status === 401 && adminPage.status === 200 && /by the numbers/i.test(adminPage.text) && /households/.test(adminPage.text) && /default-src 'none'/.test(adminPage.csp), [anonAdmin.status, adminPage.status]);
+    /* the one script that sorts the rosters is allowed by its own hash and nothing else */
+    const inline = adminPage.text.match(/<script>([\s\S]*?)<\/script>/g) || [];
+    const only = adminPage.text.match(/<script>([\s\S]*?)<\/script>/);
+    const hash = only && crypto.createHash('sha256').update(only[1], 'utf8').digest('base64');
+    const scriptSrc = (adminPage.csp.match(/script-src ([^;]*)/) || [, ''])[1];
+    check('the one script on the numbers page is allowed by its own hash and nothing else',
+      inline.length === 1 && scriptSrc === `'sha256-${hash}'`, [inline.length, scriptSrc]);
   }
   const spent = await page.evaluate(u => fetch(u).then(r => r.status), devLink);
   check('a used link is gone', spent === 410, spent);
@@ -1682,6 +1689,20 @@ try {
   check('and a helper sees no Shuffle button and no swap cue, only the week', (await p3.$$eval('[data-act="plan-kid"],[data-act="shuffle-day"],.cmp .swap', a => a.length)) === 0 && (await p3.$$eval('.cmp', a => a.length)) > 0);
   await p3.click('.daycard:not(.past) .cmp >> nth=0'); await p3.waitForTimeout(200);
   check('and the app says so instead of pretending', /Only a parent can change the plan/.test(await p3.textContent('#toast')));
+  {
+    /* the roster on the numbers page: who else is on an account, and when each of them was last active */
+    const { standard } = (await adminStats()).roster;
+    const sam = standard.find(x => x.email === 'sam@example.com') || {};
+    const gran = standard.find(x => x.email === 'gran@example.com') || {};
+    check('the roster names the second parent and the caretaker on an account, with the day each was last active',
+      sam.role === 'Parent' && gran.role === 'Caretaker' && sam.hh === gran.hh &&
+      /gran@example\.com \(caretaker, last active [A-Z]/.test(sam.others) && /sam@example\.com \(parent, last active [A-Z]/.test(gran.others),
+      [sam, gran]);
+    check('and every row of that household says the same thing was added to it',
+      standard.filter(x => x.hh === sam.hh).every(x => x.sharing === 'A parent and a caretaker'),
+      standard.filter(x => x.hh === sam.hh).map(x => x.sharing));
+    check('while someone who has signed in and never made a household is marked as having none', standard.some(x => x.role === 'No household' && x.plan === '' && x.sharing === ''), standard.map(x => [x.email, x.role]));
+  }
   await ctx3.close();
 
   /* a returning parent on a fresh phone signs in from the first screen and gets the lunches back */
@@ -2151,8 +2172,9 @@ try {
   await hook({ id: 'evt_tester', type: 'checkout.session.completed', created: t0 + 9.5, data: { object: { id: 'cs_test_t', mode: 'payment', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
   check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
   {
-    const testers = (await adminStats()).testers;
-    check('the numbers page lists the beta testers by email, with when they came in and were last seen', testers.length === 1 && /pat@example\.com/.test(testers[0].emails) && testers[0].plan === 'lifetime' && !!testers[0].since && !!testers[0].lastSeen, testers);
+    const { testers, standard } = (await adminStats()).roster;
+    check('the numbers page lists the beta testers by email, with when they came in and were last seen', testers.length === 1 && testers[0].email === 'pat@example.com' && testers[0].plan === 'Forever' && !!testers[0].since && !!testers[0].lastSeen, testers);
+    check('and everyone who did not come in on a code is on the other roster instead', standard.length > 1 && !standard.some(x => x.email === 'pat@example.com'), standard.map(x => x.email));
   }
   {
     /* the bug: last seen only moved when someone signed in, so a parent who stays signed in
@@ -2162,11 +2184,71 @@ try {
     await pb.evaluate(() => fetch('/api/household').then(r => r.status));
     const moved = (await db.query(`SELECT last_seen_at FROM users WHERE email = 'pat@example.com'`)).rows[0].last_seen_at;
     check('using the app moves last seen without signing in again', new Date(moved).getTime() > Date.now() - 60000, moved);
-    check('and the numbers page shows that day, not the day they came in', new Date((await adminStats()).testers[0].lastSeen).getTime() > Date.now() - 60000);
+    check('and the numbers page shows that day, not the day they came in', new Date((await adminStats()).roster.testers[0].lastSeen).getTime() > Date.now() - 60000);
     await db.query(`UPDATE users SET last_seen_at = now() - interval '30 days' WHERE email = 'pat@example.com'`);
     await pb.evaluate(() => fetch('/api/household').then(r => r.status));
     const again = (await db.query(`SELECT last_seen_at FROM users WHERE email = 'pat@example.com'`)).rows[0].last_seen_at;
     check('a second request within the hour writes nothing', new Date(again).getTime() < Date.now() - 60000, again);
+  }
+  {
+    /* days in the app: one row a person a day, written by the same hourly touch */
+    const uid = (await db.query(`SELECT id FROM users WHERE email = 'pat@example.com'`)).rows[0].id;
+    await db.query(`DELETE FROM user_days WHERE user_id = ${uid}`);
+    await db.query(`INSERT INTO user_days (user_id, day) VALUES (${uid}, (now() AT TIME ZONE 'America/New_York')::date - 30)`);
+    await db.query(`UPDATE sessions SET last_used_at = now() - interval '2 hours' WHERE user_id = ${uid}`);
+    await pb.evaluate(() => fetch('/api/household').then(r => r.status));
+    check('a new day in the app is counted, on top of the days already there', (await adminStats()).roster.testers[0].days === 2, (await adminStats()).roster.testers[0].days);
+    await pb.evaluate(() => fetch('/api/household').then(r => r.status));
+    check('and a second visit the same day is not counted twice', (await adminStats()).roster.testers[0].days === 2);
+  }
+  {
+    /* the rosters in a real browser: thirty rows a page, and the search, the filters and
+       the sort headers all working on rows that are already in the markup */
+    const admins = process.env.ADMIN_EMAILS;
+    process.env.ADMIN_EMAILS = 'pat@example.com';
+    const filler = Array.from({ length: 34 }, (_, i) => `('filler${i}@example.com')`).join(',');
+    await db.query(`INSERT INTO users (email) VALUES ${filler}`);
+    const pa = await pb.context().newPage(); pa.on('pageerror', e => errors.push(String(e.message)));
+    await pa.goto(BASE + '/api/admin'); await pa.waitForLoadState('load');
+    check('a person in ADMIN_EMAILS gets the numbers page itself, not a sign-in', /by the numbers/i.test(await pa.title() + await pa.textContent('h1')), await pa.title());
+    const t = await pa.evaluate(() => {
+      const box = document.querySelectorAll('[data-table]')[0];
+      const rows = () => box.querySelectorAll('tbody tr').length;
+      const head = box.querySelectorAll('thead th');
+      const out = {
+        tables: document.querySelectorAll('[data-table]').length,
+        columns: Array.prototype.map.call(head, th => th.querySelector('button').textContent.trim().replace(/[ \u2191\u2193]+$/, '')),
+        filters: Array.prototype.map.call(box.querySelectorAll('[data-filter]'), s => s.options[0].textContent),
+        toolsShown: !box.querySelector('.tools').hidden && !box.querySelector('.pager').hidden,
+        first: rows(), firstCount: box.querySelector('[data-count]').textContent
+      };
+      box.querySelector('[data-next]').click();
+      out.second = rows(); out.secondCount = box.querySelector('[data-count]').textContent;
+      const search = box.querySelector('[data-search]');
+      search.value = 'filler7@'; search.dispatchEvent(new Event('input'));
+      out.searched = rows(); out.searchedEmail = box.querySelector('tbody td').textContent;
+      box.querySelector('[data-clear]').click();
+      out.cleared = rows();
+      const pick = box.querySelector('[data-filter]');
+      pick.value = 'No household'; pick.dispatchEvent(new Event('change'));
+      out.filtered = box.querySelector('[data-count]').textContent;
+      box.querySelector('[data-clear]').click();
+      head[7].querySelector('button').click();
+      out.sorted = head[7].getAttribute('aria-sort');
+      out.topDays = box.querySelector('tbody tr').cells[7].textContent;
+      out.sheetLines = box.querySelector('[data-sheet]').textContent.split('\n').length;
+      return out;
+    });
+    check('the numbers page carries both rosters, every column with a sort button and the four filters',
+      t.tables === 2 && t.toolsShown && t.filters.join('|') === 'Role: all|Plan: all|Status: all|Added: all' &&
+      t.columns.join('|') === 'Email|Household|Role|Plan|Status|Joined|Last seen|Days in app|Who they added|Who else is on it', t);
+    check('it shows the first thirty people and pages through the rest', t.first === 30 && /^1–30 of \d\d/.test(t.firstCount) && t.second > 0 && t.second <= 30 && /^31–/.test(t.secondCount), t);
+    check('searching narrows it to the one person, and Clear brings everyone back', t.searched === 1 && /filler7@example\.com/.test(t.searchedEmail) && t.cleared === 30, t);
+    check('a filter counts only the rows it keeps, and a sort puts the largest first',
+      /^1–\d+ of \d+ \(of 40\)$/.test(t.filtered) && t.filtered !== t.firstCount && t.sorted === 'descending' && Number(t.topDays) >= 1 && t.sheetLines === 40, t);
+    await pa.close();
+    await db.query(`DELETE FROM users WHERE email LIKE 'filler%@example.com'`);
+    process.env.ADMIN_EMAILS = admins;
   }
   await hook({ id: 'evt_refund_t', type: 'charge.refunded', created: t0 + 9.6, data: { object: { id: 'ch_t', object: 'charge', customer: 'cus_pat', refunded: true } } });
   check('undoing it clears the tester mark too', (await ent()).plan === 'free' && (await ent()).source === 'none', await ent());

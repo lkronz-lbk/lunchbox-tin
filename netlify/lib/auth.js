@@ -86,6 +86,9 @@ export async function createSession(userId, kind = 'web') {
   const token = secret();
   const expires = new Date(Date.now() + SESSION_DAYS * 86400 * 1000).toISOString();
   await sql()`INSERT INTO sessions (token_hash, user_id, kind, expires_at, last_used_at) VALUES (${hash(token)}, ${userId}, ${kind}, ${expires}, now())`;
+  /* the session starts already used, so the hourly touch will not fire today: count the
+     day of the sign-in here or it is lost */
+  await sql()`INSERT INTO user_days (user_id, day) VALUES (${userId}, (now() AT TIME ZONE 'America/New_York')::date) ON CONFLICT DO NOTHING`;
   return token;
 }
 
@@ -113,13 +116,20 @@ export async function currentUser(req) {
   /* a coarse "last seen": one write an hour per session, not one per request. the user row
      is touched in the same statement, because a parent who stays signed in never signs in
      again and the session row goes when they sign out; the hour test stays inside the write
-     so two requests crossing the hour together cannot both do it */
+     so two requests crossing the hour together cannot both do it. a new New York day also
+     opens the write even inside the hour, so the day always lands in user_days, which is
+     what the numbers page counts as a day in the app */
   await sql()`
     WITH touched AS (
       UPDATE sessions SET last_used_at = now()
       WHERE token_hash = ${rows[0].token_hash}
-        AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')
-      RETURNING user_id)
+        AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour'
+             OR (last_used_at AT TIME ZONE 'America/New_York')::date < (now() AT TIME ZONE 'America/New_York')::date)
+      RETURNING user_id),
+    day AS (
+      INSERT INTO user_days (user_id, day)
+      SELECT user_id, (now() AT TIME ZONE 'America/New_York')::date FROM touched
+      ON CONFLICT DO NOTHING)
     UPDATE users SET last_seen_at = now() WHERE id IN (SELECT user_id FROM touched)`;
   return { id: rows[0].id, email: rows[0].email, name: rows[0].name };
 }
