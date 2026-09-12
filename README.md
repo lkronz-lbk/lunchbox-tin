@@ -60,7 +60,9 @@ food list from a 200-item library and produce a planned week immediately. From t
   sits above the two the app ships with, each row opening straight into cooking. The search
   matches a name or an ingredient ("oats" for what is in the cupboard) and appears only once
   there are `RECIPE_FIND_AT` recipes to search — a box over a list you can see all of is
-  furniture — staying put while a search runs so it cannot vanish mid-type. The section
+  furniture. Once shown it stays for the visit (`UI.recipeFound`), so a search running, a
+  recipe removed or the other parent's sync cannot pull it out from under a thumb; leaving
+  the tab clears both, and it arrives again with the list that needs it. The section
   heading says where a row came from, so the rows themselves carry no badge, and there is no
   empty panel under the Import button announcing that nothing has been imported. The
   two are free to cook from, food list or no food list; keeping one of your own is
@@ -95,8 +97,10 @@ food list from a 200-item library and produce a planned week immediately. From t
   document agree on it and the merge collapses them instead of keeping both.
 - **Cooking one** — **Cook it step by step** is the first thing under the head, above the
   ingredients rather than below them and the steps both — a parent who opened a recipe came
-  to cook it, and the reading is what they do on the way. It is one step on the screen at a
-  time with a progress bar, the amounts of whatever that step names underneath it (`stepIng` *claims*
+  to cook it, and the reading is what they do on the way. Because it is the obvious button
+  coming back, stepping out to **The whole recipe** remembers where it was left (`cook.last`)
+  and the button then says **Back to step 4**, with **Start it again** underneath. It is one
+  step on the screen at a time with a progress bar, the amounts of whatever that step names underneath it (`stepIng` *claims*
   an ingredient's own name, then its last word, at a word boundary, rather than merely
   matching: words a step spends on one ingredient are gone, so the white pepper cannot
   read itself into a step that says red pepper. A head that is a kind of something

@@ -1563,7 +1563,7 @@ function whatsNew(){
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
    Account categories. It is view state and never reaches S, or the merge would
    read a tap as a change and push on every one. */
-var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', recipeFound:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'});
 /* the one test for whether a pane may be on screen. A pane is opened by a tap but
    also by a link from an email and by the return from Stripe, so the render asks
@@ -3445,10 +3445,12 @@ function viewRecipes(){
   /* a search box over a list you can see all of is furniture: it appears once there
      is more here than fits a screen, and stays while a search is running so it cannot
      vanish from under a parent mid-type */
-  if(UI.recipeFind || allRecipes().length >= RECIPE_FIND_AT)
+  if(UI.recipeFind || UI.recipeFound || allRecipes().length >= RECIPE_FIND_AT){
+    UI.recipeFound = true;
     h += '<div class="field" style="margin:0"><label for="rqFind" class="sr-only">Find a recipe</label>'
       +  '<input type="search" id="rqFind" data-find="recipe" placeholder="Find a recipe, or an ingredient" '
       +  'autocomplete="off" autocapitalize="off" maxlength="60" value="'+esc(UI.recipeFind || '')+'"></div>';
+  }
   h += '<div id="rqList" class="stack">' + recipeLists() + '</div>';
   return h + '</div>';
 }
@@ -4310,8 +4312,17 @@ function cookSheet(keepScroll){
        what they read on the way. So the way in sits above the reading: fifteen rows and
        six steps used to stand between opening this and the button, which is three
        screens of flicking to reach the only thing most people want. */
-    if(r.steps.length)
-      h += '<button class="btn primary wide" data-act="cook-step" data-i="0">'+svg('check',17)+'Cook it step by step</button>';
+    if(r.steps.length){
+      /* Stepping out to re-read something and stepping back must not start the pan
+         again. Now that the button is the first thing on the screen it is the obvious
+         thing to tap, so when there is a step to go back to it says which one, and
+         starting over is the deliberate choice underneath. */
+      var back = Math.min(c.last || 0, r.steps.length - 1);
+      h += back > 0
+        ? '<button class="btn primary wide" data-act="cook-step" data-i="'+back+'">'+svg('check',17)+'Back to step '+(back + 1)+'</button>'
+          + '<button class="btn ghost wide" data-act="cook-step" data-i="0">Start it again</button>'
+        : '<button class="btn primary wide" data-act="cook-step" data-i="0">'+svg('check',17)+'Cook it step by step</button>';
+    }
     h += '<div><div class="sect-head"><h3>What you need</h3><span class="count">'+r.ing.length+'</span></div>'
       +  cookIngList(r, true)+'</div>';
     if(r.steps.length){
@@ -4649,7 +4660,7 @@ document.addEventListener('click', function(ev){
 
   /* navigation */
   if(act==='tab'){ UI.weekAhead = 0; if(el.getAttribute('data-tab')==='pack' && UI.tab==='pack' && reviewOwed()) UI.reviewLater = {};   /* the dot is a door: tapping Pack again brings the questions back */ if(UI.tab !== 'setup') UI.lastTab = paneLabel(); UI.tab = el.getAttribute('data-tab'); UI.pane = '';
-    UI.recipeFind = '';                    /* leaving the tab clears the search: coming back to a filtered list reads as a list with recipes missing */
+    UI.recipeFind = ''; UI.recipeFound = false;   /* leaving the tab clears the search: coming back to a filtered list reads as a list with recipes missing, and the field goes back to arriving with the list that needs it */
     render(); window.scrollTo(0,0); return; }
   if(act==='box-settings'){ if(UI.pane==='box') closePane(); else if(paneOK('box')) openPane('box'); return; }
   if(act==='pane'){ var pn = el.getAttribute('data-pane'); if(!paneOK(pn)) return; openPane(pn); return; }
@@ -5012,7 +5023,11 @@ document.addEventListener('click', function(ev){
   if(act==='food-open'){ foodSheet(el.getAttribute('data-kid'), el.getAttribute('data-id')); return; }
   if(act==='cook'){ cookOpen(el.getAttribute('data-kid'), el.getAttribute('data-id')); return; }
   if(act==='cook-recipe'){ cookOpenRecipe(el.getAttribute('data-id'), el.getAttribute('data-name')); return; }
-  if(act==='recipe-clear-find'){ UI.recipeFind = ''; render(); return; }
+  if(act==='recipe-clear-find'){ UI.recipeFind = ''; render();
+    /* the list the parent just asked for, not the top of the page */
+    var backTo = document.getElementById('rqFind') || document.querySelector('[data-act="cook-recipe"]');
+    if(backTo) backTo.focus();
+    return; }
   if(act==='cook-tick'){
     if(!UI.cook) return;
     var ti = el.getAttribute('data-i'), off = !!UI.cook.ticked[ti];
@@ -5020,7 +5035,11 @@ document.addEventListener('click', function(ev){
     el.classList.toggle('done', !off);          /* one line changed, so one class changes: no rebuild, no scroll to restore */
     return;
   }
-  if(act==='cook-step'){ if(!UI.cook) return; UI.cook.step = +el.getAttribute('data-i'); cookSheet(); return; }
+  if(act==='cook-step'){ if(!UI.cook) return;
+    var toStep = +el.getAttribute('data-i');
+    /* leaving the step view remembers where it was left, so coming back can offer it */
+    if(toStep < 0 && UI.cook.step >= 0) UI.cook.last = UI.cook.step;
+    UI.cook.step = toStep; cookSheet(); return; }
   /* the sheet is rebuilt, so focus is put back on the control that was pressed;
      without it a parent on VoiceOver has to find the button again after every tap */
   var cookAgain = function(a, v){

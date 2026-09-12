@@ -2663,6 +2663,16 @@ try {
     check('and a step that calls for nothing carries no amounts at all',
       /Step 4 of 7/.test(await cooking()) && (await pr2.$$eval('ul.steping li', a => a.length)) === 0,
       await pr2.textContent('.cookstep'));
+    /* the button at the top is the obvious one to tap coming back, so it must not be the
+       one that starts the pan again */
+    await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
+    check('stepping out to re-read something offers the step it was left on, with starting over underneath',
+      /Back to step 4/.test(await cooking())
+      && (await pr2.$$eval('#sheetBody [data-act="cook-step"][data-i="3"]', a => a.length)) === 1
+      && (await pr2.$$eval('#sheetBody [data-act="cook-step"][data-i="0"]', a => a.length)) === 1,
+      (await cooking()).slice(0, 120));
+    await pr2.click('[data-act="cook-step"][data-i="3"]'); await pr2.waitForTimeout(250);
+    check('and taking it puts the parent back where the pan was', /Step 4 of 7/.test(await cooking()));
     for (const n of [2, 1, 0, -1]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
     await pr2.click('[data-act="cook-units"][data-v="metric"]'); await pr2.waitForTimeout(250);
     for (const n of [0, 1, 2]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
@@ -2802,6 +2812,16 @@ try {
     check('and it arrives once the list is longer than a screen',
       (await pr2.$$eval('#rqFind', a => a.length)) === 1
       && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 9);
+    /* once it is on screen it stays for the visit: removing a recipe must not pull the
+       list 64px up from under the thumb that is reaching for Undo */
+    for (let i = 0; i < 2; i++) {
+      const row = await pr2.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => /Filler/.test(b.textContent)));
+      await row.asElement().click(); await pr2.waitForTimeout(350);
+      await pr2.click('[data-act="recipe-delete"]'); await pr2.waitForTimeout(450);
+    }
+    check('and once shown it stays, so removing one does not move the list out from under a thumb',
+      (await pr2.$$eval('#rqFind', a => a.length)) === 1
+      && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 7);
     await pr2.fill('#rqFind', 'quinoa'); await pr2.waitForTimeout(350);
     check('the search finds a recipe by name and keeps the keyboard where it was',
       (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent))).join('|').includes('Mediterranean quinoa salad')
@@ -2815,8 +2835,11 @@ try {
     await pr2.click('[data-act="tab"][data-tab="pack"]'); await pr2.waitForTimeout(300);
     await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(400);
     check('leaving the tab clears the search, so nobody comes back to a list that looks half empty',
-      (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) >= 3
-      && (await pr2.inputValue('#rqFind')) === '');
+      (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 7
+      && (await pr2.$$eval('#rqFind[value=""], #rqFind:not([value])', a => a.length))
+         === (await pr2.$$eval('#rqFind', a => a.length)));
+    check('and the field goes back to arriving with the list that needs it, rather than staying for good',
+      (await pr2.$$eval('#rqFind', a => a.length)) === 0);
     await pr2.click('[data-act="cook-recipe"]'); await pr2.waitForTimeout(400);
     check('and a recipe opens to be cooked straight from the tab, with no food list involved',
       /What you need/.test(await pr2.textContent('#sheetBody'))
