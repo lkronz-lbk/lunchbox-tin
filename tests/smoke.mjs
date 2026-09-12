@@ -1957,7 +1957,7 @@ try {
     (await pb.$$eval('.item .nm', a => a.length)) > 0 && !/no foods/i.test(await pb.textContent('#view')), foodsBefore);
   await pb.click('[data-act="tab"][data-tab="recipes"]'); await pb.waitForTimeout(350);
   check('lapsed, the Recipes tab is still there to cook from, with the idea bank free and importing locked',
-    (await pb.$$eval('[data-act="cook-recipe"]', a => a.length)) > 60
+    (await pb.$$eval('[data-act="cook-recipe"]', a => a.length)) >= 2
     && (await pb.$$eval('[data-act="upgrade"][data-why="recipe"]', a => a.length)) === 1
     && (await pb.$$eval('[data-act="recipe-import"]', a => a.length)) === 0);
   await pb.click('[data-act="upgrade"][data-why="recipe"]'); await pb.waitForTimeout(350);
@@ -2596,7 +2596,7 @@ try {
       (await openRow('Quinoa salad cup')) && (await pr2.$$eval('[data-act="cook"]', a => a.length)) === 1);
     await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
     check('the recipe opens with what to buy, what to do, and how long it takes',
-      /25 minutes/.test(await cooking()) && /makes 4 lunches/.test(await cooking())
+      /35 minutes/.test(await cooking()) && /makes 6 lunches/.test(await cooking())
       && /1 cup quinoa/.test(await cooking()) && /Rinse the quinoa/.test(await cooking()), (await cooking()).slice(0, 120));
     await pr2.click('[data-act="cook-tick"][data-i="0"]'); await pr2.waitForTimeout(250);
     check('an ingredient ticks off as it goes in, so a parent interrupted mid-recipe knows where they were',
@@ -2605,48 +2605,55 @@ try {
     /* ---- the measures */
     await pr2.click('[data-act="cook-units"][data-v="metric"]'); await pr2.waitForTimeout(250);
     const metric = await cooking();
-    check('in grams, a cup of quinoa is weighed, water is poured, a spoon of salt stays a spoon, and a cup of tomatoes stays a cup',
-      /170 g quinoa/.test(metric) && /470 ml water/.test(metric) && /½ tsp salt/.test(metric)
-      && /1 cup cherry tomatoes/.test(metric), metric.slice(0, 200));
+    check('in grams, a cup of quinoa is weighed, broth is poured, a spoon of salt stays a spoon, and a cup of tomatoes stays a cup',
+      /170 g quinoa/.test(metric) && /470 ml low-sodium vegetable broth/.test(metric) && /½ tsp salt/.test(metric)
+      && /½ cup cherry tomatoes/.test(metric), metric.slice(0, 200));
     await pr2.click('[data-act="cook-makes"][data-v="1"]'); await pr2.waitForTimeout(250);
     check('asking for one more lunch scales every amount and says how many it is making now',
-      /5 lunches/.test(await cooking()) && /210 g quinoa/.test(await cooking()));
+      /7 lunches/.test(await cooking()) && /195 g quinoa/.test(await cooking()));
     await pr2.click('[data-act="cook-makes"][data-v="-1"]'); await pr2.waitForTimeout(200);
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
-    /* a step is read where it is followed, so the oven is given in the scale this kitchen uses */
-    await addIdea('Blueberry muffin');
-    await openRow('Blueberry muffin'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
-    check('and an oven set in Fahrenheit carries its Celsius once the kitchen works in grams',
-      /375F \(190°C\)/.test(await cooking()), (await cooking()).slice(0, 220));
-    await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
-    check('while in cups it is left exactly as the recipe wrote it', !/190°C/.test(await cooking()));
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
 
     /* ---- the walk through */
     await openRow('Quinoa salad cup'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
+    await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
     await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
     check('cooking it step by step shows one step, says where it has got to, and keeps the ingredients within reach',
-      /Step 1 of 5/.test(await cooking()) && /Rinse the quinoa/.test(await cooking())
+      /Step 1 of 6/.test(await cooking()) && /Rinse the quinoa/.test(await cooking())
       && (await pr2.$$eval('[data-act="cook-step"][data-i="1"]', a => a.length)) === 1
       && (await pr2.$$eval('.prog', a => a.length)) === 1);
     await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
-    check('and it goes on and back a step at a time', /Step 2 of 5/.test(await cooking())
+    check('and it goes on and back a step at a time', /Step 2 of 6/.test(await cooking())
       && (await pr2.$$eval('[data-act="cook-step"][data-i="0"]', a => a.length)) === 1);
     /* the amounts belong beside the step that calls for them, not three taps back */
     check('a step carries the amount of everything it names, and nothing it does not',
-      (await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent))).join('|') === '1 cup quinoa|2 cups water|½ tsp salt',
+      (await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent))).join('|') === '1 cup quinoa|2 cups low-sodium vegetable broth',
       await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent)));
-    /* the step view moves a step at a time, so walk to the last one */
-    for (const n of [2, 3, 4]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
+    /* an ingredient is claimed by the step that names it and not read into the others:
+       the dressing step takes the white pepper, the vegetable step the red bell pepper */
+    for (const n of [2, 3]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
+    const dressing = await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent));
+    check('a word two ingredients share goes to the one the step actually means',
+      dressing.some(t => /ground white pepper/.test(t)) && !dressing.some(t => /red bell pepper/.test(t))
+      && !dressing.some(t => /olives/.test(t)), dressing);
+    await pr2.click('[data-act="cook-step"][data-i="4"]'); await pr2.waitForTimeout(250);
+    const veg = await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent));
+    check('and the step that means the other one gets it, with no leftovers from the first',
+      veg.some(t => /red bell pepper/.test(t)) && veg.some(t => /black olives/.test(t))
+      && !veg.some(t => /white pepper/.test(t)), veg);
+    /* the step view moves a step at a time, so walk back to the one that calls for nothing */
+    for (const n of [3, 2]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
     check('and a step that calls for nothing carries no amounts at all',
-      /Step 5 of 5/.test(await cooking()) && (await pr2.$$eval('ul.steping li', a => a.length)) === 0,
+      /Step 3 of 6/.test(await cooking()) && (await pr2.$$eval('ul.steping li', a => a.length)) === 0,
       await pr2.textContent('.cookstep'));
+    await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
+    await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
     await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
     await pr2.click('[data-act="cook-units"][data-v="metric"]'); await pr2.waitForTimeout(250);
     await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
     await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
     check('and they are in the measures and the quantity the parent chose, like every other amount',
-      (await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent))).join('|') === '170 g quinoa|470 ml water|½ tsp salt',
+      (await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent))).join('|') === '170 g quinoa|470 ml low-sodium vegetable broth',
       await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent)));
     await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
     await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
@@ -2690,7 +2697,7 @@ try {
     await pr2.fill('#riText', 'EASY TURKEY PINWHEELS — my kids ask for these every week!!\n'
       + 'Serves 4\nPrep 10 minutes\n4 large tortillas\n3 tbsp cream cheese\n8 slices deli turkey\n'
       + '1. Spread the cream cheese right to the edge of each tortilla.\n'
-      + '2. Roll them up tight and bake nothing, just chill them 20 minutes before slicing.');
+      + '2. Warm them at 375F for 5 minutes if that is how they like them, then chill 20 minutes before slicing.');
     await pr2.click('[data-act="recipe-paste"]'); await pr2.waitForTimeout(400);
     check('a caption copied from under a video is read the same way, with the shouting and the aside taken off the name',
       (await pr2.inputValue('#rsName')) === 'Easy turkey pinwheels'
@@ -2747,24 +2754,32 @@ try {
     check('a recipe of the household\u2019s own says where it is used; the bank\u2019s say they are the bank\u2019s',
       /Easy turkey pinwheels/.test(await pr2.textContent('#view'))
       && /on the food list/.test(await pr2.textContent('#view'))
-      && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) > 60);
+      && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 3);
     await pr2.fill('#rqFind', 'quinoa'); await pr2.waitForTimeout(350);
     check('the search finds a recipe by name and keeps the keyboard where it was',
       (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent))).join('|').includes('Quinoa salad cup')
       && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 1
       && await pr2.evaluate(() => document.activeElement && document.activeElement.id === 'rqFind'));
-    await pr2.fill('#rqFind', 'rolled oats'); await pr2.waitForTimeout(350);
+    await pr2.fill('#rqFind', 'lemon'); await pr2.waitForTimeout(350);
     check('and by an ingredient, which is how a parent shops the cupboard',
       (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent.trim()))).length >= 2);
     await pr2.click('[data-act="tab"][data-tab="pack"]'); await pr2.waitForTimeout(300);
     await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(400);
     check('leaving the tab clears the search, so nobody comes back to a list that looks half empty',
-      (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) > 60
+      (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 3
       && (await pr2.inputValue('#rqFind')) === '');
     await pr2.click('[data-act="cook-recipe"]'); await pr2.waitForTimeout(400);
     check('and a recipe opens to be cooked straight from the tab, with no food list involved',
       /What you need/.test(await pr2.textContent('#sheetBody'))
       && (await pr2.textContent('#sheetTitle')).length > 0);
+    /* a step is read where it is followed, so the oven is given in the scale this
+       kitchen works in — on a recipe brought in, which is where an oven lives now */
+    await pr2.click('[data-act="cook-units"][data-v="metric"]'); await pr2.waitForTimeout(250);
+    check('and an oven set in Fahrenheit carries its Celsius once the kitchen works in grams',
+      /375F \(190°C\)/.test(await pr2.textContent('#sheetBody')), (await pr2.textContent('#sheetBody')).slice(0, 240));
+    await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
+    check('while in cups it is left exactly as the recipe wrote it',
+      !/190°C/.test(await pr2.textContent('#sheetBody')));
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
 
     /* ---- a recipe is data from outside, like everything else. The shape v17 wrote —

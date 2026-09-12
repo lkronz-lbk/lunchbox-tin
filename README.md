@@ -57,10 +57,18 @@ food list from a 200-item library and produce a planned week immediately. From t
   Share plugin in the iPhone app.
 - **Recipes** — the sixth tab, and the household's, not a lunchbox's: one list however
   many kids are packed for, so it carries no lunchbox tabs. What the household has kept
-  sits above the idea bank's seventy, with a search that matches a name or an ingredient
-  ("oats" for what is in the cupboard) and a row that opens straight into cooking. The
-  bank's are free to cook from, food list or no food list; keeping one of your own is
-  the Household plan. A recipe is a record on the account (`S.recipes[]`: `n`, minutes,
+  sits above the two the app ships with, with a search that matches a name or an ingredient
+  ("lemon" for what is in the cupboard) and a row that opens straight into cooking. The
+  two are free to cook from, food list or no food list; keeping one of your own is
+  the Household plan. Those two — a Mediterranean quinoa salad and a bean and avocado wrap —
+  come from the USDA's Recipes for Healthy Kids competition, written and tasted by school
+  teams of cooks, chefs, parents and students, and published by the US government, so they
+  are public domain. `RECIPE` holds only recipes someone else has tested: the steps are
+  reworded for a parent, the method and the amounts are not ours to change, and `src`/`url`
+  say where each came from. We write none of our own — a recipe nobody has cooked is worse
+  than no recipe, because a parent trusts it. Every other dish in the bank keeps its `buy`
+  line and is planned and shopped for exactly as before; a parent who wants a recipe for one
+  imports the one they already trust. A recipe is a record on the account (`S.recipes[]`: `n`, minutes,
   what it makes, ingredient lines, steps, where it came from, plus the usual
   `id`/`createdAt`/`updatedAt`/`deletedAt`), and a food points at one with `recipeId`
   rather than carrying a copy — so the same dish in three lunchboxes is three pointers
@@ -94,7 +102,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   The recipe also reaches a parent where they need it: a **Recipe** tag on the Foods
   list, a button on the compartment sheet on Week, and named under the box on Pack.
 - **Importing a recipe** — `Recipes → Import a recipe`, gated because it writes to the
-  household; the idea bank stays free. Two ways in. The address of a recipe page goes to
+  household; the idea bank and its two recipes stay free. Two ways in. The address of a recipe page goes to
   `POST /api/recipe`, which reads the schema.org JSON-LD the page already publishes for
   search engines, the microdata under that, and failing both the article itself — an
   "Ingredients" heading and the list under it, which is how a great many recipes are
@@ -289,7 +297,8 @@ nothing to offer). `SMOKE_TODAY=2026-09-14 npm test` pins another day.
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
 onboarding, the week draw and its trait words, packing, the kid's pick, the morning review
 and resting, the school rules re-checking a live plan, compartments switching on and off,
-anchoring, the shopping list, recipes (the bank's own, cook mode, the measures and the scaling,
+anchoring, the shopping list, recipes (the two the app ships, an ingredient claimed by the step
+that means it, cook mode, the measures and the scaling,
 reading a page's markup, the page reader refusing anything but the public web, a pasted caption,
 and a hostile recipe rendered as words), a second lunchbox with its own rules, export/import (including
 refusing junk, hostile ids and a save it cannot read), the v1 → v2 migration, pruning, the

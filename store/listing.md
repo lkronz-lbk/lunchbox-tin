@@ -76,7 +76,7 @@ the enrolment, so settle it before launch.
 > Everything you planned across all kids, in one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
 >
 > THE RECIPE COMES WITH IT
-> A Recipes tab of its own, for the whole household rather than one lunchbox. The dishes you cook rather than buy come with the recipe built in, free, and you can search them by name or by what is already in the cupboard. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in cups or in grams, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
+> A Recipes tab of its own, for the whole household rather than one lunchbox, searchable by name or by what is already in the cupboard. Two kid-tested recipes come with it, free. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in cups or in grams, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
 
 > BUILT FOR MULTIPLE KIDS
 > Simplify shopping by matching all kids' lunchboxes, while honoring each school's rules with alternative options. Kids with wildly different preferences can have totally different lunchbox plans. You choose your setup, and one shopping list still covers them all.
@@ -92,7 +92,7 @@ the enrolment, so settle it before launch.
 >
 > It works online and off, and nothing leaves your phone until you choose to sign in.
 >
-> FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, with the recipe for everything you cook, take out the ones they refuse, and set your school's rules.
+> FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, with two kid-tested recipes to cook from, take out the ones they refuse, and set your school's rules.
 >
 > THE PAID HOUSEHOLD PLAN: Add your own foods or bring in a recipe from anywhere, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. The plan is bought on our website, not in this app.
 >

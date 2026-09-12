@@ -636,11 +636,11 @@ var NUMWORD = ['No','One','Two','Three','Four','Five','Six','Seven'];
 
 /* the aisle each thing to buy lives in; anything not here goes under the dish's own aisle */
 var ING_AISLE = nullMap();
-[['produce','cucumber,bananas,avocado,romaine lettuce,lettuce,tomatoes,cherry tomatoes,shredded carrots,carrots,baby carrots,broccoli,bell peppers,celery,apples,watermelon,pineapple,cantaloupe,peaches,mango,honeydew,kiwis,pears,oranges,nectarines,grapes,blueberries,strawberries,melon,berries'],
+[['produce','cucumber,bananas,avocado,romaine lettuce,lettuce,tomatoes,cherry tomatoes,shredded carrots,carrots,baby carrots,broccoli,bell peppers,purple cabbage,celery,apples,watermelon,pineapple,cantaloupe,peaches,mango,honeydew,kiwis,pears,oranges,nectarines,grapes,blueberries,strawberries,melon,berries'],
  ['deli','deli turkey,sliced ham,salami,chicken salad,cooked chicken,chicken breast,smoked salmon,hummus,olives,feta cheese,mozzarella balls,bacon'],
  ['dairy','cheese slices,cheese block,shredded cheese,cream cheese,string cheese,yogurt,cottage cheese,eggs,butter,whipped cream,cheese tortellini'],
  ['bakery','tortillas,sandwich bread,bagels,mini bagels,pita bread,english muffins,sub rolls'],
- ['pantry','sunflower butter,peanut butter,jelly,honey,pasta,italian dressing,caesar dressing,ranch dressing,mayonnaise,canned tuna,refried beans,black beans,rice,sushi rice,nori sheets,quinoa,pizza sauce,salsa,pesto,lentil soup,turkey chili,chicken noodle soup,cinnamon,dill pickles,skewers,mac & cheese'],
+ ['pantry','sunflower butter,peanut butter,jelly,honey,pasta,italian dressing,caesar dressing,ranch dressing,mayonnaise,canned tuna,refried beans,black beans,white beans,rice,sushi rice,nori sheets,quinoa,pizza sauce,salsa,pesto,lentil soup,turkey chili,chicken noodle soup,cinnamon,dill pickles,skewers,mac & cheese'],
  ['snacks','crackers,granola,tortilla chips,pretzel bites'],
  ['frozen','chicken nuggets']
 ].forEach(function(p){ p[1].split(',').forEach(function(w){ ING_AISLE[w] = p[0]; }); });
@@ -666,6 +666,7 @@ var BANK = [
   F('Hummus & veggie wrap','main',['protein','soft','light','savory'],'deli',['gluten','soy','seeds'],0,0,'Hummus|Cucumber|Shredded carrots|Tortillas'),
   F('Tuna salad with crackers','main',['protein','salty','savory','ice'],'pantry',['fish','gluten'],0,0,'Canned tuna|Mayonnaise|Crackers'),
   F('Bean & cheese roll-up','main',['protein','soft','hearty','savory'],'deli',['dairy','gluten'],1,1,'Refried beans|Shredded cheese|Tortillas'),
+  F('Bean & avocado wrap','main',['protein','soft','hearty','savory'],'pantry',['gluten'],0,0,'White beans|Avocado|Purple cabbage|Romaine lettuce|Tortillas'),
   F('Yogurt & granola parfait','main',['protein','soft','sweet','ice'],'dairy',['dairy'],1,1,'Yogurt|Granola'),
   F('Chicken & cheese skewers','main',['protein','hearty','savory','ice'],'deli',['dairy'],0,1,'Cooked chicken|Cheese block|Skewers'),
   F('Cucumber sushi rolls','main',['light','chewy','savory','ice'],'deli',[],0,0,'Sushi rice|Nori sheets|Cucumber'),
@@ -681,7 +682,7 @@ var BANK = [
   F('Chicken nuggets, packed cold','main',['protein','crunchy','hearty','savory'],'frozen',['gluten'],0,1,'Chicken nuggets'),
   F('Mini bagel pizzas, cold','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1,'Mini bagels|Pizza sauce|Shredded cheese'),
   F('Rice & black bean bowl','main',['protein','chewy','hearty','savory'],'pantry',[],0,0,'Rice|Black beans|Shredded cheese'),
-  F('Quinoa salad cup','main',['protein','chewy','light','savory','ice'],'pantry',[],0,0,'Quinoa|Cucumber|Cherry tomatoes'),
+  F('Quinoa salad cup','main',['protein','chewy','light','savory','ice'],'pantry',['dairy'],0,0,'Quinoa|Cherry tomatoes|Bell peppers|Feta cheese'),
   F('Lentil soup thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0,'Lentil soup'),
   F('Turkey chili thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0,'Turkey chili'),
   F('Chicken noodle soup thermos','main',['soft','hearty','savory','heat'],'pantry',['gluten'],0,1,'Chicken noodle soup'),
@@ -868,160 +869,42 @@ var BANK = [
 
 /* ============================================================== recipes
    A food may carry a recipe, so a parent who planned a quinoa salad never has
-   to leave the app to find out how to make it. The idea bank's cooked dishes
-   carry one built in; a food a parent wrote or imported carries its own on the
-   record on the household (S.recipes), pointed at by food.recipeId, and the bank's is
-   the fallback for a food of that name, exactly as `buy` works.
+   to leave the app to find out how to make it. A food a parent wrote or imported
+   carries its own on the record on the household (S.recipes), pointed at by
+   food.recipeId, and the bank's is the fallback for a food of that name, exactly
+   as `buy` works.
+   The bank ships only recipes someone else has actually tested. These two were
+   developed by school teams of cooks, chefs, parents and students for the USDA's
+   Recipes for Healthy Kids competition, tasted on the children they were written
+   for, and published by the government, so they are in the public domain and free
+   to print here. The wording of the steps is ours; the method and the amounts are
+   theirs. We do not write recipes of our own: a recipe nobody has cooked is worse
+   than no recipe, because a parent trusts it. For everything else the bank offers
+   the dish, and a parent who wants a recipe for it imports the one they like.
    Amounts are written the way a recipe is written, as text; parseIng reads the
    number and the unit off the front, which is all cook mode needs to halve
    them, double them, or say them in grams.
-   R(minutes, lunches it makes, ingredients, steps) — both split on |. */
-function R(m, y, ing, steps){ return {m:m, y:y, l:1, ing:ing.split('|'), steps:steps.split('|')}; }
+   R(minutes, lunches it makes, ingredients, steps, where it came from) — the
+   lists split on |, and the source shows under the recipe with a link home. */
+var USDA_R4HK = 'https://www.fna.usda.gov/tn/recipes-healthy-kids-cookbook-homes';
+function R(m, y, ing, steps, src){
+  return {m:m, y:y, l:1, ing:ing.split('|'), steps:steps.split('|'),
+    src:src || '', url:src ? USDA_R4HK : null};
+}
 var RECIPE = {
-  /* ---- mains */
-  'quinoa salad cup': R(25, 4, '1 cup quinoa|2 cups water|1/2 tsp salt|1 cucumber, diced small|1 cup cherry tomatoes, halved|3 tbsp olive oil|2 tbsp lemon juice|1/4 cup crumbled feta',
-    'Rinse the quinoa in a sieve under the cold tap for half a minute — this is what keeps it from tasting bitter.|Bring the quinoa, water and salt to a boil, then cover and turn the heat right down for 15 minutes.|Take it off the heat, leave the lid on for 5 more minutes, then fluff it with a fork and spread it on a plate to cool.|Stir the cooled quinoa together with the cucumber, tomatoes, oil, lemon juice and feta.|Spoon into cups. It keeps for four days in the fridge, and it is better on day two.'),
-  'pasta salad cup': R(20, 4, '8 oz small pasta|1 cup cherry tomatoes, halved|1/2 cup diced mozzarella|1/3 cup Italian dressing|1/4 tsp salt',
-    'Boil the pasta in well-salted water until just tender, then drain and rinse it under cold water to stop it cooking.|Toss the cold pasta with the dressing while it is still slightly damp — it soaks it up better.|Fold through the tomatoes and mozzarella and taste for salt.|Pack into cups. Keeps four days; add a splash more dressing before packing on the last day.'),
-  'chicken salad in a pita': R(15, 4, '2 cups cooked chicken, chopped|1/3 cup mayonnaise|1 stalk celery, diced small|1 tbsp lemon juice|1/4 tsp salt|4 pita breads',
-    'Chop the chicken small enough to eat one-handed — this is a lunch, not a plate.|Stir it together with the mayonnaise, celery, lemon juice and salt.|Chill it for at least half an hour so it holds together.|Fill the pitas in the morning, not the night before, or the bread goes soft.'),
-  'egg salad sandwich': R(20, 4, '6 eggs|1/4 cup mayonnaise|1 tsp mustard|1/4 tsp salt|8 slices sandwich bread',
-    'Lower the eggs into already-boiling water and cook them for 10 minutes.|Move them straight into cold water and leave them 5 minutes; they peel far more easily cold.|Peel and mash with a fork, then stir in the mayonnaise, mustard and salt.|Spread on the bread. Pack with an ice pack — egg needs to stay cold.'),
-  'tuna salad with crackers': R(10, 4, '2 cans tuna, drained|1/4 cup mayonnaise|1 tbsp lemon juice|1 stalk celery, diced small|1/4 tsp black pepper',
-    'Drain the tuna properly, pressing the lid down hard, or the salad goes watery by Wednesday.|Flake it with a fork and stir in the mayonnaise, lemon juice, celery and pepper.|Pack in a sealed container with the crackers in their own bag, so they stay crisp.'),
-  'hummus & veggie wrap': R(10, 4, '4 large tortillas|1 cup hummus|1 cucumber, cut into strips|1 cup shredded carrots|1 cup baby spinach',
-    'Spread a quarter of the hummus over each tortilla, leaving a clear inch at the far edge.|Lay the cucumber, carrot and spinach in a line across the near third.|Roll it up tight, tucking the sides in as you go.|Cut in half on the diagonal and wrap each half, or it unrolls in the bag.'),
-  'bean & cheese roll-up': R(10, 4, '1 can refried beans|1 cup shredded cheese|4 large tortillas|1/2 tsp cumin',
-    'Warm the beans with the cumin in a pan until they spread easily.|Spread them over the tortillas and scatter the cheese on while the beans are still warm, so it softens.|Roll up tight and let them cool before packing, or they steam and go soggy.'),
-  'yogurt & granola parfait': R(5, 4, '3 cups plain yogurt|1 cup granola|1 cup berries|2 tbsp honey',
-    'Stir the honey through the yogurt.|Spoon it into four cups and top with berries.|Send the granola in its own little pot or bag — granola in yogurt since morning is granola no longer.'),
-  'chicken & cheese skewers': R(15, 4, '2 cups cooked chicken, cubed|8 oz cheese, cubed|1/2 cup cherry tomatoes|8 short skewers',
-    'Use short, blunt skewers, or cut long ones down so they fit the box flat.|Thread chicken, cheese and tomato, three or four pieces to a skewer.|Chill before packing, and pack with an ice pack.'),
-  'cucumber sushi rolls': R(30, 4, '1 cup sushi rice|1 1/4 cups water|2 tbsp rice vinegar|1 tsp sugar|4 nori sheets|1 cucumber, cut into long strips',
-    'Rinse the rice until the water runs clear, then cook it with the water, covered, for 15 minutes.|Stir the vinegar and sugar through the hot rice and let it cool to room temperature.|Spread a thin layer of rice over each nori sheet, leaving a clear strip at the far edge.|Lay the cucumber across and roll tightly, wetting the clear strip to seal it.|Cut into six with a wet knife, wiping the blade between cuts.'),
-  'cold grilled chicken strips': R(20, 4, '1 1/2 lb chicken breast|2 tbsp olive oil|1 tsp paprika|1/2 tsp salt|1/2 tsp garlic powder',
-    'Rub the chicken with the oil, paprika, salt and garlic powder.|Grill or pan-fry over medium heat, about 6 minutes a side, until it is 165F in the middle.|Rest it 5 minutes, then slice it across the grain into strips.|Cool completely before packing, and pack with an ice pack.'),
-  'turkey & cheese pinwheels': R(10, 4, '4 large tortillas|3 tbsp cream cheese|8 slices deli turkey|4 slices cheese',
-    'Spread the cream cheese thinly right to the edges of each tortilla — that is the glue.|Lay on the turkey and cheese, covering the whole tortilla.|Roll up as tightly as you can and wrap each roll; chill for 20 minutes.|Trim the ends and cut each roll into four rounds. Pack them cut-side up.'),
-  'mac & cheese thermos': R(20, 4, '8 oz macaroni|2 tbsp butter|2 tbsp flour|2 cups milk|2 cups shredded cheese|1/2 tsp salt',
-    'Fill the thermos with boiling water and leave it standing while you cook — a cold thermos loses the heat in an hour.|Boil the macaroni until just tender and drain it.|Melt the butter, stir in the flour and cook it a minute, then whisk in the milk a little at a time until it thickens.|Take it off the heat, stir in the cheese and salt, then fold through the pasta.|Empty the thermos, fill it with the piping hot macaroni and close it straight away.'),
-  'grilled cheese, packed cold': R(10, 4, '8 slices sandwich bread|8 slices cheese|2 tbsp butter',
-    'Butter the outside of the bread, not the pan.|Cook over medium-low heat, 3 minutes a side, until the cheese has properly melted.|Let the sandwiches cool fully on a rack before wrapping, or the steam turns them soggy.|Cut them just before packing.'),
-  'chicken caesar wrap': R(15, 4, '2 cups cooked chicken, sliced|4 large tortillas|3 cups chopped romaine|1/3 cup caesar dressing|1/4 cup grated parmesan',
-    'Toss the romaine with the dressing and parmesan just before you build the wraps.|Lay the chicken along the near third of each tortilla and pile the salad on top.|Roll up tight, cut in half, and wrap each half.|Pack with an ice pack; if it is being packed the night before, send the dressing separately.'),
-  'mini bagel pizzas, cold': R(15, 4, '4 mini bagels, halved|1/2 cup pizza sauce|1 cup shredded mozzarella|1/2 tsp dried oregano',
-    'Heat the oven to 400F.|Spread sauce over each bagel half, then the cheese and a pinch of oregano.|Bake 8 minutes, until the cheese is bubbling at the edges.|Cool completely before packing. They are meant to be eaten cold, and they are good cold.'),
-  'rice & black bean bowl': R(25, 4, '1 cup rice|2 cups water|1 can black beans, rinsed|1 cup shredded cheese|1 tsp cumin|1/2 tsp salt|1 lime',
-    'Cook the rice in the water, covered, for 15 minutes, then leave it to stand 5 minutes off the heat.|Warm the beans with the cumin and salt.|Fork the rice through with the juice of the lime.|Layer rice, then beans, then cheese in each cup, and let it cool before the lid goes on.'),
-  'lentil soup thermos': R(35, 4, '1 cup red lentils|4 cups vegetable stock|1 onion, diced|2 carrots, diced|1 tbsp olive oil|1 tsp cumin|1/2 tsp salt',
-    'Fill the thermos with boiling water and leave it to stand.|Soften the onion and carrot in the oil for 5 minutes, then stir in the cumin.|Add the lentils and stock, bring to a boil, then simmer 20 minutes until the lentils have collapsed.|Season, blend it smooth if that is how it gets eaten, and get it back to a proper boil.|Empty the thermos and fill it with the boiling soup.'),
-  'turkey chili thermos': R(35, 4, '1 lb ground turkey|1 can kidney beans, rinsed|1 can diced tomatoes|1 onion, diced|2 tsp chili powder|1 tsp cumin|1/2 tsp salt',
-    'Fill the thermos with boiling water and leave it to stand.|Brown the turkey with the onion, breaking it up as it goes.|Stir in the chili powder and cumin and cook a minute, until you can smell them.|Add the tomatoes and beans and simmer 20 minutes.|Empty the thermos and fill it with the chili at a rolling simmer.'),
-  'tortellini salad': R(15, 4, '1 lb cheese tortellini|1 cup cherry tomatoes, halved|1/3 cup Italian dressing|1/4 cup sliced olives|2 tbsp chopped basil',
-    'Boil the tortellini until they float and are just tender, then drain and rinse under cold water.|Toss with the dressing while still slightly warm.|Fold through the tomatoes, olives and basil.|Chill before packing. Keeps three days.'),
-  'chicken & rice bowl': R(30, 4, '1 cup rice|2 cups chicken stock|2 cups cooked chicken, chopped|1 cup frozen peas|1 tbsp butter|1/2 tsp salt',
-    'Fill the thermos with boiling water and leave it to stand.|Cook the rice in the stock, covered, for 15 minutes.|Stir in the chicken, peas, butter and salt and heat it right through.|Empty the thermos and fill it while the rice is steaming.'),
-  'salmon & cracker bites': R(10, 4, '4 oz smoked salmon|4 oz cream cheese|1 tbsp lemon juice|1 tsp chopped dill|24 crackers',
-    'Beat the cream cheese with the lemon juice and dill until it is soft enough to spread.|Pack it into a small pot with the salmon folded on top.|Send the crackers in their own bag, to be built at the table — spread crackers go soft in an hour.'),
-  'blt wrap, hold the mayo': R(15, 4, '8 slices bacon|4 large tortillas|2 cups shredded lettuce|2 tomatoes, sliced|2 tbsp ranch dressing',
-    'Cook the bacon until properly crisp and drain it on paper towel; limp bacon is worse cold.|Pat the tomato slices dry, which is what stops the wrap going soggy.|Spread a little ranch on each tortilla, then lettuce, tomato and two rashers of bacon.|Roll tight, cut in half, wrap each half.'),
-  'pesto pasta cup': R(15, 4, '8 oz short pasta|1/3 cup pesto|1 cup cherry tomatoes, halved|2 tbsp grated parmesan|1 tbsp olive oil',
-    'Boil the pasta in well-salted water until just tender.|Save a spoonful of the cooking water, then drain.|Stir the pesto and the reserved water through the hot pasta, so it coats rather than clumps.|Cool, then fold through the tomatoes, parmesan and oil.'),
-  'cheese quesadilla, packed cold': R(10, 4, '4 large tortillas|2 cups shredded cheese|1 tsp olive oil',
-    'Scatter cheese over half of each tortilla and fold it over.|Cook in a dry or barely oiled pan, 2 minutes a side, pressing it flat.|Cool completely on a rack before cutting into wedges, or the cheese runs.'),
-  'egg & cheese muffin, cold': R(20, 4, '4 english muffins|4 eggs|4 slices cheese|1/4 tsp salt|1 tbsp butter',
-    'Fry the eggs in the butter, breaking the yolks so they cook through — a runny yolk is not a lunch.|Salt them, lay a slice of cheese on each while hot, and let it melt.|Toast the muffins, build them, and cool them completely before wrapping.|Pack with an ice pack.'),
-  'turkey & avocado wrap': R(10, 4, '4 large tortillas|8 slices deli turkey|2 avocados|1 tbsp lime juice|1/4 tsp salt',
-    'Mash the avocado with the lime juice and salt — the lime is what keeps it from browning by lunchtime.|Spread it over each tortilla and lay the turkey on top.|Roll tight, cut in half, and wrap each half so it holds.'),
-  'crackers, cheese cubes & salami': R(10, 4, '8 oz cheese, cubed|4 oz salami, sliced|24 crackers|1/2 cup grapes',
-    'Cube the cheese the night before and keep it in a sealed pot; it dries out uncovered.|Fold the salami slices into quarters so they sit flat and do not grease the crackers.|Pack the crackers in their own compartment or bag, away from the cheese.|Add the grapes to fill the gaps and keep everything from rattling loose.'),
-  'cream cheese & cucumber bagel': R(10, 4, '4 bagels, halved|6 oz cream cheese|1 cucumber, sliced thin|1/4 tsp salt|1 tsp chopped dill',
-    'Slice the cucumber thin and lay it on paper towel with a pinch of salt for 10 minutes, then pat it dry.|Beat the dill through the cream cheese.|Spread it thickly on both halves — it is the barrier that keeps the bagel from going damp.|Lay the cucumber on and close. Best packed in the morning.'),
-  'potato salad cup': R(30, 4, '2 lb potatoes|1/2 cup mayonnaise|1 tbsp mustard|2 stalks celery, diced|1 tbsp vinegar|1/2 tsp salt',
-    'Cut the potatoes into even chunks and boil them in salted water for 12 minutes, until a knife slides in.|Drain and, while they are still hot, toss them with the vinegar; hot potato takes up flavour, cold potato does not.|Once cool, fold through the mayonnaise, mustard, celery and salt.|Chill for at least two hours. Pack with an ice pack.'),
-  /* ---- sides */
-  'hard-boiled egg': R(15, 6, '6 eggs|1 tsp salt',
-    'Bring a pan of water to a proper rolling boil, then lower the eggs in on a spoon.|Boil 10 minutes for a firm yolk, 8 for a softer one.|Move them straight into cold water for 5 minutes; the shock is what makes them peel cleanly.|Peel under running water. They keep a week in the fridge, in the shell.'),
-  'roasted chickpeas': R(40, 6, '2 cans chickpeas, rinsed|2 tbsp olive oil|1 tsp paprika|1/2 tsp salt|1/2 tsp garlic powder',
-    'Heat the oven to 400F.|Dry the chickpeas thoroughly in a towel and pick out any loose skins — wet chickpeas steam instead of crisping.|Toss with the oil and spread them in one layer on a tray.|Roast 35 minutes, shaking the tray twice, until they rattle.|Toss with the paprika, salt and garlic powder while hot. Cool completely before they go in a pot, or they soften.'),
-  'hummus cup': R(10, 6, '2 cans chickpeas, rinsed|1/3 cup tahini|1/4 cup lemon juice|2 cloves garlic|1/2 tsp salt|3 tbsp olive oil|3 tbsp cold water',
-    'Blend the tahini, lemon juice and garlic first, on their own, until pale and thick.|Add the chickpeas and salt and blend again.|With the motor running, pour in the oil and then the cold water, a spoon at a time, until it is lighter than you expect.|Spoon into small pots. Keeps five days.'),
-  'guacamole cup': R(10, 4, '3 avocados|1 lime|1/4 cup diced red onion|1/2 tsp salt|1 tbsp chopped cilantro',
-    'Mash the avocado roughly, leaving some lumps.|Stir in the juice of the whole lime, the onion, salt and cilantro.|Pack into small pots filled to the brim, and press the lid right down onto the surface — air is what browns it.'),
-  'three-bean salad': R(15, 6, '1 can kidney beans, rinsed|1 can green beans, drained|1 can chickpeas, rinsed|1/4 cup vinegar|3 tbsp olive oil|2 tbsp sugar|1/2 tsp salt',
-    'Whisk the vinegar, oil, sugar and salt until the sugar has dissolved.|Fold the beans through and refrigerate at least four hours; this one really is better the next day.|Lift it out with a slotted spoon so the box does not fill with dressing.'),
-  'coleslaw cup': R(15, 6, '1/2 head cabbage, shredded|2 carrots, grated|1/2 cup mayonnaise|2 tbsp vinegar|1 tbsp sugar|1/2 tsp salt',
-    'Toss the shredded cabbage with the salt and leave it in a colander for 20 minutes, then squeeze it dry — this is the difference between coleslaw and soup.|Whisk the mayonnaise, vinegar and sugar together.|Fold everything through and chill. Pack with an ice pack.'),
-  'corn salad cup': R(10, 6, '3 cups corn kernels|1 cup cherry tomatoes, halved|1/4 cup diced red onion|2 tbsp lime juice|2 tbsp olive oil|1/2 tsp salt',
-    'If the corn is frozen, run it under hot water and drain it well rather than cooking it.|Toss everything together and taste for salt.|Chill an hour before packing.'),
-  'caprese skewers': R(10, 4, '16 cherry tomatoes|16 mozzarella balls|16 basil leaves|1 tbsp olive oil|8 short skewers',
-    'Thread tomato, a folded basil leaf and a mozzarella ball, twice per skewer.|Brush with the oil just before packing, not the night before.|Keep them flat in the box and pack with an ice pack.'),
-  'edamame': R(10, 4, '2 cups frozen edamame in the pod|1 tsp salt',
-    'Boil the pods in salted water for 4 minutes, no longer, or they go grey.|Drain and cool them under cold water straight away.|Toss with the salt and pack them cold. They are eaten by squeezing the beans out of the pod.'),
-  /* ---- sweets and snacks worth making */
-  'banana muffin': R(35, 12, '3 ripe bananas|1/3 cup melted butter|3/4 cup sugar|1 egg|1 tsp vanilla|1 tsp baking soda|1/4 tsp salt|1 1/2 cups flour',
-    'Heat the oven to 350F and line a 12-hole muffin tin.|Mash the bananas properly — the browner and softer they are, the better this is.|Stir in the butter, sugar, egg and vanilla.|Sprinkle the baking soda and salt over the top and stir them in, then fold in the flour until it just disappears. Do not beat it.|Divide between the holes and bake 20 minutes, until a skewer comes out clean.|Cool in the tin 5 minutes, then on a rack. They freeze well; one goes in the box frozen and thaws by lunch.'),
-  'blueberry muffin': R(35, 12, '2 cups flour|1/2 cup sugar|2 tsp baking powder|1/2 tsp salt|1 cup milk|1/3 cup oil|1 egg|1 1/2 cups blueberries',
-    'Heat the oven to 375F and line a 12-hole muffin tin.|Whisk the flour, sugar, baking powder and salt in one bowl; the milk, oil and egg in another.|Pour the wet into the dry and fold about ten times only — lumps are fine, a smooth batter makes tough muffins.|Toss the blueberries in a spoonful of flour, then fold them through; that is what stops them sinking.|Bake 20 minutes until springy. Cool on a rack.'),
-  'apple cinnamon muffin': R(35, 12, '2 cups flour|3/4 cup brown sugar|2 tsp baking powder|2 tsp cinnamon|1/2 tsp salt|1 cup milk|1/3 cup oil|1 egg|2 apples, diced small',
-    'Heat the oven to 375F and line a 12-hole muffin tin.|Whisk the dry ingredients together, then the milk, oil and egg separately.|Fold the wet into the dry until only just combined.|Fold through the diced apple and divide between the holes.|Bake 22 minutes. Cool fully before packing, or they sweat in the wrapper.'),
-  'banana bread slice': R(70, 10, '3 ripe bananas|1/2 cup melted butter|3/4 cup sugar|2 eggs|1 tsp vanilla|1 tsp baking soda|1/2 tsp salt|2 cups flour',
-    'Heat the oven to 350F and line a loaf tin.|Mash the bananas, then stir in the butter, sugar, eggs and vanilla.|Sprinkle over the baking soda and salt, stir, then fold in the flour just until it disappears.|Bake 55 minutes, until a skewer comes out clean; cover the top with foil if it browns early.|Cool completely in the tin before slicing, or it crumbles.'),
-  'zucchini bread slice': R(70, 10, '2 cups grated zucchini|2 cups flour|1 cup sugar|2 eggs|1/2 cup oil|1 tsp baking soda|2 tsp cinnamon|1/2 tsp salt',
-    'Heat the oven to 350F and line a loaf tin.|Grate the zucchini and squeeze it in a towel until no more water comes out — skip this and the loaf will not set.|Beat the eggs, oil and sugar, then stir in the zucchini.|Fold in the flour, baking soda, cinnamon and salt.|Bake 55 minutes. Cool fully before slicing.'),
-  'pumpkin bread slice': R(70, 10, '1 can pumpkin puree|2 cups flour|1 cup sugar|2 eggs|1/2 cup oil|1 tsp baking soda|2 tsp pumpkin spice|1/2 tsp salt',
-    'Heat the oven to 350F and line a loaf tin.|Beat the pumpkin, sugar, eggs and oil together.|Fold in the flour, baking soda, spice and salt until just combined.|Bake 60 minutes, until a skewer comes out clean.|Cool fully in the tin. It slices far better the next day.'),
-  'oatmeal cookie': R(30, 24, '1 cup butter, softened|1 cup brown sugar|2 eggs|1 tsp vanilla|1 1/2 cups flour|1 tsp baking soda|1 tsp cinnamon|1/2 tsp salt|3 cups rolled oats|1 cup raisins',
-    'Heat the oven to 350F and line two trays.|Beat the butter and sugar until pale, then beat in the eggs and vanilla.|Stir in the flour, baking soda, cinnamon and salt, then the oats and raisins.|Drop tablespoons onto the trays, well apart.|Bake 11 minutes — they will look underdone in the middle, and that is what keeps them chewy.|Leave them on the tray 5 minutes before moving them.'),
-  'chocolate chip cookies': R(30, 24, '1 cup butter, softened|3/4 cup brown sugar|1/2 cup sugar|2 eggs|1 tsp vanilla|2 1/4 cups flour|1 tsp baking soda|1/2 tsp salt|2 cups chocolate chips',
-    'Heat the oven to 375F and line two trays.|Beat the butter and both sugars until light, then the eggs and vanilla.|Stir in the flour, baking soda and salt, then the chocolate chips.|Drop tablespoons well apart and bake 10 minutes, until the edges are set and the middles still look soft.|Cool on the tray 5 minutes. They keep five days, and freeze raw as dough balls.'),
-  'snickerdoodle': R(30, 24, '1 cup butter, softened|1 1/2 cups sugar|2 eggs|2 3/4 cups flour|2 tsp cream of tartar|1 tsp baking soda|1/2 tsp salt|2 tbsp cinnamon sugar',
-    'Heat the oven to 400F.|Beat the butter and sugar, then the eggs.|Stir in the flour, cream of tartar, baking soda and salt.|Roll walnut-sized balls and roll each one in the cinnamon sugar.|Bake 9 minutes. They should still be pale and soft when they come out.'),
-  'brownie bite': R(35, 24, '1/2 cup butter|1 cup sugar|2 eggs|1 tsp vanilla|1/3 cup cocoa powder|1/2 cup flour|1/4 tsp salt',
-    'Heat the oven to 350F and line a 24-hole mini muffin tin.|Melt the butter and stir in the sugar, then the eggs and vanilla.|Sift in the cocoa, flour and salt and stir until smooth, no more.|Fill each hole two-thirds and bake 12 minutes.|Cool in the tin. They firm up as they cool, so pull them while the middles still look soft.'),
-  'blondie bite': R(35, 24, '1/2 cup melted butter|1 cup brown sugar|1 egg|1 tsp vanilla|1 cup flour|1/2 tsp baking powder|1/4 tsp salt|1/2 cup chocolate chips',
-    'Heat the oven to 350F and line a 24-hole mini muffin tin.|Stir the melted butter into the brown sugar, then beat in the egg and vanilla.|Fold in the flour, baking powder and salt, then the chocolate chips.|Fill each hole two-thirds and bake 13 minutes, until the tops have set and cracked.'),
-  'rice crispy treat': R(15, 16, '3 tbsp butter|10 oz marshmallows|6 cups crisped rice cereal|1/4 tsp salt',
-    'Melt the butter over low heat, then the marshmallows, stirring until smooth.|Take the pan off the heat before the cereal goes in — cooking it on is what makes them hard.|Stir in the cereal and salt quickly.|Press into a lined tray with buttered hands, firmly but not tightly.|Cool an hour, then cut into squares.'),
-  'granola cluster': R(45, 12, '3 cups rolled oats|1/2 cup honey|1/3 cup oil|1 egg white|1 tsp vanilla|1/2 tsp salt|1 tsp cinnamon',
-    'Heat the oven to 300F and line a tray.|Whisk the honey, oil, egg white, vanilla, salt and cinnamon; the egg white is what binds the clusters.|Stir in the oats until every one is coated.|Press the mixture into one firm slab on the tray, about half an inch thick.|Bake 30 minutes, turning the tray once, until golden at the edges.|Let it cool completely without touching it, then break it into clusters.'),
-  'trail mix': R(5, 10, '2 cups mixed nuts|1 cup raisins|1 cup pretzel sticks|1/2 cup chocolate chips|1/2 cup dried cranberries',
-    'Mix everything in one big bowl.|Portion it into small bags or pots straight away, so it goes in the box without a second decision on a school morning.|Leave the chocolate out in warm weather, or it melts into everything else.')  ,
-  /* ---- the rest of the bank that gets made rather than bought */
-  'turkey & cheese roll-ups': R(10, 4, '4 large tortillas|2 tbsp cream cheese|8 slices deli turkey|4 slices cheese|1 cup shredded lettuce',
-    'Spread the cream cheese thinly right to the edges of each tortilla — that is what holds the roll shut.|Lay on two slices of turkey and one of cheese, then the lettuce in a line across the near third.|Roll it up tight, tucking the sides in as you go.|Cut each roll in half on the diagonal and wrap the halves, or they unroll in the bag.'),
-  'ham & cheese pinwheels': R(10, 4, '4 large tortillas|3 tbsp cream cheese|8 slices ham|4 slices cheese|1 tsp mustard',
-    'Beat the mustard through the cream cheese and spread it to the edges of each tortilla.|Cover with the ham and the cheese, right out to the edge.|Roll as tightly as you can, wrap each roll, and chill it 20 minutes — a cold roll cuts, a warm one squashes.|Trim the ends and cut each roll into four rounds. Pack them cut-side up.'),
-  'ham & cheese sandwich': R(5, 4, '8 slices sandwich bread|8 slices ham|4 slices cheese|2 tbsp butter|1 tsp mustard',
-    'Butter both slices right to the crusts. That is the barrier that keeps the bread from going damp by lunchtime.|Lay the cheese down first, then the ham, then a little mustard if it gets eaten.|Press the sandwich gently, cut it the way it actually gets eaten, and wrap it whole.'),
-  'peanut butter & banana wrap': R(5, 4, '4 large tortillas|1/2 cup peanut butter|4 bananas|1 tsp cinnamon',
-    'Spread the peanut butter over each tortilla, leaving a clear inch at the far edge.|Lay a whole banana across the near third and dust it with cinnamon.|Roll it up tight — the peanut butter seals the far edge.|Cut in half and wrap each half. Best made in the morning, or the banana softens the wrap.'),
-  'sunbutter & honey roll-up': R(5, 4, '4 large tortillas|1/2 cup sunflower butter|3 tbsp honey',
-    'Warm the sunflower butter for a few seconds if it is stiff; it tears the tortilla cold.|Spread it over each tortilla and drizzle the honey across it.|Roll up tight and cut in half. Wrap each half, because honey finds its way out.'),
-  'veggie & hummus pita': R(10, 4, '4 pita breads|1 cup hummus|1 cucumber, cut into strips|1 cup shredded carrots|1 cup baby spinach',
-    'Cut each pita in half and open the pockets carefully so they do not split.|Spread hummus inside both walls of each pocket — that keeps the bread from going damp.|Pack the cucumber, carrot and spinach in, standing up rather than lying flat, so they do not slide out.'),
-  'chicken salad crackers': R(15, 4, '2 cups cooked chicken, chopped|1/3 cup mayonnaise|1 stalk celery, diced small|1 tbsp lemon juice|1/4 tsp salt|24 crackers',
-    'Chop the chicken small enough to spoon onto a cracker one-handed.|Stir it with the mayonnaise, celery, lemon juice and salt and chill it for half an hour.|Pack the chicken salad in a sealed pot and the crackers in their own bag, to be built at the table. Crackers spread in the morning are soft by noon.'),
-  'chicken noodle soup thermos': R(30, 4, '6 cups chicken stock|2 cups cooked chicken, shredded|1 cup egg noodles|2 carrots, sliced|2 stalks celery, sliced|1/2 tsp salt',
-    'Fill the thermos with boiling water and leave it standing while you cook; a cold thermos loses the heat by lunch.|Simmer the carrot and celery in the stock for 10 minutes.|Add the noodles and cook them 6 minutes, then stir in the chicken and the salt.|Empty the thermos and fill it while the soup is at a rolling simmer.'),
-  'fruit salad cup': R(10, 4, '2 cups melon cubes|1 cup grapes, halved|1 cup strawberries, quartered|1 orange|1 tbsp honey',
-    'Cut everything to about the same size, so a forkful is a mouthful.|Squeeze the orange over the lot and stir the honey through the juice — that is what stops the cut fruit browning.|Spoon into cups with a little of the juice. It keeps three days.'),
-  'melon skewers': R(10, 4, '2 cups watermelon cubes|2 cups cantaloupe cubes|1 cup honeydew cubes|8 short skewers',
-    'Cut the melon into cubes about an inch across; smaller ones slide off.|Use short, blunt skewers, or cut long ones down so they lie flat in the box.|Thread the three melons in turn, five or six pieces a skewer.|Pack them flat with an ice pack, and pour off any juice first.'),
-  'mini muffin': R(30, 24, '1 1/2 cups flour|1/2 cup sugar|2 tsp baking powder|1/4 tsp salt|3/4 cup milk|1/3 cup oil|1 egg|1 tsp vanilla',
-    'Heat the oven to 375F and line a 24-hole mini muffin tin.|Whisk the flour, sugar, baking powder and salt in one bowl; the milk, oil, egg and vanilla in another.|Pour the wet into the dry and fold about ten times only. Lumps are fine; a smooth batter makes tough muffins.|Fill each hole two-thirds and bake 12 minutes, until they spring back.|Cool on a rack. They freeze well, and one goes into the box frozen and thaws by lunch.'),
-  'sugar cookie': R(35, 24, '1 cup butter, softened|1 cup sugar|1 egg|1 tsp vanilla|2 1/2 cups flour|1 tsp baking powder|1/2 tsp salt',
-    'Beat the butter and sugar until pale and light, then beat in the egg and vanilla.|Stir in the flour, baking powder and salt until it just comes together.|Roll walnut-sized balls, set them well apart on lined trays, and flatten each one with the bottom of a glass.|Bake at 350F for 10 minutes. They should still look pale when they come out.'),
-  'shortbread cookie': R(45, 24, '1 cup butter, softened|1/2 cup sugar|2 cups flour|1/4 tsp salt',
-    'Beat the butter and sugar together, then work in the flour and salt with your hands until it holds.|Press it into a lined tray about half an inch thick and prick it all over with a fork.|Chill it 20 minutes. Cold shortbread keeps its edges.|Bake at 325F for 25 minutes, until it is barely golden at the rim.|Cut it into fingers while it is still warm, and let it cool in the tray.'),
-  'coconut macaroon': R(35, 20, '3 cups shredded coconut|2/3 cup sweetened condensed milk|2 egg whites|1 tsp vanilla|1/4 tsp salt',
-    'Heat the oven to 325F and line a tray.|Stir the coconut, condensed milk and vanilla together.|Whisk the egg whites with the salt to soft peaks, then fold them through.|Drop heaped tablespoons onto the tray and bake 20 minutes, until the tips are golden.|Let them cool right down on the tray before you move them, or they fall apart.'),
-  'applesauce cookie': R(30, 24, '1/2 cup butter, softened|1 cup brown sugar|1 cup applesauce|1 egg|2 cups flour|1 tsp baking soda|1 tsp cinnamon|1/2 tsp salt|1 cup raisins',
-    'Heat the oven to 350F and line two trays.|Beat the butter and sugar, then the egg and the applesauce. It will look split; carry on.|Stir in the flour, baking soda, cinnamon and salt, then the raisins.|Drop tablespoons well apart and bake 12 minutes. These are cakey rather than crisp, which is what makes them survive a lunchbox.'),
-  'mini cupcake': R(35, 24, '1 1/4 cups flour|3/4 cup sugar|1 1/2 tsp baking powder|1/4 tsp salt|1/2 cup milk|1/3 cup melted butter|1 egg|1 tsp vanilla',
-    'Heat the oven to 350F and line a 24-hole mini muffin tin.|Whisk the flour, sugar, baking powder and salt together.|Beat in the milk, butter, egg and vanilla until just smooth.|Fill each case two-thirds and bake 13 minutes.|Cool completely. Frost them only if they are being eaten the same day; frosting in a lunchbox ends up on the lid.'),
-  'lemon bar': R(60, 16, '1 cup butter, softened|1/2 cup sugar|2 cups flour|1/4 tsp salt|4 eggs|1 1/2 cups sugar|2/3 cup lemon juice|1/4 cup flour',
-    'Heat the oven to 350F and line a square tin.|Rub the butter, the half cup of sugar, the two cups of flour and the salt together and press the crumbs firmly into the tin.|Bake the base 20 minutes, until it is set and pale gold.|Whisk the eggs, the rest of the sugar, the lemon juice and the quarter cup of flour and pour it onto the hot base.|Bake 22 minutes more, until the middle barely wobbles.|Cool completely, then chill before cutting. Warm lemon bars do not cut.')
+  /* Mediterranean Quinoa Salad, Bellingham Memorial Middle School, Bellingham,
+     Massachusetts — second place, whole grains. Theirs cooks the quinoa in chicken
+     broth; ours uses vegetable, because a salad in the bank should suit the parent
+     who keeps one for the vegetarian in the house. */
+  'quinoa salad cup': R(35, 6, '1 cup quinoa|2 cups low-sodium vegetable broth|2 tbsp lemon juice|2 tbsp red wine vinegar|1 tsp garlic, minced|1 1/2 tbsp olive oil|1/2 tsp salt|1/8 tsp ground white pepper|1/4 cup red bell pepper, diced|2 tbsp green onions, diced|2 tbsp red onion, diced|1/2 cup cherry tomatoes, halved|2 tbsp black olives, sliced|2 tbsp feta cheese, crumbled|1 tbsp parsley, chopped',
+    'Rinse the quinoa in a sieve under the cold tap until the water runs clear rather than cloudy — this is what keeps it from tasting bitter.|Bring the quinoa and the broth to a boil in a covered pot, then turn the heat right down and simmer 10 to 15 minutes, until the broth has gone and a little white ring has come away from each grain.|Fluff it with a fork and put it in the fridge to cool right down.|Stir the lemon juice, vinegar, garlic, olive oil, salt and white pepper together in a small bowl. That is the dressing.|Mix the red pepper, green onions, red onion, tomatoes and olives in a large bowl, pour the dressing over and toss, then fold the cold quinoa through.|Fold in the feta and parsley, cover, and give it two hours in the fridge before you pack it. It keeps four days and is better on day two.',
+    'USDA Recipes for Healthy Kids'),
+  /* Purple Power Bean Wrap, Newman Elementary School, Needham, Massachusetts —
+     dry beans and peas. Avocado browns, so theirs holds the filling two hours at
+     most; that is a step here rather than a note, because it decides the morning. */
+  'bean & avocado wrap': R(20, 6, '1 tsp lemon zest|2 tbsp lemon juice|2 cups canned white beans, drained and rinsed|1/2 cup avocado, peeled and pitted|1 tbsp garlic, minced|2 1/4 tsp olive oil|2/3 tsp chili powder|1/2 tsp salt|1 1/2 cups purple cabbage, finely shredded|6 large whole-wheat tortillas|3 cups romaine lettuce, shredded',
+    'Grate the zest off the lemon before you juice it — the other way round does not work.|Blend the beans smooth in a food processor and tip them into a large bowl.|Blend the avocado, lemon juice, zest, garlic, olive oil, chili powder and salt smooth, stir it into the beans, then mix the shredded cabbage through.|Spread two thirds of a cup of the filling along the bottom half of each tortilla and top it with half a cup of lettuce.|Roll each one up like a burrito and cut it across on the diagonal.|Make these the morning they are eaten. The avocado will hold about two hours in the fridge and browns after that.',
+    'USDA Recipes for Healthy Kids')
 };
 var RECIPE_BY_KEY = null;
 /* the bank's recipes, safe against a food called __proto__ */
@@ -1109,7 +992,7 @@ var GRAMS = {oz:28.35, lb:453.6, g:1, kg:1000};
    liquid is left in millilitres however well we know its density, because that
    is how a jug is marked; anything not here at all keeps the measure it was
    written in, since guessing a density is worse than not converting. */
-var POUR = /\boil\b|\bmilk\b|\bwater\b|\bstock\b|\bjuice\b|\bvinegar\b|\bdressing\b|\bsauce\b|\bcream\b(?! cheese)/;
+var POUR = /\boil\b|\bmilk\b|\bwater\b|\bstock\b|\bbroth\b|\bjuice\b|\bvinegar\b|\bdressing\b|\bsauce\b|\bcream\b(?! cheese)/;
 var DENSITY = [
   [/\bflour\b/, .53], [/\brolled oats\b|\boats\b/, .4], [/\bbrown sugar\b/, .91], [/\bpowdered sugar\b|\bicing sugar\b/, .5],
   [/\bsugar\b/, .85], [/\bcocoa\b/, .42], [/\bbutter\b(?!milk)/, .96], [/\bhoney\b/, 1.42],
@@ -1231,21 +1114,47 @@ function singular(w){
   if(/(ss|us|is)$/.test(w)) return w;
   return w.replace(/ies$/, 'y').replace(/(ch|sh|x|z|s)es$/, '$1').replace(/s$/, '');
 }
+/* the words an ingredient is a kind of rather than words that name it: a parent who
+   writes "fold in the feta" means the feta cheese, and "stir the chili in" the chili
+   powder, so a head ending in one of these answers to the word in front of it too */
+var HEAD_KIND = /\s(?:cheese|oil|sauce|powder|broth|stock|vinegar|juice|extract|seeds)$/;
 function stepNames(head){
   var k = normKey(head);
   if(!k || k.length < 2) return [];
   var words = k.split(' '), out = [k];
   if(words.length > 1) out.push(words[words.length - 1]);
+  if(HEAD_KIND.test(k)) out.push(words[words.length - 2]);
   return out.map(singular).filter(function(w){ return w.length > 2; });
 }
-/* the ingredient lines this step names, in this step's own words */
+/* The ingredient lines this step names, in this step's own words and the list's own
+   order. Words are claimed rather than merely matched, or ingredients steal each
+   other's: a step that says "olive oil" has spent those words, so the black olives
+   lower down cannot read themselves into it, and a step that says "red pepper" gives
+   it to the red bell pepper rather than to the ground white pepper. Full names are
+   claimed first and longest first, short forms only afterwards, so the ingredient
+   that says more of the step's words wins the word they share. Amounts for something
+   a step never mentioned are worse at the counter than no amounts at all. */
 function stepIng(r, i, scale, metric){
-  var text = ' ' + normKey(r.steps[i] || '') + ' ', out = [], seen = nullMap();
-  (r.ing || []).forEach(function(line){
-    var names = stepNames(ingHead(line));
-    var hit = names.some(function(w){ return new RegExp('\\b' + esc4re(w) + '(?:e?s)?\\b').test(text); });
-    if(!hit) return;
-    var said = ingLine(line, scale, metric);
+  var text = ' ' + normKey(r.steps[i] || '') + ' ';
+  var rows = (r.ing || []).map(function(line){
+    return {line:line, names:stepNames(ingHead(line)), hit:false};
+  });
+  var claim = function(w){
+    var m = new RegExp('\\b' + esc4re(w) + '(?:e?s)?\\b').exec(text);
+    if(!m) return false;
+    text = text.slice(0, m.index) + '   ' + text.slice(m.index + m[0].length);
+    return true;
+  };
+  /* longest full name first; sort is stable, so two of a length keep their order */
+  var order = rows.slice().sort(function(a, b){ return (b.names[0] || '').length - (a.names[0] || '').length; });
+  order.forEach(function(row){ if(row.names.length && claim(row.names[0])) row.hit = true; });
+  order.forEach(function(row){
+    for(var k = 1; !row.hit && k < row.names.length; k++) if(claim(row.names[k])) row.hit = true;
+  });
+  var out = [], seen = nullMap();
+  rows.forEach(function(row){
+    if(!row.hit) return;
+    var said = ingLine(row.line, scale, metric);
     if(seen[said]) return; seen[said] = 1;
     out.push(said);
   });
@@ -1609,12 +1518,12 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v19';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v20';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
    This build is a feature release: recipes, in the app and importable. */
-var WHATS_NEW = {build:'lunchsorted-v19', text:'New: cooking step by step now shows how much of each thing a step calls for, beside the step.',
+var WHATS_NEW = {build:'lunchsorted-v20', text:'New: the two recipes the app comes with are now kid-tested ones from the USDA, and any recipe you want beyond them you can import.',
   steps:[
     ['The amount, where you need it', 'A step that says "stir in the butter, sugar, egg and vanilla" now says how much of each, under the step itself, so you are not tapping back to the ingredients mid-mix.'],
     ['In your measures', 'They follow the Cups or Grams switch and the number of servings, like every other amount in the recipe.']
@@ -3441,7 +3350,7 @@ function viewFoods(){
   h += gated()
     ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add your own \u2014 part of the Household plan">'+svg('lock',17)+'Add your own</button>'
       + '<button class="btn wide" data-act="ideas">'+svg('plus',17)+'Browse the idea bank</button>'
-      + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank, and every recipe in it, is free.</span>'+premiumTag()+'</p>'
+      + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank, and the recipes that come with it, is free.</span>'+premiumTag()+'</p>'
     : isHelper() ? ''
     : '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button>'
       + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words.</span>'+premiumTag()+'</p>' : '');
@@ -3451,8 +3360,8 @@ function viewFoods(){
 /* ======================================================== the Recipes tab
    Recipes belong to the household, not to a lunchbox: the same blondies are the
    same blondies whichever kid is eating them. So this is one list for everybody,
-   with no lunchbox tabs across the top — the parent's own first, the idea bank's
-   behind them, and a box to search when seventy of them is too many to scroll. */
+   with no lunchbox tabs across the top — the parent's own first, the two the app
+   ships behind them, and a box to search once a household has kept a few. */
 function recipeRow(e, where){
   var r = e.r, name = recipeName(e), head = cookHead(r, recipeCat(r, name, null));
   var on = where ? (where[normKey(name)] || (e.own && where['#' + r.id]) || []) : recipeOn(e);
@@ -4468,7 +4377,7 @@ function helpSheet(){
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle day redraws one day, or tap a compartment to change one thing.'],
     ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
     ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
-    ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then the idea bank\u2019s, free to cook from. They also reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
+    ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with \u2014 a quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
     ['Can I bring a recipe in from somewhere else?', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read \u2014 copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox\u2019s food list is offered after. Keeping one of your own is part of the Household plan.'],
     ['Can I see it in grams?', 'Open a recipe and tap Grams, or tap Cups for one that came in written in grams. A cup of flour is weighed, the oven carries its Celsius, and a spoonful of salt is left as a spoonful. The + and \u2212 make more or less and scale every amount.'],
     ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
@@ -4478,8 +4387,8 @@ function helpSheet(){
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
     ['How do I clear a phone?', 'Signed out, Erase everything on the Account tab. Signed in the lunches are the household\u2019s \u2014 Sign out leaves them behind, and Delete my account and data ends the account itself. Clear the plans keeps your foods.'],
-    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank \u2014 recipes and all \u2014 to fill it from. Foods in your own words, recipes of your own, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
-    ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, or keeping a recipe of your own, is part of the Household plan. The idea bank, and every recipe in it, stays free.']
+    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from and its two recipes to cook from. Foods in your own words, recipes of your own, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
+    ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, or keeping a recipe of your own, is part of the Household plan. The idea bank, and the recipes that come with it, stay free.']
   ];
   if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.']);
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
@@ -5020,8 +4929,8 @@ document.addEventListener('click', function(ev){
     var cameFromFood = !!tf, onto = tf ? tf.n : rname, thenFood = el.getAttribute('data-then') === 'food';
     UI.recipeDraft = null; UI.importTo = null;
     closeSheet();
-    /* a parent who started from a food is put back where they were, not dropped on a
-       list of seventy; one who started from the Recipes tab stays on it */
+    /* a parent who started from a food is put back where they were, not dropped on the
+       recipe list; one who started from the Recipes tab stays on it */
     if(!cameFromFood) UI.tab = 'recipes';
     render();
     if(thenFood && !linked){ recipeToFood(made); return; }
