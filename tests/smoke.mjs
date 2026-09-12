@@ -35,6 +35,7 @@ const { default: householdHandler } = await import('../netlify/functions/api-hou
 const { default: billingHandler } = await import('../netlify/functions/api-billing.js');
 const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
 const { default: betaHandler } = await import('../netlify/functions/beta.js');
+const { default: recipeHandler } = await import('../netlify/functions/api-recipe.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
 process.env.REVIEW_EMAIL = 'review@example.com'; process.env.REVIEW_CODE = 'REVU-2468';
 process.env.BETA_CODE = 'BETA-TEST-1234'; process.env.BETA_CAP = '2';
@@ -67,7 +68,7 @@ async function apiProxy(req, res){
   const method = req.method;
   const request = new Request(`http://${req.headers.host}${req.url}`, {method, headers,
     body: (method === 'GET' || method === 'HEAD') ? undefined : Buffer.concat(chunks), duplex: 'half'});
-  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : req.url.startsWith('/beta') ? betaHandler : householdHandler;
+  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : req.url.startsWith('/api/recipe') ? recipeHandler : req.url.startsWith('/beta') ? betaHandler : householdHandler;
   let resp;
   try { resp = await handler(request, {ip: '127.0.0.1'}); }
   catch (e) { res.writeHead(500); return res.end(String(e)); }
@@ -1919,8 +1920,10 @@ try {
      nothing a household already added is ever taken off the list */
   await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(300);
   const foodsBefore = await pb.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length);
-  check('lapsed, Add your own wears a lock and keeps its place on the page',
-    (await pb.$$eval('[data-act="upgrade"][data-why="food"]', a => a.length)) === 1 && (await pb.$$eval('[data-act="add-own"]', a => a.length)) === 0);
+  check('lapsed, both ways to write a food wear a lock and keep their place on the page',
+    (await pb.$$eval('[data-act="upgrade"][data-why="food"]', a => a.length)) === 2
+    && (await pb.$$eval('[data-act="add-own"]', a => a.length)) === 0
+    && (await pb.$$eval('[data-act="recipe-import"]', a => a.length)) === 0);
   check('and the free way in sits beside it, not three screens back',
     (await pb.$$eval('[data-act="ideas"]', a => a.filter(b => /idea bank/i.test(b.textContent)).length)) >= 1);
   check('and every food already on the list is still there and still planned', foodsBefore > 0 &&
@@ -2392,6 +2395,279 @@ try {
   }
   for (const k of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_YEAR', 'STRIPE_PRICE_LIFETIME', 'STRIPE_PRICE_MONTH']) delete process.env[k];
   stripeLib.forgetPrices();
+
+  let recipeSession = '', recipeCookieName = 'ls_session';
+  /* ----------------------------------------------------------- recipes
+     Three layers over one record: the idea bank's cooked dishes carry a recipe,
+     any recipe can be cooked a step at a time in either set of measures, and a
+     recipe can be read off a page or pasted in from under a video. Nothing here
+     needs the network except the page reader, and that is held up against a page
+     in memory rather than fetched. */
+  {
+    const { parseRecipeHtml, publicUrl, privateAddress } = await import('../netlify/functions/api-recipe.js');
+    const { COOKIE: authCookieName, createSession, findOrCreateUser } = await import('../netlify/lib/auth.js');
+    const recipeUser = await findOrCreateUser('recipes@example.com');
+    recipeSession = await createSession(recipeUser.id); recipeCookieName = authCookieName;
+    const ld = (body) => `<html><head><title>Quinoa Salad | A Blog</title><script type="application/ld+json">${JSON.stringify(body)}</script></head><body></body></html>`;
+    const read = parseRecipeHtml(ld({ '@context': 'https://schema.org', '@graph': [
+      { '@type': 'WebSite' },
+      { '@type': ['Recipe'], name: 'Lemony Quinoa Salad', recipeYield: ['4 servings'],
+        prepTime: 'PT10M', cookTime: 'PT20M',
+        recipeIngredient: ['1 cup quinoa', '&frac12; tsp salt', '2 tbsp olive oil'],
+        recipeInstructions: [
+          { '@type': 'HowToStep', text: 'Rinse the quinoa.' },
+          { '@type': 'HowToSection', itemListElement: [{ '@type': 'HowToStep', text: 'Simmer <b>20 minutes</b>.' }] }] }
+    ] }), 'https://www.a-blog.example/quinoa');
+    check('a recipe page is read out of the markup it already publishes: name, time, yield, ingredients and every step',
+      read && read.title === 'Lemony Quinoa Salad' && read.m === 30 && read.y === 4
+      && read.ing.length === 3 && read.ing[1] === '½ tsp salt'
+      && read.steps.length === 2 && read.steps[1] === 'Simmer 20 minutes.' && read.src === 'a-blog.example', read);
+    const micro = parseRecipeHtml('<h1 itemprop="name">Oat bites</h1><li itemprop="recipeIngredient">1 cup oats</li>'
+      + '<li itemprop="recipeIngredient">2 tbsp honey</li><p itemprop="recipeInstructions">Roll them.</p>', 'https://b.example/x');
+    check('a page that never adopted JSON-LD is read from the tags in its markup instead',
+      micro && micro.ing.length === 2 && /Roll them/.test(micro.steps[0]), micro);
+    check('a page with no recipe on it reads as no recipe, rather than as an empty one',
+      parseRecipeHtml('<html><body><p>1 cup of nothing</p></body></html>', 'https://c.example/x') === null);
+
+    /* the one thing on this site that fetches an address someone else chose */
+    const refused = {};
+    for (const u of ['http://example.com/r', 'https://127.0.0.1/r', 'https://10.0.0.5/r', 'https://[::1]/r',
+                     'https://localhost/r', 'https://box.internal/r', 'https://example.com:8080/r',
+                     'https://0x7f000001/r', 'https://2130706433/r', 'file:///etc/passwd', 'not-a-url'])
+      refused[u] = !!(await publicUrl(u)).error;
+    check('the page reader refuses anything but a named host on the public web over https',
+      Object.values(refused).every(Boolean), refused);
+    /* the filter reads addresses as bytes, so a private one in a costume is still private */
+    const inCostume = {};
+    for (const [label, addr] of [['loopback', '127.0.0.1'], ['private', '10.1.2.3'], ['link-local', '169.254.169.254'],
+      ['v4-mapped', '::ffff:127.0.0.1'], ['v4-compatible', '::127.0.0.1'], ['loopback v6', '::1'], ['unspecified', '::'],
+      ['NAT64', '64:ff9b::7f00:1'], ['6to4 of loopback', '2002:7f00:1::'], ['v6 multicast', 'ff02::1'],
+      ['unique local', 'fd00::1'], ['v6 link-local', 'fe80::1'], ['carrier NAT', '100.100.1.1'], ['nonsense', 'not-an-address']])
+      inCostume[label] = privateAddress(addr);
+    check('and reads an address as its bytes, so loopback wears no costume it does not see through',
+      Object.values(inCostume).every(Boolean)
+      && !privateAddress('93.184.216.34') && !privateAddress('2606:2800:220:1:248:1893:25c8:1946'), inCostume);
+
+    /* a page built to be expensive to read: the tag strippers used to scan to the end
+       of the buffer from every unclosed "<", which cost a minute of CPU per request */
+    {
+      const nasty = '<script type="application/ld+json">' + JSON.stringify({ '@type': 'Recipe',
+        name: '<script '.repeat(90000), recipeIngredient: ['1 cup oats'], recipeInstructions: '<'.repeat(400000) }) + '</script>';
+      const t0 = Date.now(); parseRecipeHtml(nasty, 'https://a.example/x'); const ms = Date.now() - t0;
+      check('a page written to be expensive to read is read in a moment anyway', ms < 2000, ms + 'ms');
+    }
+
+    const post = (body, method = 'POST', headers = {}) => recipeHandler(new Request('http://localhost/api/recipe',
+      { method, headers: { 'content-type': 'application/json', ...headers }, body: method === 'GET' ? undefined : JSON.stringify(body) }));
+    check('the reader answers nothing but a POST', (await post({}, 'GET')).status === 404);
+    /* the one thing here that fetches an address someone else chose is not left open to
+       the internet, and that is also what keeps the promise that signed out, nothing typed
+       into the app leaves the phone */
+    check('and refuses a stranger outright, whatever they ask for',
+      (await post({ url: 'https://example.com/r' })).status === 401 && (await post({})).status === 401);
+    {
+      const cookie = `${authCookieName}=${recipeSession}`;
+      check('signed in, it asks for an address when none came', (await post({}, 'POST', { cookie })).status === 400);
+      const plain = await post({ url: 'http://example.com/recipe' }, 'POST', { cookie });
+      check('and says so, in words a parent can act on, when the address is not one it will open',
+        plain.status === 422 && /https/.test((await plain.json()).error));
+      const huge = await recipeHandler(new Request('http://localhost/api/recipe',
+        { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: 'x'.repeat(4000) }));
+      check('and a body too big to be an address is refused before it is parsed', huge.status === 400);
+      const shapes = await Promise.all(['https://127.0.0.1/r', 'https://10.0.0.5/r'].map(u => post({ url: u }, 'POST', { cookie }).then(r => r.status)));
+      const worded = await Promise.all(['https://127.0.0.1/r', 'https://10.0.0.5/r'].map(u => post({ url: u }, 'POST', { cookie }).then(r => r.json()).then(j => j.error)));
+      check('and every way a page can fail to give up a recipe answers in the same words, so the reader is not a map of someone else\u2019s network',
+        shapes.every(x => x === 422) && worded[0] === worded[1], worded);
+    }
+  }
+  {
+    const ctxR2 = await phone();
+    const pr2 = await ctxR2.newPage(); pr2.on('pageerror', e => errors.push(String(e.message)));
+    /* the address of a recipe page, answered from here, so the suite never leaves the machine */
+    await ctxR2.route('**/api/recipe', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ recipe: {
+      title: 'Lemony Quinoa Salad', m: 30, y: 4,
+      ing: ['1 cup quinoa', '2 cups water', '4 oz feta cheese, crumbled', '1/2 tsp salt'],
+      steps: ['Rinse the quinoa.', 'Simmer it for 20 minutes.', 'Toss it with the feta.'],
+      src: 'a-blog.example', url: 'https://a-blog.example/quinoa' } }) }));
+    await pr2.goto(BASE + '/app/'); await pr2.waitForTimeout(400);
+    await pr2.fill('#obName', 'Wren'); await pr2.click('[data-act="ob-go"]'); await pr2.waitForTimeout(500);
+    const later2 = await pr2.$('[data-act="ob-later"]'); if (later2) { await later2.click(); await pr2.waitForTimeout(350); }
+    await pr2.click('[data-act="tab"][data-tab="foods"]'); await pr2.waitForTimeout(300);
+    const cooking = () => pr2.textContent('#sheetBody');
+    const openRow = async (name) => {
+      const h = await pr2.evaluateHandle(n => [...document.querySelectorAll('[data-act="food-open"]')].find(b => b.textContent.includes(n)), name);
+      const el = h.asElement(); if (!el) return false;
+      await el.click(); await pr2.waitForTimeout(300); return true;
+    };
+    const addIdea = async (name) => {
+      await pr2.click('[data-act="ideas"]'); await pr2.waitForTimeout(300);
+      await pr2.click(`[data-act="add-idea"][data-name="${name}"]`); await pr2.waitForTimeout(300);
+      await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
+    };
+
+    /* ---- the idea bank's own recipes, free like the rest of the bank */
+    await addIdea('Quinoa salad cup');
+    check('a food from the idea bank that has to be cooked says so on the list',
+      await pr2.$$eval('[data-act="food-open"]', a => a.some(b => /Quinoa salad cup/.test(b.textContent) && /Recipe/.test(b.textContent))));
+    check('and opening it offers the recipe rather than sending a parent out of the app to find one',
+      (await openRow('Quinoa salad cup')) && (await pr2.$$eval('[data-act="cook"]', a => a.length)) === 1);
+    await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
+    check('the recipe opens with what to buy, what to do, and how long it takes',
+      /25 minutes/.test(await cooking()) && /makes 4 lunches/.test(await cooking())
+      && /1 cup quinoa/.test(await cooking()) && /Rinse the quinoa/.test(await cooking()), (await cooking()).slice(0, 120));
+    await pr2.click('[data-act="cook-tick"][data-i="0"]'); await pr2.waitForTimeout(250);
+    check('an ingredient ticks off as it goes in, so a parent interrupted mid-recipe knows where they were',
+      (await pr2.$$eval('[data-act="cook-tick"][data-i="0"]', a => a[0].className)).includes('done'));
+
+    /* ---- the measures */
+    await pr2.click('[data-act="cook-units"][data-v="metric"]'); await pr2.waitForTimeout(250);
+    const metric = await cooking();
+    check('in grams, a cup of quinoa is weighed, water is poured, a spoon of salt stays a spoon, and a cup of tomatoes stays a cup',
+      /170 g quinoa/.test(metric) && /470 ml water/.test(metric) && /½ tsp salt/.test(metric)
+      && /1 cup cherry tomatoes/.test(metric), metric.slice(0, 200));
+    await pr2.click('[data-act="cook-makes"][data-v="1"]'); await pr2.waitForTimeout(250);
+    check('asking for one more lunch scales every amount and says how many it is making now',
+      /5 lunches/.test(await cooking()) && /210 g quinoa/.test(await cooking()));
+    await pr2.click('[data-act="cook-makes"][data-v="-1"]'); await pr2.waitForTimeout(200);
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    /* a step is read where it is followed, so the oven is given in the scale this kitchen uses */
+    await addIdea('Blueberry muffin');
+    await openRow('Blueberry muffin'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
+    check('and an oven set in Fahrenheit carries its Celsius once the kitchen works in grams',
+      /375F \(190°C\)/.test(await cooking()), (await cooking()).slice(0, 220));
+    await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
+    check('while in cups it is left exactly as the recipe wrote it', !/190°C/.test(await cooking()));
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+
+    /* ---- the walk through */
+    await openRow('Quinoa salad cup'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
+    await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
+    check('cooking it step by step shows one step, says where it has got to, and keeps the ingredients within reach',
+      /Step 1 of 5/.test(await cooking()) && /Rinse the quinoa/.test(await cooking())
+      && (await pr2.$$eval('[data-act="cook-step"][data-i="1"]', a => a.length)) === 1
+      && (await pr2.$$eval('.prog', a => a.length)) === 1);
+    await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
+    check('and it goes on and back a step at a time', /Step 2 of 5/.test(await cooking())
+      && (await pr2.$$eval('[data-act="cook-step"][data-i="0"]', a => a.length)) === 1);
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
+    check('none of the cooking is written into the household: a half-made recipe is not something the other phone needs',
+      await pr2.evaluate(() => !/"ticked"|"step":/.test(localStorage.getItem('lunchsorted') || '')));
+    check('the phone remembers which measures this kitchen works in',
+      await pr2.evaluate(() => localStorage.getItem('lunchsorted-units')) === 'us');
+
+    /* ---- the recipe where a parent is actually standing: the box being packed */
+    const today0 = await pr2.evaluate(() => { const n = new Date(), p = x => String(x).padStart(2, '0');
+      return n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()); });
+    await pr2.click('[data-act="tab"][data-tab="week"]'); await pr2.waitForTimeout(350);
+    await pr2.click(`[data-act="slot"][data-day="${today0}"][data-cat="main"]`); await pr2.waitForTimeout(350);
+    check('the compartment sheet offers the recipe for whatever is in the compartment',
+      (await pr2.$$eval('[data-act="cook"]', a => a.length)) <= 1);
+    const quinoaId = await pr2.$$eval('[data-act="pick"]', a => {
+      const hit = a.find(b => /Quinoa salad cup/.test(b.textContent)); return hit && hit.getAttribute('data-id'); });
+    await pr2.click(`[data-act="pick"][data-id="${quinoaId}"]`); await pr2.waitForTimeout(400);
+    await pr2.click(`[data-act="slot"][data-day="${today0}"][data-cat="main"]`); await pr2.waitForTimeout(350);
+    check('and once a dish that has to be cooked is in it, the recipe is one tap from the week',
+      (await pr2.$$eval('[data-act="cook"]', a => a.map(b => b.getAttribute('data-id')))).includes(quinoaId));
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    await pr2.click('[data-act="tab"][data-tab="pack"]'); await pr2.waitForTimeout(350);
+    check('and the pack list names what in this box gets made, so the recipe waits in the kitchen',
+      /Making it\?/.test(await pr2.textContent('#view'))
+      && (await pr2.$$eval('#view [data-act="cook"]', a => a.map(b => b.textContent))).some(t => /Quinoa salad cup/.test(t)));
+    await pr2.click('[data-act="tab"][data-tab="foods"]'); await pr2.waitForTimeout(300);
+
+    /* ---- reading one off a page needs a sign-in, because that is the only part that leaves the phone */
+    await pr2.click('[data-act="recipe-import"]'); await pr2.waitForTimeout(300);
+    check('signed out, the app does not offer to send an address anywhere, and says why',
+      (await pr2.$$eval('#riUrl', a => a.length)) === 0
+      && (await pr2.$$eval('#riText', a => a.length)) === 1
+      && /nothing you type here leaves the phone/.test(await pr2.textContent('#sheetBody')));
+
+    /* ---- and pasted in, which is the only thing that works for a video */
+    await pr2.fill('#riText', 'EASY TURKEY PINWHEELS — my kids ask for these every week!!\n'
+      + 'Serves 4\n4 large tortillas\n3 tbsp cream cheese\n8 slices deli turkey\n'
+      + 'Spread the cream cheese right to the edge of each tortilla.\nRoll them up tight and chill them before slicing.');
+    await pr2.click('[data-act="recipe-paste"]'); await pr2.waitForTimeout(400);
+    check('a caption copied from under a video is read the same way, with the shouting and the aside taken off the name',
+      (await pr2.inputValue('#nfName')) === 'Easy turkey pinwheels'
+      && /Deli turkey/.test(await pr2.inputValue('#nfBuy'))
+      && /3 ingredients · 2 steps/.test(await pr2.textContent('#sheetBody')),
+      await pr2.inputValue('#nfName'));
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+
+    /* ---- a recipe is data from outside, like everything else */
+    await pr2.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const k = d.kids.filter(x => !x.deletedAt)[0];
+      const stamp = { createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', deletedAt: null,
+        kidId: k.id, c: 'main', a: 'other', t: [], al: [], buy: null };
+      k.foods.push({ id: 'food_hostile', n: 'Sneaky salad', ...stamp, recipe: {
+        ing: ['1 cup oats'], steps: ['Stir it <img src=x onerror="window.__ls_bad=1"> well.'],
+        url: 'javascript:window.__ls_bad=1', src: 'x'.repeat(300), m: 1e9, y: -4 } });
+      k.foods.push({ id: 'food_empty', n: 'Nothing salad', ...stamp, recipe: { ing: [], steps: [] } });
+      k.foods.push({ id: 'food_silly', n: 'Silly salad', ...stamp, recipe: 'not a recipe' });
+      localStorage.setItem('lunchsorted', JSON.stringify(d));
+    });
+    await pr2.goto(BASE + '/app/'); await pr2.waitForTimeout(500);
+    await pr2.click('[data-act="tab"][data-tab="foods"]'); await pr2.waitForTimeout(300);
+    await openRow('Sneaky salad'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
+    const hostile = await cooking();
+    check('a recipe that arrives from outside is put on screen as the words it is, never as markup or as a link the app would follow',
+      /Stir it <img src=x onerror/.test(hostile)
+      && (await pr2.$$eval('#sheetBody img, #sheetBody a[href^="javascript"]', a => a.length)) === 0
+      && await pr2.evaluate(() => !window.__ls_bad), hostile.slice(0, 160));
+    check('and its impossible numbers are dropped rather than shown', !/-4|16666/.test(hostile), hostile.slice(0, 120));
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    await openRow('Nothing salad');
+    const emptyOne = (await pr2.$$eval('[data-act="cook"]', a => a.length)) === 0;
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    await openRow('Silly salad');
+    check('a recipe with nothing in it, or one that is not a recipe at all, leaves the food with none',
+      emptyOne && (await pr2.$$eval('[data-act="cook"]', a => a.length)) === 0);
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    await ctxR2.close();
+  }
+  {
+    /* signed in, the address of a page can be read. The session is made directly rather
+       than driven through the sign-in screens, which have their own tests above; the
+       reader itself is answered from here, so the suite never leaves the machine. */
+    const ctxR3 = await phone();
+    await ctxR3.addCookies([{ name: recipeCookieName, value: recipeSession, url: BASE }]);
+    await ctxR3.route('**/api/recipe', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ recipe: {
+      title: 'Lemony Quinoa Salad', m: 30, y: 4,
+      ing: ['1 cup quinoa', '2 cups water', '4 oz feta cheese, crumbled', '1/2 tsp salt'],
+      steps: ['Rinse the quinoa.', 'Simmer it for 20 minutes.', 'Toss it with the feta.'],
+      src: 'a-blog.example', url: 'https://a-blog.example/quinoa' } }) }));
+    const pr3 = await ctxR3.newPage(); pr3.on('pageerror', e => errors.push(String(e.message)));
+    await pr3.goto(BASE + '/app/'); await pr3.waitForTimeout(600);
+    await pr3.fill('#obName', 'Rowan'); await pr3.click('[data-act="ob-go"]'); await pr3.waitForTimeout(600);
+    for (const a of ['ob-later', 'ob-skip']) { const b = await pr3.$(`[data-act="${a}"]`); if (b) { await b.click(); await pr3.waitForTimeout(350); } }
+    await pr3.click('[data-act="tab"][data-tab="foods"]'); await pr3.waitForTimeout(400);
+    await pr3.click('[data-act="recipe-import"]'); await pr3.waitForTimeout(350);
+    check('signed in, the app offers to read a page', (await pr3.$$eval('#riUrl', a => a.length)) === 1);
+    await pr3.fill('#riUrl', 'https://a-blog.example/quinoa');
+    await pr3.click('[data-act="recipe-fetch"]'); await pr3.waitForTimeout(600);
+    check('a recipe read off a page comes back as a food to check over, with every guess shown rather than hidden',
+      (await pr3.inputValue('#nfName')) === 'Lemony Quinoa Salad'
+      && /Quinoa/.test(await pr3.inputValue('#nfBuy'))
+      && (await pr3.$$eval('#nfAl .tg[aria-pressed="true"]', a => a.map(b => b.getAttribute('data-v')))).includes('dairy')
+      && /the school rules go by this/.test(await pr3.textContent('#sheetBody')),
+      await pr3.inputValue('#nfBuy'));
+    await pr3.click('[data-act="save-own"]'); await pr3.waitForTimeout(500);
+    const saved = await pr3.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const f = d.kids.flatMap(k => k.foods).find(x => x.n === 'Lemony Quinoa Salad');
+      return f && { ing: f.recipe.ing.length, steps: f.recipe.steps.length, src: f.recipe.src, url: f.recipe.url, buy: f.buy.length, l: f.recipe.l };
+    });
+    check('and it lands on the list as a food, carrying its recipe, where it came from, and its shopping line',
+      saved && saved.ing === 4 && saved.steps === 3 && saved.src === 'a-blog.example' && saved.buy > 1, saved);
+    check('and it is counted in servings, not in lunches, because that is what its own page said',
+      !saved.l && /makes 4 servings/.test(await (async () => {
+        const h = await pr3.evaluateHandle(() => [...document.querySelectorAll('[data-act="food-open"]')].find(b => /Lemony/.test(b.textContent)));
+        await h.asElement().click(); await pr3.waitForTimeout(300); return pr3.textContent('#sheetBody');
+      })()));
+    await pr3.click('#sheetClose'); await pr3.waitForTimeout(200);
+    await ctxR3.close();
+  }
 
   /* ------------------------------------------------------- pwa + offline */
   check('the service worker takes control',
