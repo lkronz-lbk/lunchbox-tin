@@ -181,6 +181,7 @@ a.btn{text-decoration:none}
   width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left}
 .item:first-child{border-top:0}
 .item .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.item button.grow{align-self:stretch;justify-content:center;text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
 .item .nm{display:block;font-size:14.5px;line-height:1.3}
 .item .meta{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.05em}
 .item .go{flex:none;display:inline-flex;align-items:center;color:var(--ink-3)}
@@ -314,6 +315,12 @@ nav.tabs svg{width:21px;height:21px}
 .pickbox .pic{width:44px;height:44px;border-radius:10px}
 .kiddone .pic{width:44px;height:44px;border-radius:10px}
 .pic.big{width:104px;height:104px;border-radius:18px;margin:0 auto}
+/* cook mode: read at arm's length, on a counter, with wet hands */
+.prog{height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.prog span{display:block;height:100%;background:var(--accent)}
+.cookstep{margin:0;font-size:19px;line-height:1.5}
+ol.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px}
+ol.steps li{font-size:14.5px;line-height:1.55;padding-left:2px}
 .thumb{width:44px;height:44px;border-radius:var(--r-md);border:1.5px solid var(--line);background:var(--surface-2);padding:0;overflow:hidden;
   display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;font:inherit}
 .thumb .ic{font-size:22px;line-height:1}
@@ -558,7 +565,8 @@ var I = {
   trash:'<path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M7 7l1 12.2A1.8 1.8 0 0 0 9.8 21h4.4a1.8 1.8 0 0 0 1.8-1.8L17 7"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   people:'<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.7a3.2 3.2 0 0 1 0 5.6M17.5 20a5.6 5.6 0 0 0-2-4.3"/>',
-  save:'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v6h7V4M8 20v-6h8v6"/>'
+  save:'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v6h7V4M8 20v-6h8v6"/>',
+  book:'<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M8 8h8M8 11.5h5.5"/>'
 };
 function svg(n, w){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'+(w?' style="width:'+w+'px;height:'+w+'px"':'')+'>'+I[n]+'</svg>'; }
 
@@ -834,6 +842,251 @@ var BANK = [
   F('Oat milk box','drink',['light'],'drinks',[],0,0),
   F('Yogurt drink','drink',['protein','sweet','ice'],'drinks',['dairy'],0,1)
 ];
+
+/* ============================================================== recipes
+   A food may carry a recipe, so a parent who planned a quinoa salad never has
+   to leave the app to find out how to make it. The idea bank's cooked dishes
+   carry one built in; a food a parent wrote or imported carries its own on the
+   record (food.recipe), and the bank's is the fallback, exactly as `buy` works.
+   Amounts are written the way a recipe is written, as text; parseIng reads the
+   number and the unit off the front, which is all cook mode needs to halve
+   them, double them, or say them in grams.
+   R(minutes, lunches it makes, ingredients, steps) — both split on |. */
+function R(m, y, ing, steps){ return {m:m, y:y, l:1, ing:ing.split('|'), steps:steps.split('|')}; }
+var RECIPE = {
+  /* ---- mains */
+  'quinoa salad cup': R(25, 4, '1 cup quinoa|2 cups water|1/2 tsp salt|1 cucumber, diced small|1 cup cherry tomatoes, halved|3 tbsp olive oil|2 tbsp lemon juice|1/4 cup crumbled feta',
+    'Rinse the quinoa in a sieve under cold water for half a minute — this is what keeps it from tasting bitter.|Bring the quinoa, water and salt to a boil, then cover and turn the heat right down for 15 minutes.|Take it off the heat, leave the lid on for 5 more minutes, then fluff it with a fork and spread it on a plate to cool.|Stir the cooled quinoa together with the cucumber, tomatoes, oil, lemon juice and feta.|Spoon into cups. It keeps for four days in the fridge, and it is better on day two.'),
+  'pasta salad cup': R(20, 4, '8 oz small pasta|1 cup cherry tomatoes, halved|1/2 cup diced mozzarella|1/3 cup Italian dressing|1/4 tsp salt',
+    'Boil the pasta in well-salted water until just tender, then drain and rinse it under cold water to stop it cooking.|Toss the cold pasta with the dressing while it is still slightly damp — it soaks it up better.|Fold through the tomatoes and mozzarella and taste for salt.|Pack into cups. Keeps four days; add a splash more dressing before packing on the last day.'),
+  'chicken salad in a pita': R(15, 4, '2 cups cooked chicken, chopped|1/3 cup mayonnaise|1 stalk celery, diced small|1 tbsp lemon juice|1/4 tsp salt|4 pita breads',
+    'Chop the chicken small enough to eat one-handed — this is a lunch, not a plate.|Stir it together with the mayonnaise, celery, lemon juice and salt.|Chill it for at least half an hour so it holds together.|Fill the pitas in the morning, not the night before, or the bread goes soft.'),
+  'egg salad sandwich': R(20, 4, '6 eggs|1/4 cup mayonnaise|1 tsp mustard|1/4 tsp salt|8 slices sandwich bread',
+    'Lower the eggs into already-boiling water and cook them for 10 minutes.|Move them straight into cold water and leave them 5 minutes; they peel far more easily cold.|Peel and mash with a fork, then stir in the mayonnaise, mustard and salt.|Spread on the bread. Pack with an ice pack — egg needs to stay cold.'),
+  'tuna salad with crackers': R(10, 4, '2 cans tuna, drained|1/4 cup mayonnaise|1 tbsp lemon juice|1 stalk celery, diced small|1/4 tsp black pepper',
+    'Drain the tuna properly, pressing the lid down hard, or the salad goes watery by Wednesday.|Flake it with a fork and stir in the mayonnaise, lemon juice, celery and pepper.|Pack in a sealed container with the crackers in their own bag, so they stay crisp.'),
+  'hummus & veggie wrap': R(10, 4, '4 large tortillas|1 cup hummus|1 cucumber, cut into strips|1 cup shredded carrots|1 cup baby spinach',
+    'Spread a quarter of the hummus over each tortilla, leaving a clear inch at the far edge.|Lay the cucumber, carrot and spinach in a line across the near third.|Roll it up tight, tucking the sides in as you go.|Cut in half on the diagonal and wrap each half, or it unrolls in the bag.'),
+  'bean & cheese roll-up': R(10, 4, '1 can refried beans|1 cup shredded cheese|4 large tortillas|1/2 tsp cumin',
+    'Warm the beans with the cumin in a pan until they spread easily.|Spread them over the tortillas and scatter the cheese on while the beans are still warm, so it softens.|Roll up tight and let them cool before packing, or they steam and go soggy.'),
+  'yogurt & granola parfait': R(5, 4, '3 cups plain yogurt|1 cup granola|1 cup berries|2 tbsp honey',
+    'Stir the honey through the yogurt.|Spoon it into four cups and top with berries.|Send the granola in its own little pot or bag — granola in yogurt since morning is granola no longer.'),
+  'chicken & cheese skewers': R(15, 4, '2 cups cooked chicken, cubed|8 oz cheese, cubed|1/2 cup cherry tomatoes|8 short skewers',
+    'Use short, blunt skewers, or cut long ones down so they fit the box flat.|Thread chicken, cheese and tomato, three or four pieces to a skewer.|Chill before packing, and pack with an ice pack.'),
+  'cucumber sushi rolls': R(30, 4, '1 cup sushi rice|1 1/4 cups water|2 tbsp rice vinegar|1 tsp sugar|4 nori sheets|1 cucumber, cut into long strips',
+    'Rinse the rice until the water runs clear, then cook it with the water, covered, for 15 minutes.|Stir the vinegar and sugar through the hot rice and let it cool to room temperature.|Spread a thin layer of rice over each nori sheet, leaving a clear strip at the far edge.|Lay the cucumber across and roll tightly, wetting the clear strip to seal it.|Cut into six with a wet knife, wiping the blade between cuts.'),
+  'cold grilled chicken strips': R(20, 4, '1 1/2 lb chicken breast|2 tbsp olive oil|1 tsp paprika|1/2 tsp salt|1/2 tsp garlic powder',
+    'Rub the chicken with the oil, paprika, salt and garlic powder.|Grill or pan-fry over medium heat, about 6 minutes a side, until it is 165F in the middle.|Rest it 5 minutes, then slice it across the grain into strips.|Cool completely before packing, and pack with an ice pack.'),
+  'turkey & cheese pinwheels': R(10, 4, '4 large tortillas|3 tbsp cream cheese|8 slices deli turkey|4 slices cheese',
+    'Spread the cream cheese thinly right to the edges of each tortilla — that is the glue.|Lay on the turkey and cheese, covering the whole tortilla.|Roll up as tightly as you can and wrap each roll; chill for 20 minutes.|Trim the ends and cut each roll into four rounds. Pack them cut-side up.'),
+  'mac & cheese thermos': R(20, 4, '8 oz macaroni|2 tbsp butter|2 tbsp flour|2 cups milk|2 cups shredded cheese|1/2 tsp salt',
+    'Fill the thermos with boiling water and leave it standing while you cook — a cold thermos loses the heat in an hour.|Boil the macaroni until just tender and drain it.|Melt the butter, stir in the flour and cook it a minute, then whisk in the milk a little at a time until it thickens.|Take it off the heat, stir in the cheese and salt, then fold through the pasta.|Empty the thermos, fill it with the piping hot macaroni and close it straight away.'),
+  'grilled cheese, packed cold': R(10, 4, '8 slices sandwich bread|8 slices cheese|2 tbsp butter',
+    'Butter the outside of the bread, not the pan.|Cook over medium-low heat, 3 minutes a side, until the cheese has properly melted.|Let the sandwiches cool fully on a rack before wrapping, or the steam turns them soggy.|Cut them just before packing.'),
+  'chicken caesar wrap': R(15, 4, '2 cups cooked chicken, sliced|4 large tortillas|3 cups chopped romaine|1/3 cup caesar dressing|1/4 cup grated parmesan',
+    'Toss the romaine with the dressing and parmesan just before you build the wraps.|Lay the chicken along the near third of each tortilla and pile the salad on top.|Roll up tight, cut in half, and wrap each half.|Pack with an ice pack; if it is being packed the night before, send the dressing separately.'),
+  'mini bagel pizzas, cold': R(15, 4, '4 mini bagels, halved|1/2 cup pizza sauce|1 cup shredded mozzarella|1/2 tsp dried oregano',
+    'Heat the oven to 400F.|Spread sauce over each bagel half, then the cheese and a pinch of oregano.|Bake 8 minutes, until the cheese is bubbling at the edges.|Cool completely before packing. They are meant to be eaten cold, and they are good cold.'),
+  'rice & black bean bowl': R(25, 4, '1 cup rice|2 cups water|1 can black beans, rinsed|1 cup shredded cheese|1 tsp cumin|1/2 tsp salt|1 lime',
+    'Cook the rice in the water, covered, for 15 minutes, then leave it to stand 5 minutes off the heat.|Warm the beans with the cumin and salt.|Fork the rice through with the juice of the lime.|Layer rice, then beans, then cheese in each cup, and let it cool before the lid goes on.'),
+  'lentil soup thermos': R(35, 4, '1 cup red lentils|4 cups vegetable stock|1 onion, diced|2 carrots, diced|1 tbsp olive oil|1 tsp cumin|1/2 tsp salt',
+    'Fill the thermos with boiling water and leave it to stand.|Soften the onion and carrot in the oil for 5 minutes, then stir in the cumin.|Add the lentils and stock, bring to a boil, then simmer 20 minutes until the lentils have collapsed.|Season, blend it smooth if that is how it gets eaten, and get it back to a proper boil.|Empty the thermos and fill it with the boiling soup.'),
+  'turkey chili thermos': R(35, 4, '1 lb ground turkey|1 can kidney beans, rinsed|1 can diced tomatoes|1 onion, diced|2 tsp chili powder|1 tsp cumin|1/2 tsp salt',
+    'Fill the thermos with boiling water and leave it to stand.|Brown the turkey with the onion, breaking it up as it goes.|Stir in the chili powder and cumin and cook a minute, until you can smell them.|Add the tomatoes and beans and simmer 20 minutes.|Empty the thermos and fill it with the chili at a rolling simmer.'),
+  'tortellini salad': R(15, 4, '1 lb cheese tortellini|1 cup cherry tomatoes, halved|1/3 cup Italian dressing|1/4 cup sliced olives|2 tbsp chopped basil',
+    'Boil the tortellini until they float and are just tender, then drain and rinse under cold water.|Toss with the dressing while still slightly warm.|Fold through the tomatoes, olives and basil.|Chill before packing. Keeps three days.'),
+  'chicken & rice bowl': R(30, 4, '1 cup rice|2 cups chicken stock|2 cups cooked chicken, chopped|1 cup frozen peas|1 tbsp butter|1/2 tsp salt',
+    'Fill the thermos with boiling water and leave it to stand.|Cook the rice in the stock, covered, for 15 minutes.|Stir in the chicken, peas, butter and salt and heat it right through.|Empty the thermos and fill it while the rice is steaming.'),
+  'salmon & cracker bites': R(10, 4, '4 oz smoked salmon|4 oz cream cheese|1 tbsp lemon juice|1 tsp chopped dill|24 crackers',
+    'Beat the cream cheese with the lemon juice and dill until it is soft enough to spread.|Pack it into a small pot with the salmon folded on top.|Send the crackers in their own bag, to be built at the table — spread crackers go soft in an hour.'),
+  'blt wrap, hold the mayo': R(15, 4, '8 slices bacon|4 large tortillas|2 cups shredded lettuce|2 tomatoes, sliced|2 tbsp ranch dressing',
+    'Cook the bacon until properly crisp and drain it on paper towel; limp bacon is worse cold.|Pat the tomato slices dry, which is what stops the wrap going soggy.|Spread a little ranch on each tortilla, then lettuce, tomato and two rashers of bacon.|Roll tight, cut in half, wrap each half.'),
+  'pesto pasta cup': R(15, 4, '8 oz short pasta|1/3 cup pesto|1 cup cherry tomatoes, halved|2 tbsp grated parmesan|1 tbsp olive oil',
+    'Boil the pasta in well-salted water until just tender.|Save a spoonful of the cooking water, then drain.|Stir the pesto and the reserved water through the hot pasta, so it coats rather than clumps.|Cool, then fold through the tomatoes, parmesan and oil.'),
+  'cheese quesadilla, packed cold': R(10, 4, '4 large tortillas|2 cups shredded cheese|1 tsp olive oil',
+    'Scatter cheese over half of each tortilla and fold it over.|Cook in a dry or barely oiled pan, 2 minutes a side, pressing it flat.|Cool completely on a rack before cutting into wedges, or the cheese runs.'),
+  'egg & cheese muffin, cold': R(20, 4, '4 english muffins|4 eggs|4 slices cheese|1/4 tsp salt|1 tbsp butter',
+    'Fry the eggs in the butter, breaking the yolks so they cook through — a runny yolk is not a lunch.|Salt them, lay a slice of cheese on each while hot, and let it melt.|Toast the muffins, build them, and cool them completely before wrapping.|Pack with an ice pack.'),
+  'turkey & avocado wrap': R(10, 4, '4 large tortillas|8 slices deli turkey|2 avocados|1 tbsp lime juice|1/4 tsp salt',
+    'Mash the avocado with the lime juice and salt — the lime is what keeps it from browning by lunchtime.|Spread it over each tortilla and lay the turkey on top.|Roll tight, cut in half, and wrap each half so it holds.'),
+  'crackers, cheese cubes & salami': R(10, 4, '8 oz cheese, cubed|4 oz salami, sliced|24 crackers|1/2 cup grapes',
+    'Cube the cheese the night before and keep it in a sealed pot; it dries out uncovered.|Fold the salami slices into quarters so they sit flat and do not grease the crackers.|Pack the crackers in their own compartment or bag, away from the cheese.|Add the grapes to fill the gaps and keep everything from rattling loose.'),
+  'cream cheese & cucumber bagel': R(10, 4, '4 bagels, halved|6 oz cream cheese|1 cucumber, sliced thin|1/4 tsp salt|1 tsp chopped dill',
+    'Slice the cucumber thin and lay it on paper towel with a pinch of salt for 10 minutes, then pat it dry.|Beat the dill through the cream cheese.|Spread it thickly on both halves — it is the barrier that keeps the bagel from going damp.|Lay the cucumber on and close. Best packed in the morning.'),
+  'potato salad cup': R(30, 4, '2 lb potatoes|1/2 cup mayonnaise|1 tbsp mustard|2 stalks celery, diced|1 tbsp vinegar|1/2 tsp salt',
+    'Cut the potatoes into even chunks and boil them in salted water for 12 minutes, until a knife slides in.|Drain and, while they are still hot, toss them with the vinegar; hot potato takes up flavour, cold potato does not.|Once cool, fold through the mayonnaise, mustard, celery and salt.|Chill for at least two hours. Pack with an ice pack.'),
+  /* ---- sides */
+  'hard-boiled egg': R(15, 6, '6 eggs|1 tsp salt',
+    'Bring a pan of water to a proper rolling boil, then lower the eggs in on a spoon.|Boil 10 minutes for a firm yolk, 8 for a softer one.|Move them straight into cold water for 5 minutes; the shock is what makes them peel cleanly.|Peel under running water. They keep a week in the fridge, in the shell.'),
+  'roasted chickpeas': R(40, 6, '2 cans chickpeas, rinsed|2 tbsp olive oil|1 tsp paprika|1/2 tsp salt|1/2 tsp garlic powder',
+    'Heat the oven to 400F.|Dry the chickpeas thoroughly in a towel and pick out any loose skins — wet chickpeas steam instead of crisping.|Toss with the oil and spread them in one layer on a tray.|Roast 35 minutes, shaking the tray twice, until they rattle.|Toss with the paprika, salt and garlic powder while hot. Cool completely before they go in a pot, or they soften.'),
+  'hummus cup': R(10, 6, '2 cans chickpeas, rinsed|1/3 cup tahini|1/4 cup lemon juice|2 cloves garlic|1/2 tsp salt|3 tbsp olive oil|3 tbsp cold water',
+    'Blend the tahini, lemon juice and garlic first, on their own, until pale and thick.|Add the chickpeas and salt and blend again.|With the motor running, pour in the oil and then the cold water, a spoon at a time, until it is lighter than you expect.|Spoon into small pots. Keeps five days.'),
+  'guacamole cup': R(10, 4, '3 avocados|1 lime|1/4 cup diced red onion|1/2 tsp salt|1 tbsp chopped cilantro',
+    'Mash the avocado roughly, leaving some lumps.|Stir in the juice of the whole lime, the onion, salt and cilantro.|Pack into small pots filled to the brim, and press the lid right down onto the surface — air is what browns it.'),
+  'three-bean salad': R(15, 6, '1 can kidney beans, rinsed|1 can green beans, drained|1 can chickpeas, rinsed|1/4 cup vinegar|3 tbsp olive oil|2 tbsp sugar|1/2 tsp salt',
+    'Whisk the vinegar, oil, sugar and salt until the sugar has dissolved.|Fold the beans through and refrigerate at least four hours; this one really is better the next day.|Lift it out with a slotted spoon so the box does not fill with dressing.'),
+  'coleslaw cup': R(15, 6, '1/2 head cabbage, shredded|2 carrots, grated|1/2 cup mayonnaise|2 tbsp vinegar|1 tbsp sugar|1/2 tsp salt',
+    'Toss the shredded cabbage with the salt and leave it in a colander for 20 minutes, then squeeze it dry — this is the difference between coleslaw and soup.|Whisk the mayonnaise, vinegar and sugar together.|Fold everything through and chill. Pack with an ice pack.'),
+  'corn salad cup': R(10, 6, '3 cups corn kernels|1 cup cherry tomatoes, halved|1/4 cup diced red onion|2 tbsp lime juice|2 tbsp olive oil|1/2 tsp salt',
+    'If the corn is frozen, run it under hot water and drain it well rather than cooking it.|Toss everything together and taste for salt.|Chill an hour before packing.'),
+  'caprese skewers': R(10, 4, '16 cherry tomatoes|16 mozzarella balls|16 basil leaves|1 tbsp olive oil|8 short skewers',
+    'Thread tomato, a folded basil leaf and a mozzarella ball, twice per skewer.|Brush with the oil just before packing, not the night before.|Keep them flat in the box and pack with an ice pack.'),
+  'edamame': R(10, 4, '2 cups frozen edamame in the pod|1 tsp salt',
+    'Boil the pods in salted water for 4 minutes, no longer, or they go grey.|Drain and cool them under cold water straight away.|Toss with the salt and pack them cold. They are eaten by squeezing the beans out of the pod.'),
+  /* ---- sweets and snacks worth making */
+  'banana muffin': R(35, 12, '3 ripe bananas|1/3 cup melted butter|3/4 cup sugar|1 egg|1 tsp vanilla|1 tsp baking soda|1/4 tsp salt|1 1/2 cups flour',
+    'Heat the oven to 350F and line a 12-hole muffin tin.|Mash the bananas properly — the browner and softer they are, the better this is.|Stir in the butter, sugar, egg and vanilla.|Sprinkle the baking soda and salt over the top and stir them in, then fold in the flour until it just disappears. Do not beat it.|Divide between the holes and bake 20 minutes, until a skewer comes out clean.|Cool in the tin 5 minutes, then on a rack. They freeze well; one goes in the box frozen and thaws by lunch.'),
+  'blueberry muffin': R(35, 12, '2 cups flour|1/2 cup sugar|2 tsp baking powder|1/2 tsp salt|1 cup milk|1/3 cup oil|1 egg|1 1/2 cups blueberries',
+    'Heat the oven to 375F and line a 12-hole muffin tin.|Whisk the flour, sugar, baking powder and salt in one bowl; the milk, oil and egg in another.|Pour the wet into the dry and fold about ten times only — lumps are fine, a smooth batter makes tough muffins.|Toss the blueberries in a spoonful of flour, then fold them through; that is what stops them sinking.|Bake 20 minutes until springy. Cool on a rack.'),
+  'apple cinnamon muffin': R(35, 12, '2 cups flour|3/4 cup brown sugar|2 tsp baking powder|2 tsp cinnamon|1/2 tsp salt|1 cup milk|1/3 cup oil|1 egg|2 apples, diced small',
+    'Heat the oven to 375F and line a 12-hole muffin tin.|Whisk the dry ingredients together, then the milk, oil and egg separately.|Fold the wet into the dry until only just combined.|Fold through the diced apple and divide between the holes.|Bake 22 minutes. Cool fully before packing, or they sweat in the wrapper.'),
+  'banana bread slice': R(70, 10, '3 ripe bananas|1/2 cup melted butter|3/4 cup sugar|2 eggs|1 tsp vanilla|1 tsp baking soda|1/2 tsp salt|2 cups flour',
+    'Heat the oven to 350F and line a loaf tin.|Mash the bananas, then stir in the butter, sugar, eggs and vanilla.|Sprinkle over the baking soda and salt, stir, then fold in the flour just until it disappears.|Bake 55 minutes, until a skewer comes out clean; cover the top with foil if it browns early.|Cool completely in the tin before slicing, or it crumbles.'),
+  'zucchini bread slice': R(70, 10, '2 cups grated zucchini|2 cups flour|1 cup sugar|2 eggs|1/2 cup oil|1 tsp baking soda|2 tsp cinnamon|1/2 tsp salt',
+    'Heat the oven to 350F and line a loaf tin.|Grate the zucchini and squeeze it in a towel until no more water comes out — skip this and the loaf will not set.|Beat the eggs, oil and sugar, then stir in the zucchini.|Fold in the flour, baking soda, cinnamon and salt.|Bake 55 minutes. Cool fully before slicing.'),
+  'pumpkin bread slice': R(70, 10, '1 can pumpkin puree|2 cups flour|1 cup sugar|2 eggs|1/2 cup oil|1 tsp baking soda|2 tsp pumpkin spice|1/2 tsp salt',
+    'Heat the oven to 350F and line a loaf tin.|Beat the pumpkin, sugar, eggs and oil together.|Fold in the flour, baking soda, spice and salt until just combined.|Bake 60 minutes, until a skewer comes out clean.|Cool fully in the tin. It slices far better the next day.'),
+  'oatmeal cookie': R(30, 24, '1 cup butter, softened|1 cup brown sugar|2 eggs|1 tsp vanilla|1 1/2 cups flour|1 tsp baking soda|1 tsp cinnamon|1/2 tsp salt|3 cups rolled oats|1 cup raisins',
+    'Heat the oven to 350F and line two trays.|Beat the butter and sugar until pale, then beat in the eggs and vanilla.|Stir in the flour, baking soda, cinnamon and salt, then the oats and raisins.|Drop tablespoons onto the trays, well apart.|Bake 11 minutes — they will look underdone in the middle, and that is what keeps them chewy.|Leave them on the tray 5 minutes before moving them.'),
+  'chocolate chip cookies': R(30, 24, '1 cup butter, softened|3/4 cup brown sugar|1/2 cup sugar|2 eggs|1 tsp vanilla|2 1/4 cups flour|1 tsp baking soda|1/2 tsp salt|2 cups chocolate chips',
+    'Heat the oven to 375F and line two trays.|Beat the butter and both sugars until light, then the eggs and vanilla.|Stir in the flour, baking soda and salt, then the chocolate chips.|Drop tablespoons well apart and bake 10 minutes, until the edges are set and the middles still look soft.|Cool on the tray 5 minutes. They keep five days, and freeze raw as dough balls.'),
+  'snickerdoodle': R(30, 24, '1 cup butter, softened|1 1/2 cups sugar|2 eggs|2 3/4 cups flour|2 tsp cream of tartar|1 tsp baking soda|1/2 tsp salt|2 tbsp cinnamon sugar',
+    'Heat the oven to 400F.|Beat the butter and sugar, then the eggs.|Stir in the flour, cream of tartar, baking soda and salt.|Roll walnut-sized balls and roll each one in the cinnamon sugar.|Bake 9 minutes. They should still be pale and soft when they come out.'),
+  'brownie bite': R(35, 24, '1/2 cup butter|1 cup sugar|2 eggs|1 tsp vanilla|1/3 cup cocoa powder|1/2 cup flour|1/4 tsp salt',
+    'Heat the oven to 350F and line a 24-hole mini muffin tin.|Melt the butter and stir in the sugar, then the eggs and vanilla.|Sift in the cocoa, flour and salt and stir until smooth, no more.|Fill each hole two-thirds and bake 12 minutes.|Cool in the tin. They firm up as they cool, so pull them while the middles still look soft.'),
+  'blondie bite': R(35, 24, '1/2 cup melted butter|1 cup brown sugar|1 egg|1 tsp vanilla|1 cup flour|1/2 tsp baking powder|1/4 tsp salt|1/2 cup chocolate chips',
+    'Heat the oven to 350F and line a 24-hole mini muffin tin.|Stir the melted butter into the brown sugar, then beat in the egg and vanilla.|Fold in the flour, baking powder and salt, then the chocolate chips.|Fill each hole two-thirds and bake 13 minutes, until the tops have set and cracked.'),
+  'rice crispy treat': R(15, 16, '3 tbsp butter|10 oz marshmallows|6 cups crisped rice cereal|1/4 tsp salt',
+    'Melt the butter over low heat, then the marshmallows, stirring until smooth.|Take the pan off the heat before the cereal goes in — cooked-on marshmallow is what makes them hard.|Stir in the cereal and salt quickly.|Press into a lined tray with buttered hands, firmly but not tightly.|Cool an hour, then cut into squares.'),
+  'granola cluster': R(45, 12, '3 cups rolled oats|1/2 cup honey|1/3 cup oil|1 egg white|1 tsp vanilla|1/2 tsp salt|1 tsp cinnamon',
+    'Heat the oven to 300F and line a tray.|Whisk the honey, oil, egg white, vanilla, salt and cinnamon; the egg white is what binds the clusters.|Stir in the oats until every one is coated.|Press the mixture into one firm slab on the tray, about half an inch thick.|Bake 30 minutes, turning the tray once, until golden at the edges.|Let it cool completely without touching it, then break it into clusters.'),
+  'trail mix': R(5, 10, '2 cups mixed nuts|1 cup raisins|1 cup pretzel sticks|1/2 cup chocolate chips|1/2 cup dried cranberries',
+    'Mix everything in one big bowl.|Portion it into small bags or pots straight away, so it goes in the box without a second decision on a school morning.|Leave the chocolate out in warm weather, or it melts into everything else.')
+};
+var RECIPE_BY_KEY = null;
+/* the bank's recipes, safe against a food called __proto__ */
+function recipeByName(n){
+  if(!RECIPE_BY_KEY){ RECIPE_BY_KEY = nullMap(); Object.keys(RECIPE).forEach(function(k){ RECIPE_BY_KEY[k] = RECIPE[k]; }); }
+  return RECIPE_BY_KEY[normKey(n)] || null;
+}
+/* a food's own recipe first, then the bank's for a food of that name, so a household
+   seeded before recipes existed gets them too — the same fallback `buy` uses */
+function recipeFor(f){ return f ? (f.recipe || recipeByName(f.n)) : null; }
+
+/* ------------------------------------------------- amounts
+   An ingredient is stored as the line a recipe writes ("1 1/2 cups rolled oats").
+   Reading the number and the unit off the front is all cook mode needs to halve
+   it, double it, or say it in grams; anything it cannot read stays exactly as
+   written, which is the honest answer for "a handful of spinach". */
+var FRACS = {'½':.5,'⅓':1/3,'⅔':2/3,'¼':.25,'¾':.75,'⅛':.125,'⅜':.375,'⅝':.625,'⅞':.875};
+var UNITS = [
+  ['tbsp', /^(?:tbsps?|tbs|tablespoons?)\b\.?/i],
+  ['tsp',  /^(?:tsps?|teaspoons?)\b\.?/i],
+  ['floz', /^(?:fl\.?\s?ozs?|fluid ounces?)\b\.?/i],
+  ['cup',  /^(?:cups?|c)\b\.?/i],
+  ['ml',   /^(?:mls?|millilit(?:er|re)s?)\b\.?/i],
+  ['l',    /^(?:l|lit(?:er|re)s?)\b\.?/i],
+  ['oz',   /^(?:ozs?|ounces?)\b\.?/i],
+  ['lb',   /^(?:lbs?|pounds?)\b\.?/i],
+  ['kg',   /^(?:kgs?|kilograms?)\b\.?/i],
+  ['g',    /^(?:g|grams?)\b\.?/i]
+];
+var ML = {tsp:4.93, tbsp:14.79, cup:236.6, floz:29.57, ml:1, l:1000};
+var GRAMS = {oz:28.35, lb:453.6, g:1, kg:1000};
+/* Grams per millilitre, for the things a lunch recipe measures by the cup. A
+   liquid is left in millilitres however well we know its density, because that
+   is how a jug is marked; anything not here at all keeps the measure it was
+   written in, since guessing a density is worse than not converting. */
+var POUR = /\boil\b|\bmilk\b|\bwater\b|\bstock\b|\bjuice\b|\bvinegar\b|\bdressing\b|\bsauce\b|\bcream\b(?! cheese)/;
+var DENSITY = [
+  [/\bflour\b/, .53], [/\brolled oats\b|\boats\b/, .4], [/\bbrown sugar\b/, .91], [/\bpowdered sugar\b|\bicing sugar\b/, .5],
+  [/\bsugar\b/, .85], [/\bcocoa\b/, .42], [/\bbutter\b(?!milk)/, .91], [/\bhoney\b/, 1.42],
+  [/\bmaple syrup\b/, 1.32], [/\byogurt\b/, 1.03], [/\bquinoa\b/, .71], [/\brice\b/, .8],
+  [/\bchocolate chips\b/, .74], [/\btahini\b|\bmayonnaise\b/, 1.05], [/\bshredded cheese\b|\bgrated parmesan\b/, .45],
+  [/\bgranola\b|\bcereal\b/, .4], [/\blentils\b/, .85], [/\bhummus\b/, 1.05], [/\bpesto\b/, 1.03]
+];
+function densityOf(name){
+  if(POUR.test(name)) return 0;
+  for(var i=0;i<DENSITY.length;i++) if(DENSITY[i][0].test(name)) return DENSITY[i][1];
+  return 0;
+}
+/* "1 1/2", "1½", "3/4", "2", "1.5", "1-2" (the first of a range) */
+function parseQty(s){
+  var m = s.match(/^(\d+(?:\.\d+)?)\s*(?:[-–]\s*\d+(?:\.\d+)?)?\s*(\d)\/(\d)/);      /* 1 1/2 */
+  if(m) return {q:+m[1] + (+m[2] / +m[3]), len:m[0].length};
+  m = s.match(/^(\d+(?:\.\d+)?)\s*([½⅓⅔¼¾⅛⅜⅝⅞])/);                        /* 1½ */
+  if(m && FRACS[m[2]]) return {q:+m[1] + FRACS[m[2]], len:m[0].length};
+  m = s.match(/^(\d+)\/(\d+)/);                                                            /* 3/4 */
+  if(m) return {q:+m[1] / +m[2], len:m[0].length};
+  m = s.match(/^([½⅓⅔¼¾⅛⅜⅝⅞])/);                                          /* ½ */
+  if(m && FRACS[m[1]]) return {q:FRACS[m[1]], len:m[0].length};
+  m = s.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*\d+(?:\.\d+)?/);                             /* 1-2 */
+  if(m) return {q:+m[1], len:m[0].length};
+  m = s.match(/^(\d+(?:\.\d+)?)/);                                                         /* 2 */
+  if(m) return {q:+m[1], len:m[0].length};
+  return null;
+}
+/* {q, u, n, raw} — q null when the line has no number the app can scale */
+function parseIng(line){
+  var s = String(line).trim(), raw = s;
+  var q = parseQty(s);
+  if(!q) return {q:null, u:'', n:s, raw:raw};
+  var rest = s.slice(q.len).replace(/^\s+/, ''), u = '';
+  for(var i=0;i<UNITS.length;i++){
+    var m = rest.match(UNITS[i][1]);
+    if(m){ u = UNITS[i][0]; rest = rest.slice(m[0].length).replace(/^\s+/, ''); break; }
+  }
+  if(u && /^(?:of)\s+/i.test(rest)) rest = rest.replace(/^(?:of)\s+/i, '');
+  return {q:q.q, u:u, n:rest, raw:raw};
+}
+var COMMON = [[1/8,'⅛'],[1/4,'¼'],[1/3,'⅓'],[1/2,'½'],[2/3,'⅔'],[3/4,'¾']];
+/* a number a parent can act on: 1½, not 1.5, and never 0.6666666666 */
+function fmtQty(q){
+  if(!(q > 0)) return '';
+  if(Math.abs(q - Math.round(q)) < .02) return String(Math.round(q));
+  var whole = Math.floor(q), part = q - whole, best = null;
+  COMMON.forEach(function(c){ if(Math.abs(part - c[0]) < .05 && (!best || Math.abs(part - c[0]) < Math.abs(part - best[0]))) best = c; });
+  if(best) return (whole ? whole : '') + best[1];
+  return String(Math.round(q * 10) / 10);
+}
+function fmtMass(g){ return (g < 100 ? Math.round(g) : Math.round(g / 5) * 5) + ' g'; }
+function fmtVol(ml){ return (ml < 100 ? Math.round(ml / 5) * 5 : Math.round(ml / 10) * 10) + ' ml'; }
+/* An ingredient line at this many servings, in this system of measures. A spoonful
+   of salt stays a spoonful: under about 15 grams the metric number is less use than
+   the spoon, and a parent measuring 6 g of baking soda is a parent we have failed. */
+var METRIC_MIN = 15;
+function ingLine(ing, scale, metric){
+  var p = parseIng(ing);
+  if(p.q === null) return p.raw;
+  var q = p.q * scale, u = p.u, n = p.n;
+  if(metric){
+    if(ML[u]){
+      var ml = q * ML[u], d = densityOf(n);
+      /* a cup of something we can weigh becomes grams, a cup of something you pour
+         becomes millilitres, and a cup of cherry tomatoes stays a cup, because
+         240 ml of cherry tomatoes is not a measurement anyone has ever used */
+      if(d && ml * d >= METRIC_MIN) return fmtMass(ml * d) + ' ' + n;
+      if(POUR.test(n) && ml >= METRIC_MIN) return fmtVol(ml) + ' ' + n;
+    } else if(GRAMS[u]){
+      var g = q * GRAMS[u];
+      if(g >= METRIC_MIN) return fmtMass(g) + ' ' + n;
+    }
+  }
+  return (fmtQty(q) + ' ' + (u ? unitWord(u, q) + ' ' : '') + n).replace(/\s+/g, ' ').trim();
+}
+function unitWord(u, q){
+  var many = q > 1.01;
+  return u === 'tbsp' ? 'tbsp' : u === 'tsp' ? 'tsp' : u === 'cup' ? (many ? 'cups' : 'cup')
+    : u === 'floz' ? 'fl oz' : u === 'lb' ? (many ? 'lbs' : 'lb') : u;
+}
+/* a step reads the same in both, except that an oven has two scales */
+function stepLine(text, metric){
+  if(!metric) return text;
+  return String(text).replace(/(\d{2,3})\s*(?:°\s*)?F\b/g, function(all, f){
+    return all + ' (' + Math.round((+f - 32) * 5 / 9 / 5) * 5 + '°C)';
+  });
+}
 
 /* ================================================================ storage
    The ONLY place that touches persistence. Both calls are async so the
@@ -1174,20 +1427,20 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v16';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v17';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved, so
    this build keeps the last feature release's note rather than spending it on a layout.
    All this build changed is how big the kid's two choices are. */
-var WHATS_NEW = {build:'lunchsorted-v16', text:'New: matched boxes, tabs across the lunchboxes, the week after, and a three o\u2019clock ask.',
+var WHATS_NEW = {build:'lunchsorted-v17', text:'New: recipes. The idea bank\u2019s cooked dishes come with one, and you can bring your own in.',
   steps:[
-    ['Boxes that match', 'With more than one lunchbox, Shuffle all draws them from the same foods where each box\u2019s rules allow. It asks whose boxes first, and every shuffle can be undone. Switch it off under Account \u2192 Lunchboxes.'],
-    ['Tabs, not a menu', 'On Pack, Week and Foods the lunchboxes are tabs along the top. One tap each.'],
-    ['One food, every box', 'Add a food and it goes into every lunchbox; the button says where. Tap a name to leave one out.'],
-    ['The week after', 'On Week, tap Next beside the date. Plan it, shop for it under Next week, and it becomes this week on its own.'],
-    ['Overrule a rule', 'Tap a compartment, then a food a rule keeps out, and it goes in flagged with a \u201c!\u201d.'],
-    ['Ask at three', 'From three o\u2019clock Pack asks how today\u2019s box went; a dot on the Pack tab until you answer. Pack at night? Say so in the lunchbox settings and Pack shows tomorrow\u2019s box from three.']
+    ['A recipe on the list', 'Tap a food on the Foods tab. The ones you cook \u2014 the quinoa salad, the pasta salad, the muffins \u2014 now come with the recipe, free with the idea bank.'],
+    ['One step at a time', 'Cook it step by step walks through it, one step on the screen, with the ingredients a tap away and a box to tick as each one goes in.'],
+    ['Cups or grams', 'Switch the measures over and a cup of flour is weighed, the oven carries its Celsius, and the salt is left as a spoonful. Ask for more lunches and every amount scales.'],
+    ['Bring a recipe in', 'Foods \u2192 Import a recipe. Paste the address of a recipe page and the app reads it. For a reel or a pin, copy the words under it and paste those instead.'],
+    ['It lands as a food', 'What comes in becomes a food on the list, with its shopping line and what it contains already filled in \u2014 check that part before you save it, because the school rules go by it.'],
+    ['Where you need it', 'The recipe is on the compartment on Week, and named on Pack under the box, which is where you are standing the night before.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
@@ -1199,7 +1452,7 @@ function whatsNew(){
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
    Account categories. It is view state and never reaches S, or the merge would
    read a tap as a change and push on every one. */
-var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'});
 /* the one test for whether a pane may be on screen. A pane is opened by a tap but
    also by a link from an email and by the return from Stripe, so the render asks
@@ -1250,7 +1503,8 @@ function newKid(name, hue){
 }
 function newFood(kid, o){
   return {id:uid('food'), kidId:kid.id, n:o.n, c:o.c, t:(o.t||[]).slice(), a:o.a||'other',
-    al:(o.al||[]).slice(), buy:Array.isArray(o.buy) ? o.buy.slice() : null, createdAt:now(), updatedAt:now(), deletedAt:null};
+    al:(o.al||[]).slice(), buy:Array.isArray(o.buy) ? o.buy.slice() : null, recipe:normRecipe(o.recipe),
+    createdAt:now(), updatedAt:now(), deletedAt:null};
 }
 /* the phone's IANA zone (America/New_York), or null where the browser will not say */
 function phoneTz(){ try{ return validTz(Intl.DateTimeFormat().resolvedOptions().timeZone); }catch(e){ return null; } }
@@ -1345,6 +1599,7 @@ function normFood(kid, f){
     a: AISLES.indexOf(f.a) > -1 ? f.a : 'other',
     al:(Array.isArray(f.al) ? f.al : []).filter(function(x){ return ALLERGENS.some(function(y){ return y.k === x; }); }),
     buy:normBuy(f.buy, n),
+    recipe:normRecipe(f.recipe),
     img:(typeof f.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
     createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt), deletedAt: f.deletedAt ? safeStamp(f.deletedAt) : null};
 }
@@ -1353,6 +1608,24 @@ function normFood(kid, f){
 function normBuy(v, name){
   if(Array.isArray(v)) return v.map(function(x){ return safeStr(x, 40, '').trim(); }).filter(Boolean).slice(0, 8);
   var b = bankByName(name); return b && b.buy ? b.buy.slice() : null;
+}
+/* A recipe a parent wrote, pasted or imported. It arrives from outside the app
+   exactly as a food does — a paste, a backup, the other phone — so it is rebuilt
+   from a whitelist too: lines of plain text, a number of minutes and a number of
+   lunches, and where it came from. Anything unreadable is dropped rather than
+   rendered, and a recipe with neither an ingredient nor a step is no recipe. */
+var ING_MAX = 40, STEP_MAX = 30;
+function safeHttps(v){ return (typeof v === 'string' && v.length <= 300 && /^https:\/\/[^\s<>"']+$/.test(v)) ? v : null; }
+function normRecipe(v){
+  if(!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  var lines = function(a, max, n){ return (Array.isArray(a) ? a : []).map(function(x){ return safeStr(x, max, '').replace(/\s+/g, ' ').trim(); }).filter(Boolean).slice(0, n); };
+  var ing = lines(v.ing, 120, ING_MAX), steps = lines(v.steps, 600, STEP_MAX);
+  if(!ing.length && !steps.length) return null;
+  var m = Math.round(+v.m), y = Math.round(+v.y);
+  var out = {m:(m > 0 && m <= 1440) ? m : 0, y:(y > 0 && y <= 99) ? y : 0, ing:ing, steps:steps,
+    src:safeStr(v.src, 60, '').replace(/\s+/g, ' ').trim(), url:safeHttps(v.url)};
+  if(v.l) out.l = 1;
+  return out;
 }
 function normStamped(v){
   v = plainObj(v);
@@ -2373,7 +2646,7 @@ function openSheet(title, html, state){
   sheetEl.classList.add('open'); backEl.classList.add('open'); bodyEl.scrollTop = 0;
   document.body.style.overflow = 'hidden';
 }
-function closeSheet(){ sheetEl.classList.remove('open'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; if(!UI.kid) document.body.style.overflow = ''; }
+function closeSheet(){ sheetEl.classList.remove('open'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; if(!UI.kid) document.body.style.overflow = ''; }
 backEl.addEventListener('click', closeSheet);
 document.getElementById('sheetClose').addEventListener('click', closeSheet);
 
@@ -2730,6 +3003,15 @@ function viewPack(){
     +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day)
     +  '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">' + packButton(kid, day) + pickButton(kid, day) + '</span></div></div>';
 
+  /* what in this box gets made rather than bought: the recipe waits where the box
+     is being packed, because that is the evening a parent is standing in the kitchen */
+  var making = catsFor(kid).map(function(c){ return foodById(kid, day.slots[c.k]); })
+    .filter(function(f){ return f && recipeFor(f); });
+  if(making.length)
+    box += '<p class="hint" style="margin:0">Making it? ' + making.map(function(f){
+      return '<button class="linkbtn" data-act="cook" data-kid="'+esc(kid.id)+'" data-id="'+esc(f.id)+'">'+esc(f.n)+'</button>';
+    }).join(', ') + '</p>';
+
   /* with more than one lunchbox, the box on screen is not the whole morning */
   var hh = householdReady(day.d);
   if(hh.boxes > 1){
@@ -2857,12 +3139,14 @@ function viewFoods(){
     h += '<div class="list">';
     mine.forEach(function(f){
       var v = violation(kid, f);
+      var fr = recipeFor(f);
       h += '<div class="item"><button class="thumb" data-act="food-photo" data-id="'+esc(f.id)+'" aria-label="'+(f.img ? 'Change the photo of ' : 'Add a photo of ')+esc(f.n)+'" style="border-color:var(--c-'+c.k+')">'+picHTML(f)+'</button>'
-        +  '<span class="grow"><span class="nm">'+esc(f.n)+'</span>'
+        +  '<button class="grow" data-act="food-open" data-kid="'+esc(kid.id)+'" data-id="'+esc(f.id)+'" aria-label="Open '+esc(f.n)+'">'
+        +  '<span class="nm">'+esc(f.n)+(fr ? ' <span class="chip">Recipe</span>' : '')+'</span>'
         +  (v ? '<span class="meta" style="color:var(--warn)">skipped &mdash; '+esc(v)+'</span>'
              : '<span class="meta"'+(eatStats(kid,f.id).resting ? ' style="color:var(--warn)"' : '')+'>'
                  + esc(eatLabel(kid, f.id) || (f.buy && f.buy.length > 1 ? f.buy.join(' \u00b7 ') : AISLE_LABEL[f.a] || 'Your own'))+'</span>')
-        +  '</span><button class="x" data-act="del-food" data-id="'+esc(f.id)+'" aria-label="Remove '+esc(f.n)+'">'
+        +  '</button><button class="x" data-act="del-food" data-id="'+esc(f.id)+'" aria-label="Remove '+esc(f.n)+'">'
         +  svg('trash',17)+'</button></div>';
     });
     h += '</div></div>';
@@ -2878,10 +3162,12 @@ function viewFoods(){
      never stuck with what it has */
   h += gated()
     ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add your own \u2014 part of the Household plan">'+svg('lock',17)+'Add your own</button>'
+      + '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Import a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Import a recipe</button>'
       + '<button class="btn wide" data-act="ideas">'+svg('plus',17)+'Browse the idea bank</button>'
-      + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank is free.</span>'+premiumTag()+'</p>'
+      + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank, and every recipe in it, is free.</span>'+premiumTag()+'</p>'
     : '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button>'
-      + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words.</span>'+premiumTag()+'</p>' : '');
+      + '<button class="btn wide" data-act="recipe-import">'+svg('book',17)+'Import a recipe</button>'
+      + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words, or one read off a recipe page.</span>'+premiumTag()+'</p>' : '');
   return h + '</div>';
 }
 
@@ -3275,7 +3561,10 @@ function slotSheet(kidId, dayStr, cat){
     + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'">'
     + svg('dice',15)+'Shuffle this one</button>'
     + '<button class="tg" data-act="sheet-lock" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'"'
-    + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Don&#8217;t change this one</button></div>';
+    + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Don&#8217;t change this one</button>'
+    /* whatever is in the compartment, if it is something you make rather than buy */
+    + (recipeFor(foodById(kid, day.slots[cat])) ? '<button class="btn sm ghost" data-act="cook" data-kid="'+esc(kid.id)+'" data-id="'+esc(day.slots[cat])+'">'+svg('book',15)+'Recipe</button>' : '')
+    + '</div>';
   if(!pool.length){
     h += '<div class="empty"><p>No '+esc(c.plural.toLowerCase())+' in the list yet.</p></div>';
   } else {
@@ -3397,26 +3686,307 @@ function addOwnLabel(){
   if(t.length === ks.length) return 'Add to '+(ks.length === 2 ? 'both lunchboxes' : 'all '+ks.length+' lunchboxes');
   return 'Add to '+listNames(t);
 }
-function addOwnSheet(){
-  var h = '<div class="field"><label for="nfName">Food</label>'
-    + '<input type="text" id="nfName" placeholder="Grandma&#39;s zucchini muffins" autocomplete="off"></div>'
+/* The one form for a food in a parent's own words. An imported recipe arrives
+   here too, with everything the app could work out already filled in and every
+   one of those guesses still a tap away from being wrong — what a dish contains
+   decides what the school rules do with it, so it is never settled silently. */
+function addOwnSheet(pre){
+  pre = pre || {};
+  UI.recipeDraft = pre.recipe || null;
+  var cats = addCats(), pc = cats.some(function(c){ return c.k === pre.c; }) ? pre.c : cats[0].k;
+  var on = function(list, v){ return (Array.isArray(list) ? list : []).indexOf(v) > -1; };
+  var h = (pre.recipe ? recipeCard(pre.recipe) : '')
+    + '<div class="field"><label for="nfName">Food</label>'
+    + '<input type="text" id="nfName" placeholder="Grandma&#39;s zucchini muffins" autocomplete="off" maxlength="80" value="'+esc(pre.n || '')+'"></div>'
     + '<div class="field"><label>Goes in</label><div class="toggles" id="nfCat">'
-    + addCats().map(function(c,i){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(i===0)+'">'+c.label+'</button>'; }).join('')
+    + cats.map(function(c){ return '<button class="tg" data-nf="cat" data-v="'+c.k+'" aria-pressed="'+(c.k === pc)+'">'+c.label+'</button>'; }).join('')
     + '</div></div><div class="field"><label for="nfAisle">Store aisle</label><select id="nfAisle">'
-    + AISLES.map(function(a){ return '<option value="'+a+'">'+AISLE_SHORT[a]+'</option>'; }).join('')
+    + AISLES.map(function(a){ return '<option value="'+a+'"'+(a === pre.a ? ' selected' : '')+'>'+AISLE_SHORT[a]+'</option>'; }).join('')
     + '</select></div><div class="field"><label for="nfBuy">To buy for it, if more than one thing</label>'
-    + '<input type="text" id="nfBuy" placeholder="Zucchini, flour, eggs" autocomplete="off" maxlength="200"></div>'
+    + '<input type="text" id="nfBuy" placeholder="Zucchini, flour, eggs" autocomplete="off" maxlength="200" value="'+esc((pre.buy || []).join(', '))+'"></div>'
     + '<div class="field"><label>What it&#39;s like</label><div id="nfTags"><div class="toggles">'
-    + TAG_FIRST.map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="false">'+TAG_LABEL[t]+'</button>'; }).join('')
-    + '</div><details class="more"><summary>More</summary><div class="toggles" style="margin-top:8px">'
-    + TAGS.filter(function(t){ return TAG_FIRST.indexOf(t) < 0; }).map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="false">'+TAG_LABEL[t]+'</button>'; }).join('')
+    + TAG_FIRST.map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="'+on(pre.t, t)+'">'+TAG_LABEL[t]+'</button>'; }).join('')
+    + '</div><details class="more"'+((pre.t || []).some(function(t){ return TAG_FIRST.indexOf(t) < 0; }) ? ' open' : '')+'><summary>More</summary><div class="toggles" style="margin-top:8px">'
+    + TAGS.filter(function(t){ return TAG_FIRST.indexOf(t) < 0; }).map(function(t){ return '<button class="tg" data-nf="tag" data-v="'+t+'" aria-pressed="'+on(pre.t, t)+'">'+TAG_LABEL[t]+'</button>'; }).join('')
     + '</div></details></div><span class="hint">Tap what fits.</span></div>'
     + '<div class="field"><label>Contains</label><div class="toggles" id="nfAl">'
-    + ALLERGENS.map(function(a){ return '<button class="tg" data-nf="al" data-v="'+a.k+'" aria-pressed="false">'+a.label+'</button>'; }).join('')
-    + '</div></div>' + targetRow('')
+    + ALLERGENS.map(function(a){ return '<button class="tg" data-nf="al" data-v="'+a.k+'" aria-pressed="'+on(pre.al, a.k)+'">'+a.label+'</button>'; }).join('')
+    + '</div>'+(pre.recipe ? '<span class="hint">Read from the recipe. Check it before you save &mdash; the school rules go by this.</span>' : '')+'</div>' + targetRow('')
     + '<button class="btn primary wide" id="nfSave" data-act="save-own" style="white-space:normal;height:auto;min-height:48px;padding:10px 16px">'+esc(addOwnLabel())+'</button>';
-  openSheet('Add your own', h);
-  setTimeout(function(){ var el = document.getElementById('nfName'); if(el) el.focus(); }, 220);
+  openSheet(pre.recipe ? 'Check it over' : 'Add your own', h);
+  setTimeout(function(){ var el = document.getElementById('nfName'); if(el && !pre.n) el.focus(); }, 220);
+}
+
+/* ======================================================= importing a recipe
+   Two ways in, because the recipes a parent actually saves live in two places.
+   A recipe page publishes its recipe in the markup for search engines, so the
+   address of one is enough: /api/recipe reads it and hands back the parts. A
+   video does not — there is nothing to read under a reel but the words its maker
+   typed, so the second way is to paste those words in, and the same parser runs
+   on the phone with no network at all. Either way what comes back is shown to
+   the parent to correct before it becomes a food: the compartment, the aisle and
+   above all what it contains, because the school rules are built on that and a
+   guess is not good enough to hide. */
+function stripNum(l){ return l.replace(/^(?:step\s*)?\d{1,2}\s*[.):]\s+/i, '').replace(/^[-*•·]\s*/, '').trim(); }
+/* what a parent pasted from under a video is a caption, not a title: the emoji,
+   the aside after the dash and the shouting all come off, and what is left is
+   still theirs to edit before it becomes the name of a food */
+function tidyTitle(t){
+  t = String(t || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{2190}-\u{21FF}]/gu, ' ').replace(/\s+/g, ' ').trim();
+  t = t.split(/\s+[\u2014\u2013-]\s+|[!?]+\s+|\s*\|\s*/)[0].trim().replace(/[!.,:;]+$/, '').trim();
+  if(t.length > 3 && t === t.toUpperCase() && /[A-Z]{4}/.test(t)) t = t.charAt(0) + t.slice(1).toLowerCase();
+  return t.slice(0, 80);
+}
+/* a line that reads like something you buy rather than something you do */
+function looksIngredient(l){
+  if(l.length > 90) return false;
+  if(/^[\d¼-¾⅐-⅞]/.test(l)) return true;
+  return /^(?:a|an|one|two|three|four|half|some|salt|pepper|pinch)\b/i.test(l) && l.length < 45;
+}
+var HEAD_ING = /^(?:ingredients?|you(?:’|')?ll need|what you need|shopping list)$/i;
+var HEAD_STEP = /^(?:instructions?|directions?|method|steps?|preparation|to make it|how to make it)$/i;
+var HEAD_SKIP = /^(?:notes?|nutrition|equipment|storage|tips?|substitutions?)$/i;
+function parsePasted(raw){
+  var lines = String(raw || '').replace(/\r/g, '').split('\n').map(function(l){ return l.replace(/\s+/g, ' ').trim(); });
+  var title = '', ing = [], steps = [], mode = '', mins = 0, yld = 0;
+  lines.forEach(function(l){
+    if(!l) return;
+    var bare = l.replace(/[:\s]+$/, '');
+    if(HEAD_ING.test(bare)){ mode = 'i'; return; }
+    if(HEAD_STEP.test(bare)){ mode = 's'; return; }
+    if(HEAD_SKIP.test(bare)){ mode = 'x'; return; }
+    if(mode === 'x') return;
+    var y = l.match(/\b(?:serves|servings?|makes|yields?)\b[^0-9]{0,12}(\d{1,2})/i);
+    if(y && !yld){ yld = +y[1]; if(/^(?:serves|servings?|makes|yields?)\b/i.test(l)) return; }
+    var t = l.match(/\b(?:total|cook|bake|prep|ready in|time)\b[^0-9]{0,16}(\d{1,3})\s*(m|min|mins|minutes?|h|hr|hrs|hours?)\b/i);
+    if(t && l.length < 60){ mins += /^h/i.test(t[2]) ? +t[1] * 60 : +t[1]; return; }
+    if(!title && mode === '' && !looksIngredient(l) && l.length < 90){ title = l; return; }
+    if(mode === 's'){ steps.push(stripNum(l)); return; }
+    if(mode === 'i' || looksIngredient(l)){ ing.push(stripNum(l)); return; }
+    if(l.length > 40) steps.push(stripNum(l));
+  });
+  return {title:tidyTitle(title), m:(mins > 0 && mins <= 1440) ? mins : 0, y:(yld > 0 && yld < 100) ? yld : 0,
+    ing:ing.slice(0, ING_MAX), steps:steps.slice(0, STEP_MAX), src:'', url:null};
+}
+
+/* ---- what the app can work out about an imported dish, for a parent to correct */
+var AL_HINT = [
+  ['nuts',  /peanut|almond|cashew|walnut|pecan|pistachio|hazelnut|macadamia|\bnuts?\b/],
+  ['seeds', /sesame|tahini|sunflower seed|pumpkin seed|poppy seed|hummus/],
+  ['dairy', /\bmilk\b|cheese|\bbutter\b|yogurt|yoghurt|\bcream\b|ricotta|mozzarella|parmesan|\bfeta\b|\bghee\b/],
+  ['gluten',/\bflour\b|bread|pasta|tortilla|cracker|noodle|wheat|panko|breadcrumb|bagel|\bpita\b|couscous|barley|\bbun\b|\broll\b/],
+  ['egg',   /\beggs?\b|mayonnaise|\bmayo\b|meringue/],
+  ['soy',   /\bsoy\b|\btofu\b|edamame|tamari|\bmiso\b/],
+  ['fish',  /\btuna\b|salmon|anchov|fish sauce|shrimp|\bcod\b|sardine|worcestershire/]
+];
+function guessAllergens(lines){
+  var raw = lines.join(' \n ').toLowerCase();
+  /* a nut butter is a nut, never a dairy one, so the dairy test never sees the word */
+  var dairySafe = raw.replace(/\b(?:peanut|sunflower|almond|cashew|nut|seed|cocoa|apple|shea)\s+butter\b/g, ' spread ');
+  return AL_HINT.filter(function(a){ return a[1].test(a[0] === 'dairy' ? dairySafe : raw); }).map(function(a){ return a[0]; });
+}
+var TRIM_FRONT = /^(?:of|fresh|freshly|finely|thinly|roughly|coarsely|chopped|diced|grated|shredded|sliced|minced|ground|crushed|large|small|medium|ripe|cold|warm|hot|melted|softened|packed|heaping|plain|whole|raw|cooked|good|extra|optional|slices?|cloves?|cans?|tins?|jars?|packs?|packets?|sticks?|strips?|pieces?|handfuls?|bunch(?:es)?|sprigs?)\s+/i;
+var TRIM_BACK = /[,\s]+(?:chopped|diced|grated|shredded|sliced|minced|melted|softened|divided|drained|rinsed|halved|quartered|cubed|to taste|for serving|for garnish|optional|if needed|plus more)\s*$/i;
+/* the shopping line for an imported dish: the things, not the amounts */
+function buyFrom(ing){
+  var seen = nullMap(), out = [];
+  ing.forEach(function(line){
+    var n = parseIng(line).n.replace(/\([^)]*\)/g, ' ').split(/,| or /)[0];
+    var was = '';
+    while(n !== was){ was = n; n = n.replace(TRIM_FRONT, '').replace(TRIM_BACK, '').trim(); }
+    if(!n || n.length < 2 || n.length > 40 || /^(?:to taste|water|salt|pepper|salt and pepper)$/i.test(n)) return;
+    var k = normKey(n); if(seen[k]) return; seen[k] = 1;
+    out.push(n.charAt(0).toUpperCase() + n.slice(1));
+  });
+  return out.slice(0, 8);
+}
+function guessAisle(buy){
+  var count = nullMap(), best = '', n = 0;
+  buy.forEach(function(b){
+    var a = ING_AISLE[normKey(b)]; if(!a) return;
+    count[a] = (count[a] || 0) + 1;
+    if(count[a] > n){ n = count[a]; best = a; }
+  });
+  return best || 'other';
+}
+var SWEET_RE = /cookie|muffin|brownie|blondie|cupcake|cake\b|bread\b|bars?\b|scone|donut|doughnut|biscuit|pudding|granola|flapjack|slice\b|bites?\b|balls?\b|squares?\b|treats?\b|truffle/i;
+function guessFood(rec){
+  var title = rec.title || '', all = [title].concat(rec.ing || []);
+  var c = SWEET_RE.test(title) ? 'sweet' : 'main';
+  var buy = buyFrom(rec.ing || []);
+  var t = c === 'sweet' ? ['sweet','soft'] : ['hearty'];
+  if(/chicken|turkey|beef|tuna|salmon|egg|bean|lentil|chickpea|cheese|yogurt|tofu|quinoa/i.test(all.join(' '))) t.push('protein');
+  return {n:title, c:c, a:guessAisle(buy), buy:buy, t:t, al:guessAllergens(all), recipe:rec};
+}
+
+/* ---- the sheet: an address, or the words themselves */
+function recipeImportSheet(kidId, foodId){
+  UI.importTo = (kidId && foodId) ? {kidId:kidId, id:foodId} : null;
+  var to = UI.importTo ? (foodById(kidById(kidId) || activeKid(), foodId) || {}).n : '';
+  var h = '<div class="stack" style="gap:14px">'
+    + '<p class="hint" style="margin:0">'+(to ? 'A recipe for '+esc(to)+'. ' : '')
+    + 'Give the app the address of a recipe page and it reads the ingredients and the steps off it.</p>'
+    + '<div class="field"><label for="riUrl">Address of a recipe page</label>'
+    + '<input type="url" id="riUrl" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://" maxlength="500"></div>'
+    + '<button class="btn primary wide" data-act="recipe-fetch">Read the recipe</button>'
+    + '<p class="hint" style="margin:0">A video has no recipe to read. Copy the words under the reel or the pin and paste them here instead.</p>'
+    + '<div class="field"><label for="riText">Or paste the recipe</label>'
+    + '<textarea id="riText" rows="8" placeholder="Quinoa salad&#10;Serves 4&#10;&#10;1 cup quinoa&#10;2 cups water&#10;&#10;Rinse the quinoa.&#10;Simmer it for 15 minutes."></textarea></div>'
+    + '<button class="btn wide" data-act="recipe-paste">Use what I pasted</button>'
+    + '<p class="hint" id="riMsg" aria-live="polite" style="margin:0"></p></div>';
+  openSheet(to ? 'Add a recipe' : 'Import a recipe', h);
+}
+function recipeMsg(text, bad){
+  var el = document.getElementById('riMsg');
+  if(el){ el.textContent = text; el.style.color = bad ? 'var(--warn)' : ''; }
+}
+function recipeCard(r){
+  var head = cookHead(r);
+  return '<div class="card stack" style="gap:10px"><div class="sect-head"><h3>What we read</h3>'
+    + (head ? '<span class="count">'+esc(head)+'</span>' : '')+'</div>'
+    + '<p class="hint" style="margin:0">'+r.ing.length+' ingredient'+(r.ing.length === 1 ? '' : 's')
+    + ' · '+r.steps.length+' step'+(r.steps.length === 1 ? '' : 's')+(r.src ? ' · from '+esc(r.src) : '')+'</p>'
+    + '<details class="more"><summary>Read it through</summary><div style="margin-top:8px">'
+    + '<div class="list">'+r.ing.map(function(l){ return '<div class="item"><span class="grow"><span class="nm">'+esc(l)+'</span></span></div>'; }).join('')+'</div>'
+    + (r.steps.length ? '<ol class="steps" style="margin-top:12px">'+r.steps.map(function(s){ return '<li>'+esc(s)+'</li>'; }).join('')+'</ol>' : '')
+    + '</div></details></div>';
+}
+/* what came back, for the parent to correct before it becomes a food */
+function recipeReview(rec){
+  rec = normRecipe(rec) ? Object.assign(normRecipe(rec), {title:safeStr(rec.title, 80, '').trim()}) : null;
+  if(!rec){ recipeMsg('There was no recipe in that. Try pasting the ingredients and the steps.', true); return; }
+  var to = UI.importTo;
+  if(to){
+    var k = kidById(to.kidId) || activeKid(), f = k && foodById(k, to.id);
+    if(!f){ closeSheet(); return; }
+    UI.recipeDraft = rec;
+    openSheet('Add a recipe', '<div class="stack" style="gap:14px">'+recipeCard(rec)
+      + '<button class="btn primary wide" data-act="recipe-attach">Add it to '+esc(f.n)+'</button>'
+      + '<button class="btn ghost wide" data-act="recipe-import">Start again</button></div>');
+    return;
+  }
+  var pre = guessFood(rec);
+  if(!pre.n){ recipeMsg('That recipe has no name. Paste it again with the name on the first line.', true); return; }
+  addOwnSheet(pre);
+}
+
+/* ========================================================= cook mode
+   A food that has a recipe can be cooked from the app: what to buy and what to
+   do, the amounts scaled to how many lunches are being made, in cups or in
+   grams, and then one step at a time with a box to tick. None of it is saved to
+   the household — what was ticked off while cooking on Sunday is not something
+   the other phone needs on Monday, and a half-finished recipe should not sync. */
+var UNITS_KEY = 'lunchsorted-units';
+function metricPref(){ try{ return localStorage.getItem(UNITS_KEY) === 'metric'; }catch(e){ return false; } }
+function setMetricPref(v){ try{ localStorage.setItem(UNITS_KEY, v ? 'metric' : 'us'); }catch(e){} }
+function cookFood(){
+  var c = UI.cook; if(!c) return null;
+  var k = kidById(c.kidId) || activeKid();
+  return k ? foodById(k, c.id) : null;
+}
+function cookOpen(kidId, foodId){
+  var k = kidById(kidId) || activeKid(), f = k && foodById(k, foodId), r = recipeFor(f);
+  if(!f || !r) return;
+  UI.cook = {kidId:k.id, id:f.id, makes:r.y || 0, metric:metricPref(), step:-1, ticked:nullMap()};
+  cookSheet();
+}
+/* how much of the recipe to make: the number of lunches a parent asked for over
+   the number it was written for. A recipe that never said stays at one. */
+function cookScale(r){
+  var c = UI.cook;
+  return (r.y && c && c.makes) ? c.makes / r.y : 1;
+}
+/* the app's own recipes are written a lunch at a time; a recipe off the web is
+   written in servings, and calling twelve oat bites twelve lunches would be a lie */
+function madeOf(r, n){ return r && r.l ? (n === 1 ? 'lunch' : 'lunches') : (n === 1 ? 'serving' : 'servings'); }
+function cookHead(r){
+  var bits = [];
+  if(r.m) bits.push(r.m < 60 ? r.m + ' minutes' : Math.round(r.m / 30) / 2 + ' hours');
+  if(r.y) bits.push('makes ' + r.y + ' ' + madeOf(r, r.y));
+  return bits.join(' · ');
+}
+function cookIngList(r, tickable){
+  var c = UI.cook, scale = cookScale(r);
+  return '<div class="list">' + r.ing.map(function(line, i){
+    var txt = ingLine(line, scale, c.metric);
+    if(!tickable) return '<div class="item"><span class="grow"><span class="nm">'+esc(txt)+'</span></span></div>';
+    return '<button class="item'+(c.ticked[i] ? ' done' : '')+'" data-act="cook-tick" data-i="'+i+'">'
+      + '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(txt)+'</span></span></button>';
+  }).join('') + '</div>';
+}
+function cookSheet(keepScroll){
+  var f = cookFood(), r = recipeFor(f), c = UI.cook;
+  if(!f || !r || !c){ closeSheet(); return; }
+  var at = keepScroll ? bodyEl.scrollTop : 0;
+  var h;
+  if(c.step < 0){
+    h = '<div class="stack" style="gap:14px">';
+    if(cookHead(r)) h += '<p class="hint" style="margin:0">'+esc(cookHead(r))+'</p>';
+    /* the two questions a parent answers before starting: how much, and in what */
+    h += '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">';
+    if(r.y){
+      h += '<span class="row" style="gap:6px;align-items:center">'
+        +  '<button class="btn sm ghost" data-act="cook-makes" data-v="-1" aria-label="One '+madeOf(r, 1)+' fewer"'+(c.makes <= 1 ? ' disabled' : '')+'>&minus;</button>'
+        +  '<span class="qty" aria-live="polite">'+c.makes+' '+madeOf(r, c.makes)+'</span>'
+        +  '<button class="btn sm ghost" data-act="cook-makes" data-v="1" aria-label="One '+madeOf(r, 1)+' more"'+(c.makes >= 40 ? ' disabled' : '')+'>+</button></span>';
+    }
+    h += '<span class="toggles" style="margin-left:auto">'
+      +  '<button class="tg" data-act="cook-units" data-v="us" aria-pressed="'+(!c.metric)+'">Cups</button>'
+      +  '<button class="tg" data-act="cook-units" data-v="metric" aria-pressed="'+(!!c.metric)+'">Grams</button></span></div>';
+    h += '<div><div class="sect-head"><h3>What you need</h3><span class="count">'+r.ing.length+'</span></div>'
+      +  cookIngList(r, true)+'</div>';
+    if(r.steps.length){
+      h += '<div><div class="sect-head"><h3>How it goes</h3><span class="count">'+r.steps.length+'</span></div><ol class="steps">'
+        +  r.steps.map(function(s){ return '<li>'+esc(stepLine(s, c.metric))+'</li>'; }).join('')+'</ol></div>'
+        +  '<button class="btn primary wide" data-act="cook-step" data-i="0">'+svg('check',17)+'Cook it step by step</button>';
+    }
+    if(r.src || r.url){
+      h += '<p class="hint" style="margin:0">From '+esc(r.src || 'the web')
+        +  (r.url ? ' · ' + (nativePlugin('Browser')
+              ? '<button class="linkbtn" data-act="recipe-site" data-url="'+esc(r.url)+'">the original</button>'
+              : '<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">the original</a>') : '')+'</p>';
+    }
+    h += '</div>';
+  } else {
+    var i = Math.min(c.step, r.steps.length - 1), last = i === r.steps.length - 1;
+    h = '<div class="stack" style="gap:14px">'
+      + '<div class="spread"><p class="hint" style="margin:0">Step '+(i + 1)+' of '+r.steps.length+'</p>'
+      + '<button class="linkbtn" data-act="cook-step" data-i="-1">All of it</button></div>'
+      + '<div class="prog"><span style="width:'+Math.round((i + 1) / r.steps.length * 100)+'%"></span></div>'
+      + '<div class="card"><p class="cookstep">'+esc(stepLine(r.steps[i], c.metric))+'</p></div>'
+      + (last ? '<button class="btn primary wide" data-act="cook-done">'+svg('check',17)+'That is lunch sorted</button>'
+              : '<button class="btn primary wide" data-act="cook-step" data-i="'+(i + 1)+'">Next step</button>')
+      + (i > 0 ? '<button class="btn ghost wide" data-act="cook-step" data-i="'+(i - 1)+'">Back a step</button>' : '')
+      + '<details class="more"><summary>What you need</summary><div style="margin-top:8px">'+cookIngList(r, false)+'</div></details>'
+      + '</div>';
+  }
+  openSheet(f.n, h);
+  if(keepScroll) bodyEl.scrollTop = at;
+}
+/* One food, on its own: what it costs at the shop, and its recipe if it has one.
+   Tapping a food on the list is about how it gets made, so this is where a
+   recipe is read, started, pasted in or imported. */
+function foodSheet(kidId, foodId){
+  var k = kidById(kidId) || activeKid(), f = k && foodById(k, foodId);
+  if(!f) return;
+  var r = recipeFor(f), v = violation(k, f);
+  var h = '<div class="stack" style="gap:14px">';
+  if(f.img) h += '<img class="pic big" src="'+f.img+'" alt="">';
+  var meta = [catByKey(f.c) ? catByKey(f.c).label : '', AISLE_SHORT[f.a] || ''].filter(Boolean).join(' · ');
+  h += '<p class="hint" style="margin:0">'+esc(meta)+'</p>';
+  if(v) h += '<p class="hint" style="margin:0;color:var(--warn)">Flagged — '+esc(v)+'</p>';
+  if(f.buy && f.buy.length) h += '<div><div class="sect-head"><h3>On the list</h3></div><div class="list">'
+    + f.buy.map(function(b){ return '<div class="item"><span class="grow"><span class="nm">'+esc(b)+'</span></span></div>'; }).join('')+'</div></div>';
+  if(r){
+    h += '<div><div class="sect-head"><h3>Recipe</h3>'+(cookHead(r) ? '<span class="count">'+esc(cookHead(r))+'</span>' : '')+'</div></div>'
+      +  '<button class="btn primary wide" data-act="cook" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('book',17)+'Open the recipe</button>';
+    if(f.recipe) h += '<button class="btn ghost wide" data-act="recipe-clear" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">Remove this recipe</button>';
+  } else if(!isHelper()){
+    h += '<p class="hint" style="margin:0">No recipe yet. Paste one in, or give the app the address of one on the web.</p>'
+      +  '<button class="btn wide" data-act="recipe-add" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('plus',17)+'Add a recipe</button>';
+  }
+  h += '</div>';
+  openSheet(f.n, h);
 }
 /* a page on the site, from inside the app: Safari with its Done button in the iPhone app, a new tab on the web */
 function siteLink(path, label, primary){
@@ -3434,6 +4004,9 @@ function helpSheet(){
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle day redraws one day, or tap a compartment to change one thing.'],
     ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
     ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
+    ['Where is the recipe?', 'Tap a food on the Foods tab. Anything from the idea bank you cook rather than buy comes with one, free. It is on the compartment on Week too, and named under the box on Pack.'],
+    ['Can I bring a recipe in from somewhere else?', 'Foods \u2192 Import a recipe. Paste the address of a recipe page and the app reads the ingredients and the steps off it. A reel or a pin has no recipe to read \u2014 copy the words under it and paste those in. It lands as a food, for you to check over first.'],
+    ['Can I see it in grams?', 'Open a recipe and tap Grams. A cup of flour is weighed, the oven carries its Celsius, and a spoonful of salt is left as a spoonful. The + and \u2212 make more or fewer lunches and scale every amount.'],
     ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
     ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Shuffle all draws them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top \u2014 in the settings too.'],
     ['Can I plan the week after?', 'Yes. On Week, tap Next beside the date; Plan it draws the week. Shop lists it under Next week, and it becomes this week on its own.'],
@@ -3552,6 +4125,7 @@ var BOX_TABS = ['pack', 'week', 'foods'];
 
 /* ---------------------------------------------------------------- events */
 var HELPER_OK = ['tab','help','help-site','whats-new','whats-new-ok','week-ahead','home-ok','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
+  'food-open','cook','cook-tick','cook-step','cook-units','cook-makes','cook-done','recipe-site',
   'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit',
   'pane','pane-done','delete-account'];   /* without these a caretaker cannot reach Sign out or Leave, which now sit a pane deep */
 document.addEventListener('click', function(ev){
@@ -3880,7 +4454,8 @@ document.addEventListener('click', function(ev){
       a:document.getElementById('nfAisle').value,
       buy:(document.getElementById('nfBuy').value||'').split(',').map(function(x){ return x.trim().slice(0, 40); }).filter(Boolean).slice(0, 8),
       t:[].slice.call(document.querySelectorAll('#nfTags .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
-      al:[].slice.call(document.querySelectorAll('#nfAl .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); })
+      al:[].slice.call(document.querySelectorAll('#nfAl .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
+      recipe:UI.recipeDraft
     });
     if(!r5.added.length){ toast(addFailLine(n, r5)); return; }
     save(); closeSheet(); render(); toast(addedLine(n, r5)); return;
@@ -3894,6 +4469,71 @@ document.addEventListener('click', function(ev){
       return;
     }
     pickPhoto(pf.id); return;
+  }
+  /* importing a recipe writes a food, so it sits behind the same door as writing
+     one by hand; the idea bank and its recipes stay free either way */
+  if(act==='recipe-import'){ if(gated()){ closeSheet(); upgradeSheet('food'); return; } recipeImportSheet(null, null); return; }
+  if(act==='recipe-add'){
+    if(gated()){ closeSheet(); upgradeSheet('food'); return; }
+    recipeImportSheet(el.getAttribute('data-kid'), el.getAttribute('data-id')); return;
+  }
+  if(act==='recipe-fetch'){
+    var ue = document.getElementById('riUrl'), url = ue ? (ue.value || '').trim() : '';
+    if(!url){ if(ue) ue.focus(); recipeMsg('Paste the address of the recipe page first.', true); return; }
+    if(!/^https?:\/\//i.test(url)) url = 'https://' + url.replace(/^\/+/, '');
+    if(!navigator.onLine){ recipeMsg('Reading a page needs a connection. Paste the recipe in instead.', true); return; }
+    if(el.disabled) return;
+    el.disabled = true; recipeMsg('Reading it\u2026');
+    api('POST', '/api/recipe', {url:url}).then(function(r){
+      el.disabled = false;
+      if(r.status === 200 && r.recipe){ recipeReview(r.recipe); return; }
+      recipeMsg(r.error || 'That page would not open for us. Paste the recipe in instead.', true);
+    }).catch(function(){ el.disabled = false; recipeMsg('That page would not open for us. Paste the recipe in instead.', true); });
+    return;
+  }
+  if(act==='recipe-paste'){
+    var te = document.getElementById('riText'), txt = te ? te.value : '';
+    if(!String(txt).trim()){ if(te) te.focus(); recipeMsg('Paste the recipe in the box first.', true); return; }
+    recipeReview(parsePasted(txt)); return;
+  }
+  if(act==='recipe-attach'){
+    var ak = UI.importTo && (kidById(UI.importTo.kidId) || activeKid()), af = ak && foodById(ak, UI.importTo.id);
+    var ar = UI.recipeDraft;
+    if(!af || !ar){ closeSheet(); return; }
+    af.recipe = normRecipe(ar); touch(af); touch(ak); save(); closeSheet(); render();
+    toast('Recipe saved to ' + af.n); return;
+  }
+  /* recipes: reading one, and cooking from it. Nothing here changes the household,
+     so a caretaker may do all of it and none of it is pushed to the other phone. */
+  if(act==='food-open'){ foodSheet(el.getAttribute('data-kid'), el.getAttribute('data-id')); return; }
+  if(act==='cook'){ cookOpen(el.getAttribute('data-kid'), el.getAttribute('data-id')); return; }
+  if(act==='cook-tick'){
+    if(!UI.cook) return;
+    var ti = el.getAttribute('data-i');
+    if(UI.cook.ticked[ti]) delete UI.cook.ticked[ti]; else UI.cook.ticked[ti] = 1;
+    cookSheet(true); return;
+  }
+  if(act==='cook-step'){ if(!UI.cook) return; UI.cook.step = +el.getAttribute('data-i'); cookSheet(); return; }
+  if(act==='cook-units'){
+    if(!UI.cook) return;
+    UI.cook.metric = el.getAttribute('data-v') === 'metric'; setMetricPref(UI.cook.metric); cookSheet(true); return;
+  }
+  if(act==='cook-makes'){
+    if(!UI.cook) return;
+    UI.cook.makes = Math.max(1, Math.min(40, UI.cook.makes + (+el.getAttribute('data-v') || 0)));
+    cookSheet(true); return;
+  }
+  if(act==='cook-done'){ closeSheet(); toast('Nice one'); return; }
+  if(act==='recipe-site'){
+    var ru = el.getAttribute('data-url') || '';
+    if(!/^https:\/\/[^\s<>"']+$/.test(ru)) return;
+    var rb = nativePlugin('Browser'); if(rb) rb.open({url:ru}).catch(function(){});
+    return;
+  }
+  if(act==='recipe-clear'){
+    var qk = kidById(el.getAttribute('data-kid')) || kid, qf = qk && foodById(qk, el.getAttribute('data-id'));
+    if(!qf) return;
+    qf.recipe = null; touch(qf); touch(qk); save(); closeSheet(); render(); toast('Recipe removed'); return;
   }
   if(act==='food-photo-pick'){ closeSheet(); pickPhoto(el.getAttribute('data-id')); return; }
   if(act==='food-photo-clear'){

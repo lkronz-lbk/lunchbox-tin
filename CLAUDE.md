@@ -75,7 +75,8 @@ Never again:
 - `netlify/functions/`: `api-auth.js` (magic links, sessions, delete), `api-household.js`
   (document sync, invites, members), `api-billing.js` (Stripe checkout, portal, webhook),
   `cron-trial.js` (the daily reminder emails, scheduled, production only), `api-admin.js`
-  (the numbers page at `/admin`, for `ADMIN_EMAILS`).
+  (the numbers page at `/admin`, for `ADMIN_EMAILS`), `api-recipe.js` (reads a recipe off a page
+  a parent found — https only, named public hosts only, nothing returned that is not a recipe).
   `netlify/lib/`: `db.js`, `auth.js`, `mail.js`, `stripe.js`, `trial.js`.
 - `netlify/database/migrations/`: numbered SQL, applied by `scripts/migrate.mjs` at build.
 - `ios/`: the Capacitor iPhone shell (Swift Package Manager, no CocoaPods); `capacitor.config.json`
