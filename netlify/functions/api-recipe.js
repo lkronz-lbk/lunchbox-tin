@@ -18,7 +18,11 @@ import { currentUser } from '../lib/auth.js';
 const MAX_BYTES = 1_500_000;          /* a recipe page that needs more than this is not publishing a recipe */
 const MAX_HOPS = 3;
 const TIMEOUT_MS = 8000;
-const UA = 'LunchSortedBot/1.0 (+https://lunchsorted.app/help.html)';
+/* Says exactly what it is, but leads with the token a great many CDN and firewall
+   rules require before they will serve a page at all. A blanket block on anything
+   that does not start "Mozilla/5.0" is common enough that being pure about this
+   costs parents recipes. */
+const UA = 'Mozilla/5.0 (compatible; LunchSortedBot/1.0; +https://lunchsorted.app/help.html)';
 
 /* ---- where this function may look.
    Only the public web over https. Everything private is refused by address,
@@ -35,6 +39,11 @@ const BAD_HOST = /^(localhost|.*\.(local|internal|localdomain|home|lan))$/i;
    and resolves inside, that one does not exist, that one is behind a firewall that
    drops rather than refuses. A parent cannot act on the difference; a scanner can. */
 const NO_RECIPE = 'We could not read a recipe from that page. Copy the recipe and paste it in instead.';
+/* This one is different, and safe to tell apart: it is only ever reached after a public
+   host on 443 has handed us HTML, which the caller could have fetched themselves. It says
+   nothing about anyone's internal network, and it is the difference between a parent
+   retyping the address and a parent pasting the recipe. */
+const NO_RECIPE_HERE = 'We opened that page but could not find a recipe in it. Copy the recipe and paste it in instead.';
 
 /* An address as its bytes, so a range test is a range test. Matching the front of
    the string misses every address that is a private one wearing a hat: ::127.0.0.1,
@@ -149,6 +158,15 @@ async function readPage(start) {
 const ENTS = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'", '#x27': "'", '#160': ' ',
   frac12: '\u00bd', frac14: '\u00bc', frac34: '\u00be', frac13: '\u2153', frac23: '\u2154', deg: '\u00b0',
   rsquo: '\u2019', lsquo: '\u2018', ldquo: '\u201c', rdquo: '\u201d', ndash: '\u2013', mdash: '\u2014', hellip: '\u2026' };
+/* the accented letters a recipe actually uses — purée, jalapeño, crème — by code point,
+   because a page that spells them as named entities should not come back full of holes */
+for (const p of ['agrave224','aacute225','acirc226','atilde227','auml228','aring229','aelig230','ccedil231',
+  'egrave232','eacute233','ecirc234','euml235','igrave236','iacute237','icirc238','iuml239','ntilde241',
+  'ograve242','oacute243','ocirc244','otilde245','ouml246','oslash248','ugrave249','uacute250','ucirc251','uuml252']) {
+  const [, name, code] = /^([a-z]+)(\d+)$/.exec(p);
+  ENTS[name] = String.fromCharCode(+code);
+  ENTS[name[0].toUpperCase() + name.slice(1)] = String.fromCharCode(+code - 32);
+}
 /* Capped at the head. Both tag-stripping passes scan to the end of the buffer from
    every unmatched "<", so a field carrying a megabyte of them costs a minute of CPU
    on an endpoint someone else points at us. Every caller truncates to 600 characters
@@ -161,11 +179,13 @@ function text(v) {
   return String(v == null ? '' : v).slice(0, TEXT_MAX)
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[^>]*>/g, ' ')
-    .replace(/&(#x?[0-9a-f]+|[a-z][a-z0-9]*);/gi, (all, e) => {
-      const k = e.toLowerCase();
-      if (ENTS[k]) return ENTS[k];
+    .replace(/&(#x?[0-9a-f]+|[a-zA-Z][a-zA-Z0-9]*);/g, (all, e) => {
+      if (Object.prototype.hasOwnProperty.call(ENTS, e)) return ENTS[e];
+      const lower = e.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(ENTS, lower)) return ENTS[lower];
       const n = /^#x/i.test(e) ? parseInt(e.slice(2), 16) : /^#/.test(e) ? parseInt(e.slice(1), 10) : NaN;
-      return Number.isFinite(n) && n > 31 && n < 0x10000 ? String.fromCharCode(n) : ' ';
+      if (Number.isFinite(n) && n > 31 && n <= 0x10ffff) { try { return String.fromCodePoint(n); } catch { return ' '; } }
+      return all;                            /* a name we do not know stays as it was written, rather than becoming a hole */
     })
     .replace(/\s+/g, ' ')
     .replace(/\s+([.,;:!?)])/g, '$1')        /* a stripped tag leaves a gap the punctuation falls into */
@@ -243,6 +263,57 @@ function fromMicrodata(html) {
   if (!ing.length) return null;
   return { name: (grab('name')[0] || ''), recipeIngredient: ing, recipeInstructions: ins };
 }
+/* ---- the page as a reader sees it.
+   Plenty of recipes are published with no machine-readable markup at all: a shop's
+   blog post, a newsletter, anything on a platform whose blog template only knows
+   about articles. The recipe is still right there under an "Ingredients" heading
+   and a numbered list, so that is what this reads. Every scan is bounded and
+   forward-only, because this runs on a page someone else wrote. */
+const HEADING = /<(h[1-6]|strong|b)\b[^>]*>([\s\S]{0,200}?)<\/\1>/gi;
+const ING_HEAD = /^(?:ingredients|what you(?:'|\u2019)?ll need|what you need|you will need|shopping list)\b/i;
+const STEP_HEAD = /^(?:instructions?|directions?|method|steps?|preparation|how to make|to make|assembly)\b/i;
+const STOP_HEAD = /^(?:notes?|nutrition|equipment|storage|tips?|substitutions?|related|comments?|reviews?|about|shop\b)/i;
+
+function headings(html) {
+  HEADING.lastIndex = 0;
+  const out = [];
+  let m, n = 0;
+  while (n++ < 400 && (m = HEADING.exec(html))) out.push({ end: HEADING.lastIndex, t: text(m[2]) });
+  return out;
+}
+/* the items of the first list between here and there */
+function listItems(html, from, to) {
+  const window = html.slice(from, Math.min(to, from + 40000));
+  const open = /<(ul|ol)\b[^>]*>/i.exec(window);
+  if (!open) return [];
+  const start = open.index + open[0].length;
+  const close = window.toLowerCase().indexOf('</' + open[1].toLowerCase() + '>', start);
+  const block = window.slice(start, close < 0 ? window.length : close);
+  return [...block.matchAll(/<li\b[^>]*>([\s\S]{0,2000}?)<\/li>/gi)].map(x => text(x[1])).filter(Boolean).slice(0, 60);
+}
+/* or, where there is no list, the paragraphs between here and there */
+function paragraphs(html, from, to) {
+  const window = html.slice(from, Math.min(to, from + 40000));
+  return [...window.matchAll(/<(?:p|div)\b[^>]*>([\s\S]{0,2000}?)<\/(?:p|div)>/gi)]
+    .map(x => text(x[1])).filter(s => s.length > 12).slice(0, 40);
+}
+function fromArticle(html) {
+  const heads = headings(html);
+  let ing = [], steps = [];
+  for (let i = 0; i < heads.length; i++) {
+    const t = heads[i].t, from = heads[i].end, to = i + 1 < heads.length ? heads[i + 1].end : html.length;
+    if (!ing.length && ING_HEAD.test(t)) { ing = listItems(html, from, to); continue; }
+    if (!steps.length && STEP_HEAD.test(t)) {
+      steps = listItems(html, from, to);
+      if (!steps.length) steps = paragraphs(html, from, to);
+      continue;
+    }
+    if (ing.length && steps.length && STOP_HEAD.test(t)) break;
+  }
+  /* a list under an Ingredients heading is the whole claim; one line is a coincidence */
+  if (ing.length < 2) return null;
+  return { name: '', recipeIngredient: ing, recipeInstructions: steps };
+}
 function titleOf(html) {
   const m = /<title[^>]*>([\s\S]{0,300}?)<\/title>/i.exec(html);
   return m ? text(m[1]).replace(/\s*[|–—-]\s*[^|–—-]{0,40}$/, '').trim() : '';
@@ -254,7 +325,7 @@ const clean = (list, max, n) => (Array.isArray(list) ? list : [list])
 /* the whole of the reading, with no network in it, so the suite can hold a page
    up against it and see exactly what a parent would get back */
 export function parseRecipeHtml(html, href) {
-  const ld = fromJsonLd(html) || fromMicrodata(html);
+  const ld = fromJsonLd(html) || fromMicrodata(html) || fromArticle(html);
   if (!ld) return null;
   const ing = clean(ld.recipeIngredient || ld.ingredients || [], 120, 40);
   const how = steps(ld.recipeInstructions).map(s => s.slice(0, 600)).slice(0, 30);
@@ -306,7 +377,7 @@ export default async (req) => {
     if (page.error) return fail(page.error, 422);
 
     const recipe = parseRecipeHtml(page.html, page.url.href);
-    if (!recipe) return fail(NO_RECIPE, 422);
+    if (!recipe) return fail(NO_RECIPE_HERE, 422);
     return json({ recipe });
   } catch (e) {
     console.error('api-recipe', e);
