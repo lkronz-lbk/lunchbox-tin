@@ -261,29 +261,22 @@ forward).
       `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
       function responses instead, every app open becomes a function call (remove that rule).
 - [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form.
-- [ ] Reshoot the marketing and store screenshots on a machine that can reach
-      fonts.gstatic.com. The bottom bar shows five tabs in the three marketing shots that
-      include it: `public/img/screen-week.*`, `screen-pack.*` and `screen-shop.*`.
-      `screen-kidpick.*` is the handover screen and has no bar; the six
-      `store/screenshots/*.png` and the three `public/img/mail-day*.png` are all cropped
-      above it, so none of those nine is wrong about the tab. Separately stale:
-      `screen-pack.*` and `store/screenshots/02-pack.png` (the box now carries a
-      "Making it?" row) and `06-foods.png` (the Foods rows now carry a Recipe tag).
-      Both of those need staging now that only two bank dishes carry a recipe, and
-      neither is a starter, so a default household seeds neither and an unchanged
-      re-run reproduces the same shot: before shooting, add **Quinoa salad cup** from
-      Foods → Ideas, and for the pack shot swap it into today's main compartment on
-      Week. Without that the Recipe tag and the "Making it?" row do not appear at all.
-      Add a Recipes shot to both sets — `public/img/screen-recipes.png|webp` as a fifth
-      figure on the site (widen `.shots` to `repeat(5,1fr)`), and
-      `store/screenshots/07-recipes.png` as a seventh store slot, listed in
-      `store/listing.md`, which still has six. Stage that one too: add both bank dishes
-      so the rows read "on the food list", and import one recipe of your own so the
-      shot does not lead with "Nothing of your own yet". If staging it is more than it
-      is worth, drop the Recipes slot from both sets and this paragraph with it — a
-      screenshot of a search box over two rows argues against the feature.
-      `npm run dev`, then `npm run shots`; `node scripts/store-shots.mjs` for the store
-      set. Shot where the fonts cannot load, they come out in the fallback face.
+- [x] The four marketing screenshots and the new Recipes one are reshot against v20:
+      six tabs in the Pack/Week/Foods/Shop/Recipes/Account order, the "Making it?" row,
+      and `public/img/screen-recipes.png|webp` as a fifth figure on the site (`.shots` is
+      five columns now). `scripts/shots.mjs` stages what it needs — only two dishes carry
+      a recipe and neither is a starter, so it adds the Mediterranean quinoa salad and
+      swaps it into Monday's main compartment, and it seeds one recipe of the household's
+      own for the Recipes shot, or the tab photographs as an Import button over two rows.
+      Where fonts.gstatic.com is unreachable, `LS_FONT_CACHE=<dir>` serves the brand faces
+      from a cache (`fonts.css`, the woff2 files and a `map.txt` of "<url> <file>" lines)
+      rather than letting the shot come out in the fallback face.
+- [ ] Reshoot the six store screenshots, which are still on the old bar: `npm run dev`,
+      then `node scripts/store-shots.mjs` (it takes `LS_FONT_CACHE` too once it is given
+      the same block). `02-pack.png` and `06-foods.png` need the same staging as above, or
+      the "Making it?" row and the Recipe tag have nothing to show. Add
+      `store/screenshots/07-recipes.png` as a seventh slot and list it in
+      `store/listing.md`, which still names six.
 - [ ] Run `npm run csp` after any change to `public/app/index.html` (the test suite refuses
       a stale hash), and bump `VERSION` in `public/app/sw.js` when icons, the manifest or the
       fonts change. The shell itself refreshes one launch behind a deploy without a bump.

@@ -19,8 +19,27 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const b = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const ctx = await b.newContext({ viewport: {width:375, height:812}, deviceScaleFactor:2, colorScheme:'light', timezoneId:'America/New_York' });
 /* The brand fonts come from Google, so these have to be shot somewhere that can
-   reach fonts.gstatic.com; a sandbox that cannot will render them in the fallback
-   face, which is worse than a stale screenshot. The page is given time to load them. */
+   reach fonts.gstatic.com; a machine that cannot will render them in the fallback
+   face, which is worse than a stale screenshot. The page is given time to load them.
+   Where the network is closed, point LS_FONT_CACHE at a directory holding fonts.css
+   and the woff2 files, plus a map.txt of "<url> <filename>" lines, and the requests
+   are answered from there instead. Nothing about the picture changes; it is the same
+   bytes Google would have sent. Without the variable this is a no-op, so a machine
+   that can reach Google carries on as before. */
+const FONTS = process.env.LS_FONT_CACHE;
+if (FONTS) {
+  const map = new Map(fs.readFileSync(path.join(FONTS, 'map.txt'), 'utf8')
+    .split('\n').filter(Boolean).map(l => l.split(/\s+/)));
+  await ctx.route(/fonts\.(googleapis|gstatic)\.com/, async route => {
+    const url = route.request().url();
+    if (url.includes('fonts.googleapis.com'))
+      return route.fulfill({ contentType: 'text/css', body: fs.readFileSync(path.join(FONTS, 'fonts.css'), 'utf8') });
+    const file = map.get(url);
+    if (!file) return route.abort();
+    return route.fulfill({ contentType: 'font/woff2', body: fs.readFileSync(path.join(FONTS, file)) });
+  });
+  console.log('fonts served from', FONTS);
+}
 /* Shoot on a Monday, so the week view shows a week rather than the two days
    left after a Thursday. The app reads the clock in a dozen places; pin it once. */
 await ctx.addInitScript(() => {
@@ -91,6 +110,28 @@ async function shot(tab, name, extra) {
   console.log('shot', name);
 }
 
+/* Only two dishes carry a recipe and neither is a starter, so a household seeded from
+   the bank has none: the pack shot's "Making it?" row and the Foods tab's Recipe tag
+   have nothing to show unless one is put on the list and into today's box on purpose. */
+await p.click('[data-act="tab"][data-tab="foods"]'); await wait(400);
+await toEmma();
+await p.click('[data-act="ideas"]'); await wait(400);
+await p.click('[data-act="add-idea"][data-name="Mediterranean quinoa salad"]'); await wait(400);
+await p.click('#sheetClose'); await wait(400);
+/* and into Monday's main compartment, which is the box the pack shot is of */
+await p.click('[data-act="tab"][data-tab="week"]'); await wait(400);
+await toEmma();
+await p.click('[data-act="slot"][data-day="2026-09-07"][data-cat="main"]'); await wait(500);
+const pickSalad = await p.evaluate(() => {
+  const hit = [...document.querySelectorAll('[data-act="pick"]')].find(b => /Mediterranean quinoa salad/.test(b.textContent));
+  if (hit) hit.click();
+  return !!hit;
+});
+if (!pickSalad) throw new Error('the quinoa salad was not offered for Monday\u2019s main compartment');
+await wait(600);
+/* picking usually closes the sheet itself; #sheetClose stays in the DOM either way */
+if (await p.locator('#sheetClose').isVisible()) { await p.click('#sheetClose'); await wait(400); }
+
 await shot('week', 'screen-week');
 await shot('pack', 'screen-pack', async () => {
   /* Emma's box finished, so the household line has something to say */
@@ -98,6 +139,28 @@ await shot('pack', 'screen-pack', async () => {
   if (packed) { await packed.click(); await wait(400); }
 });
 await shot('shop', 'screen-shop');
+
+/* The Recipes tab is the household's, so it takes no lunchbox. Shot as a household
+   that has been using it: one brought in of its own above the two the app ships,
+   because the tab's whole point is that both live in one list. Left empty it is an
+   Import button over two rows, which argues against the feature it is selling. */
+await p.click('[data-act="tab"][data-tab="recipes"]'); await wait(500);
+await p.evaluate(() => {
+  const d = JSON.parse(localStorage.getItem('lunchsorted')), t = new Date().toISOString();
+  d.recipes = (d.recipes || []).concat([{ id: 'rec_shot1', n: 'Pumpkin blondies', m: 40, y: 12,
+    ing: ['1 cup rolled oats', '\u00bd cup pumpkin pur\u00e9e', '1 cup flour', '\u00bd cup brown sugar'],
+    steps: ['Heat the oven to 350F.', 'Stir it all together.', 'Bake 25 minutes.'],
+    src: 'menolabs.com', url: 'https://menolabs.com/blogs/recipes/pumpkin-blondies',
+    createdAt: t, updatedAt: t, deletedAt: null }]);
+  localStorage.setItem('lunchsorted', JSON.stringify(d));
+});
+await p.reload(); await wait(900);
+await p.click('[data-act="tab"][data-tab="recipes"]'); await wait(600);
+await hideToast();
+await p.evaluate(() => window.scrollTo(0, 0));
+await wait(350);
+await p.screenshot({ path: `${OUT}/screen-recipes.png` });
+console.log('shot', 'screen-recipes');
 
 /* The kid's pick: not a tab, and the switch has to go on first. Two options that look
    alike sell the opposite of what this screen is for, so step past any part whose
@@ -119,7 +182,7 @@ console.log('shot', 'screen-kidpick');
 await p.click('[data-act="kid-exit"]', { force: true }); await wait(400);
 
 /* WebP twins: Chromium is the encoder, since sips on this machine will not write one */
-for (const name of ['screen-week','screen-pack','screen-shop','screen-kidpick']) {
+for (const name of ['screen-week','screen-pack','screen-shop','screen-recipes','screen-kidpick']) {
   const png = fs.readFileSync(`${OUT}/${name}.png`).toString('base64');
   const out = await p.evaluate(async b64 => {
     const img = new Image();

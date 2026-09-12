@@ -3032,14 +3032,28 @@ try {
   check('the landing page never scrolls sideways on a phone',
     !(await site.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)));
   /* wake the lazy images the way a reader does: a screen at a time, top to bottom */
-  await site.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 60)); } window.scrollTo(0, document.body.scrollHeight); });
+  await site.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 60)); } window.scrollTo(0, document.body.scrollHeight);
+    /* below the breakpoint the shots are a swipeable row with mandatory snapping, so
+       setting scrollLeft fights the snap: bring each figure into view the way a swipe
+       would, or the ones off to the right never wake and never load */
+    for (const fig of document.querySelectorAll('.shots figure')) {
+      fig.scrollIntoView({block:'center', inline:'center'});
+      await new Promise(r => setTimeout(r, 80));
+    }
+    /* lazy images start loading when they come into view, so give the ones just woken
+       a chance to finish before anything asks whether they did */
+    await Promise.all([...document.images].map(i => i.complete ? null : new Promise(r => {
+      i.addEventListener('load', r, {once:true}); i.addEventListener('error', r, {once:true});
+      setTimeout(r, 4000);
+    }))); });
   await site.waitForTimeout(600);
   check('the three email screenshots are on the site', ['1','3','6'].every(d => fs.existsSync('public/img/mail-day'+d+'.png')));
   check('every screenshot on the landing page loads',
-    await site.$$eval('img', a => a.length > 0 && a.every(i => i.complete && i.naturalWidth > 0)));
+    await site.$$eval('img', a => a.length > 0 && a.every(i => i.complete && i.naturalWidth > 0)),
+    await site.$$eval('img', a => a.filter(i => !(i.complete && i.naturalWidth > 0)).map(i => i.currentSrc || i.src)));
   check('screenshots ship as WebP with a PNG fallback and load lazily',
-    await site.$$eval('picture source[type="image/webp"]', a => a.length) === 5 &&
-    await site.$$eval('.shots img[loading="lazy"]', a => a.length) === 4);
+    await site.$$eval('picture source[type="image/webp"]', a => a.length) === 6 &&
+    await site.$$eval('.shots img[loading="lazy"]', a => a.length) === 5);
   check('the honeypot is hidden from assistive tech and the tab order',
     await site.$eval('input[name="bot-field"]', i => i.closest('[aria-hidden="true"]') !== null && i.getAttribute('tabindex') === '-1'));
   warn('og:image is an absolute URL (set once the domain exists)',
