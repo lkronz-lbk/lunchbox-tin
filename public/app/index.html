@@ -1001,10 +1001,14 @@ var GRAMS = {oz:28.35, lb:453.6, g:1, kg:1000};
 var POUR = /\boil\b|\bmilk\b|\bwater\b|\bstock\b|\bjuice\b|\bvinegar\b|\bdressing\b|\bsauce\b|\bcream\b(?! cheese)/;
 var DENSITY = [
   [/\bflour\b/, .53], [/\brolled oats\b|\boats\b/, .4], [/\bbrown sugar\b/, .91], [/\bpowdered sugar\b|\bicing sugar\b/, .5],
-  [/\bsugar\b/, .85], [/\bcocoa\b/, .42], [/\bbutter\b(?!milk)/, .91], [/\bhoney\b/, 1.42],
-  [/\bmaple syrup\b/, 1.32], [/\byogurt\b/, 1.03], [/\bquinoa\b/, .71], [/\brice\b/, .8],
-  [/\bchocolate chips\b/, .74], [/\btahini\b|\bmayonnaise\b/, 1.05], [/\bshredded cheese\b|\bgrated parmesan\b/, .45],
-  [/\bgranola\b|\bcereal\b/, .4], [/\blentils\b/, .85], [/\bhummus\b/, 1.05], [/\bpesto\b/, 1.03]
+  [/\bsugar\b/, .85], [/\bcocoa\b/, .42], [/\bbutter\b(?!milk)/, .96], [/\bhoney\b/, 1.42],
+  [/\bmaple syrup\b/, 1.32], [/\byogurt\b/, 1.03],
+  /* a cup of puffed cereal weighs almost nothing; a cup of the rice it was puffed
+     from weighs eight times as much, so the puffed one is named before the grain */
+  [/\bcrisped rice\b|\bpuffed\b|\brice cereal\b/, .11],
+  [/\bquinoa\b/, .71], [/\brice\b/, .8],
+  [/\bchocolate chips\b/, .74], [/\btahini\b|\bmayonnaise\b/, 1.05], [/\bshredded cheese\b|\bgrated parmesan\b/, .48],
+  [/\bgranola\b/, .42], [/\blentils\b/, .85], [/\bhummus\b/, 1.05], [/\bpesto\b/, 1.03]
 ];
 function densityOf(name){
   if(POUR.test(name)) return 0;

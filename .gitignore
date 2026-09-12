@@ -5,3 +5,6 @@ node_modules
 
 # Xcode resolves these on first open, per machine
 ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# throwaway probe scripts the reviewer agents write into the root
+.*.mjs
