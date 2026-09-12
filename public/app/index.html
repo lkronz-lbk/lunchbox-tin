@@ -2847,13 +2847,17 @@ var sheetEl = document.getElementById('sheet'),
     bodyEl  = document.getElementById('sheetBody'),
     titleEl = document.getElementById('sheetTitle');
 var sheetState = null;
+/* the what’s new sheet is on screen. Reading it is the dismissal: Got it, Done, the
+   backdrop — whichever door the parent leaves by, the banner has done its job. */
+var newsSheet = false;
 function openSheet(title, html, state){
-  titleEl.textContent = title; bodyEl.innerHTML = html; sheetState = state || null;
+  titleEl.textContent = title; bodyEl.innerHTML = html; sheetState = state || null; newsSheet = false;
   sheetEl.classList.add('open'); backEl.classList.add('open'); bodyEl.scrollTop = 0;
   document.body.style.overflow = 'hidden';
 }
 function closeSheet(){ sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
-  UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = ''; }
+  UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = '';
+  if(newsSheet){ newsSheet = false; UI.notice = ''; markSeen(); render(); } }
 backEl.addEventListener('click', closeSheet);
 document.getElementById('sheetClose').addEventListener('click', closeSheet);
 
@@ -4847,7 +4851,7 @@ document.addEventListener('click', function(ev){
     var wn = '<div class="card stack" style="gap:14px">' + WHATS_NEW.steps.map(function(st, i){
       return '<div class="switch" style="align-items:flex-start"><span class="count" style="min-width:22px;margin-top:2px">'+(i+1)+'</span><div><div class="t">'+esc(st[0])+'</div><div class="d">'+esc(st[1])+'</div></div></div>';
     }).join('') + '</div><button class="btn primary wide" data-act="whats-new-ok" style="margin-top:14px">Got it</button>';
-    openSheet('What\u2019s new', wn); return;
+    openSheet('What\u2019s new', wn); newsSheet = true; return;
   }
   if(act==='home-ok'){ try{ localStorage.setItem(HOME_KEY, '1'); }catch(e){} UI.homeHint = false; render(); return; }
   if(act==='beta-retry'){ claimBeta.tries = 0; claimBeta.failed = false; claimBeta(); render(); return; }
@@ -5305,7 +5309,7 @@ document.addEventListener('click', function(ev){
     return;
   }
   if(act==='notice-dismiss'){ UI.notice=''; markSeen(); render(); return; }
-  if(act==='whats-new-ok'){ UI.notice=''; markSeen(); closeSheet(); render(); return; }
+  if(act==='whats-new-ok'){ closeSheet(); return; }   /* closing the sheet is what clears the banner, by this door or any other */
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = {d:el.getAttribute('data-day'), at:Date.now()}; render(); return; }

@@ -424,6 +424,12 @@ try {
       check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
       await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
       check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .switch', a => a.length)) === STEP_COUNT);
+      await page.click('#sheetClose'); await page.waitForTimeout(300);
+      check('Done at the top of the walk-through dismisses the note too',
+        !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
+      await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
+      await page.reload(); await page.waitForTimeout(600);
+      await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
       await page.click('[data-act="whats-new-ok"]'); await page.waitForTimeout(300);
       check('Got it dismisses the note for good', !/New: /.test(await page.textContent('#view')) && await page.evaluate(() => /^lunchsorted-v\d+$/.test(localStorage.getItem('lunchsorted-seen') || '')));
       await page.reload(); await page.waitForTimeout(600);
