@@ -1962,7 +1962,7 @@ try {
     && (await pb.$$eval('[data-act="recipe-import"]', a => a.length)) === 0);
   await pb.click('[data-act="upgrade"][data-why="recipe"]'); await pb.waitForTimeout(350);
   check('and the plan sheet says what is locked and what is not',
-    /idea bank stays free to cook from/.test(await pb.textContent('#sheetBody')), await pb.textContent('#sheetBody'));
+    /The two the app comes with stay free to cook from/.test(await pb.textContent('#sheetBody')), await pb.textContent('#sheetBody'));
   await pb.click('#sheetClose'); await pb.waitForTimeout(250);
   await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(350);
   await pb.click('[data-act="upgrade"][data-why="food"]'); await pb.waitForTimeout(350);
@@ -2589,15 +2589,24 @@ try {
     };
 
     /* ---- the idea bank's own recipes, free like the rest of the bank */
-    await addIdea('Quinoa salad cup');
+    await addIdea('Mediterranean quinoa salad');
     check('a food from the idea bank that has to be cooked says so on the list',
-      await pr2.$$eval('[data-act="food-open"]', a => a.some(b => /Quinoa salad cup/.test(b.textContent) && /Recipe/.test(b.textContent))));
+      await pr2.$$eval('[data-act="food-open"]', a => a.some(b => /Mediterranean quinoa salad/.test(b.textContent) && /Recipe/.test(b.textContent))));
     check('and opening it offers the recipe rather than sending a parent out of the app to find one',
-      (await openRow('Quinoa salad cup')) && (await pr2.$$eval('[data-act="cook"]', a => a.length)) === 1);
+      (await openRow('Mediterranean quinoa salad')) && (await pr2.$$eval('[data-act="cook"]', a => a.length)) === 1);
     await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
     check('the recipe opens with what to buy, what to do, and how long it takes',
-      /35 minutes/.test(await cooking()) && /makes 6 lunches/.test(await cooking())
-      && /1 cup quinoa/.test(await cooking()) && /Rinse the quinoa/.test(await cooking()), (await cooking()).slice(0, 120));
+      /35 minutes, plus 2 hours chilling/.test(await cooking()) && /makes 6 lunches/.test(await cooking())
+      && /1 cup quinoa/.test(await cooking()) && /Rinse the quinoa/.test(await cooking()), (await cooking()).slice(0, 140));
+    check('and the waiting is in the head and in the first step, not sprung at the end',
+      /Start this the evening before/.test(await cooking())
+      && (await cooking()).indexOf('Start this the evening before') < (await cooking()).indexOf('Rinse the quinoa'));
+    check('and it says whose recipe it is, with the original a tap away on a control big enough to hit',
+      /From USDA Recipes for Healthy Kids/.test(await cooking())
+      && await pr2.$$eval('#sheetBody a.btn, #sheetBody button.btn[data-act="recipe-site"]', a =>
+           a.length === 1 && /fna\.usda\.gov/.test(a[0].getAttribute('href') || a[0].getAttribute('data-url') || '')
+           && a[0].getBoundingClientRect().height >= 44),
+      (await cooking()).slice(-160));
     await pr2.click('[data-act="cook-tick"][data-i="0"]'); await pr2.waitForTimeout(250);
     check('an ingredient ticks off as it goes in, so a parent interrupted mid-recipe knows where they were',
       (await pr2.$$eval('[data-act="cook-tick"][data-i="0"]', a => a[0].className)).includes('done'));
@@ -2615,51 +2624,67 @@ try {
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
 
     /* ---- the walk through */
-    await openRow('Quinoa salad cup'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
+    await openRow('Mediterranean quinoa salad'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
     await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
-    await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
+    for (const n of [0, 1]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
     check('cooking it step by step shows one step, says where it has got to, and keeps the ingredients within reach',
-      /Step 1 of 6/.test(await cooking()) && /Rinse the quinoa/.test(await cooking())
-      && (await pr2.$$eval('[data-act="cook-step"][data-i="1"]', a => a.length)) === 1
+      /Step 2 of 7/.test(await cooking()) && /Rinse the quinoa/.test(await cooking())
+      && (await pr2.$$eval('[data-act="cook-step"][data-i="2"]', a => a.length)) === 1
       && (await pr2.$$eval('.prog', a => a.length)) === 1);
-    await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
-    check('and it goes on and back a step at a time', /Step 2 of 6/.test(await cooking())
-      && (await pr2.$$eval('[data-act="cook-step"][data-i="0"]', a => a.length)) === 1);
+    await pr2.click('[data-act="cook-step"][data-i="2"]'); await pr2.waitForTimeout(250);
+    check('and it goes on and back a step at a time', /Step 3 of 7/.test(await cooking())
+      && (await pr2.$$eval('[data-act="cook-step"][data-i="1"]', a => a.length)) === 1);
     /* the amounts belong beside the step that calls for them, not three taps back */
     check('a step carries the amount of everything it names, and nothing it does not',
       (await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent))).join('|') === '1 cup quinoa|2 cups low-sodium vegetable broth',
       await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent)));
     /* an ingredient is claimed by the step that names it and not read into the others:
        the dressing step takes the white pepper, the vegetable step the red bell pepper */
-    for (const n of [2, 3]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
+    for (const n of [3, 4]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
     const dressing = await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent));
     check('a word two ingredients share goes to the one the step actually means',
       dressing.some(t => /ground white pepper/.test(t)) && !dressing.some(t => /red bell pepper/.test(t))
       && !dressing.some(t => /olives/.test(t)), dressing);
-    await pr2.click('[data-act="cook-step"][data-i="4"]'); await pr2.waitForTimeout(250);
+    await pr2.click('[data-act="cook-step"][data-i="5"]'); await pr2.waitForTimeout(250);
     const veg = await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent));
     check('and the step that means the other one gets it, with no leftovers from the first',
       veg.some(t => /red bell pepper/.test(t)) && veg.some(t => /black olives/.test(t))
       && !veg.some(t => /white pepper/.test(t)), veg);
     /* the step view moves a step at a time, so walk back to the one that calls for nothing */
-    for (const n of [3, 2]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
+    for (const n of [4, 3]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
     check('and a step that calls for nothing carries no amounts at all',
-      /Step 3 of 6/.test(await cooking()) && (await pr2.$$eval('ul.steping li', a => a.length)) === 0,
+      /Step 4 of 7/.test(await cooking()) && (await pr2.$$eval('ul.steping li', a => a.length)) === 0,
       await pr2.textContent('.cookstep'));
-    await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
-    await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
-    await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
+    for (const n of [2, 1, 0, -1]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
     await pr2.click('[data-act="cook-units"][data-v="metric"]'); await pr2.waitForTimeout(250);
-    await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
-    await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
+    for (const n of [0, 1, 2]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
     check('and they are in the measures and the quantity the parent chose, like every other amount',
       (await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent))).join('|') === '170 g quinoa|470 ml low-sodium vegetable broth',
       await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent)));
     await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
     await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
-    await pr2.click('[data-act="cook-step"][data-i="0"]'); await pr2.waitForTimeout(250);
-    await pr2.click('[data-act="cook-step"][data-i="1"]'); await pr2.waitForTimeout(250);
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
+
+    /* the other one the app ships, which nothing else in the suite exercises: its own
+       shopping line, its own allergen, and the warning that decides which evening */
+    await addIdea('Bean & avocado wrap');
+    check('the second recipe the app ships is on the list with what to buy for it',
+      await pr2.$$eval('[data-act="food-open"]', a => a.some(b => /Bean &amp; avocado wrap/.test(b.innerHTML)
+        && /White beans/.test(b.textContent) && /Recipe/.test(b.textContent))),
+      await pr2.$$eval('[data-act="food-open"]', a => a.map(b => b.textContent).filter(t => /avocado wrap/.test(t))));
+    await openRow('Bean & avocado wrap'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
+    check('and it says up front that it is a morning job, before a parent rolls six of them',
+      /20 minutes/.test(await cooking()) && /makes 6 lunches/.test(await cooking())
+      && /Make these the morning they are eaten/.test(await cooking())
+      && /From USDA Recipes for Healthy Kids/.test(await cooking()), (await cooking()).slice(0, 160));
+    /* scaled to one lunch, an eighth of a teaspoon must not round away to none */
+    for (let i = 0; i < 5; i++) { await pr2.click('[data-act="cook-makes"][data-v="-1"]'); await pr2.waitForTimeout(200); }
+    const one = await pr2.$$eval('#sheetBody .item .nm', a => a.map(b => b.textContent.trim()));
+    check('and cut to one lunch it still asks for a measurable amount of everything, never none',
+      /1 lunch\+/.test(await cooking()) && one.length === 11 && !one.some(t => /(^|\s)0(\.\d+)?(\s|$)/.test(t)),
+      (await cooking()).slice(0, 60) + ' || ' + one.join(' / '));
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
+
     check('none of the cooking is written into the household: a half-made recipe is not something the other phone needs',
       await pr2.evaluate(() => !/"ticked"|"step":/.test(localStorage.getItem('lunchsorted') || '')));
     check('the phone remembers which measures this kitchen works in',
@@ -2670,10 +2695,10 @@ try {
       return n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()); });
     await pr2.click('[data-act="tab"][data-tab="week"]'); await pr2.waitForTimeout(350);
     await pr2.click(`[data-act="slot"][data-day="${today0}"][data-cat="main"]`); await pr2.waitForTimeout(350);
-    check('the compartment sheet offers the recipe for whatever is in the compartment',
+    check('the compartment sheet offers at most the one recipe for what is in the compartment',
       (await pr2.$$eval('[data-act="cook"]', a => a.length)) <= 1);
     const quinoaId = await pr2.$$eval('[data-act="pick"]', a => {
-      const hit = a.find(b => /Quinoa salad cup/.test(b.textContent)); return hit && hit.getAttribute('data-id'); });
+      const hit = a.find(b => /Mediterranean quinoa salad/.test(b.textContent)); return hit && hit.getAttribute('data-id'); });
     await pr2.click(`[data-act="pick"][data-id="${quinoaId}"]`); await pr2.waitForTimeout(400);
     await pr2.click(`[data-act="slot"][data-day="${today0}"][data-cat="main"]`); await pr2.waitForTimeout(350);
     check('and once a dish that has to be cooked is in it, the recipe is one tap from the week',
@@ -2682,7 +2707,7 @@ try {
     await pr2.click('[data-act="tab"][data-tab="pack"]'); await pr2.waitForTimeout(350);
     check('and the pack list names what in this box gets made, so the recipe waits in the kitchen',
       /Making it\?/.test(await pr2.textContent('#view'))
-      && (await pr2.$$eval('#view [data-act="cook"]', a => a.map(b => b.textContent))).some(t => /Quinoa salad cup/.test(t)));
+      && (await pr2.$$eval('#view [data-act="cook"]', a => a.map(b => b.textContent))).some(t => /Mediterranean quinoa salad/.test(t)));
     /* ---- reading one off a page needs a sign-in, because that is the only part that leaves the phone */
     await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(350);
     await pr2.click('[data-act="recipe-import"]'); await pr2.waitForTimeout(300);
@@ -2754,19 +2779,21 @@ try {
     check('a recipe of the household\u2019s own says where it is used; the bank\u2019s say they are the bank\u2019s',
       /Easy turkey pinwheels/.test(await pr2.textContent('#view'))
       && /on the food list/.test(await pr2.textContent('#view'))
-      && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 3);
+      && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) >= 3);
     await pr2.fill('#rqFind', 'quinoa'); await pr2.waitForTimeout(350);
     check('the search finds a recipe by name and keeps the keyboard where it was',
-      (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent))).join('|').includes('Quinoa salad cup')
+      (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent))).join('|').includes('Mediterranean quinoa salad')
       && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 1
       && await pr2.evaluate(() => document.activeElement && document.activeElement.id === 'rqFind'));
     await pr2.fill('#rqFind', 'lemon'); await pr2.waitForTimeout(350);
     check('and by an ingredient, which is how a parent shops the cupboard',
-      (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent.trim()))).length >= 2);
+      (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent.replace(/\s*Idea bank\s*$/, '').trim())))
+        .sort().join('|') === 'Bean & avocado wrap|Mediterranean quinoa salad',
+      await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent.trim())));
     await pr2.click('[data-act="tab"][data-tab="pack"]'); await pr2.waitForTimeout(300);
     await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(400);
     check('leaving the tab clears the search, so nobody comes back to a list that looks half empty',
-      (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 3
+      (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) >= 3
       && (await pr2.inputValue('#rqFind')) === '');
     await pr2.click('[data-act="cook-recipe"]'); await pr2.waitForTimeout(400);
     check('and a recipe opens to be cooked straight from the tab, with no food list involved',

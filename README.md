@@ -64,8 +64,13 @@ food list from a 200-item library and produce a planned week immediately. From t
   come from the USDA's Recipes for Healthy Kids competition, written and tasted by school
   teams of cooks, chefs, parents and students, and published by the US government, so they
   are public domain. `RECIPE` holds only recipes someone else has tested: the steps are
-  reworded for a parent, the method and the amounts are not ours to change, and `src`/`url`
-  say where each came from. We write none of our own — a recipe nobody has cooked is worse
+  reworded for a parent and the wait moved to the front where it decides the evening (`wait`
+  on the record, shown in `cookHead`), the amounts are not ours to change, and `src`/`url`
+  say where each came from. The one substitution is the salad's chicken broth for vegetable,
+  so the bank's only salad suits a vegetarian. Both arrive as their own bank foods —
+  `Mediterranean quinoa salad` and `Bean & avocado wrap` — rather than onto dishes
+  households already have, so no stored food's allergens or `buy` line changes under
+  anyone. We write none of our own — a recipe nobody has cooked is worse
   than no recipe, because a parent trusts it. Every other dish in the bank keeps its `buy`
   line and is planned and shopped for exactly as before; a parent who wants a recipe for one
   imports the one they already trust. A recipe is a record on the account (`S.recipes[]`: `n`, minutes,
@@ -85,8 +90,13 @@ food list from a 200-item library and produce a planned week immediately. From t
   from the name (`liftedId`), not minted at random, so two phones normalising the same v17
   document agree on it and the merge collapses them instead of keeping both.
 - **Cooking one** — **Cook it step by step** is one step on the screen at a time with a
-  progress bar, the amounts of whatever that step names underneath it (`stepIng` matches an
-  ingredient's own name, and its last word, singular or plural, at a word boundary), the
+  progress bar, the amounts of whatever that step names underneath it (`stepIng` *claims*
+  an ingredient's own name, then its last word, at a word boundary, rather than merely
+  matching: words a step spends on one ingredient are gone, so the white pepper cannot
+  read itself into a step that says red pepper. A head that is a kind of something
+  (`HEAD_KIND`) answers to the word in front of it, so "fold in the feta" finds the feta
+  cheese; and a word the step said as one ingredient's whole name puts every line of that
+  thing back in play, so an ingredient divided over two lines shows both), the
   full list behind a summary, and a box to tick per ingredient —
   none of which is written to the document, because a half-made recipe is not something
   the other phone needs. **Cups or grams** converts what can honestly be converted, both
@@ -249,11 +259,21 @@ forward).
       above it, so none of those nine is wrong about the tab. Separately stale:
       `screen-pack.*` and `store/screenshots/02-pack.png` (the box now carries a
       "Making it?" row) and `06-foods.png` (the Foods rows now carry a Recipe tag).
+      Both of those need staging now that only two bank dishes carry a recipe, and
+      neither is a starter, so a default household seeds neither and an unchanged
+      re-run reproduces the same shot: before shooting, add **Quinoa salad cup** from
+      Foods → Ideas, and for the pack shot swap it into today's main compartment on
+      Week. Without that the Recipe tag and the "Making it?" row do not appear at all.
       Add a Recipes shot to both sets — `public/img/screen-recipes.png|webp` as a fifth
       figure on the site (widen `.shots` to `repeat(5,1fr)`), and
-      `store/screenshots/07-recipes.png` as a seventh store slot. `npm run dev`, then
-      `npm run shots`; `node scripts/store-shots.mjs` for the store set. Shot where the
-      fonts cannot load, they come out in the fallback face.
+      `store/screenshots/07-recipes.png` as a seventh store slot, listed in
+      `store/listing.md`, which still has six. Stage that one too: add both bank dishes
+      so the rows read "on the food list", and import one recipe of your own so the
+      shot does not lead with "Nothing of your own yet". If staging it is more than it
+      is worth, drop the Recipes slot from both sets and this paragraph with it — a
+      screenshot of a search box over two rows argues against the feature.
+      `npm run dev`, then `npm run shots`; `node scripts/store-shots.mjs` for the store
+      set. Shot where the fonts cannot load, they come out in the fallback face.
 - [ ] Run `npm run csp` after any change to `public/app/index.html` (the test suite refuses
       a stale hash), and bump `VERSION` in `public/app/sw.js` when icons, the manifest or the
       fonts change. The shell itself refreshes one launch behind a deploy without a bump.

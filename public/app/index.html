@@ -636,8 +636,8 @@ var NUMWORD = ['No','One','Two','Three','Four','Five','Six','Seven'];
 
 /* the aisle each thing to buy lives in; anything not here goes under the dish's own aisle */
 var ING_AISLE = nullMap();
-[['produce','cucumber,bananas,avocado,romaine lettuce,lettuce,tomatoes,cherry tomatoes,shredded carrots,carrots,baby carrots,broccoli,bell peppers,purple cabbage,celery,apples,watermelon,pineapple,cantaloupe,peaches,mango,honeydew,kiwis,pears,oranges,nectarines,grapes,blueberries,strawberries,melon,berries'],
- ['deli','deli turkey,sliced ham,salami,chicken salad,cooked chicken,chicken breast,smoked salmon,hummus,olives,feta cheese,mozzarella balls,bacon'],
+[['produce','cucumber,bananas,avocado,romaine lettuce,lettuce,tomatoes,cherry tomatoes,shredded carrots,carrots,baby carrots,broccoli,bell peppers,purple cabbage,parsley,celery,apples,watermelon,pineapple,cantaloupe,peaches,mango,honeydew,kiwis,pears,oranges,nectarines,grapes,blueberries,strawberries,melon,berries'],
+ ['deli','deli turkey,sliced ham,salami,chicken salad,cooked chicken,chicken breast,smoked salmon,hummus,olives,black olives,feta cheese,mozzarella balls,bacon'],
  ['dairy','cheese slices,cheese block,shredded cheese,cream cheese,string cheese,yogurt,cottage cheese,eggs,butter,whipped cream,cheese tortellini'],
  ['bakery','tortillas,sandwich bread,bagels,mini bagels,pita bread,english muffins,sub rolls'],
  ['pantry','sunflower butter,peanut butter,jelly,honey,pasta,italian dressing,caesar dressing,ranch dressing,mayonnaise,canned tuna,refried beans,black beans,white beans,rice,sushi rice,nori sheets,quinoa,pizza sauce,salsa,pesto,lentil soup,turkey chili,chicken noodle soup,cinnamon,dill pickles,skewers,mac & cheese'],
@@ -666,7 +666,8 @@ var BANK = [
   F('Hummus & veggie wrap','main',['protein','soft','light','savory'],'deli',['gluten','soy','seeds'],0,0,'Hummus|Cucumber|Shredded carrots|Tortillas'),
   F('Tuna salad with crackers','main',['protein','salty','savory','ice'],'pantry',['fish','gluten'],0,0,'Canned tuna|Mayonnaise|Crackers'),
   F('Bean & cheese roll-up','main',['protein','soft','hearty','savory'],'deli',['dairy','gluten'],1,1,'Refried beans|Shredded cheese|Tortillas'),
-  F('Bean & avocado wrap','main',['protein','soft','hearty','savory'],'pantry',['gluten'],0,0,'White beans|Avocado|Purple cabbage|Romaine lettuce|Tortillas'),
+  F('Mediterranean quinoa salad','main',['protein','chewy','light','savory','ice'],'pantry',['dairy'],0,0,'Quinoa|Cherry tomatoes|Bell peppers|Feta cheese|Black olives|Parsley'),
+  F('Bean & avocado wrap','main',['protein','soft','hearty','messy','savory','ice'],'pantry',['gluten'],0,0,'White beans|Avocado|Purple cabbage|Romaine lettuce|Tortillas'),
   F('Yogurt & granola parfait','main',['protein','soft','sweet','ice'],'dairy',['dairy'],1,1,'Yogurt|Granola'),
   F('Chicken & cheese skewers','main',['protein','hearty','savory','ice'],'deli',['dairy'],0,1,'Cooked chicken|Cheese block|Skewers'),
   F('Cucumber sushi rolls','main',['light','chewy','savory','ice'],'deli',[],0,0,'Sushi rice|Nori sheets|Cucumber'),
@@ -682,7 +683,7 @@ var BANK = [
   F('Chicken nuggets, packed cold','main',['protein','crunchy','hearty','savory'],'frozen',['gluten'],0,1,'Chicken nuggets'),
   F('Mini bagel pizzas, cold','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1,'Mini bagels|Pizza sauce|Shredded cheese'),
   F('Rice & black bean bowl','main',['protein','chewy','hearty','savory'],'pantry',[],0,0,'Rice|Black beans|Shredded cheese'),
-  F('Quinoa salad cup','main',['protein','chewy','light','savory','ice'],'pantry',['dairy'],0,0,'Quinoa|Cherry tomatoes|Bell peppers|Feta cheese'),
+  F('Quinoa salad cup','main',['protein','chewy','light','savory','ice'],'pantry',[],0,0,'Quinoa|Cucumber|Cherry tomatoes'),
   F('Lentil soup thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0,'Lentil soup'),
   F('Turkey chili thermos','main',['protein','hearty','savory','heat'],'pantry',[],0,0,'Turkey chili'),
   F('Chicken noodle soup thermos','main',['soft','hearty','savory','heat'],'pantry',['gluten'],0,1,'Chicken noodle soup'),
@@ -884,26 +885,29 @@ var BANK = [
    Amounts are written the way a recipe is written, as text; parseIng reads the
    number and the unit off the front, which is all cook mode needs to halve
    them, double them, or say them in grams.
-   R(minutes, lunches it makes, ingredients, steps, where it came from) — the
-   lists split on |, and the source shows under the recipe with a link home. */
+   R(minutes, lunches it makes, ingredients, steps, where it came from, the wait) —
+   the lists split on |, and the source shows under the recipe with a link home. The
+   wait is the part of the clock that is not cooking: a recipe that says 35 minutes
+   and then asks for two hours in the fridge has lied to a parent at nine at night,
+   so the head carries it and the first step says it before anything is cooked. */
 var USDA_R4HK = 'https://www.fna.usda.gov/tn/recipes-healthy-kids-cookbook-homes';
-function R(m, y, ing, steps, src){
+function R(m, y, ing, steps, src, wait){
   return {m:m, y:y, l:1, ing:ing.split('|'), steps:steps.split('|'),
-    src:src || '', url:src ? USDA_R4HK : null};
+    src:src || '', url:src ? USDA_R4HK : null, wait:wait || ''};
 }
 var RECIPE = {
   /* Mediterranean Quinoa Salad, Bellingham Memorial Middle School, Bellingham,
      Massachusetts — second place, whole grains. Theirs cooks the quinoa in chicken
      broth; ours uses vegetable, because a salad in the bank should suit the parent
      who keeps one for the vegetarian in the house. */
-  'quinoa salad cup': R(35, 6, '1 cup quinoa|2 cups low-sodium vegetable broth|2 tbsp lemon juice|2 tbsp red wine vinegar|1 tsp garlic, minced|1 1/2 tbsp olive oil|1/2 tsp salt|1/8 tsp ground white pepper|1/4 cup red bell pepper, diced|2 tbsp green onions, diced|2 tbsp red onion, diced|1/2 cup cherry tomatoes, halved|2 tbsp black olives, sliced|2 tbsp feta cheese, crumbled|1 tbsp parsley, chopped',
-    'Rinse the quinoa in a sieve under the cold tap until the water runs clear rather than cloudy — this is what keeps it from tasting bitter.|Bring the quinoa and the broth to a boil in a covered pot, then turn the heat right down and simmer 10 to 15 minutes, until the broth has gone and a little white ring has come away from each grain.|Fluff it with a fork and put it in the fridge to cool right down.|Stir the lemon juice, vinegar, garlic, olive oil, salt and white pepper together in a small bowl. That is the dressing.|Mix the red pepper, green onions, red onion, tomatoes and olives in a large bowl, pour the dressing over and toss, then fold the cold quinoa through.|Fold in the feta and parsley, cover, and give it two hours in the fridge before you pack it. It keeps four days and is better on day two.',
-    'USDA Recipes for Healthy Kids'),
+  'mediterranean quinoa salad': R(35, 6, '1 cup quinoa|2 cups low-sodium vegetable broth|2 tbsp lemon juice|2 tbsp red wine vinegar|1 tsp garlic, minced|1 1/2 tbsp olive oil|1/2 tsp salt|1/8 tsp ground white pepper|1/4 cup red bell pepper, diced|2 tbsp green onions, diced|2 tbsp red onion, diced|1/2 cup cherry tomatoes, halved|2 tbsp black olives, sliced|2 tbsp feta cheese, crumbled|1 tbsp parsley, chopped',
+    'Start this the evening before, or first thing: it wants two hours in the fridge at the end, and it is better on day two than on day one.|Rinse the quinoa in a sieve under the cold tap until the water runs clear rather than cloudy — this is what keeps it from tasting bitter.|Bring the quinoa and the broth to a boil in a covered pot, then turn the heat right down and simmer 10 to 15 minutes, until the broth has gone and a little white ring has come away from each grain.|Fluff it with a fork and put it in the fridge to cool right down.|Stir the lemon juice, vinegar, garlic, olive oil, salt and white pepper together in a small bowl. That is the dressing.|Mix the red pepper, green onions, red onion, tomatoes and olives in a large bowl, pour the dressing over and toss, then fold the cold quinoa through.|Fold in the feta and parsley, cover, and give it its two hours in the fridge. It keeps four days.',
+    'USDA Recipes for Healthy Kids', 'plus 2 hours chilling'),
   /* Purple Power Bean Wrap, Newman Elementary School, Needham, Massachusetts —
      dry beans and peas. Avocado browns, so theirs holds the filling two hours at
      most; that is a step here rather than a note, because it decides the morning. */
   'bean & avocado wrap': R(20, 6, '1 tsp lemon zest|2 tbsp lemon juice|2 cups canned white beans, drained and rinsed|1/2 cup avocado, peeled and pitted|1 tbsp garlic, minced|2 1/4 tsp olive oil|2/3 tsp chili powder|1/2 tsp salt|1 1/2 cups purple cabbage, finely shredded|6 large whole-wheat tortillas|3 cups romaine lettuce, shredded',
-    'Grate the zest off the lemon before you juice it — the other way round does not work.|Blend the beans smooth in a food processor and tip them into a large bowl.|Blend the avocado, lemon juice, zest, garlic, olive oil, chili powder and salt smooth, stir it into the beans, then mix the shredded cabbage through.|Spread two thirds of a cup of the filling along the bottom half of each tortilla and top it with half a cup of lettuce.|Roll each one up like a burrito and cut it across on the diagonal.|Make these the morning they are eaten. The avocado will hold about two hours in the fridge and browns after that.',
+    'Make these the morning they are eaten, not the night before: there is avocado in them, and it holds about two hours in the fridge before it browns.|Grate the zest off the lemon before you juice it — the other way round does not work.|Blend the beans smooth in a food processor and tip them into a large bowl.|Blend the avocado with the lemon juice, the zest, the garlic, the olive oil, the chili powder and the salt until it is smooth too.|Stir that into the beans, then mix the shredded cabbage through.|Spread two thirds of a cup of the filling along the bottom half of each tortilla and top it with half a cup of lettuce.|Roll each one up like a burrito and cut it across on the diagonal.',
     'USDA Recipes for Healthy Kids')
 };
 var RECIPE_BY_KEY = null;
@@ -1039,14 +1043,21 @@ function parseIng(line){
   return {q:q.q, u:u, n:rest, raw:raw};
 }
 var COMMON = [[1/8,'⅛'],[1/4,'¼'],[1/3,'⅓'],[3/8,'⅜'],[1/2,'½'],[5/8,'⅝'],[2/3,'⅔'],[3/4,'¾'],[7/8,'⅞']];
-/* a number a parent can act on: 1½, not 1.5, and never 0.6666666666 */
+/* a number a parent can act on: 1½, not 1.5, and never 0.6666666666 — and never 0,
+   which is what scaling an eighth of a teaspoon of pepper down to one lunch used to
+   say. Nothing in a kitchen is measured below an eighth, and a spoon is marked in
+   eighths, so a small amount comes up to one rather than rounding away, and anything
+   no common fraction fits takes the nearest eighth instead of a decimal. */
 function fmtQty(q){
   if(!(q > 0)) return '';
+  if(q < .125) q = .125;
   if(Math.abs(q - Math.round(q)) < .02) return String(Math.round(q));
-  var whole = Math.floor(q), part = q - whole, best = null;
-  COMMON.forEach(function(c){ if(Math.abs(part - c[0]) < .05 && (!best || Math.abs(part - c[0]) < Math.abs(part - best[0]))) best = c; });
-  if(best) return (whole ? whole : '') + best[1];
-  return String(Math.round(q * 10) / 10);
+  var near = function(v, tol){
+    var whole = Math.floor(v), part = v - whole, best = null;
+    COMMON.forEach(function(c){ if(Math.abs(part - c[0]) < tol && (!best || Math.abs(part - c[0]) < Math.abs(part - best[0]))) best = c; });
+    return best ? (whole ? whole : '') + best[1] : '';
+  };
+  return near(q, .05) || near(Math.round(q * 8) / 8, .001) || String(Math.round(q) || 1);
 }
 function fmtMass(g){ return (g < 100 ? Math.round(g) : Math.round(g / 5) * 5) + ' g'; }
 function fmtVol(ml){ return (ml < 100 ? Math.round(ml / 5) * 5 : Math.round(ml / 10) * 10) + ' ml'; }
@@ -1147,9 +1158,21 @@ function stepIng(r, i, scale, metric){
   };
   /* longest full name first; sort is stable, so two of a length keep their order */
   var order = rows.slice().sort(function(a, b){ return (b.names[0] || '').length - (a.names[0] || '').length; });
-  order.forEach(function(row){ if(row.names.length && claim(row.names[0])) row.hit = true; });
+  var whole = nullMap();
+  order.forEach(function(row){
+    if(row.names.length && claim(row.names[0])){ row.hit = true; whole[row.names[0]] = 1; }
+  });
   order.forEach(function(row){
     for(var k = 1; !row.hit && k < row.names.length; k++) if(claim(row.names[k])) row.hit = true;
+  });
+  /* An ingredient divided across two lines — a cup of sugar in the batter and two
+     spoonfuls on top — has one name between them, and the first line to claim it spends
+     it. So a word the step said as an ingredient's whole name puts every line of that
+     thing back in play: both sugars show, and "both sugars" reaches the brown sugar as
+     well. A word claimed as a short form does not, or the white pepper would read itself
+     into the step that says red pepper, which is the fault this ordering exists to fix. */
+  rows.forEach(function(row){
+    for(var k = 0; !row.hit && k < row.names.length; k++) if(whole[row.names[k]]) row.hit = true;
   });
   var out = [], seen = nullMap();
   rows.forEach(function(row){
@@ -1366,7 +1389,7 @@ function upgradeSheet(why){
   var pr = (Account.billing && Account.billing.prices) || {}, forever = why === 'forever';
   var h = '<p style="margin:0">'+(why === 'share' ? 'Sharing the lunches with the other parent’s phone, or a caretaker, is part of the Household plan.'
         : why === 'lunchbox' ? 'A second lunchbox is part of the Household plan. The first is free for as long as you like.'
-        : why === 'recipe' ? 'Keeping a recipe of your own \u2014 written out, pasted in, or read off a page \u2014 is part of the Household plan. Every recipe in the idea bank stays free to cook from, and every recipe you have kept stays yours.'
+        : why === 'recipe' ? 'Keeping a recipe of your own \u2014 written out, pasted in, or read off a page \u2014 is part of the Household plan. The two the app comes with stay free to cook from, and every recipe you have kept stays yours.'
         : why === 'food' ? 'Writing a food in your own words, or bringing one in from a recipe page, is part of the Household plan. Every food you have added stays on the list, and the idea bank \u2014 recipes and all \u2014 is free.'
         : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
         : why === 'review' ? 'The morning review — what came home, what to rest — is part of the Household plan.'
@@ -1522,11 +1545,13 @@ var APP_BUILD = 'lunchsorted-v20';     /* the same tag as VERSION in sw.js; npm 
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
-   This build is a feature release: recipes, in the app and importable. */
-var WHATS_NEW = {build:'lunchsorted-v20', text:'New: the two recipes the app comes with are now kid-tested ones from the USDA, and any recipe you want beyond them you can import.',
+   This build is a loss as much as a gain — sixty-eight recipes went — so the note says
+   so plainly, and the second card is the part that stops it reading as a week of
+   planning taken away, because nothing about planning, shopping or packing moved. */
+var WHATS_NEW = {build:'lunchsorted-v20', text:'New: two recipes school kitchens actually tested. The sixty-eight we had written ourselves are gone — Import a recipe brings in the ones you trust.',
   steps:[
-    ['The amount, where you need it', 'A step that says "stir in the butter, sugar, egg and vanilla" now says how much of each, under the step itself, so you are not tapping back to the ingredients mid-mix.'],
-    ['In your measures', 'They follow the Cups or Grams switch and the number of servings, like every other amount in the recipe.']
+    ['Two we can stand behind', 'A quinoa salad cup and a bean & avocado wrap, both written and taste-tested by school teams of cooks, chefs, parents and students for the USDA. We had written the rest ourselves and nobody had cooked them, which is not something to hand a parent at six in the morning.'],
+    ['Everything else is where it was', 'Every other dish in the idea bank is still planned, still goes on the shopping list with what to buy for it, and is still packed. What it no longer has is a recipe we made up. Recipes → Import a recipe brings in the one you already use.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
@@ -3350,7 +3375,7 @@ function viewFoods(){
   h += gated()
     ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add your own \u2014 part of the Household plan">'+svg('lock',17)+'Add your own</button>'
       + '<button class="btn wide" data-act="ideas">'+svg('plus',17)+'Browse the idea bank</button>'
-      + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank, and the recipes that come with it, is free.</span>'+premiumTag()+'</p>'
+      + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank, and the two recipes that come with it, stays free.</span>'+premiumTag()+'</p>'
     : isHelper() ? ''
     : '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button>'
       + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words.</span>'+premiumTag()+'</p>' : '');
@@ -4230,7 +4255,7 @@ function madeOf(r, n, cat){
 }
 function cookHead(r, cat){
   var bits = [];
-  if(r.m) bits.push(r.m < 90 ? r.m + ' minutes' : hoursWord(r.m));
+  if(r.m) bits.push((r.m < 90 ? r.m + ' minutes' : hoursWord(r.m)) + (r.wait ? ', ' + r.wait : ''));
   if(r.y) bits.push(('makes ' + r.y + ' ' + madeOf(r, r.y, cat)).trim());
   return bits.join(' · ');
 }
@@ -4298,10 +4323,10 @@ function cookSheet(keepScroll){
       h += '<button class="btn ghost wide" data-act="recipe-delete" data-id="'+esc(r.id)+'">'+svg('trash',17)+'Remove this recipe</button>';
     }
     if(r.src || r.url){
-      h += '<p class="hint muted" style="margin:0">From '+esc(r.src || 'the web')
-        +  (r.url ? ' · ' + (nativePlugin('Browser')
-              ? '<button class="linkbtn" data-act="recipe-site" data-url="'+esc(r.url)+'">the original</button>'
-              : '<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">the original</a>') : '')+'</p>';
+      h += '<p class="hint muted" style="margin:0">From '+esc(r.src || 'the web')+'</p>'
+        +  (r.url ? (nativePlugin('Browser')
+              ? '<button class="btn sm ghost" data-act="recipe-site" data-url="'+esc(r.url)+'">Read the original</button>'
+              : '<a class="btn sm ghost" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">Read the original</a>') : '');
     }
     h += '</div>';
   } else {
@@ -4352,7 +4377,7 @@ function foodSheet(kidId, foodId){
   } else if(!isHelper()){
     /* a recipe on a food is written to the household, so it wears the same lock and
        the same tag as writing a food by hand — on screen, never hidden */
-    h += '<p class="hint muted" style="margin:0">No recipe yet. Paste one in, or give the app the address of one on the web.</p>'
+    h += '<p class="hint muted" style="margin:0">No recipe here. We only ship recipes someone has cooked and tested, so this dish has none \u2014 bring in the one you already trust.</p>'
       +  (gated()
           ? '<button class="btn ghost wide" data-act="upgrade" data-why="recipe" aria-label="Add a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Add a recipe</button>'
           : '<button class="btn wide" data-act="recipe-add" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('plus',17)+'Add a recipe</button>')

@@ -34,7 +34,14 @@ the enrolment, so settle it before launch.
 - [x] Primary language: English (U.S.)
 - [x] Primary category: Food & Drink
 - [x] Secondary category: Productivity
-- [x] Content rights: does not contain, show or access third-party content
+- [ ] Content rights: **answer yes, it contains third-party content, and say it is
+      public domain.** The app ships two recipes from the USDA's Recipes for Healthy Kids
+      cookbook, shown with a source line and a link to the original. They are works of the
+      US government and so in the public domain, which means the rights are ours to use,
+      not that the content is ours. Apple asks whether third-party content is present, not
+      whether it is licensed, so the old answer is no longer true. A parent can also import
+      a recipe from a page they choose, which is their copy on their device and not
+      distributed by us — say so if asked.
 - [x] Age rating: 4+ (the questionnaire is below; every answer None or No)
 - [x] Privacy policy URL: `https://lunchsorted.app/privacy.html`
 
@@ -75,8 +82,8 @@ the enrolment, so settle it before launch.
 > THE SHOPPING LIST WRITES ITSELF
 > Everything you planned across all kids, in one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
 >
-> THE RECIPE COMES WITH IT
-> A Recipes tab of its own, for the whole household rather than one lunchbox, searchable by name or by what is already in the cupboard. Two kid-tested recipes come with it, free. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in cups or in grams, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
+> TWO RECIPES IN, THE REST YOU BRING
+> A Recipes tab of its own, for the whole household rather than one lunchbox. Two kid-tested recipes come with it, free, and once you have kept a few of your own you can search them by name or by what is already in the cupboard. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in cups or in grams, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
 
 > BUILT FOR MULTIPLE KIDS
 > Simplify shopping by matching all kids' lunchboxes, while honoring each school's rules with alternative options. Kids with wildly different preferences can have totally different lunchbox plans. You choose your setup, and one shopping list still covers them all.
@@ -210,6 +217,8 @@ the free tier with the plan's pieces locked, which is also fine.
 > How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle the week or one day; tap a compartment (the swap arrow) to change it. Shop: the list is what to buy, by aisle; the share button sends it to Notes or Reminders. Pack: one Packed check per box; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the gear beside the lunchbox name). The gear beside the lunchbox name: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
 >
 > Payments: the Household plan is sold on our website (lunchsorted.app) and not in the app. The app does not use in-app purchase. Where the app mentions the plan, it opens Safari to our site; the app itself takes no payment. The review account is inside its free three weeks, so everything is on. This is a US-only listing.
+>
+> Recipes: two recipes are built in, from the USDA's Recipes for Healthy Kids cookbook (Food and Nutrition Administration, fna.usda.gov). They are US government works in the public domain; each is shown with a source line and a link to the original. Everything else on the Recipes tab is imported by the parent from a page or text they chose, stored on their own household and not published by us. Recipes tab → Import a recipe, if you want to see that path.
 >
 > Offline: the app works without a network once opened once; airplane mode shows the same week.
 >
