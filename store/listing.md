@@ -34,14 +34,21 @@ the enrolment, so settle it before launch.
 - [x] Primary language: English (U.S.)
 - [x] Primary category: Food & Drink
 - [x] Secondary category: Productivity
-- [ ] Content rights: **answer yes, it contains third-party content, and say it is
-      public domain.** The app ships two recipes from the USDA's Recipes for Healthy Kids
-      cookbook, shown with a source line and a link to the original. They are works of the
-      US government and so in the public domain, which means the rights are ours to use,
-      not that the content is ours. Apple asks whether third-party content is present, not
-      whether it is licensed, so the old answer is no longer true. A parent can also import
-      a recipe from a page they choose, which is their copy on their device and not
-      distributed by us — say so if asked.
+- [ ] Content rights: **read the question on the page before answering — it asks whether
+      the app contains, displays OR ACCESSES third-party content, not whether we are
+      licensed for it.** Two reasons the old "no" no longer holds, the second being the
+      bigger one:
+      1. The app ships two recipes from the USDA's Recipes for Healthy Kids cookbook, with
+         a source line and a link to the original. They are US government works and so
+         public domain — which settles that we may reprint them, not that they are ours.
+         School teams of cooks, chefs, parents and students wrote them.
+      2. **Import a recipe fetches a page the parent names and shows what it read.** That
+         is accessing third-party content however the question is read, and it has been
+         true since the Recipes tab shipped, before any USDA recipe was in the app. Nothing
+         imported is redistributed: it is read on request, kept on that household's own
+         document, and shown to nobody else.
+      Neither of these is "open source" — that is a software licence, and no recipe in the
+      app carries one.
 - [x] Age rating: 4+ (the questionnaire is below; every answer None or No)
 - [x] Privacy policy URL: `https://lunchsorted.app/privacy.html`
 
