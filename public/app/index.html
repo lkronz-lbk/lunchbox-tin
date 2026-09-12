@@ -324,6 +324,11 @@ nav.tabs svg{width:21px;height:21px}
    the screen while a step is up, because half a screen of dimmed food list behind
    the one line you are following is the wrong thing to be looking at. */
 .sheet.cooking{height:86vh}
+/* the step takes the screen, so what is left over goes between the buttons and the
+   ingredients rather than piling up as a gap under everything */
+.sheet.cooking .body{flex:1}
+.sheet.cooking .body>.stack{flex:1}
+.sheet.cooking .body .more{margin-top:auto}
 .prog{height:5px;border-radius:999px;background:var(--line);outline:1px solid var(--line-strong);overflow:hidden}
 .prog span{display:block;height:100%;background:var(--accent)}
 .cookstep{margin:0;font-size:19px;line-height:1.5}
@@ -3449,7 +3454,7 @@ function viewFoods(){
    with no lunchbox tabs across the top — the parent's own first, the idea bank's
    behind them, and a box to search when seventy of them is too many to scroll. */
 function recipeRow(e, where){
-  var r = e.r, name = recipeName(e), head = cookHead(r);
+  var r = e.r, name = recipeName(e), head = cookHead(r, recipeCat(r, name, null));
   var on = where ? (where[normKey(name)] || (e.own && where['#' + r.id]) || []) : recipeOn(e);
   var meta = head || '';
   if(on.length) meta += (meta ? ' · ' : '') + (kids().length > 1 ? 'on ' + listNames(on) : 'on the food list');
@@ -4284,22 +4289,22 @@ function cookTitle(){
   var c = UI.cook; if(!c) return '';
   return c.name || (cookFood() || {}).n || '';
 }
-function cookStart(r, name, foodId, kidId){
+function cookStart(r, name, foodId, kidId, cat){
   if(!r || !name) return;
-  UI.cook = {kidId:kidId || (activeKid() || {}).id, id:foodId || null, rec:foodId ? null : r, name:name,
+  UI.cook = {kidId:kidId || (activeKid() || {}).id, id:foodId || null, rec:foodId ? null : r, name:name, cat:cat || '',
     makes:r.y || 0, metric:metricPref(), step:-1, ticked:nullMap()};
   cookSheet();
 }
 function cookOpen(kidId, foodId){
   var k = kidById(kidId) || activeKid(), f = k && foodById(k, foodId), r = recipeFor(f);
   if(!f || !r) return;
-  cookStart(r, f.n, f.id, k.id);
+  cookStart(r, f.n, f.id, k.id, f.c);
 }
 /* from the Recipes tab: the household's own by id, or the idea bank's by name */
 function cookOpenRecipe(id, name){
   var own = id ? libById(id) : null, r = own || recipeByName(name);
   if(!r) return;
-  cookStart(r, own ? own.n : name, null, null);
+  cookStart(r, own ? own.n : name, null, null, recipeCat(r, own ? own.n : name, null));
 }
 /* how much of the recipe to make: the number of lunches a parent asked for over
    the number it was written for. A recipe that never said stays at one. */
@@ -4310,15 +4315,26 @@ function cookScale(r){
 /* What a yield is counted in. A main the app wrote makes four lunches and says so;
    two dozen cookies are two dozen cookies, not two dozen lunches; and anything read
    off someone else's page is in whatever that page called a serving. */
-function madeOf(r, n, f){
-  if(r && r.l) return (f && f.c === 'main') ? (n === 1 ? 'lunch' : 'lunches') : '';
+function madeOf(r, n, cat){
+  if(r && r.l) return cat === 'main' ? (n === 1 ? 'lunch' : 'lunches') : '';
   return n === 1 ? 'serving' : 'servings';
 }
-function cookHead(r, f){
+function cookHead(r, cat){
   var bits = [];
   if(r.m) bits.push(r.m < 90 ? r.m + ' minutes' : hoursWord(r.m));
-  if(r.y) bits.push(('makes ' + r.y + ' ' + madeOf(r, r.y, f)).trim());
+  if(r.y) bits.push(('makes ' + r.y + ' ' + madeOf(r, r.y, cat)).trim());
   return bits.join(' · ');
+}
+/* the compartment a recipe makes something for: the food's, if it was opened from one,
+   and otherwise the idea bank's own answer, so a main reads as lunches wherever it is
+   opened from rather than only on the Foods tab */
+function recipeCat(r, name, f){
+  if(f) return f.c;
+  var b = bankByName(name || (r && r.n));
+  if(b) return b.c;
+  var by = null;
+  kids().forEach(function(k){ foodsOf(k).forEach(function(x){ if(!by && r && r.id && x.recipeId === r.id) by = x; }); });
+  return by ? by.c : guessCat(r || {});
 }
 function hoursWord(m){
   var h = Math.round(m / 15) / 4;                     /* to the nearest quarter hour, which is how an oven is thought about */
@@ -4341,14 +4357,14 @@ function cookSheet(keepScroll){
   var h;
   if(c.step < 0){
     h = '<div class="stack" style="gap:14px">';
-    if(cookHead(r, f)) h += '<p class="hint muted" style="margin:0">'+esc(cookHead(r, f))+'</p>';
+    if(cookHead(r, c.cat)) h += '<p class="hint muted" style="margin:0">'+esc(cookHead(r, c.cat))+'</p>';
     /* the two questions a parent answers before starting: how much, and in what */
     h += '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">';
     if(r.y){
       h += '<span class="row" style="gap:6px;align-items:center">'
-        +  '<button class="btn sm step" data-act="cook-makes" data-v="-1" aria-label="One '+(madeOf(r, 1, f) || 'batch')+' fewer"'+(c.makes <= 1 ? ' disabled' : '')+'>&minus;</button>'
-        +  '<span class="qty" aria-live="polite">'+((c.makes+' '+madeOf(r, c.makes, f)).trim())+'</span>'
-        +  '<button class="btn sm step" data-act="cook-makes" data-v="1" aria-label="One '+(madeOf(r, 1, f) || 'batch')+' more"'+(c.makes >= 40 ? ' disabled' : '')+'>+</button></span>';
+        +  '<button class="btn sm step" data-act="cook-makes" data-v="-1" aria-label="One '+(madeOf(r, 1, c.cat) || 'batch')+' fewer"'+(c.makes <= 1 ? ' disabled' : '')+'>&minus;</button>'
+        +  '<span class="qty" aria-live="polite">'+((c.makes+' '+madeOf(r, c.makes, c.cat)).trim())+'</span>'
+        +  '<button class="btn sm step" data-act="cook-makes" data-v="1" aria-label="One '+(madeOf(r, 1, c.cat) || 'batch')+' more"'+(c.makes >= 40 ? ' disabled' : '')+'>+</button></span>';
     }
     h += '<span class="toggles" style="margin-left:auto">'
       +  '<button class="tg" data-act="cook-units" data-v="us" aria-pressed="'+(!c.metric)+'">Cups</button>'
