@@ -4467,9 +4467,11 @@ function exportText(){
 }
 
 /* ------------------------------------------------------------ app shell */
+/* The order is the order a week is built in: the box you are packing, the week it came
+   from, the list it was drawn from — then the two you act on, and the account last. */
 var TABS = [
   {k:'pack', label:'Pack', icon:'pack'}, {k:'week', label:'Week', icon:'week'},
-  {k:'shop', label:'Shop', icon:'shop'}, {k:'foods',label:'Foods',icon:'foods'},
+  {k:'foods',label:'Foods',icon:'foods'}, {k:'shop', label:'Shop', icon:'shop'},
   {k:'recipes',label:'Recipes',icon:'book'}, {k:'setup',label:'Account',icon:'account'}
 ];
 function render(){
