@@ -65,17 +65,28 @@ food list from a 200-item library and produce a planned week immediately. From t
   something the other phone needs. **Cups or grams** converts what can honestly be converted: a
   cup of a thing whose density we know is weighed, a pourable thing is given in millilitres, an
   oven set in Fahrenheit carries its Celsius, anything under about 15 g stays a spoonful, and a cup
-  of cherry tomatoes stays a cup. The + and − change how many lunches it makes and scale every
-  amount, rounded to fractions a kitchen uses. Amounts are stored as the text a recipe writes
+  of cherry tomatoes stays a cup. The + and − change how much it makes — lunches for the app's own mains, whatever the
+  recipe counted in for anything else — and scale every amount, rounded to the eighths a
+  measuring cup is marked in. It converts both ways, so a recipe written in grams reads back
+  in cups. Amounts are stored as the text a recipe writes
   (`parseIng` reads the number and the unit off the front), so a line the app cannot read is shown
-  exactly as written rather than mangled.
+  exactly as written rather than mangled. A food that has one carries a **Recipe** tag on the
+  Foods list; a recipe of the parent's own can be attached to a food that has none (it goes on
+  the same dish in every lunchbox) and removed again with an Undo, after which a food named
+  after a bank dish falls back to the bank's. The cups-or-grams choice is kept on the phone
+  (`lunchsorted-units`), not in the household document, like the cook-mode ticks.
 - **Importing a recipe** — `Foods → Import a recipe`, gated like *Add your own* because it writes a
   food; the idea bank stays free. Two ways in. The address of a recipe page goes to
   `POST /api/recipe`, which reads the schema.org JSON-LD the page already publishes for search
   engines (and the microdata under it), and returns the parts and nothing else — not the page, not
-  its headers — so the function is no use as a proxy. It opens only https, only a named host on
-  the public web, refuses every private and link-local address after resolving the name, at every
-  redirect, caps the body and the time, and is throttled per address. A video has no recipe to
+  its headers — so the function is no use as a proxy. It asks for a session, which is what keeps
+  the privacy page's promise that signed out nothing you type leaves the phone, and gives the
+  throttle an account to count rather than an address anyone can rotate. It opens only https,
+  only a named host on the public web, reads every resolved address as bytes and refuses the
+  private, loopback, link-local and multicast ones in every notation they can be written in,
+  re-checks at each redirect, caps the body it reads and the time it takes, bounds the parser so
+  a page cannot make reading it expensive, and answers every failure in the same words so it is
+  not a map of someone else's network. A video has no recipe to
   read, so the second way is pasting the words under it: the same parser runs on the phone with no
   network, reading a title, `Serves 4`, `Prep 10 minutes`, ingredient lines and steps out of a
   caption. What comes back becomes a food with its compartment, aisle, shopping line and allergens
@@ -198,6 +209,12 @@ forward).
       `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
       function responses instead, every app open becomes a function call (remove that rule).
 - [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form.
+- [ ] Reshoot the marketing and store screenshots on a machine that can reach
+      fonts.gstatic.com: `public/img/screen-pack.*` (the box now carries a "Making it?"
+      line), `store/screenshots/02-pack.png` (the same) and `06-foods.png` (the Foods
+      rows now carry a Recipe tag, and the tab an Import a recipe button). `npm run dev`,
+      then `npm run shots`; `node scripts/store-shots.mjs` for the store set. Shot where
+      the fonts cannot load, they come out in the fallback face.
 - [ ] Run `npm run csp` after any change to `public/app/index.html` (the test suite refuses
       a stale hash), and bump `VERSION` in `public/app/sw.js` when icons, the manifest or the
       fonts change. The shell itself refreshes one launch behind a deploy without a bump.

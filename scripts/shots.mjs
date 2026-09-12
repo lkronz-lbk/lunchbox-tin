@@ -10,11 +10,17 @@
    screen fills itself now, so there is nothing left to frame by hand. */
 import { chromium } from 'playwright';
 import fs from 'node:fs';
-const OUT = '/Users/lizkronzek/lunch-sorted/public/img';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+/* the repository's own img directory, not one machine's copy of it */
+const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'img');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
-const b = await chromium.launch();
+const b = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const ctx = await b.newContext({ viewport: {width:375, height:812}, deviceScaleFactor:2, colorScheme:'light', timezoneId:'America/New_York' });
+/* The brand fonts come from Google, so these have to be shot somewhere that can
+   reach fonts.gstatic.com; a sandbox that cannot will render them in the fallback
+   face, which is worse than a stale screenshot. The page is given time to load them. */
 /* Shoot on a Monday, so the week view shows a week rather than the two days
    left after a Thursday. The app reads the clock in a dozen places; pin it once. */
 await ctx.addInitScript(() => {
@@ -30,7 +36,7 @@ await ctx.addInitScript(() => {
 const p = await ctx.newPage();
 p.on('pageerror', e => console.log('PAGEERROR', e.message));
 try {
-  await p.goto('http://localhost:8099/app/index.html', {timeout:8000});
+  await p.goto('http://127.0.0.1:8099/app/index.html', {timeout:8000});   /* the address `npm run dev` prints: localhost can resolve to ::1, where nothing is listening */
 } catch (e) {
   console.error('No static server on :8099 — run `npm run dev` in another terminal first.');
   await b.close();

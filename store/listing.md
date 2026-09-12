@@ -67,7 +67,7 @@ the enrolment, so settle it before launch.
 > Answer three questions and you get five planned lunchboxes: a main, a side, a fruit and a sweet for every school day. Not a random shuffle. Something crunchy against a soft main, protein when the main is light, something sharp to cut the salt. Re-shuffle the whole week, or individual boxes if needed, or just switch out one item.
 >
 > NOTHING TO SET UP FIRST
-> There is no food library to build before you get anything back. It starts with foods most kids eat and you adapt from there. Take out the options they refuse, and add more from a long list of ideas. On the Household plan you can write in that pickle roll-up only your kid will eat.
+> There is no food library to build before you get anything back. It starts with foods most kids eat and you adapt from there. Take out the options they refuse, and add more from a long list of ideas. On the Household plan you can write in that pickle roll-up only your kid will eat, or paste in the address of a recipe you found and let the app read the ingredients off it.
 >
 > YOUR SCHOOL'S RULES BUILT IN
 > Nut free, seed free, dairy free, no microwave, no ice pack, a short eating window, no chocolate, or set your own. Set them per kid, per school. A food that breaks a rule gets flagged in your list, so you always know why something stopped showing up.
@@ -75,6 +75,9 @@ the enrolment, so settle it before launch.
 > THE SHOPPING LIST WRITES ITSELF
 > Everything you planned across all kids, in one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
 >
+> THE RECIPE COMES WITH IT
+> The dishes you cook rather than buy come with the recipe built in, free. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in cups or in grams, scaled to how many lunches you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it becomes a food on your list with its shopping line already written.
+
 > BUILT FOR MULTIPLE KIDS
 > Simplify shopping by matching all kids' lunchboxes, while honoring each school's rules with alternative options. Kids with wildly different preferences can have totally different lunchbox plans. You choose your setup, and one shopping list still covers them all.
 >
@@ -89,9 +92,9 @@ the enrolment, so settle it before launch.
 >
 > It works online and off, and nothing leaves your phone until you choose to sign in.
 >
-> FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, take out the ones they refuse, and set your school's rules.
+> FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, with the recipe for everything you cook, take out the ones they refuse, and set your school's rules.
 >
-> THE PAID HOUSEHOLD PLAN: Add your own foods, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. The plan is bought on our website, not in this app.
+> THE PAID HOUSEHOLD PLAN: Add your own foods or bring in a recipe from anywhere, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. The plan is bought on our website, not in this app.
 >
 > Made by a mom who no longer dreads packing lunches. hello@lunchsorted.app
 
@@ -99,7 +102,7 @@ the enrolment, so settle it before launch.
 
 - [x] Pasted
 
-> lunchbox,bento,packed,meal,planner,kids,picky,eater,snack,grocery,shopping,list,allergy,prep,ideas
+> lunchbox,bento,packed,meal,planner,kids,picky,eater,snack,grocery,shopping,list,allergy,recipe
 
 ### URLs and copyright
 
