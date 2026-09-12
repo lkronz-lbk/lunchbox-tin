@@ -2451,6 +2451,31 @@ try {
       micro && micro.ing.length === 2 && /Roll them/.test(micro.steps[0]), micro);
     check('a page with no recipe on it reads as no recipe, rather than as an empty one',
       parseRecipeHtml('<html><body><p>1 cup of nothing</p></body></html>', 'https://c.example/x') === null);
+    /* A great many recipes are published with no machine-readable markup at all — a shop's
+       blog post on a template that only knows about articles. The recipe is still under an
+       Ingredients heading, so that is read too, entities and all. */
+    const article = parseRecipeHtml('<html><head><title>Pumpkin Blondies &ndash; A Shop</title>'
+      + '<script type="application/ld+json">{"@type":"BlogPosting","headline":"Pumpkin Blondies"}</script></head><body>'
+      + '<h1>Pumpkin Blondies</h1><p>A fall favourite.</p>'
+      + '<h2>Ingredients</h2><ul><li>1 cup all-purpose flour</li><li>&frac12; cup pumpkin pur&eacute;e</li>'
+      + '<li>&frac34; cup brown sugar</li><li>1 tsp pumpkin pie spice</li></ul>'
+      + '<h2>Instructions</h2><ol><li>Heat the oven to 350F.</li><li>Bake 28 minutes.</li></ol>'
+      + '<h2>Notes</h2><p>Keeps five days.</p></body></html>', 'https://a-shop.example/blogs/recipes/pumpkin-blondies?utm_source=Pinterest');
+    check('a recipe published as nothing but a heading and a list is read out of the page itself',
+      article && article.title === 'Pumpkin Blondies'
+      && article.ing.length === 4 && article.ing[1] === '½ cup pumpkin purée'
+      && article.steps.length === 2 && /Keeps five days/.test(article.steps.join(' ')) === false, article);
+    check('and one Ingredients heading with nothing under it is not a recipe',
+      parseRecipeHtml('<h2>Ingredients</h2><p>Coming soon.</p>', 'https://c.example/x') === null
+      && parseRecipeHtml('<h2>Ingredients</h2><ul><li>love</li></ul>', 'https://c.example/x') === null);
+    {
+      /* the article reader runs on pages someone else wrote, so it is bounded too */
+      const t0 = Date.now();
+      parseRecipeHtml('<h2>'.repeat(200000).slice(0, 1500000), 'https://c.example/x');
+      parseRecipeHtml('<h2>Ingredients</h2><ul>' + '<li>'.repeat(300000).slice(0, 1400000), 'https://c.example/x');
+      const ms = Date.now() - t0;
+      check('and a page of unclosed tags does not make reading it expensive', ms < 2000, ms + 'ms');
+    }
 
     /* the one thing on this site that fetches an address someone else chose */
     const refused = {};

@@ -78,8 +78,10 @@ food list from a 200-item library and produce a planned week immediately. From t
 - **Importing a recipe** — `Foods → Import a recipe`, gated like *Add your own* because it writes a
   food; the idea bank stays free. Two ways in. The address of a recipe page goes to
   `POST /api/recipe`, which reads the schema.org JSON-LD the page already publishes for search
-  engines (and the microdata under it), and returns the parts and nothing else — not the page, not
-  its headers — so the function is no use as a proxy. It asks for a session, which is what keeps
+  engines, the microdata under that, and failing both the article itself — an "Ingredients"
+  heading and the list under it, which is how a great many recipes are published, a shop's blog
+  post among them — and returns the parts and nothing else — not the page, not its headers — so
+  the function is no use as a proxy. It asks for a session, which is what keeps
   the privacy page's promise that signed out nothing you type leaves the phone, and gives the
   throttle an account to count rather than an address anyone can rotate. It opens only https,
   only a named host on the public web, reads every resolved address as bytes and refuses the
