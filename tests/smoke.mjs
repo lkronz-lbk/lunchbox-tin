@@ -2314,6 +2314,7 @@ try {
   for (const k of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_YEAR', 'STRIPE_PRICE_LIFETIME', 'STRIPE_PRICE_MONTH']) delete process.env[k];
   stripeLib.forgetPrices();
 
+  let recipeSession = '', recipeCookieName = 'ls_session';
   /* ----------------------------------------------------------- recipes
      Three layers over one record: the idea bank's cooked dishes carry a recipe,
      any recipe can be cooked a step at a time in either set of measures, and a
@@ -2321,7 +2322,10 @@ try {
      needs the network except the page reader, and that is held up against a page
      in memory rather than fetched. */
   {
-    const { parseRecipeHtml, publicUrl } = await import('../netlify/functions/api-recipe.js');
+    const { parseRecipeHtml, publicUrl, privateAddress } = await import('../netlify/functions/api-recipe.js');
+    const { COOKIE: authCookieName, createSession, findOrCreateUser } = await import('../netlify/lib/auth.js');
+    const recipeUser = await findOrCreateUser('recipes@example.com');
+    recipeSession = await createSession(recipeUser.id); recipeCookieName = authCookieName;
     const ld = (body) => `<html><head><title>Quinoa Salad | A Blog</title><script type="application/ld+json">${JSON.stringify(body)}</script></head><body></body></html>`;
     const read = parseRecipeHtml(ld({ '@context': 'https://schema.org', '@graph': [
       { '@type': 'WebSite' },
@@ -2351,14 +2355,48 @@ try {
       refused[u] = !!(await publicUrl(u)).error;
     check('the page reader refuses anything but a named host on the public web over https',
       Object.values(refused).every(Boolean), refused);
+    /* the filter reads addresses as bytes, so a private one in a costume is still private */
+    const inCostume = {};
+    for (const [label, addr] of [['loopback', '127.0.0.1'], ['private', '10.1.2.3'], ['link-local', '169.254.169.254'],
+      ['v4-mapped', '::ffff:127.0.0.1'], ['v4-compatible', '::127.0.0.1'], ['loopback v6', '::1'], ['unspecified', '::'],
+      ['NAT64', '64:ff9b::7f00:1'], ['6to4 of loopback', '2002:7f00:1::'], ['v6 multicast', 'ff02::1'],
+      ['unique local', 'fd00::1'], ['v6 link-local', 'fe80::1'], ['carrier NAT', '100.100.1.1'], ['nonsense', 'not-an-address']])
+      inCostume[label] = privateAddress(addr);
+    check('and reads an address as its bytes, so loopback wears no costume it does not see through',
+      Object.values(inCostume).every(Boolean)
+      && !privateAddress('93.184.216.34') && !privateAddress('2606:2800:220:1:248:1893:25c8:1946'), inCostume);
 
-    const post = (body, method = 'POST') => recipeHandler(new Request('http://localhost/api/recipe',
-      { method, headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : JSON.stringify(body) }), { ip: '203.0.113.9' });
+    /* a page built to be expensive to read: the tag strippers used to scan to the end
+       of the buffer from every unclosed "<", which cost a minute of CPU per request */
+    {
+      const nasty = '<script type="application/ld+json">' + JSON.stringify({ '@type': 'Recipe',
+        name: '<script '.repeat(90000), recipeIngredient: ['1 cup oats'], recipeInstructions: '<'.repeat(400000) }) + '</script>';
+      const t0 = Date.now(); parseRecipeHtml(nasty, 'https://a.example/x'); const ms = Date.now() - t0;
+      check('a page written to be expensive to read is read in a moment anyway', ms < 2000, ms + 'ms');
+    }
+
+    const post = (body, method = 'POST', headers = {}) => recipeHandler(new Request('http://localhost/api/recipe',
+      { method, headers: { 'content-type': 'application/json', ...headers }, body: method === 'GET' ? undefined : JSON.stringify(body) }));
     check('the reader answers nothing but a POST', (await post({}, 'GET')).status === 404);
-    check('and asks for an address when none came', (await post({})).status === 400);
-    const plain = await post({ url: 'http://example.com/recipe' });
-    check('and says so, in words a parent can act on, when the address is not one it will open',
-      plain.status === 422 && /https/.test((await plain.json()).error));
+    /* the one thing here that fetches an address someone else chose is not left open to
+       the internet, and that is also what keeps the promise that signed out, nothing typed
+       into the app leaves the phone */
+    check('and refuses a stranger outright, whatever they ask for',
+      (await post({ url: 'https://example.com/r' })).status === 401 && (await post({})).status === 401);
+    {
+      const cookie = `${authCookieName}=${recipeSession}`;
+      check('signed in, it asks for an address when none came', (await post({}, 'POST', { cookie })).status === 400);
+      const plain = await post({ url: 'http://example.com/recipe' }, 'POST', { cookie });
+      check('and says so, in words a parent can act on, when the address is not one it will open',
+        plain.status === 422 && /https/.test((await plain.json()).error));
+      const huge = await recipeHandler(new Request('http://localhost/api/recipe',
+        { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: 'x'.repeat(4000) }));
+      check('and a body too big to be an address is refused before it is parsed', huge.status === 400);
+      const shapes = await Promise.all(['https://127.0.0.1/r', 'https://10.0.0.5/r'].map(u => post({ url: u }, 'POST', { cookie }).then(r => r.status)));
+      const worded = await Promise.all(['https://127.0.0.1/r', 'https://10.0.0.5/r'].map(u => post({ url: u }, 'POST', { cookie }).then(r => r.json()).then(j => j.error)));
+      check('and every way a page can fail to give up a recipe answers in the same words, so the reader is not a map of someone else\u2019s network',
+        shapes.every(x => x === 422) && worded[0] === worded[1], worded);
+    }
   }
   {
     const ctxR2 = await phone();
@@ -2455,27 +2493,14 @@ try {
       && (await pr2.$$eval('#view [data-act="cook"]', a => a.map(b => b.textContent))).some(t => /Quinoa salad cup/.test(t)));
     await pr2.click('[data-act="tab"][data-tab="foods"]'); await pr2.waitForTimeout(300);
 
-    /* ---- reading one off a page */
+    /* ---- reading one off a page needs a sign-in, because that is the only part that leaves the phone */
     await pr2.click('[data-act="recipe-import"]'); await pr2.waitForTimeout(300);
-    await pr2.fill('#riUrl', 'https://a-blog.example/quinoa');
-    await pr2.click('[data-act="recipe-fetch"]'); await pr2.waitForTimeout(500);
-    check('a recipe read off a page comes back as a food to check over, with every guess shown rather than hidden',
-      (await pr2.inputValue('#nfName')) === 'Lemony Quinoa Salad'
-      && /Quinoa/.test(await pr2.inputValue('#nfBuy'))
-      && (await pr2.$$eval('#nfAl .tg[aria-pressed="true"]', a => a.map(b => b.getAttribute('data-v')))).includes('dairy')
-      && /the school rules go by this/.test(await pr2.textContent('#sheetBody')),
-      await pr2.inputValue('#nfBuy'));
-    await pr2.click('[data-act="save-own"]'); await pr2.waitForTimeout(400);
-    const saved = await pr2.evaluate(() => {
-      const d = JSON.parse(localStorage.getItem('lunchsorted'));
-      const f = d.kids.flatMap(k => k.foods).find(x => x.n === 'Lemony Quinoa Salad');
-      return f && { ing: f.recipe.ing.length, steps: f.recipe.steps.length, src: f.recipe.src, url: f.recipe.url, buy: f.buy.length };
-    });
-    check('and it lands on the list as a food, carrying its recipe, where it came from, and its shopping line',
-      saved && saved.ing === 4 && saved.steps === 3 && saved.src === 'a-blog.example' && saved.buy > 1, saved);
+    check('signed out, the app does not offer to send an address anywhere, and says why',
+      (await pr2.$$eval('#riUrl', a => a.length)) === 0
+      && (await pr2.$$eval('#riText', a => a.length)) === 1
+      && /nothing you type here leaves the phone/.test(await pr2.textContent('#sheetBody')));
 
     /* ---- and pasted in, which is the only thing that works for a video */
-    await pr2.click('[data-act="recipe-import"]'); await pr2.waitForTimeout(300);
     await pr2.fill('#riText', 'EASY TURKEY PINWHEELS — my kids ask for these every week!!\n'
       + 'Serves 4\n4 large tortillas\n3 tbsp cream cheese\n8 slices deli turkey\n'
       + 'Spread the cream cheese right to the edge of each tortilla.\nRoll them up tight and chill them before slicing.');
@@ -2518,6 +2543,48 @@ try {
       emptyOne && (await pr2.$$eval('[data-act="cook"]', a => a.length)) === 0);
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
     await ctxR2.close();
+  }
+  {
+    /* signed in, the address of a page can be read. The session is made directly rather
+       than driven through the sign-in screens, which have their own tests above; the
+       reader itself is answered from here, so the suite never leaves the machine. */
+    const ctxR3 = await phone();
+    await ctxR3.addCookies([{ name: recipeCookieName, value: recipeSession, url: BASE }]);
+    await ctxR3.route('**/api/recipe', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ recipe: {
+      title: 'Lemony Quinoa Salad', m: 30, y: 4,
+      ing: ['1 cup quinoa', '2 cups water', '4 oz feta cheese, crumbled', '1/2 tsp salt'],
+      steps: ['Rinse the quinoa.', 'Simmer it for 20 minutes.', 'Toss it with the feta.'],
+      src: 'a-blog.example', url: 'https://a-blog.example/quinoa' } }) }));
+    const pr3 = await ctxR3.newPage(); pr3.on('pageerror', e => errors.push(String(e.message)));
+    await pr3.goto(BASE + '/app/'); await pr3.waitForTimeout(600);
+    await pr3.fill('#obName', 'Rowan'); await pr3.click('[data-act="ob-go"]'); await pr3.waitForTimeout(600);
+    for (const a of ['ob-later', 'ob-skip']) { const b = await pr3.$(`[data-act="${a}"]`); if (b) { await b.click(); await pr3.waitForTimeout(350); } }
+    await pr3.click('[data-act="tab"][data-tab="foods"]'); await pr3.waitForTimeout(400);
+    await pr3.click('[data-act="recipe-import"]'); await pr3.waitForTimeout(350);
+    check('signed in, the app offers to read a page', (await pr3.$$eval('#riUrl', a => a.length)) === 1);
+    await pr3.fill('#riUrl', 'https://a-blog.example/quinoa');
+    await pr3.click('[data-act="recipe-fetch"]'); await pr3.waitForTimeout(600);
+    check('a recipe read off a page comes back as a food to check over, with every guess shown rather than hidden',
+      (await pr3.inputValue('#nfName')) === 'Lemony Quinoa Salad'
+      && /Quinoa/.test(await pr3.inputValue('#nfBuy'))
+      && (await pr3.$$eval('#nfAl .tg[aria-pressed="true"]', a => a.map(b => b.getAttribute('data-v')))).includes('dairy')
+      && /the school rules go by this/.test(await pr3.textContent('#sheetBody')),
+      await pr3.inputValue('#nfBuy'));
+    await pr3.click('[data-act="save-own"]'); await pr3.waitForTimeout(500);
+    const saved = await pr3.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const f = d.kids.flatMap(k => k.foods).find(x => x.n === 'Lemony Quinoa Salad');
+      return f && { ing: f.recipe.ing.length, steps: f.recipe.steps.length, src: f.recipe.src, url: f.recipe.url, buy: f.buy.length, l: f.recipe.l };
+    });
+    check('and it lands on the list as a food, carrying its recipe, where it came from, and its shopping line',
+      saved && saved.ing === 4 && saved.steps === 3 && saved.src === 'a-blog.example' && saved.buy > 1, saved);
+    check('and it is counted in servings, not in lunches, because that is what its own page said',
+      !saved.l && /makes 4 servings/.test(await (async () => {
+        const h = await pr3.evaluateHandle(() => [...document.querySelectorAll('[data-act="food-open"]')].find(b => /Lemony/.test(b.textContent)));
+        await h.asElement().click(); await pr3.waitForTimeout(300); return pr3.textContent('#sheetBody');
+      })()));
+    await pr3.click('#sheetClose'); await pr3.waitForTimeout(200);
+    await ctxR3.close();
   }
 
   /* ------------------------------------------------------- pwa + offline */

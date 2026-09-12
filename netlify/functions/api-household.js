@@ -40,14 +40,19 @@ async function ensureHousehold(user, withDoc) {
 }
 
 /* a helper sees the pack list and nothing else: the lunchboxes' names, this week's
-   plan, the foods it names, and the ticks; no rules, allergens, history or addresses */
+   plan, the foods it names, and the ticks; no rules, allergens, history or addresses.
+   A recipe goes with the food, because whoever is packing the box may be the one
+   making it — but only what to do, never where the parent found it. */
+function recipeForHelper(r) {
+  return r ? { m: r.m, y: r.y, ing: r.ing, steps: r.steps, src: '', url: null } : null;
+}
 function helperView(doc) {
   if (!doc) return doc;
   const kids = (doc.kids || []).filter(k => !k.deletedAt).map(k => {
     const used = new Set(); (k.week && k.week.days || []).forEach(d => Object.values(d.slots || {}).forEach(id => id && used.add(id)));
     return { id: k.id, name: k.name, hue: k.hue, createdAt: k.createdAt, updatedAt: k.updatedAt, deletedAt: null,
       settings: { days: (k.settings || {}).days || [1,2,3,4,5], noHeat: true, avoidAllergens: [], avoidText: '', slots: (k.settings || {}).slots || {}, updatedAt: (k.settings || {}).updatedAt },
-      foods: (k.foods || []).filter(f => used.has(f.id)).map(f => ({ id: f.id, kidId: f.kidId, n: f.n, c: f.c, t: f.t, a: f.a, al: [], buy: Array.isArray(f.buy) ? f.buy : null, recipe: f.recipe || null, img: f.img || null, createdAt: f.createdAt, updatedAt: f.updatedAt, deletedAt: f.deletedAt })),
+      foods: (k.foods || []).filter(f => used.has(f.id)).map(f => ({ id: f.id, kidId: f.kidId, n: f.n, c: f.c, t: f.t, a: f.a, al: [], buy: Array.isArray(f.buy) ? f.buy : null, recipe: recipeForHelper(f.recipe), img: f.img || null, createdAt: f.createdAt, updatedAt: f.updatedAt, deletedAt: f.deletedAt })),
       week: k.week, packed: k.packed || {}, eaten: {}, past: [] };
   });
   return { ...doc, kids, members: (doc.members || []).map(m => ({ id: m.id, name: m.name, role: m.role, createdAt: m.createdAt, updatedAt: m.updatedAt, deletedAt: m.deletedAt })), pantry: {} };

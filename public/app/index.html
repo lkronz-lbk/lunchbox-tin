@@ -315,10 +315,15 @@ nav.tabs svg{width:21px;height:21px}
 .pickbox .pic{width:44px;height:44px;border-radius:10px}
 .kiddone .pic{width:44px;height:44px;border-radius:10px}
 .pic.big{width:104px;height:104px;border-radius:18px;margin:0 auto}
-/* cook mode: read at arm's length, on a counter, with wet hands */
-.prog{height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+/* cook mode: read at arm's length, on a counter, with wet hands. The sheet takes
+   the screen while a step is up, because half a screen of dimmed food list behind
+   the one line you are following is the wrong thing to be looking at. */
+.sheet.cooking{height:86vh}
+.prog{height:5px;border-radius:999px;background:var(--line);outline:1px solid var(--line-strong);overflow:hidden}
 .prog span{display:block;height:100%;background:var(--accent)}
 .cookstep{margin:0;font-size:19px;line-height:1.5}
+.cookstep:focus{outline:none}
+.btn.sm.step{min-width:44px;padding:0 10px;font-size:17px}
 ol.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px}
 ol.steps li{font-size:14.5px;line-height:1.55;padding-left:2px}
 .thumb{width:44px;height:44px;border-radius:var(--r-md);border:1.5px solid var(--line);background:var(--surface-2);padding:0;overflow:hidden;
@@ -962,7 +967,42 @@ var RECIPE = {
   'granola cluster': R(45, 12, '3 cups rolled oats|1/2 cup honey|1/3 cup oil|1 egg white|1 tsp vanilla|1/2 tsp salt|1 tsp cinnamon',
     'Heat the oven to 300F and line a tray.|Whisk the honey, oil, egg white, vanilla, salt and cinnamon; the egg white is what binds the clusters.|Stir in the oats until every one is coated.|Press the mixture into one firm slab on the tray, about half an inch thick.|Bake 30 minutes, turning the tray once, until golden at the edges.|Let it cool completely without touching it, then break it into clusters.'),
   'trail mix': R(5, 10, '2 cups mixed nuts|1 cup raisins|1 cup pretzel sticks|1/2 cup chocolate chips|1/2 cup dried cranberries',
-    'Mix everything in one big bowl.|Portion it into small bags or pots straight away, so it goes in the box without a second decision on a school morning.|Leave the chocolate out in warm weather, or it melts into everything else.')
+    'Mix everything in one big bowl.|Portion it into small bags or pots straight away, so it goes in the box without a second decision on a school morning.|Leave the chocolate out in warm weather, or it melts into everything else.')  ,
+  /* ---- the rest of the bank that gets made rather than bought */
+  'turkey & cheese roll-ups': R(10, 4, '4 large tortillas|2 tbsp cream cheese|8 slices deli turkey|4 slices cheese|1 cup shredded lettuce',
+    'Spread the cream cheese thinly right to the edges of each tortilla — that is what holds the roll shut.|Lay on two slices of turkey and one of cheese, then the lettuce in a line across the near third.|Roll it up tight, tucking the sides in as you go.|Cut each roll in half on the diagonal and wrap the halves, or they unroll in the bag.'),
+  'ham & cheese pinwheels': R(10, 4, '4 large tortillas|3 tbsp cream cheese|8 slices ham|4 slices cheese|1 tsp mustard',
+    'Beat the mustard through the cream cheese and spread it to the edges of each tortilla.|Cover with the ham and the cheese, right out to the edge.|Roll as tightly as you can, wrap each roll, and chill it 20 minutes — a cold roll cuts, a warm one squashes.|Trim the ends and cut each roll into four rounds. Pack them cut-side up.'),
+  'ham & cheese sandwich': R(5, 4, '8 slices sandwich bread|8 slices ham|4 slices cheese|2 tbsp butter|1 tsp mustard',
+    'Butter both slices right to the crusts. That is the barrier that keeps the bread from going damp by lunchtime.|Lay the cheese down first, then the ham, then a little mustard if it gets eaten.|Press the sandwich gently, cut it the way it actually gets eaten, and wrap it whole.'),
+  'peanut butter & banana wrap': R(5, 4, '4 large tortillas|1/2 cup peanut butter|4 bananas|1 tsp cinnamon',
+    'Spread the peanut butter over each tortilla, leaving a clear inch at the far edge.|Lay a whole banana across the near third and dust it with cinnamon.|Roll it up tight — the peanut butter seals the far edge.|Cut in half and wrap each half. Best made in the morning, or the banana softens the wrap.'),
+  'sunbutter & honey roll-up': R(5, 4, '4 large tortillas|1/2 cup sunflower butter|3 tbsp honey',
+    'Warm the sunflower butter for a few seconds if it is stiff; it tears the tortilla cold.|Spread it over each tortilla and drizzle the honey across it.|Roll up tight and cut in half. Wrap each half, because honey finds its way out.'),
+  'veggie & hummus pita': R(10, 4, '4 pita breads|1 cup hummus|1 cucumber, cut into strips|1 cup shredded carrots|1 cup baby spinach',
+    'Cut each pita in half and open the pockets carefully so they do not split.|Spread hummus inside both walls of each pocket — that keeps the bread from going damp.|Pack the cucumber, carrot and spinach in, standing up rather than lying flat, so they do not slide out.'),
+  'chicken salad crackers': R(15, 4, '2 cups cooked chicken, chopped|1/3 cup mayonnaise|1 stalk celery, diced small|1 tbsp lemon juice|1/4 tsp salt|24 crackers',
+    'Chop the chicken small enough to spoon onto a cracker one-handed.|Stir it with the mayonnaise, celery, lemon juice and salt and chill it for half an hour.|Pack the chicken salad in a sealed pot and the crackers in their own bag, to be built at the table. Crackers spread in the morning are soft by noon.'),
+  'chicken noodle soup thermos': R(30, 4, '6 cups chicken stock|2 cups cooked chicken, shredded|1 cup egg noodles|2 carrots, sliced|2 stalks celery, sliced|1/2 tsp salt',
+    'Fill the thermos with boiling water and leave it standing while you cook; a cold thermos loses the heat by lunch.|Simmer the carrot and celery in the stock for 10 minutes.|Add the noodles and cook them 6 minutes, then stir in the chicken and the salt.|Empty the thermos and fill it while the soup is at a rolling simmer.'),
+  'fruit salad cup': R(10, 4, '2 cups melon cubes|1 cup grapes, halved|1 cup strawberries, quartered|1 orange|1 tbsp honey',
+    'Cut everything to about the same size, so a forkful is a mouthful.|Squeeze the orange over the lot and stir the honey through the juice — that is what stops the cut fruit browning.|Spoon into cups with a little of the juice. It keeps three days.'),
+  'melon skewers': R(10, 4, '2 cups watermelon cubes|2 cups cantaloupe cubes|1 cup honeydew cubes|8 short skewers',
+    'Cut the melon into cubes about an inch across; smaller ones slide off.|Use short, blunt skewers, or cut long ones down so they lie flat in the box.|Thread the three melons in turn, five or six pieces a skewer.|Pack them flat with an ice pack, and pour off any juice first.'),
+  'mini muffin': R(30, 24, '1 1/2 cups flour|1/2 cup sugar|2 tsp baking powder|1/4 tsp salt|3/4 cup milk|1/3 cup oil|1 egg|1 tsp vanilla',
+    'Heat the oven to 375F and line a 24-hole mini muffin tin.|Whisk the flour, sugar, baking powder and salt in one bowl; the milk, oil, egg and vanilla in another.|Pour the wet into the dry and fold about ten times only. Lumps are fine; a smooth batter makes tough muffins.|Fill each hole two-thirds and bake 12 minutes, until they spring back.|Cool on a rack. They freeze well, and one goes into the box frozen and thaws by lunch.'),
+  'sugar cookie': R(35, 24, '1 cup butter, softened|1 cup sugar|1 egg|1 tsp vanilla|2 1/2 cups flour|1 tsp baking powder|1/2 tsp salt',
+    'Beat the butter and sugar until pale and light, then beat in the egg and vanilla.|Stir in the flour, baking powder and salt until it just comes together.|Roll walnut-sized balls, set them well apart on lined trays, and flatten each one with the bottom of a glass.|Bake at 350F for 10 minutes. They should still look pale when they come out.'),
+  'shortbread cookie': R(45, 24, '1 cup butter, softened|1/2 cup sugar|2 cups flour|1/4 tsp salt',
+    'Beat the butter and sugar together, then work in the flour and salt with your hands until it holds.|Press it into a lined tray about half an inch thick and prick it all over with a fork.|Chill it 20 minutes. Cold shortbread keeps its edges.|Bake at 325F for 25 minutes, until it is barely golden at the rim.|Cut it into fingers while it is still warm, and let it cool in the tray.'),
+  'coconut macaroon': R(35, 20, '3 cups shredded coconut|2/3 cup sweetened condensed milk|2 egg whites|1 tsp vanilla|1/4 tsp salt',
+    'Heat the oven to 325F and line a tray.|Stir the coconut, condensed milk and vanilla together.|Whisk the egg whites with the salt to soft peaks, then fold them through.|Drop heaped tablespoons onto the tray and bake 20 minutes, until the tips are golden.|Let them cool right down on the tray before you move them, or they fall apart.'),
+  'applesauce cookie': R(30, 24, '1/2 cup butter, softened|1 cup brown sugar|1 cup applesauce|1 egg|2 cups flour|1 tsp baking soda|1 tsp cinnamon|1/2 tsp salt|1 cup raisins',
+    'Heat the oven to 350F and line two trays.|Beat the butter and sugar, then the egg and the applesauce. It will look split; carry on.|Stir in the flour, baking soda, cinnamon and salt, then the raisins.|Drop tablespoons well apart and bake 12 minutes. These are cakey rather than crisp, which is what makes them survive a lunchbox.'),
+  'mini cupcake': R(35, 24, '1 1/4 cups flour|3/4 cup sugar|1 1/2 tsp baking powder|1/4 tsp salt|1/2 cup milk|1/3 cup melted butter|1 egg|1 tsp vanilla',
+    'Heat the oven to 350F and line a 24-hole mini muffin tin.|Whisk the flour, sugar, baking powder and salt together.|Beat in the milk, butter, egg and vanilla until just smooth.|Fill each case two-thirds and bake 13 minutes.|Cool completely. Frost them only if they are being eaten the same day; frosting in a lunchbox ends up on the lid.'),
+  'lemon bar': R(60, 16, '1 cup butter, softened|1/2 cup sugar|2 cups flour|1/4 tsp salt|4 eggs|1 1/2 cups sugar|2/3 cup lemon juice|1/4 cup flour',
+    'Heat the oven to 350F and line a square tin.|Rub the butter, the half cup of sugar, the two cups of flour and the salt together and press the crumbs firmly into the tin.|Bake the base 20 minutes, until it is set and pale gold.|Whisk the eggs, the rest of the sugar, the lemon juice and the quarter cup of flour and pour it onto the hot base.|Bake 22 minutes more, until the middle barely wobbles.|Cool completely, then chill before cutting. Warm lemon bars do not cut.')
 };
 var RECIPE_BY_KEY = null;
 /* the bank's recipes, safe against a food called __proto__ */
@@ -1044,7 +1084,7 @@ function parseIng(line){
   if(u && /^(?:of)\s+/i.test(rest)) rest = rest.replace(/^(?:of)\s+/i, '');
   return {q:q.q, u:u, n:rest, raw:raw};
 }
-var COMMON = [[1/8,'⅛'],[1/4,'¼'],[1/3,'⅓'],[1/2,'½'],[2/3,'⅔'],[3/4,'¾']];
+var COMMON = [[1/8,'⅛'],[1/4,'¼'],[1/3,'⅓'],[3/8,'⅜'],[1/2,'½'],[5/8,'⅝'],[2/3,'⅔'],[3/4,'¾'],[7/8,'⅞']];
 /* a number a parent can act on: 1½, not 1.5, and never 0.6666666666 */
 function fmtQty(q){
   if(!(q > 0)) return '';
@@ -1056,6 +1096,27 @@ function fmtQty(q){
 }
 function fmtMass(g){ return (g < 100 ? Math.round(g) : Math.round(g / 5) * 5) + ' g'; }
 function fmtVol(ml){ return (ml < 100 ? Math.round(ml / 5) * 5 : Math.round(ml / 10) * 10) + ' ml'; }
+/* The other direction, for a recipe that arrived written in grams: a kitchen that
+   works in cups needs it back in cups, or the toggle does nothing at all. A weight
+   only becomes a cup measure where the density is known; otherwise it becomes
+   ounces, which is at least the right kind of number. Converted amounts snap to
+   the nearest eighth, because that is what a measuring cup is marked in. */
+function eighths(v){ return Math.round(v * 8) / 8; }
+function usFromMetric(q, u, n){
+  if(ML[u]){
+    var ml = q * ML[u];
+    if(ml >= 170){ var c = eighths(ml / ML.cup); return fmtQty(c) + ' ' + unitWord('cup', c); }
+    if(ml >= 11) return fmtQty(Math.round(ml / ML.tbsp * 2) / 2) + ' tbsp';
+    return fmtQty(Math.round(ml / ML.tsp * 4) / 4) + ' tsp';
+  }
+  if(GRAMS[u]){
+    var g = q * GRAMS[u], d = densityOf(n);
+    if(d){ var cc = eighths(g / d / ML.cup); if(cc >= .25) return fmtQty(cc) + ' ' + unitWord('cup', cc); }
+    if(g >= 454){ var lb = eighths(g / GRAMS.lb); return fmtQty(lb) + ' ' + unitWord('lb', lb); }
+    if(g >= 15) return fmtQty(Math.round(g / GRAMS.oz * 2) / 2) + ' oz';
+  }
+  return null;
+}
 /* An ingredient line at this many servings, in this system of measures. A spoonful
    of salt stays a spoonful: under about 15 grams the metric number is less use than
    the spoon, and a parent measuring 6 g of baking soda is a parent we have failed. */
@@ -1076,6 +1137,9 @@ function ingLine(ing, scale, metric){
       var g = q * GRAMS[u];
       if(g >= METRIC_MIN) return fmtMass(g) + ' ' + n;
     }
+  } else if(u === 'g' || u === 'kg' || u === 'ml' || u === 'l'){
+    var back = usFromMetric(q, u, n);
+    if(back) return back + ' ' + n;
   }
   return (fmtQty(q) + ' ' + (u ? unitWord(u, q) + ' ' : '') + n).replace(/\s+/g, ' ').trim();
 }
@@ -1086,7 +1150,7 @@ function unitWord(u, q){
 }
 /* a step reads the same in both, except that an oven has two scales */
 function stepLine(text, metric){
-  if(!metric) return text;
+  if(!metric || /\d\s*(?:°\s*)?C\b/.test(text)) return text;    /* already says both; saying it twice helps nobody */
   return String(text).replace(/(\d{2,3})\s*(?:°\s*)?F\b/g, function(all, f){
     return all + ' (' + Math.round((+f - 32) * 5 / 9 / 5) * 5 + '°C)';
   });
@@ -1333,7 +1397,16 @@ function applyState(st){
   }
   if(Account.members.length > 1) Account.invite = '';        /* the link did its job */
 }
-function docTooBig(){ return JSON.stringify(S).length > 1900000; }
+/* The server measures the document in UTF-8 bytes (MAX_DOC_BYTES, 2 MB); a curly
+   quote is one character here and three bytes there, and recipe text is full of
+   them. Counting characters would let a document through that the server then
+   refuses 413 on every save, forever, so this counts what the server counts and
+   stops short of it. */
+var DOC_MAX = 1900000;
+function docBytes(v){ try{ return new TextEncoder().encode(JSON.stringify(v)).length; }catch(e){ return JSON.stringify(v).length * 2; } }
+function docTooBig(){ return docBytes(S) > DOC_MAX; }
+/* is there room for one more thing of about this size? */
+function docRoomFor(n){ return docBytes(S) + n <= DOC_MAX; }
 var Sync = {
   pull:function(){
     if(!S || Account.busy || !navigator.onLine) return Promise.resolve();
@@ -1419,7 +1492,7 @@ function syncLine(){
   if(isHelper()) return 'Read-only on this phone \u2014 checkmarks stay here';
   if(!navigator.onLine) return 'Offline \u2014 changes are saved on this phone and sent when you are back';
   if(Account.status === 'syncing') return 'Syncing\u2026';
-  if(Account.status === 'big') return 'This household is too large to send \u2014 remove some photos, foods or old lunchboxes';
+  if(Account.status === 'big') return 'This household is too large to send \u2014 remove some photos, recipes, foods or old lunchboxes';
   if(Account.status === 'error') return Account.tries < RETRY_WAITS.length ? 'Could not reach the server \u2014 trying again shortly' : 'Not sent to the other phone yet \u2014 it goes with your next change';
   if(Account.syncedAt){ var m = Math.round((Date.now() - Account.syncedAt) / 60000); return 'Synced ' + (m < 1 ? 'just now' : m === 1 ? 'a minute ago' : m + ' minutes ago'); }
   return 'Signed in';
@@ -1626,10 +1699,10 @@ function normRecipe(v){
   var ing = lines(v.ing, 120, ING_MAX), steps = lines(v.steps, 600, STEP_MAX);
   if(!ing.length && !steps.length) return null;
   var m = Math.round(+v.m), y = Math.round(+v.y);
-  var out = {m:(m > 0 && m <= 1440) ? m : 0, y:(y > 0 && y <= 99) ? y : 0, ing:ing, steps:steps,
+  /* `l` — written in lunches rather than servings — is the bank's own mark and is
+     never carried in from outside, so a pasted recipe cannot claim to be one of ours */
+  return {m:(m > 0 && m <= 1440) ? m : 0, y:(y > 0 && y <= 99) ? y : 0, ing:ing, steps:steps,
     src:safeStr(v.src, 60, '').replace(/\s+/g, ' ').trim(), url:safeHttps(v.url)};
-  if(v.l) out.l = 1;
-  return out;
 }
 function normStamped(v){
   v = plainObj(v);
@@ -2650,7 +2723,8 @@ function openSheet(title, html, state){
   sheetEl.classList.add('open'); backEl.classList.add('open'); bodyEl.scrollTop = 0;
   document.body.style.overflow = 'hidden';
 }
-function closeSheet(){ sheetEl.classList.remove('open'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; if(!UI.kid) document.body.style.overflow = ''; }
+function closeSheet(){ sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null;
+  UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = ''; }
 backEl.addEventListener('click', closeSheet);
 document.getElementById('sheetClose').addEventListener('click', closeSheet);
 
@@ -3010,11 +3084,17 @@ function viewPack(){
   /* what in this box gets made rather than bought: the recipe waits where the box
      is being packed, because that is the evening a parent is standing in the kitchen */
   var making = catsFor(kid).map(function(c){ return foodById(kid, day.slots[c.k]); })
-    .filter(function(f){ return f && recipeFor(f); });
+    .filter(function(f){
+      /* only what is worth standing at the counter for: a parent about to walk out of
+         the door does not need to be told there is a recipe for a ham sandwich */
+      var mr = f && recipeFor(f);
+      return !!mr && (!!f.recipe || mr.m >= 10);
+    });
   if(making.length)
-    box += '<p class="hint" style="margin:0">Making it? ' + making.map(function(f){
-      return '<button class="linkbtn" data-act="cook" data-kid="'+esc(kid.id)+'" data-id="'+esc(f.id)+'">'+esc(f.n)+'</button>';
-    }).join(', ') + '</p>';
+    box += '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'
+      +  '<span class="hint muted" style="margin:0">Making it?</span>' + making.map(function(f){
+           return '<button class="btn sm ghost" data-act="cook" data-kid="'+esc(kid.id)+'" data-id="'+esc(f.id)+'">'+svg('book',14)+esc(f.n)+'</button>';
+         }).join('') + '</div>';
 
   /* with more than one lunchbox, the box on screen is not the whole morning */
   var hh = householdReady(day.d);
@@ -3145,7 +3225,7 @@ function viewFoods(){
       var v = violation(kid, f);
       var fr = recipeFor(f);
       h += '<div class="item"><button class="thumb" data-act="food-photo" data-id="'+esc(f.id)+'" aria-label="'+(f.img ? 'Change the photo of ' : 'Add a photo of ')+esc(f.n)+'" style="border-color:var(--c-'+c.k+')">'+picHTML(f)+'</button>'
-        +  '<button class="grow" data-act="food-open" data-kid="'+esc(kid.id)+'" data-id="'+esc(f.id)+'" aria-label="Open '+esc(f.n)+'">'
+        +  '<button class="grow" data-act="food-open" data-kid="'+esc(kid.id)+'" data-id="'+esc(f.id)+'">'
         +  '<span class="nm">'+esc(f.n)+(fr ? ' <span class="chip">Recipe</span>' : '')+'</span>'
         +  (v ? '<span class="meta" style="color:var(--warn)">skipped &mdash; '+esc(v)+'</span>'
              : '<span class="meta"'+(eatStats(kid,f.id).resting ? ' style="color:var(--warn)"' : '')+'>'
@@ -3169,6 +3249,7 @@ function viewFoods(){
       + '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Import a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Import a recipe</button>'
       + '<button class="btn wide" data-act="ideas">'+svg('plus',17)+'Browse the idea bank</button>'
       + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank, and every recipe in it, is free.</span>'+premiumTag()+'</p>'
+    : isHelper() ? ''
     : '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button>'
       + '<button class="btn wide" data-act="recipe-import">'+svg('book',17)+'Import a recipe</button>'
       + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words, or one read off a recipe page.</span>'+premiumTag()+'</p>' : '');
@@ -3475,7 +3556,7 @@ function feedbackMail(kind){
 
 /* the camera or the roll, then the thumbnail onto the food */
 function pickPhoto(foodId){
-  if(JSON.stringify(S).length + PHOTO_MAX > 1900000){ toast('No room for more photos \u2014 remove a few first'); return; }
+  if(!docRoomFor(PHOTO_MAX)){ toast('No room for more photos \u2014 remove a few first'); return; }
   var inp = document.getElementById('photoIn');
   if(!inp){ inp = document.createElement('input'); inp.type = 'file'; inp.id = 'photoIn'; inp.accept = 'image/*'; inp.hidden = true; document.body.appendChild(inp); }   /* no capture attribute: the camera or the roll, the phone asks */
   inp.value = ''; inp.setAttribute('data-food', foodId);
@@ -3565,10 +3646,13 @@ function slotSheet(kidId, dayStr, cat){
     + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'">'
     + svg('dice',15)+'Shuffle this one</button>'
     + '<button class="tg" data-act="sheet-lock" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'"'
-    + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Don&#8217;t change this one</button>'
-    /* whatever is in the compartment, if it is something you make rather than buy */
-    + (recipeFor(foodById(kid, day.slots[cat])) ? '<button class="btn sm ghost" data-act="cook" data-kid="'+esc(kid.id)+'" data-id="'+esc(day.slots[cat])+'">'+svg('book',15)+'Recipe</button>' : '')
-    + '</div>';
+    + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Don&#8217;t change this one</button></div>';
+  /* whatever is in the compartment, if it is something you make rather than buy. On its
+     own line: the two buttons above change the plan, this one only reads. */
+  var inSlot = foodById(kid, day.slots[cat]);
+  if(recipeFor(inSlot))
+    h += '<button class="btn ghost wide" data-act="cook" data-kid="'+esc(kid.id)+'" data-id="'+esc(inSlot.id)+'">'
+      +  svg('book',15)+'Recipe for '+esc(inSlot.n)+'</button>';
   if(!pool.length){
     h += '<div class="empty"><p>No '+esc(c.plural.toLowerCase())+' in the list yet.</p></div>';
   } else {
@@ -3715,8 +3799,9 @@ function addOwnSheet(pre){
     + '</div></details></div><span class="hint">Tap what fits.</span></div>'
     + '<div class="field"><label>Contains</label><div class="toggles" id="nfAl">'
     + ALLERGENS.map(function(a){ return '<button class="tg" data-nf="al" data-v="'+a.k+'" aria-pressed="'+on(pre.al, a.k)+'">'+a.label+'</button>'; }).join('')
-    + '</div>'+(pre.recipe ? '<span class="hint">Read from the recipe. Check it before you save &mdash; the school rules go by this.</span>' : '')+'</div>' + targetRow('')
-    + '<button class="btn primary wide" id="nfSave" data-act="save-own" style="white-space:normal;height:auto;min-height:48px;padding:10px 16px">'+esc(addOwnLabel())+'</button>';
+    + '</div>'+(pre.recipe ? '<span class="hint" style="color:var(--warn)">Read from the recipe. Check it before you save &mdash; the school rules go by this.</span>' : '')+'</div>' + targetRow('')
+    + '<button class="btn primary wide" id="nfSave" data-act="save-own" style="white-space:normal;height:auto;min-height:48px;padding:10px 16px">'+esc(addOwnLabel())+'</button>'
+    + (pre.recipe ? '<button class="btn ghost wide" data-act="recipe-import">Read a different one</button>' : '');
   openSheet(pre.recipe ? 'Check it over' : 'Add your own', h);
   setTimeout(function(){ var el = document.getElementById('nfName'); if(el && !pre.n) el.focus(); }, 220);
 }
@@ -3731,7 +3816,11 @@ function addOwnSheet(pre){
    the parent to correct before it becomes a food: the compartment, the aisle and
    above all what it contains, because the school rules are built on that and a
    guess is not good enough to hide. */
-function stripNum(l){ return l.replace(/^(?:step\s*)?\d{1,2}\s*[.):]\s+/i, '').replace(/^[-*•·]\s*/, '').trim(); }
+/* "1." and "2)" in front of a line are a recipe numbering its steps, not an amount:
+   they come off before the line is read, and the fact that they were there is what
+   says the line is a step. A leading bullet comes off the same way. */
+var NUMBERED = /^(?:step\s*)?\d{1,2}\s*[.)]\s+/i;
+function stripNum(l){ return l.replace(NUMBERED, '').replace(/^[-*\u2022\u00b7]\s*/, '').trim(); }
 /* what a parent pasted from under a video is a caption, not a title: the emoji,
    the aside after the dash and the shouting all come off, and what is left is
    still theirs to edit before it becomes the name of a food */
@@ -3744,10 +3833,12 @@ function tidyTitle(t){
 /* a line that reads like something you buy rather than something you do */
 function looksIngredient(l){
   if(l.length > 90) return false;
-  if(/^[\d¼-¾⅐-⅞]/.test(l)) return true;
+  if(/^[\d\u00bc-\u00be\u2150-\u215e]/.test(l)) return true;
   return /^(?:a|an|one|two|three|four|half|some|salt|pepper|pinch)\b/i.test(l) && l.length < 45;
 }
-var HEAD_ING = /^(?:ingredients?|you(?:’|')?ll need|what you need|shopping list)$/i;
+/* the tail of a caption: tags, handles and links, which are neither */
+function isNoise(l){ return !/[a-z]/i.test(l) || /^(?:#|@|https?:\/\/)/i.test(l) || /^#\S+(?:\s+#\S+)*$/.test(l); }
+var HEAD_ING = /^(?:ingredients?|you(?:\u2019|')?ll need|what you need|shopping list)$/i;
 var HEAD_STEP = /^(?:instructions?|directions?|method|steps?|preparation|to make it|how to make it)$/i;
 var HEAD_SKIP = /^(?:notes?|nutrition|equipment|storage|tips?|substitutions?)$/i;
 function parsePasted(raw){
@@ -3764,10 +3855,14 @@ function parsePasted(raw){
     if(y && !yld){ yld = +y[1]; if(/^(?:serves|servings?|makes|yields?)\b/i.test(l)) return; }
     var t = l.match(/\b(?:total|cook|bake|prep|ready in|time)\b[^0-9]{0,16}(\d{1,3})\s*(m|min|mins|minutes?|h|hr|hrs|hours?)\b/i);
     if(t && l.length < 60){ mins += /^h/i.test(t[2]) ? +t[1] * 60 : +t[1]; return; }
-    if(!title && mode === '' && !looksIngredient(l) && l.length < 90){ title = l; return; }
-    if(mode === 's'){ steps.push(stripNum(l)); return; }
-    if(mode === 'i' || looksIngredient(l)){ ing.push(stripNum(l)); return; }
-    if(l.length > 40) steps.push(stripNum(l));
+    /* the numbering comes off first, so a numbered step is read as a step and not,
+       because it opens with a digit, as an amount */
+    var body = stripNum(l);
+    if(!body || isNoise(body)) return;
+    if(!title && mode === '' && !looksIngredient(body) && body.length < 90){ title = body; return; }
+    if(mode === 's'){ steps.push(body); return; }
+    if(mode === 'i' || looksIngredient(body)){ ing.push(body); return; }
+    steps.push(body);                       /* anything left is something you do */
   });
   return {title:tidyTitle(title), m:(mins > 0 && mins <= 1440) ? mins : 0, y:(yld > 0 && yld < 100) ? yld : 0,
     ing:ing.slice(0, ING_MAX), steps:steps.slice(0, STEP_MAX), src:'', url:null};
@@ -3827,16 +3922,25 @@ function guessFood(rec){
 function recipeImportSheet(kidId, foodId){
   UI.importTo = (kidId && foodId) ? {kidId:kidId, id:foodId} : null;
   var to = UI.importTo ? (foodById(kidById(kidId) || activeKid(), foodId) || {}).n : '';
+  /* Reading a page is the one part of this that leaves the phone, so it asks for a
+     sign-in first: that is what keeps "signed out, nothing you type leaves the phone"
+     true. Pasting the recipe in is read here and goes nowhere, so it is always open. */
   var h = '<div class="stack" style="gap:14px">'
     + '<p class="hint" style="margin:0">'+(to ? 'A recipe for '+esc(to)+'. ' : '')
-    + 'Give the app the address of a recipe page and it reads the ingredients and the steps off it.</p>'
-    + '<div class="field"><label for="riUrl">Address of a recipe page</label>'
-    + '<input type="url" id="riUrl" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://" maxlength="500"></div>'
-    + '<button class="btn primary wide" data-act="recipe-fetch">Read the recipe</button>'
-    + '<p class="hint" style="margin:0">A video has no recipe to read. Copy the words under the reel or the pin and paste them here instead.</p>'
+    + 'Give the app the address of a recipe page and it reads the ingredients and the steps off it.</p>';
+  if(signedIn()){
+    h += '<div class="field"><label for="riUrl">Address of a recipe page</label>'
+      +  '<input type="url" id="riUrl" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://" maxlength="500"></div>'
+      +  '<button class="btn primary wide" data-act="recipe-fetch">Read the recipe</button>';
+  } else {
+    h += '<div class="card stack" style="gap:10px"><p class="hint" style="margin:0">Reading a page happens on our server, so it needs you signed in. '
+      +  'Signed out, nothing you type here leaves the phone \u2014 which is why pasting the recipe in still works.</p>'
+      +  '<button class="btn wide" data-act="go-signin" data-close="1">Sign in</button></div>';
+  }
+  h += '<p class="hint" style="margin:0">A video has no recipe to read. Copy the words under the reel or the pin and paste them here instead.</p>'
     + '<div class="field"><label for="riText">Or paste the recipe</label>'
     + '<textarea id="riText" rows="8" placeholder="Quinoa salad&#10;Serves 4&#10;&#10;1 cup quinoa&#10;2 cups water&#10;&#10;Rinse the quinoa.&#10;Simmer it for 15 minutes."></textarea></div>'
-    + '<button class="btn wide" data-act="recipe-paste">Use what I pasted</button>'
+    + '<button class="btn'+(signedIn() ? '' : ' primary')+' wide" data-act="recipe-paste">Use what I pasted</button>'
     + '<p class="hint" id="riMsg" aria-live="polite" style="margin:0"></p></div>';
   openSheet(to ? 'Add a recipe' : 'Import a recipe', h);
 }
@@ -3846,9 +3950,8 @@ function recipeMsg(text, bad){
 }
 function recipeCard(r){
   var head = cookHead(r);
-  return '<div class="card stack" style="gap:10px"><div class="sect-head"><h3>What we read</h3>'
-    + (head ? '<span class="count">'+esc(head)+'</span>' : '')+'</div>'
-    + '<p class="hint" style="margin:0">'+r.ing.length+' ingredient'+(r.ing.length === 1 ? '' : 's')
+  return '<div class="card stack" style="gap:10px"><div class="sect-head"><h3>What we read</h3></div>'
+    + '<p class="hint muted" style="margin:0">'+(head ? esc(head)+' · ' : '')+r.ing.length+' ingredient'+(r.ing.length === 1 ? '' : 's')
     + ' · '+r.steps.length+' step'+(r.steps.length === 1 ? '' : 's')+(r.src ? ' · from '+esc(r.src) : '')+'</p>'
     + '<details class="more"><summary>Read it through</summary><div style="margin-top:8px">'
     + '<div class="list">'+r.ing.map(function(l){ return '<div class="item"><span class="grow"><span class="nm">'+esc(l)+'</span></span></div>'; }).join('')+'</div>'
@@ -3900,20 +4003,29 @@ function cookScale(r){
   var c = UI.cook;
   return (r.y && c && c.makes) ? c.makes / r.y : 1;
 }
-/* the app's own recipes are written a lunch at a time; a recipe off the web is
-   written in servings, and calling twelve oat bites twelve lunches would be a lie */
-function madeOf(r, n){ return r && r.l ? (n === 1 ? 'lunch' : 'lunches') : (n === 1 ? 'serving' : 'servings'); }
-function cookHead(r){
+/* What a yield is counted in. A main the app wrote makes four lunches and says so;
+   two dozen cookies are two dozen cookies, not two dozen lunches; and anything read
+   off someone else's page is in whatever that page called a serving. */
+function madeOf(r, n, f){
+  if(r && r.l) return (f && f.c === 'main') ? (n === 1 ? 'lunch' : 'lunches') : '';
+  return n === 1 ? 'serving' : 'servings';
+}
+function cookHead(r, f){
   var bits = [];
-  if(r.m) bits.push(r.m < 60 ? r.m + ' minutes' : Math.round(r.m / 30) / 2 + ' hours');
-  if(r.y) bits.push('makes ' + r.y + ' ' + madeOf(r, r.y));
+  if(r.m) bits.push(r.m < 90 ? r.m + ' minutes' : hoursWord(r.m));
+  if(r.y) bits.push(('makes ' + r.y + ' ' + madeOf(r, r.y, f)).trim());
   return bits.join(' · ');
+}
+function hoursWord(m){
+  var h = Math.round(m / 15) / 4;                     /* to the nearest quarter hour, which is how an oven is thought about */
+  return (h === 1 ? '1 hour' : h + ' hours');
 }
 function cookIngList(r, tickable){
   var c = UI.cook, scale = cookScale(r);
   return '<div class="list">' + r.ing.map(function(line, i){
     var txt = ingLine(line, scale, c.metric);
-    if(!tickable) return '<div class="item"><span class="grow"><span class="nm">'+esc(txt)+'</span></span></div>';
+    /* the same list, mid-recipe: what has already gone in still reads as gone in */
+    if(!tickable) return '<div class="item'+(c.ticked[i] ? ' done' : '')+'"><span class="grow"><span class="nm">'+esc(txt)+'</span></span></div>';
     return '<button class="item'+(c.ticked[i] ? ' done' : '')+'" data-act="cook-tick" data-i="'+i+'">'
       + '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(txt)+'</span></span></button>';
   }).join('') + '</div>';
@@ -3925,14 +4037,14 @@ function cookSheet(keepScroll){
   var h;
   if(c.step < 0){
     h = '<div class="stack" style="gap:14px">';
-    if(cookHead(r)) h += '<p class="hint" style="margin:0">'+esc(cookHead(r))+'</p>';
+    if(cookHead(r, f)) h += '<p class="hint muted" style="margin:0">'+esc(cookHead(r, f))+'</p>';
     /* the two questions a parent answers before starting: how much, and in what */
     h += '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">';
     if(r.y){
       h += '<span class="row" style="gap:6px;align-items:center">'
-        +  '<button class="btn sm ghost" data-act="cook-makes" data-v="-1" aria-label="One '+madeOf(r, 1)+' fewer"'+(c.makes <= 1 ? ' disabled' : '')+'>&minus;</button>'
-        +  '<span class="qty" aria-live="polite">'+c.makes+' '+madeOf(r, c.makes)+'</span>'
-        +  '<button class="btn sm ghost" data-act="cook-makes" data-v="1" aria-label="One '+madeOf(r, 1)+' more"'+(c.makes >= 40 ? ' disabled' : '')+'>+</button></span>';
+        +  '<button class="btn sm step" data-act="cook-makes" data-v="-1" aria-label="One '+(madeOf(r, 1, f) || 'batch')+' fewer"'+(c.makes <= 1 ? ' disabled' : '')+'>&minus;</button>'
+        +  '<span class="qty" aria-live="polite">'+((c.makes+' '+madeOf(r, c.makes, f)).trim())+'</span>'
+        +  '<button class="btn sm step" data-act="cook-makes" data-v="1" aria-label="One '+(madeOf(r, 1, f) || 'batch')+' more"'+(c.makes >= 40 ? ' disabled' : '')+'>+</button></span>';
     }
     h += '<span class="toggles" style="margin-left:auto">'
       +  '<button class="tg" data-act="cook-units" data-v="us" aria-pressed="'+(!c.metric)+'">Cups</button>'
@@ -3954,10 +4066,10 @@ function cookSheet(keepScroll){
   } else {
     var i = Math.min(c.step, r.steps.length - 1), last = i === r.steps.length - 1;
     h = '<div class="stack" style="gap:14px">'
-      + '<div class="spread"><p class="hint" style="margin:0">Step '+(i + 1)+' of '+r.steps.length+'</p>'
-      + '<button class="linkbtn" data-act="cook-step" data-i="-1">All of it</button></div>'
+      + '<div class="spread"><p class="hint muted" style="margin:0">Step '+(i + 1)+' of '+r.steps.length+'</p>'
+      + '<button class="linkbtn" data-act="cook-step" data-i="-1">The whole recipe</button></div>'
       + '<div class="prog"><span style="width:'+Math.round((i + 1) / r.steps.length * 100)+'%"></span></div>'
-      + '<div class="card"><p class="cookstep">'+esc(stepLine(r.steps[i], c.metric))+'</p></div>'
+      + '<div class="card"><p class="cookstep" tabindex="-1">Step '+(i + 1)+'. '+esc(stepLine(r.steps[i], c.metric))+'</p></div>'
       + (last ? '<button class="btn primary wide" data-act="cook-done">'+svg('check',17)+'That is lunch sorted</button>'
               : '<button class="btn primary wide" data-act="cook-step" data-i="'+(i + 1)+'">Next step</button>')
       + (i > 0 ? '<button class="btn ghost wide" data-act="cook-step" data-i="'+(i - 1)+'">Back a step</button>' : '')
@@ -3965,7 +4077,11 @@ function cookSheet(keepScroll){
       + '</div>';
   }
   openSheet(f.n, h);
+  sheetEl.classList.toggle('cooking', c.step >= 0);
   if(keepScroll) bodyEl.scrollTop = at;
+  /* the step is what changed, so that is what is read out and what focus lands on;
+     without this a parent on VoiceOver hears nothing when a step advances */
+  if(c.step >= 0){ var sc = bodyEl.querySelector('.cookstep'); if(sc) sc.focus(); }
 }
 /* One food, on its own: what it costs at the shop, and its recipe if it has one.
    Tapping a food on the list is about how it gets made, so this is where a
@@ -3977,17 +4093,22 @@ function foodSheet(kidId, foodId){
   var h = '<div class="stack" style="gap:14px">';
   if(f.img) h += '<img class="pic big" src="'+f.img+'" alt="">';
   var meta = [catByKey(f.c) ? catByKey(f.c).label : '', AISLE_SHORT[f.a] || ''].filter(Boolean).join(' · ');
-  h += '<p class="hint" style="margin:0">'+esc(meta)+'</p>';
-  if(v) h += '<p class="hint" style="margin:0;color:var(--warn)">Flagged — '+esc(v)+'</p>';
+  h += '<p class="hint muted" style="margin:0">'+esc(meta)+'</p>';
+  if(v) h += '<p class="hint" style="margin:0;color:var(--warn)">Skipped &mdash; '+esc(v)+'</p>';
   if(f.buy && f.buy.length) h += '<div><div class="sect-head"><h3>On the list</h3></div><div class="list">'
     + f.buy.map(function(b){ return '<div class="item"><span class="grow"><span class="nm">'+esc(b)+'</span></span></div>'; }).join('')+'</div></div>';
   if(r){
-    h += '<div><div class="sect-head"><h3>Recipe</h3>'+(cookHead(r) ? '<span class="count">'+esc(cookHead(r))+'</span>' : '')+'</div></div>'
+    h += '<div><div class="sect-head"><h3>Recipe</h3>'+(cookHead(r, f) ? '<span class="count">'+esc(cookHead(r, f))+'</span>' : '')+'</div></div>'
       +  '<button class="btn primary wide" data-act="cook" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('book',17)+'Open the recipe</button>';
-    if(f.recipe) h += '<button class="btn ghost wide" data-act="recipe-clear" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">Remove this recipe</button>';
+    if(f.recipe && !isHelper()) h += '<button class="btn ghost wide" data-act="recipe-clear" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">Remove this recipe</button>';
   } else if(!isHelper()){
-    h += '<p class="hint" style="margin:0">No recipe yet. Paste one in, or give the app the address of one on the web.</p>'
-      +  '<button class="btn wide" data-act="recipe-add" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('plus',17)+'Add a recipe</button>';
+    /* a recipe on a food is written to the household, so it wears the same lock and
+       the same tag as writing a food by hand — on screen, never hidden */
+    h += '<p class="hint muted" style="margin:0">No recipe yet. Paste one in, or give the app the address of one on the web.</p>'
+      +  (gated()
+          ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Add a recipe</button>'
+          : '<button class="btn wide" data-act="recipe-add" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('plus',17)+'Add a recipe</button>')
+      +  (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A recipe of your own.</span>'+premiumTag()+'</p>' : '');
   }
   h += '</div>';
   openSheet(f.n, h);
@@ -4452,7 +4573,7 @@ document.addEventListener('click', function(ev){
     if(gated()){ closeSheet(); upgradeSheet('food'); return; }        /* a sheet open across the last night of the trial */
     var el2 = document.getElementById('nfName'), n = (el2.value||'').trim();
     if(!n){ el2.focus(); toast('Give it a name first'); return; }
-    var r5 = addFoodTo(addTargets(), {
+    var own5 = {
       n:n,
       c:document.querySelector('#nfCat .tg[aria-pressed="true"]').getAttribute('data-v'),
       a:document.getElementById('nfAisle').value,
@@ -4460,9 +4581,13 @@ document.addEventListener('click', function(ev){
       t:[].slice.call(document.querySelectorAll('#nfTags .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
       al:[].slice.call(document.querySelectorAll('#nfAl .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
       recipe:UI.recipeDraft
-    });
+    };
+    if(UI.recipeDraft && !docRoomFor(docBytes(UI.recipeDraft) * Math.max(1, addTargets().length) + 400)){
+      toast('No room for another recipe \u2014 remove one first'); return;
+    }
+    var r5 = addFoodTo(addTargets(), own5);
     if(!r5.added.length){ toast(addFailLine(n, r5)); return; }
-    save(); closeSheet(); render(); toast(addedLine(n, r5)); return;
+    save(); closeSheet(); render(); toast(addedLine(n, r5) + (own5.recipe ? ', with its recipe' : '')); return;
   }
   if(act==='food-photo'){
     var pf = foodById(kid, el.getAttribute('data-id')); if(!pf) return;
@@ -4483,16 +4608,20 @@ document.addEventListener('click', function(ev){
   }
   if(act==='recipe-fetch'){
     var ue = document.getElementById('riUrl'), url = ue ? (ue.value || '').trim() : '';
+    if(!signedIn()){ recipeMsg('Reading a page needs you signed in. Paste the recipe in instead.', true); return; }
     if(!url){ if(ue) ue.focus(); recipeMsg('Paste the address of the recipe page first.', true); return; }
     if(!/^https?:\/\//i.test(url)) url = 'https://' + url.replace(/^\/+/, '');
     if(!navigator.onLine){ recipeMsg('Reading a page needs a connection. Paste the recipe in instead.', true); return; }
     if(el.disabled) return;
     el.disabled = true; recipeMsg('Reading it\u2026');
+    var tok = UI.recipeFetch = (UI.recipeFetch || 0) + 1;
+    var stale = function(){ return tok !== UI.recipeFetch || !sheetEl.classList.contains('open'); };
     api('POST', '/api/recipe', {url:url}).then(function(r){
       el.disabled = false;
+      if(stale()) return;                       /* the sheet was dismissed while we read: it does not slide back up */
       if(r.status === 200 && r.recipe){ recipeReview(r.recipe); return; }
-      recipeMsg(r.error || 'That page would not open for us. Paste the recipe in instead.', true);
-    }).catch(function(){ el.disabled = false; recipeMsg('That page would not open for us. Paste the recipe in instead.', true); });
+      recipeMsg(r.error || 'We could not read a recipe from that page. Paste the recipe in instead.', true);
+    }).catch(function(){ el.disabled = false; if(!stale()) recipeMsg('We could not read a recipe from that page. Paste the recipe in instead.', true); });
     return;
   }
   if(act==='recipe-paste'){
@@ -4501,11 +4630,23 @@ document.addEventListener('click', function(ev){
     recipeReview(parsePasted(txt)); return;
   }
   if(act==='recipe-attach'){
+    if(gated()){ closeSheet(); upgradeSheet('food'); return; }     /* a sheet open across the last night of the trial */
     var ak = UI.importTo && (kidById(UI.importTo.kidId) || activeKid()), af = ak && foodById(ak, UI.importTo.id);
-    var ar = UI.recipeDraft;
+    var ar = UI.recipeDraft && normRecipe(UI.recipeDraft);
     if(!af || !ar){ closeSheet(); return; }
-    af.recipe = normRecipe(ar); touch(af); touch(ak); save(); closeSheet(); render();
-    toast('Recipe saved to ' + af.n); return;
+    if(!docRoomFor(docBytes(ar) + 200)){ closeSheet(); toast('No room for another recipe \u2014 remove one first'); return; }
+    /* the same dish in another lunchbox is the same dish: the recipe goes on every
+       copy of it, exactly as a food added from the bank goes into every box */
+    var n = 0;
+    kids().forEach(function(k2){
+      foodsOf(k2).forEach(function(f2){
+        if(normKey(f2.n) !== normKey(af.n)) return;
+        f2.recipe = normRecipe(ar); touch(f2); touch(k2); n++;
+      });
+    });
+    if(!n){ closeSheet(); return; }
+    save(); closeSheet(); render();
+    toast('Recipe saved to ' + af.n + (n > 1 ? ' in ' + NUMWORD[Math.min(n, 7)].toLowerCase() + ' lunchboxes' : '')); return;
   }
   /* recipes: reading one, and cooking from it. Nothing here changes the household,
      so a caretaker may do all of it and none of it is pushed to the other phone. */
@@ -4513,19 +4654,28 @@ document.addEventListener('click', function(ev){
   if(act==='cook'){ cookOpen(el.getAttribute('data-kid'), el.getAttribute('data-id')); return; }
   if(act==='cook-tick'){
     if(!UI.cook) return;
-    var ti = el.getAttribute('data-i');
-    if(UI.cook.ticked[ti]) delete UI.cook.ticked[ti]; else UI.cook.ticked[ti] = 1;
-    cookSheet(true); return;
+    var ti = el.getAttribute('data-i'), off = !!UI.cook.ticked[ti];
+    if(off) delete UI.cook.ticked[ti]; else UI.cook.ticked[ti] = 1;
+    el.classList.toggle('done', !off);          /* one line changed, so one class changes: no rebuild, no scroll to restore */
+    return;
   }
   if(act==='cook-step'){ if(!UI.cook) return; UI.cook.step = +el.getAttribute('data-i'); cookSheet(); return; }
+  /* the sheet is rebuilt, so focus is put back on the control that was pressed;
+     without it a parent on VoiceOver has to find the button again after every tap */
+  var cookAgain = function(a, v){
+    cookSheet(true);
+    var back = bodyEl.querySelector('[data-act="'+a+'"][data-v="'+v+'"]');
+    if(back && !back.disabled) back.focus();
+  };
   if(act==='cook-units'){
     if(!UI.cook) return;
-    UI.cook.metric = el.getAttribute('data-v') === 'metric'; setMetricPref(UI.cook.metric); cookSheet(true); return;
+    UI.cook.metric = el.getAttribute('data-v') === 'metric'; setMetricPref(UI.cook.metric);
+    cookAgain('cook-units', el.getAttribute('data-v')); return;
   }
   if(act==='cook-makes'){
     if(!UI.cook) return;
     UI.cook.makes = Math.max(1, Math.min(40, UI.cook.makes + (+el.getAttribute('data-v') || 0)));
-    cookSheet(true); return;
+    cookAgain('cook-makes', el.getAttribute('data-v')); return;
   }
   if(act==='cook-done'){ closeSheet(); toast('Nice one'); return; }
   if(act==='recipe-site'){
@@ -4536,8 +4686,17 @@ document.addEventListener('click', function(ev){
   }
   if(act==='recipe-clear'){
     var qk = kidById(el.getAttribute('data-kid')) || kid, qf = qk && foodById(qk, el.getAttribute('data-id'));
-    if(!qf) return;
-    qf.recipe = null; touch(qf); touch(qk); save(); closeSheet(); render(); toast('Recipe removed'); return;
+    if(!qf || !qf.recipe) return;
+    var was = qf.recipe, wasId = qf.id, wasKid = qk.id;
+    qf.recipe = null; touch(qf); touch(qk); save(); closeSheet(); render();
+    /* a food named after one in the idea bank falls back to the bank's recipe, which
+       is not gone and never was theirs to lose; say which of the two just happened */
+    toast(recipeFor(qf) ? 'Your recipe removed \u2014 the idea bank\u2019s is back' : 'Recipe removed', function(){
+      var bk = kidById(wasKid), bf = bk && foodById(bk, wasId);
+      if(!bf) return;
+      bf.recipe = was; touch(bf); touch(bk); save(); render();
+    });
+    return;
   }
   if(act==='food-photo-pick'){ closeSheet(); pickPhoto(el.getAttribute('data-id')); return; }
   if(act==='food-photo-clear'){

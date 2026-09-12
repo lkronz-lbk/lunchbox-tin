@@ -1,5 +1,7 @@
 import dns from 'node:dns/promises';
-import { json, fail, clientIp, ipKey, throttled } from '../lib/db.js';
+import net from 'node:net';
+import { json, fail, throttled } from '../lib/db.js';
+import { currentUser } from '../lib/auth.js';
 
 /* Reading a recipe off a page a parent found.
    POST /api/recipe {url} -> {recipe:{title, m, y, ing[], steps[], src, url}}
@@ -28,37 +30,78 @@ const UA = 'LunchSortedBot/1.0 (+https://lunchsorted.app/help.html)';
    offer. The cap on what comes back is the second line of defence: nothing
    leaves here that did not parse as a recipe.) */
 const BAD_HOST = /^(localhost|.*\.(local|internal|localdomain|home|lan))$/i;
+/* Every way a page can fail to give us a recipe answers with the same sentence.
+   Told apart, the failures are a map of someone else's network: this name resolves
+   and resolves inside, that one does not exist, that one is behind a firewall that
+   drops rather than refuses. A parent cannot act on the difference; a scanner can. */
+const NO_RECIPE = 'We could not read a recipe from that page. Copy the recipe and paste it in instead.';
 
-function privateAddress(ip) {
-  const v4 = ip.includes('.') ? ip.replace(/^::ffff:/i, '') : null;
-  if (v4 && /^\d+\.\d+\.\d+\.\d+$/.test(v4)) {
-    const [a, b] = v4.split('.').map(Number);
-    return a === 0 || a === 10 || a === 127 || a >= 224
-      || (a === 169 && b === 254)                       /* link-local, and every cloud's metadata service */
-      || (a === 172 && b >= 16 && b <= 31)
-      || (a === 192 && b === 168)
-      || (a === 100 && b >= 64 && b <= 127)             /* carrier-grade NAT */
-      || (a === 198 && (b === 18 || b === 19));
-  }
-  const v6 = ip.toLowerCase();
-  return v6 === '::' || v6 === '::1' || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6);
+/* An address as its bytes, so a range test is a range test. Matching the front of
+   the string misses every address that is a private one wearing a hat: ::127.0.0.1,
+   the NAT64 and 6to4 encodings of it, and IPv6 multicast. */
+function addrBytes(ip) {
+  if (net.isIPv4(ip)) return ip.split('.').map(Number);
+  if (!net.isIPv6(ip)) return null;
+  let s = ip.toLowerCase().replace(/%.*$/, '');
+  let v4 = [];
+  const m = /:((?:\d{1,3}\.){3}\d{1,3})$/.exec(s);
+  if (m) { v4 = m[1].split('.').map(Number); s = s.slice(0, m.index + 1) + '0:0'; }
+  const parts = s.split('::');
+  if (parts.length > 2) return null;
+  const head = parts[0] ? parts[0].split(':').filter(Boolean) : [];
+  const tail = parts.length === 2 ? (parts[1] ? parts[1].split(':').filter(Boolean) : []) : null;
+  const groups = tail === null ? head
+    : head.concat(new Array(Math.max(0, 8 - head.length - tail.length)).fill('0')).concat(tail);
+  if (groups.length !== 8) return null;
+  const out = [];
+  for (const g of groups) { const n = parseInt(g, 16); if (!Number.isFinite(n)) return null; out.push((n >> 8) & 255, n & 255); }
+  if (v4.length === 4) { out[12] = v4[0]; out[13] = v4[1]; out[14] = v4[2]; out[15] = v4[3]; }
+  return out;
+}
+function privateV4(b) {
+  const [a, c, d] = b;
+  return a === 0 || a === 10 || a === 127 || a >= 224            /* this network, private, loopback, multicast and above */
+    || (a === 169 && c === 254)                                  /* link-local, and every cloud's metadata service */
+    || (a === 172 && c >= 16 && c <= 31)
+    || (a === 192 && c === 168)
+    || (a === 192 && c === 0 && (d === 0 || d === 2))             /* IETF protocol assignments, TEST-NET-1 */
+    || (a === 198 && c === 51 && d === 100)                       /* TEST-NET-2 */
+    || (a === 203 && c === 0 && d === 113)                        /* TEST-NET-3 */
+    || (a === 100 && c >= 64 && c <= 127)                         /* carrier-grade NAT */
+    || (a === 198 && (c === 18 || c === 19));                     /* benchmarking */
+}
+export function privateAddress(ip) {
+  const b = addrBytes(ip);
+  if (!b) return true;                                           /* unreadable is unreachable: we do not open what we cannot check */
+  if (b.length === 4) return privateV4(b);
+  const lead = b.slice(0, 10).every(x => x === 0);
+  if (lead && b[10] === 0xff && b[11] === 0xff) return privateV4(b.slice(12));   /* ::ffff:a.b.c.d */
+  if (lead) return true;                                         /* ::/96 — ::, ::1 and ::a.b.c.d */
+  if (b[0] === 0 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b) return true; /* 64:ff9b::/96, NAT64 */
+  if (b[0] === 0x20 && b[1] === 0x02) return privateV4(b.slice(2, 6));            /* 2002::/16, 6to4 */
+  if (b[0] === 0xff) return true;                                /* multicast */
+  if ((b[0] & 0xfe) === 0xfc) return true;                       /* fc00::/7, unique local */
+  if (b[0] === 0xfe && (b[1] & 0xc0) === 0x80) return true;      /* fe80::/10, link-local */
+  return false;
 }
 
 export async function publicUrl(raw) {
   let u;
   try { u = new URL(raw); } catch { return { error: 'That does not look like a web address' }; }
   if (u.protocol !== 'https:') return { error: 'The address has to start with https' };
-  if (u.port && u.port !== '443') return { error: 'That address is not a recipe page' };
+  if (u.port && u.port !== '443') return { error: NO_RECIPE };
+  /* a token someone pasted by accident is not stored, not synced, and not shown to a caretaker */
+  u.username = ''; u.password = ''; u.hash = '';
   const host = u.hostname;
   /* a real recipe lives at a real name: no bare addresses (in any of the shapes a
      number can be written), no bracketed IPv6, nothing that only resolves inside
      a network */
   if (BAD_HOST.test(host) || !host.includes('.') || host.startsWith('[')
-      || /^[\d.]+$/.test(host) || /^0x/i.test(host)) return { error: 'That address is not a recipe page' };
+      || /^[\d.]+$/.test(host) || /^0x/i.test(host)) return { error: NO_RECIPE };
   let addrs;
   try { addrs = await dns.lookup(host, { all: true, verbatim: true }); }
-  catch { return { error: 'We could not reach that page' }; }
-  if (!addrs.length || addrs.some(a => privateAddress(a.address))) return { error: 'That address is not a recipe page' };
+  catch { return { error: NO_RECIPE }; }
+  if (!addrs.length || addrs.some(a => privateAddress(a.address))) return { error: NO_RECIPE };
   return { url: u };
 }
 
@@ -76,15 +119,16 @@ async function readPage(start) {
         headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml', 'accept-language': 'en' }
       });
       if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
-        if (++hops > MAX_HOPS) return { error: 'That page kept redirecting' };
+        if (++hops > MAX_HOPS) return { error: NO_RECIPE };
         target = new URL(res.headers.get('location'), ok.url).href;
         continue;
       }
-      if (!res.ok) return { error: res.status === 404 ? 'That page is not there' : 'That page would not open for us' };
+      if (!res.ok) return { error: NO_RECIPE };
+      /* a response with no type at all is not taken on trust: a recipe page says it is HTML */
       const type = res.headers.get('content-type') || '';
-      if (type && !/text\/html|application\/xhtml/i.test(type)) return { error: 'That is not a recipe page' };
+      if (!/^\s*(?:text\/html|application\/xhtml\+xml)\s*(?:;|$)/i.test(type)) return { error: NO_RECIPE };
       const reader = res.body && res.body.getReader();
-      if (!reader) return { error: 'That page would not open for us' };
+      if (!reader) return { error: NO_RECIPE };
       const parts = []; let size = 0;
       while (true) {
         const { done, value } = await reader.read();
@@ -96,7 +140,8 @@ async function readPage(start) {
       return { html: Buffer.concat(parts).toString('utf8'), url: ok.url };
     }
   } catch (e) {
-    return { error: e && e.name === 'AbortError' ? 'That page took too long' : 'We could not reach that page' };
+    console.warn('api-recipe: fetch failed', e && e.name, e && e.message);   /* the detail stays in the log, where it is ours */
+    return { error: NO_RECIPE };
   } finally { clearTimeout(timer); }
 }
 
@@ -104,8 +149,16 @@ async function readPage(start) {
 const ENTS = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'", '#x27': "'", '#160': ' ',
   frac12: '\u00bd', frac14: '\u00bc', frac34: '\u00be', frac13: '\u2153', frac23: '\u2154', deg: '\u00b0',
   rsquo: '\u2019', lsquo: '\u2018', ldquo: '\u201c', rdquo: '\u201d', ndash: '\u2013', mdash: '\u2014', hellip: '\u2026' };
+/* Capped at the head. Both tag-stripping passes scan to the end of the buffer from
+   every unmatched "<", so a field carrying a megabyte of them costs a minute of CPU
+   on an endpoint someone else points at us. Every caller truncates to 600 characters
+   or fewer anyway, so nothing a recipe needs is lost here.
+   Note that this DECODES entities after stripping tags, so markup that arrived
+   escaped comes back out as literal markup. Every consumer escapes it on the way to
+   the screen; nothing here may be treated as safe HTML. */
+const TEXT_MAX = 4000;
 function text(v) {
-  return String(v == null ? '' : v)
+  return String(v == null ? '' : v).slice(0, TEXT_MAX)
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[^>]*>/g, ' ')
     .replace(/&(#x?[0-9a-f]+|[a-z][a-z0-9]*);/gi, (all, e) => {
@@ -142,7 +195,8 @@ function steps(v, out = [], depth = 0) {
   }
   if (typeof v === 'string') {
     /* one long block: the list markup is the only thing that says where a step ends */
-    String(v).split(/<\/(?:li|p|div)>|(?:\r?\n)+/i).map(text).filter(s => s.length > 2).forEach(s => out.push(s));
+    String(v).slice(0, 200000).split(/<\/(?:li|p|div)>|(?:\r?\n)+/i)
+      .slice(0, 200).map(text).filter(s => s.length > 2).forEach(s => { if (out.length < 60) out.push(s); });
   }
   return out;
 }
@@ -160,11 +214,21 @@ function findRecipe(node, depth = 0) {
   }
   return null;
 }
+/* The opening tag is matched, then the close is found by scanning forward. A single
+   pattern spanning both would backtrack from every unclosed opening to the end of the
+   buffer, so a page carrying thousands of them — well inside the size cap — would cost
+   seconds of CPU per request on an endpoint anyone can call. */
+const OPEN_LD = /<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*>/gi;
 function fromJsonLd(html) {
-  const blocks = [...html.matchAll(/<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
-  for (const b of blocks) {
+  OPEN_LD.lastIndex = 0;
+  let m, seen = 0;
+  while (seen++ < 20 && (m = OPEN_LD.exec(html))) {
+    const end = html.indexOf('</script>', OPEN_LD.lastIndex);
+    if (end < 0) break;
+    const body = html.slice(OPEN_LD.lastIndex, end);
+    OPEN_LD.lastIndex = end + 9;
     let data;
-    try { data = JSON.parse(b[1].replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, '')); } catch { continue; }
+    try { data = JSON.parse(body.replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, '')); } catch { continue; }
     const r = findRecipe(data);
     if (r) return r;
   }
@@ -207,24 +271,42 @@ export function parseRecipeHtml(html, href) {
   };
 }
 
-export default async (req, context) => {
+export default async (req) => {
   if (req.method !== 'POST') return fail('Not found', 404);
   try {
-    /* a reader on our domain is worth abusing, so it is capped per address per hour;
-       a deploy with no database still reads recipes, it just cannot count them */
-    const key = 'recipe:' + ipKey(clientIp(req, context));
-    try { if (key !== 'recipe:' && await throttled(key, 30, 3600)) return fail('That is a lot of recipes at once. Try again in a little while.', 429); }
-    catch (e) { console.warn('api-recipe: throttle unavailable', e && e.message); }
+    /* Signed in, and nothing else. This is the one thing on the site that fetches an
+       address a caller chose, so it is not left open to the internet: a session means
+       someone proved control of an email address, it gives the throttle an account to
+       count rather than an address anyone can rotate, and it keeps the promise the
+       privacy page makes — that until you sign in, nothing you type leaves the phone.
+       Pasting a recipe in needs none of this and never leaves the phone at all. */
+    const user = await currentUser(req);
+    if (!user) return fail('Sign in to read a recipe off a page, or paste the recipe in instead', 401);
 
-    const body = await req.json().catch(() => ({}));
-    const raw = typeof body.url === 'string' ? body.url.trim() : '';
-    if (!raw || raw.length > 500) return fail('Paste the address of the recipe page', 400);
+    /* the body is capped before it is parsed, not after */
+    const raw = await req.text();
+    if (Buffer.byteLength(raw, 'utf8') > 2000) return fail('Paste the address of the recipe page', 400);
+    let body = {};
+    try { body = raw ? JSON.parse(raw) : {}; } catch { return fail('Paste the address of the recipe page', 400); }
+    const url = typeof body.url === 'string' ? body.url.trim() : '';
+    if (!url || url.length > 500) return fail('Paste the address of the recipe page', 400);
 
-    const page = await readPage(raw);
+    /* a reader that fetches is worth abusing, so it is counted per account per hour.
+       If the store cannot be reached the answer is no: reading a page is a convenience,
+       and a database hiccup must not be the moment the only limit disappears. */
+    try {
+      if (await throttled(`recipe:${user.id}`, 30, 3600))
+        return fail('That is a lot of recipes at once. Try again in a little while.', 429);
+    } catch (e) {
+      console.error('api-recipe: throttle unavailable', e && e.message);
+      return fail('We cannot read recipes just now. Paste the recipe in instead.', 503);
+    }
+
+    const page = await readPage(url);
     if (page.error) return fail(page.error, 422);
 
     const recipe = parseRecipeHtml(page.html, page.url.href);
-    if (!recipe) return fail('We could not find a recipe on that page. Copy the recipe and paste it in instead.', 422);
+    if (!recipe) return fail(NO_RECIPE, 422);
     return json({ recipe });
   } catch (e) {
     console.error('api-recipe', e);
