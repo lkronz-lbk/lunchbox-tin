@@ -181,6 +181,25 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
   a.pantry['apples'] = {have:true, at:t1}; b.pantry['bread'] = {have:true, at:t2};
   m = M.merge(a, b);
   check('merge: ticks from both phones are kept', !!(m.kids[0].packed['2026-09-01'].main && m.kids[0].packed['2026-09-01'].side) && !!(m.pantry.apples && m.pantry.bread));
+  /* recipes belong to the household, so they merge like members and lunchboxes do */
+  a = clone(); b = clone();
+  a.recipes = [{id:'rec_1', n:'Blondies', m:40, y:12, ing:['1 cup oats'], steps:['Stir.'], src:'', url:null, createdAt:t1, updatedAt:t1, deletedAt:null}];
+  b.recipes = [{id:'rec_1', n:'Pumpkin blondies', m:40, y:12, ing:['1 cup oats'], steps:['Stir.'], src:'', url:null, createdAt:t1, updatedAt:t2, deletedAt:null},
+               {id:'rec_2', n:'Oat bars', m:20, y:8, ing:['2 cups oats'], steps:['Press.'], src:'', url:null, createdAt:t2, updatedAt:t2, deletedAt:null}];
+  m = M.merge(a, b);
+  check('merge: a recipe renamed on the other phone wins, and one written there arrives',
+    m.recipes.length === 2 && m.recipes.filter(r => r.id === 'rec_1')[0].n === 'Pumpkin blondies'
+    && m.recipes.some(r => r.id === 'rec_2'), m.recipes.map(r => r.n));
+  a = clone(); b = clone();
+  a.recipes = [{id:'rec_1', n:'Blondies', m:40, y:12, ing:['1 cup oats'], steps:['Stir.'], src:'', url:null, createdAt:t1, updatedAt:t2, deletedAt:null}];
+  b.recipes = [{id:'rec_1', n:'Blondies', m:40, y:12, ing:['1 cup oats'], steps:['Stir.'], src:'', url:null, createdAt:t1, updatedAt:t1, deletedAt:t1}];
+  check('merge: a recipe removed on one phone and edited later on the other keeps the later edit',
+    M.merge(a, b).recipes[0].deletedAt === null);
+  a = clone(); b = clone();
+  a.recipes = [{id:'rec_1', n:'Blondies', m:40, y:12, ing:['1 cup oats'], steps:['Stir.'], src:'', url:null, createdAt:t1, updatedAt:t1, deletedAt:null}];
+  b.recipes = [{id:'rec_1', n:'Blondies', m:40, y:12, ing:['1 cup oats'], steps:['Stir.'], src:'', url:null, createdAt:t1, updatedAt:t2, deletedAt:t2}];
+  check('merge: and a newer removal beats an older edit, like every other record',
+    M.merge(a, b).recipes[0].deletedAt === t2);
   a = clone(); b = clone(); b.members.push({id:'mem_b', name:'Sam', updatedAt:t2, deletedAt:null});
   b.kids.push({id:'kid_2', name:'Ollie', hue:1, createdAt:t2, updatedAt:t2, deletedAt:null, settings:{days:[1], updatedAt:t2}, foods:[], week:null, packed:{}, eaten:{}, past:[]});
   m = M.merge(a, b);
@@ -1899,14 +1918,23 @@ try {
      nothing a household already added is ever taken off the list */
   await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(300);
   const foodsBefore = await pb.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length);
-  check('lapsed, both ways to write a food wear a lock and keep their place on the page',
-    (await pb.$$eval('[data-act="upgrade"][data-why="food"]', a => a.length)) === 2
-    && (await pb.$$eval('[data-act="add-own"]', a => a.length)) === 0
-    && (await pb.$$eval('[data-act="recipe-import"]', a => a.length)) === 0);
+  check('lapsed, Add your own wears a lock and keeps its place on the page',
+    (await pb.$$eval('[data-act="upgrade"][data-why="food"]', a => a.length)) === 1
+    && (await pb.$$eval('[data-act="add-own"]', a => a.length)) === 0);
   check('and the free way in sits beside it, not three screens back',
     (await pb.$$eval('[data-act="ideas"]', a => a.filter(b => /idea bank/i.test(b.textContent)).length)) >= 1);
   check('and every food already on the list is still there and still planned', foodsBefore > 0 &&
     (await pb.$$eval('.item .nm', a => a.length)) > 0 && !/no foods/i.test(await pb.textContent('#view')), foodsBefore);
+  await pb.click('[data-act="tab"][data-tab="recipes"]'); await pb.waitForTimeout(350);
+  check('lapsed, the Recipes tab is still there to cook from, with the idea bank free and importing locked',
+    (await pb.$$eval('[data-act="cook-recipe"]', a => a.length)) > 60
+    && (await pb.$$eval('[data-act="upgrade"][data-why="recipe"]', a => a.length)) === 1
+    && (await pb.$$eval('[data-act="recipe-import"]', a => a.length)) === 0);
+  await pb.click('[data-act="upgrade"][data-why="recipe"]'); await pb.waitForTimeout(350);
+  check('and the plan sheet says what is locked and what is not',
+    /idea bank stays free to cook from/.test(await pb.textContent('#sheetBody')), await pb.textContent('#sheetBody'));
+  await pb.click('#sheetClose'); await pb.waitForTimeout(250);
+  await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(350);
   await pb.click('[data-act="upgrade"][data-why="food"]'); await pb.waitForTimeout(350);
   check('tapping the lock opens the plan sheet, not the form',
     (await pb.$$eval('#nfName', a => a.length)) === 0 && /own words/i.test(await pb.textContent('#sheetBody')));
@@ -2516,57 +2544,155 @@ try {
     check('and the pack list names what in this box gets made, so the recipe waits in the kitchen',
       /Making it\?/.test(await pr2.textContent('#view'))
       && (await pr2.$$eval('#view [data-act="cook"]', a => a.map(b => b.textContent))).some(t => /Quinoa salad cup/.test(t)));
-    await pr2.click('[data-act="tab"][data-tab="foods"]'); await pr2.waitForTimeout(300);
-
     /* ---- reading one off a page needs a sign-in, because that is the only part that leaves the phone */
+    await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(350);
     await pr2.click('[data-act="recipe-import"]'); await pr2.waitForTimeout(300);
     check('signed out, the app does not offer to send an address anywhere, and says why',
       (await pr2.$$eval('#riUrl', a => a.length)) === 0
       && (await pr2.$$eval('#riText', a => a.length)) === 1
       && /nothing you type here leaves the phone/.test(await pr2.textContent('#sheetBody')));
 
-    /* ---- and pasted in, which is the only thing that works for a video */
+    /* ---- and pasted in, which is the only thing that works for a video.
+       A recipe is kept for its own sake: it goes into the household's library, and
+       putting it on a lunchbox's food list is a separate thing, offered afterwards. */
     await pr2.fill('#riText', 'EASY TURKEY PINWHEELS — my kids ask for these every week!!\n'
-      + 'Serves 4\n4 large tortillas\n3 tbsp cream cheese\n8 slices deli turkey\n'
-      + 'Spread the cream cheese right to the edge of each tortilla.\nRoll them up tight and chill them before slicing.');
+      + 'Serves 4\nPrep 10 minutes\n4 large tortillas\n3 tbsp cream cheese\n8 slices deli turkey\n'
+      + '1. Spread the cream cheese right to the edge of each tortilla.\n'
+      + '2. Roll them up tight and bake nothing, just chill them 20 minutes before slicing.');
     await pr2.click('[data-act="recipe-paste"]'); await pr2.waitForTimeout(400);
     check('a caption copied from under a video is read the same way, with the shouting and the aside taken off the name',
+      (await pr2.inputValue('#rsName')) === 'Easy turkey pinwheels'
+      && /3 ingredients · 2 steps/.test(await pr2.textContent('#sheetBody')), await pr2.inputValue('#rsName'));
+    check('and a numbered step that mentions a time is a step, not the time the recipe takes',
+      /10 minutes · makes 4 servings/.test(await pr2.textContent('#sheetBody')), await pr2.textContent('#sheetBody'));
+    await pr2.click('[data-act="recipe-save"]'); await pr2.waitForTimeout(500);
+    const kept = await pr2.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      return { lib: (d.recipes || []).map(r => ({ n: r.n, ing: r.ing.length, steps: r.steps.length, y: r.y, m: r.m, id: /^rec_/.test(r.id) })),
+        foods: d.kids.flatMap(k => k.foods).filter(f => f.recipeId).length };
+    });
+    check('it is kept on the household, with an id of its own, and nothing is put on a food list uninvited',
+      kept.lib.length === 1 && kept.lib[0].n === 'Easy turkey pinwheels' && kept.lib[0].ing === 3
+      && kept.lib[0].steps === 2 && kept.lib[0].y === 4 && kept.lib[0].m === 10 && kept.lib[0].id
+      && kept.foods === 0, kept);
+    check('and the food list is offered next rather than assumed',
+      /Put it on a food list too/.test(await pr2.textContent('#sheetBody'))
+      && (await pr2.$$eval('[data-act="recipe-to-food"]', a => a.length)) === 1);
+    await pr2.click('[data-act="recipe-to-food"]'); await pr2.waitForTimeout(400);
+    check('and taking that offer prefills the food, guesses and all, pointing at the recipe rather than copying it',
       (await pr2.inputValue('#nfName')) === 'Easy turkey pinwheels'
       && /Deli turkey/.test(await pr2.inputValue('#nfBuy'))
-      && /3 ingredients · 2 steps/.test(await pr2.textContent('#sheetBody')),
-      await pr2.inputValue('#nfName'));
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+      && (await pr2.$$eval('#nfAl .tg[aria-pressed="true"]', a => a.map(b => b.getAttribute('data-v')))).includes('dairy'),
+      await pr2.inputValue('#nfBuy'));
+    await pr2.click('[data-act="save-own"]'); await pr2.waitForTimeout(500);
+    const linked = await pr2.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const r = (d.recipes || [])[0], f = d.kids.flatMap(k => k.foods).filter(x => x.n === 'Easy turkey pinwheels');
+      return { n: f.length, pointing: f.every(x => x.recipeId === r.id), copies: f.filter(x => x.recipe).length };
+    });
+    check('a food points at the recipe rather than carrying a copy of it, in every lunchbox it went into',
+      linked.n >= 1 && linked.pointing && linked.copies === 0, linked);
 
-    /* ---- a recipe is data from outside, like everything else */
+    /* ---- the tab it all lives on, which is not per-lunchbox */
+    await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(400);
+    check('the Recipes tab is on the bottom bar and belongs to the household, not to a lunchbox',
+      (await pr2.$$eval('nav.tabs [data-tab="recipes"]', a => a.length)) === 1
+      && (await pr2.$$eval('.boxtabs', a => a.length)) === 0
+      && /Yours/.test(await pr2.textContent('#view'))
+      && /From the idea bank/.test(await pr2.textContent('#view')));
+    check('and every tab on the bar is still big enough to hit, with nothing running off the edge',
+      await pr2.evaluate(() => {
+        const bar = document.querySelector('nav.tabs');
+        return [...bar.children].every(b => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44)
+          && bar.scrollWidth <= bar.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth;
+      }));
+    check('a recipe of the household\u2019s own says where it is used; the bank\u2019s say they are the bank\u2019s',
+      /Easy turkey pinwheels/.test(await pr2.textContent('#view'))
+      && /on the food list/.test(await pr2.textContent('#view'))
+      && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) > 60);
+    await pr2.fill('#rqFind', 'quinoa'); await pr2.waitForTimeout(350);
+    check('the search finds a recipe by name and keeps the keyboard where it was',
+      (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent))).join('|').includes('Quinoa salad cup')
+      && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 1
+      && await pr2.evaluate(() => document.activeElement && document.activeElement.id === 'rqFind'));
+    await pr2.fill('#rqFind', 'rolled oats'); await pr2.waitForTimeout(350);
+    check('and by an ingredient, which is how a parent shops the cupboard',
+      (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent.trim()))).length >= 2);
+    await pr2.click('[data-act="tab"][data-tab="pack"]'); await pr2.waitForTimeout(300);
+    await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(400);
+    check('leaving the tab clears the search, so nobody comes back to a list that looks half empty',
+      (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) > 60
+      && (await pr2.inputValue('#rqFind')) === '');
+    await pr2.click('[data-act="cook-recipe"]'); await pr2.waitForTimeout(400);
+    check('and a recipe opens to be cooked straight from the tab, with no food list involved',
+      /What you need/.test(await pr2.textContent('#sheetBody'))
+      && (await pr2.textContent('#sheetTitle')).length > 0);
+    await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
+
+    /* ---- a recipe is data from outside, like everything else. The shape v17 wrote —
+       a recipe on the food — is carried forward into the library rather than dropped,
+       and everything about it is rebuilt from the whitelist on the way. */
     await pr2.evaluate(() => {
       const d = JSON.parse(localStorage.getItem('lunchsorted'));
-      const k = d.kids.filter(x => !x.deletedAt)[0];
+      const ks = d.kids.filter(x => !x.deletedAt), k = ks[0];
       const stamp = { createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', deletedAt: null,
         kidId: k.id, c: 'main', a: 'other', t: [], al: [], buy: null };
+      const legacy = { m: 40, y: 12, ing: ['1 cup oats', '2 tbsp honey'], steps: ['Stir it.', 'Bake it.'], src: 'old.example', url: null };
+      k.foods.push({ id: 'food_leg1', n: 'Legacy bars', ...stamp, recipe: legacy });
+      if (ks[1]) ks[1].foods.push({ id: 'food_leg2', n: 'Legacy bars', ...stamp, kidId: ks[1].id, recipe: legacy });
       k.foods.push({ id: 'food_hostile', n: 'Sneaky salad', ...stamp, recipe: {
         ing: ['1 cup oats'], steps: ['Stir it <img src=x onerror="window.__ls_bad=1"> well.'],
-        url: 'javascript:window.__ls_bad=1', src: 'x'.repeat(300), m: 1e9, y: -4 } });
+        url: 'javascript:window.__ls_bad=1', src: 'x'.repeat(300), m: 1e9, y: -4, l: 1 } });
       k.foods.push({ id: 'food_empty', n: 'Nothing salad', ...stamp, recipe: { ing: [], steps: [] } });
       k.foods.push({ id: 'food_silly', n: 'Silly salad', ...stamp, recipe: 'not a recipe' });
       localStorage.setItem('lunchsorted', JSON.stringify(d));
     });
-    await pr2.goto(BASE + '/app/'); await pr2.waitForTimeout(500);
-    await pr2.click('[data-act="tab"][data-tab="foods"]'); await pr2.waitForTimeout(300);
-    await openRow('Sneaky salad'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
-    const hostile = await cooking();
-    check('a recipe that arrives from outside is put on screen as the words it is, never as markup or as a link the app would follow',
+    await pr2.goto(BASE + '/app/'); await pr2.waitForTimeout(600);
+    const lifted = await pr2.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const bars = (d.recipes || []).filter(r => r.n === 'Legacy bars');
+      const pointing = d.kids.flatMap(k => k.foods).filter(f => f.n === 'Legacy bars');
+      const bad = (d.recipes || []).find(r => r.n === 'Sneaky salad');
+      return { bars: bars.length, ing: bars[0] && bars[0].ing.length, id: bars[0] && /^rec_/.test(bars[0].id),
+        pointing: pointing.length, allPoint: pointing.length > 0 && pointing.every(f => f.recipeId === (bars[0] || {}).id),
+        copies: d.kids.flatMap(k => k.foods).filter(f => f.recipe).length,
+        badUrl: bad && bad.url, badSrc: bad && bad.src.length, badM: bad && bad.m, badY: bad && bad.y, badL: bad && bad.l,
+        empties: (d.recipes || []).filter(r => r.n === 'Nothing salad' || r.n === 'Silly salad').length };
+    });
+    check('a recipe written the old way, on the food, is carried into the library — once, however many lunchboxes held it',
+      lifted.bars === 1 && lifted.ing === 2 && lifted.id && lifted.pointing >= 1 && lifted.allPoint && lifted.copies === 0, lifted);
+    check('and is rebuilt from the whitelist on the way in: no address it cannot open, no nonsense numbers, and it cannot claim to be one of ours',
+      lifted.badUrl === null && lifted.badSrc <= 60 && lifted.badM === 0 && lifted.badY === 0 && !lifted.badL, lifted);
+    check('a recipe with nothing in it, or one that is not a recipe at all, is not carried anywhere', lifted.empties === 0, lifted);
+
+    await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(400);
+    check('the lifted recipe is on the tab, under the household\u2019s own',
+      /Legacy bars/.test(await pr2.textContent('#view')));
+    const hostileRow = await pr2.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => /Sneaky salad/.test(b.textContent)));
+    await hostileRow.asElement().click(); await pr2.waitForTimeout(400);
+    const hostile = await pr2.textContent('#sheetBody');
+    check('and a recipe that arrives from outside is put on screen as the words it is, never as markup or as a link the app would follow',
       /Stir it <img src=x onerror/.test(hostile)
       && (await pr2.$$eval('#sheetBody img, #sheetBody a[href^="javascript"]', a => a.length)) === 0
-      && await pr2.evaluate(() => !window.__ls_bad), hostile.slice(0, 160));
-    check('and its impossible numbers are dropped rather than shown', !/-4|16666/.test(hostile), hostile.slice(0, 120));
+      && await pr2.evaluate(() => !window.__ls_bad) && !/-4|16666/.test(hostile), hostile.slice(0, 160));
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
-    await openRow('Nothing salad');
-    const emptyOne = (await pr2.$$eval('[data-act="cook"]', a => a.length)) === 0;
+
+    /* ---- removing one from the library, and what that leaves behind */
+    const barsId = await pr2.evaluate(() => (JSON.parse(localStorage.getItem('lunchsorted')).recipes || []).find(r => r.n === 'Legacy bars').id);
+    const bars = await pr2.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => /Legacy bars/.test(b.textContent)));
+    await bars.asElement().click(); await pr2.waitForTimeout(350);
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
-    await openRow('Silly salad');
-    check('a recipe with nothing in it, or one that is not a recipe at all, leaves the food with none',
-      emptyOne && (await pr2.$$eval('[data-act="cook"]', a => a.length)) === 0);
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    await pr2.evaluate(id => { document.querySelector('#view').insertAdjacentHTML('afterbegin',
+      '<button id="delprobe" data-act="recipe-delete" data-id="' + id + '">x</button>'); }, barsId);
+    await pr2.click('#delprobe'); await pr2.waitForTimeout(400);
+    const afterDelete = await pr2.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const r = (d.recipes || []).find(x => x.n === 'Legacy bars');
+      return { tomb: !!(r && r.deletedAt), stillPointing: d.kids.flatMap(k => k.foods).filter(f => f.recipeId === (r || {}).id).length,
+        foodStays: d.kids.flatMap(k => k.foods).filter(f => f.n === 'Legacy bars' && !f.deletedAt).length };
+    });
+    check('removing a recipe tombstones it, unhooks the foods that used it, and takes none of them off the list',
+      afterDelete.tomb && afterDelete.stillPointing === 0 && afterDelete.foodStays >= 1, afterDelete);
     await ctxR2.close();
   }
   {
@@ -2584,30 +2710,37 @@ try {
     await pr3.goto(BASE + '/app/'); await pr3.waitForTimeout(600);
     await pr3.fill('#obName', 'Rowan'); await pr3.click('[data-act="ob-go"]'); await pr3.waitForTimeout(600);
     for (const a of ['ob-later', 'ob-skip']) { const b = await pr3.$(`[data-act="${a}"]`); if (b) { await b.click(); await pr3.waitForTimeout(350); } }
-    await pr3.click('[data-act="tab"][data-tab="foods"]'); await pr3.waitForTimeout(400);
+    await pr3.click('[data-act="tab"][data-tab="recipes"]'); await pr3.waitForTimeout(400);
     await pr3.click('[data-act="recipe-import"]'); await pr3.waitForTimeout(350);
     check('signed in, the app offers to read a page', (await pr3.$$eval('#riUrl', a => a.length)) === 1);
     await pr3.fill('#riUrl', 'https://a-blog.example/quinoa');
     await pr3.click('[data-act="recipe-fetch"]'); await pr3.waitForTimeout(600);
-    check('a recipe read off a page comes back as a food to check over, with every guess shown rather than hidden',
-      (await pr3.inputValue('#nfName')) === 'Lemony Quinoa Salad'
-      && /Quinoa/.test(await pr3.inputValue('#nfBuy'))
-      && (await pr3.$$eval('#nfAl .tg[aria-pressed="true"]', a => a.map(b => b.getAttribute('data-v')))).includes('dairy')
-      && /the school rules go by this/.test(await pr3.textContent('#sheetBody')),
-      await pr3.inputValue('#nfBuy'));
-    await pr3.click('[data-act="save-own"]'); await pr3.waitForTimeout(500);
+    check('a recipe read off a page comes back to be named and kept, not pushed onto a food list',
+      (await pr3.inputValue('#rsName')) === 'Lemony Quinoa Salad'
+      && /from a-blog.example/.test(await pr3.textContent('#sheetBody')),
+      await pr3.inputValue('#rsName'));
+    await pr3.click('[data-act="recipe-save"]'); await pr3.waitForTimeout(500);
     const saved = await pr3.evaluate(() => {
       const d = JSON.parse(localStorage.getItem('lunchsorted'));
-      const f = d.kids.flatMap(k => k.foods).find(x => x.n === 'Lemony Quinoa Salad');
-      return f && { ing: f.recipe.ing.length, steps: f.recipe.steps.length, src: f.recipe.src, url: f.recipe.url, buy: f.buy.length, l: f.recipe.l };
+      const r = (d.recipes || [])[0];
+      return r && { n: r.n, ing: r.ing.length, steps: r.steps.length, src: r.src, url: r.url, l: r.l,
+        foods: d.kids.flatMap(k => k.foods).filter(f => f.recipeId).length };
     });
-    check('and it lands on the list as a food, carrying its recipe, where it came from, and its shopping line',
-      saved && saved.ing === 4 && saved.steps === 3 && saved.src === 'a-blog.example' && saved.buy > 1, saved);
+    check('and it is kept with its steps and where it came from, and no food made for it yet',
+      saved && saved.ing === 4 && saved.steps === 3 && saved.src === 'a-blog.example' && saved.foods === 0, saved);
+    await pr3.click('[data-act="recipe-to-food"]'); await pr3.waitForTimeout(400);
+    await pr3.click('[data-act="save-own"]'); await pr3.waitForTimeout(500);
+    check('and once it is on a food list, the food points at it and the shopping line came with it',
+      await pr3.evaluate(() => {
+        const d = JSON.parse(localStorage.getItem('lunchsorted'));
+        const r = (d.recipes || [])[0], f = d.kids.flatMap(k => k.foods).find(x => x.n === 'Lemony Quinoa Salad');
+        return !!f && f.recipeId === r.id && !f.recipe && f.buy.length > 1;
+      }));
+    await pr3.click('[data-act="tab"][data-tab="recipes"]'); await pr3.waitForTimeout(400);
+    const own = await pr3.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => /Lemony/.test(b.textContent)));
+    await own.asElement().click(); await pr3.waitForTimeout(400);
     check('and it is counted in servings, not in lunches, because that is what its own page said',
-      !saved.l && /makes 4 servings/.test(await (async () => {
-        const h = await pr3.evaluateHandle(() => [...document.querySelectorAll('[data-act="food-open"]')].find(b => /Lemony/.test(b.textContent)));
-        await h.asElement().click(); await pr3.waitForTimeout(300); return pr3.textContent('#sheetBody');
-      })()));
+      /makes 4 servings/.test(await pr3.textContent('#sheetBody')), await pr3.textContent('#sheetBody'));
     await pr3.click('#sheetClose'); await pr3.waitForTimeout(200);
     await ctxR3.close();
   }

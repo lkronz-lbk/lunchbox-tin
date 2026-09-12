@@ -238,6 +238,7 @@ nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--ground);backgro
 nav.tabs button{flex:1;border:0;background:none;min-height:48px;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:3px;color:var(--ink-3);border-radius:var(--r-md)}
 nav.tabs button span{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+@media (max-width:359px){ nav.tabs button span{font-size:9px;letter-spacing:.04em} }
 nav.tabs button[aria-current="true"]{color:var(--accent)}
 nav.tabs button{position:relative}
 nav.tabs .due{position:absolute;top:8px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:var(--hot);border:2px solid var(--ground)}
@@ -324,6 +325,9 @@ nav.tabs svg{width:21px;height:21px}
 .cookstep{margin:0;font-size:19px;line-height:1.5}
 .cookstep:focus{outline:none}
 .btn.sm.step{min-width:44px;padding:0 10px;font-size:17px}
+/* a label a screen reader reads and a sighted parent does not need, because the
+   placeholder beside it says the same thing */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 ol.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px}
 ol.steps li{font-size:14.5px;line-height:1.55;padding-left:2px}
 .thumb{width:44px;height:44px;border-radius:var(--r-md);border:1.5px solid var(--line);background:var(--surface-2);padding:0;overflow:hidden;
@@ -512,6 +516,7 @@ window.LSMerge = (function(){
       align:(a.align && b.align) ? newer(a.align, b.align) : (a.align || b.align),
       reviewReminder:(a.reviewReminder && b.reviewReminder) ? newer(a.reviewReminder, b.reviewReminder) : (a.reviewReminder || b.reviewReminder),
       packWhen:(a.packWhen && b.packWhen) ? newer(a.packWhen, b.packWhen) : (a.packWhen || b.packWhen),
+      recipes:unionById(a.recipes, b.recipes, newer),
       pantry:mergeMap(a.pantry, b.pantry)
     };
   }
@@ -1010,9 +1015,47 @@ function recipeByName(n){
   if(!RECIPE_BY_KEY){ RECIPE_BY_KEY = nullMap(); Object.keys(RECIPE).forEach(function(k){ RECIPE_BY_KEY[k] = RECIPE[k]; }); }
   return RECIPE_BY_KEY[normKey(n)] || null;
 }
-/* a food's own recipe first, then the bank's for a food of that name, so a household
-   seeded before recipes existed gets them too — the same fallback `buy` uses */
-function recipeFor(f){ return f ? (f.recipe || recipeByName(f.n)) : null; }
+/* ---- the household's library, and the bank behind it.
+   A food resolves to a recipe three ways, in order: the one it was given, one of the
+   household's own by the same name, and failing both the idea bank's — the same
+   fallback `buy` uses, so a list seeded before any of this existed gets them too. */
+function libRecipes(){ return (S && Array.isArray(S.recipes) ? S.recipes : []).filter(function(r){ return !r.deletedAt; }); }
+function libById(id){
+  if(!id) return null;
+  var hit = libRecipes().filter(function(r){ return r.id === id; })[0];
+  return hit || null;
+}
+function libByName(n){
+  if(!n) return null;
+  var key = normKey(n);
+  return libRecipes().filter(function(r){ return normKey(r.n) === key; })[0] || null;
+}
+function recipeFor(f){
+  if(!f) return null;
+  return libById(f.recipeId) || libByName(f.n) || recipeByName(f.n);
+}
+/* every recipe a parent can open, theirs first, the bank's after, each one already
+   knowing whether it is on a food list and whose */
+function allRecipes(){
+  var out = [], seen = nullMap();
+  libRecipes().slice().sort(function(a, b){ return (a.n || '').localeCompare(b.n || ''); }).forEach(function(r){
+    seen[normKey(r.n)] = 1; out.push({r:r, own:true});
+  });
+  BANK.forEach(function(b){
+    var r = recipeByName(b.n);
+    if(r && !seen[normKey(b.n)]){ seen[normKey(b.n)] = 1; out.push({r:r, own:false, name:b.n}); }
+  });
+  return out;
+}
+/* the name a recipe goes by, whether it is the household's or the bank's */
+function recipeName(e){ return e.own ? e.r.n : e.name; }
+/* which lunchboxes hold a food this recipe belongs to */
+function recipeOn(e){
+  var nm = normKey(recipeName(e)), id = e.own ? e.r.id : null;
+  return kids().filter(function(k){
+    return foodsOf(k).some(function(f){ return (id && f.recipeId === id) || normKey(f.n) === nm; });
+  });
+}
 
 /* ------------------------------------------------- amounts
    An ingredient is stored as the line a recipe writes ("1 1/2 cups rolled oats").
@@ -1348,11 +1391,13 @@ function resumeAfter(){
   else if(why === 'share'){ UI.tab = 'setup'; UI.pane = 'household'; render(); }
   else if(why === 'week'){ UI.tab = 'week'; render(); }
   else if(why === 'food'){ UI.tab = 'foods'; UI.pane = ''; render(); addOwnSheet(); }
+  else if(why === 'recipe'){ UI.tab = 'recipes'; UI.pane = ''; render(); recipeImportSheet(null, null); }
 }
 function upgradeSheet(why){
   var pr = (Account.billing && Account.billing.prices) || {}, forever = why === 'forever';
   var h = '<p style="margin:0">'+(why === 'share' ? 'Sharing the lunches with the other parent’s phone, or a caretaker, is part of the Household plan.'
         : why === 'lunchbox' ? 'A second lunchbox is part of the Household plan. The first is free for as long as you like.'
+        : why === 'recipe' ? 'Keeping a recipe of your own \u2014 written out, pasted in, or read off a page \u2014 is part of the Household plan. Every recipe in the idea bank stays free to cook from, and every recipe you have kept stays yours.'
         : why === 'food' ? 'Writing a food in your own words, or bringing one in from a recipe page, is part of the Household plan. Every food you have added stays on the list, and the idea bank \u2014 recipes and all \u2014 is free.'
         : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
         : why === 'review' ? 'The morning review — what came home, what to rest — is part of the Household plan.'
@@ -1528,7 +1573,7 @@ function whatsNew(){
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
    Account categories. It is view state and never reaches S, or the merge would
    read a tap as a change and push on every one. */
-var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'});
 /* the one test for whether a pane may be on screen. A pane is opened by a tap but
    also by a link from an email and by the return from Stripe, so the render asks
@@ -1579,8 +1624,8 @@ function newKid(name, hue){
 }
 function newFood(kid, o){
   return {id:uid('food'), kidId:kid.id, n:o.n, c:o.c, t:(o.t||[]).slice(), a:o.a||'other',
-    al:(o.al||[]).slice(), buy:Array.isArray(o.buy) ? o.buy.slice() : null, recipe:normRecipe(o.recipe),
-    createdAt:now(), updatedAt:now(), deletedAt:null};
+    al:(o.al||[]).slice(), buy:Array.isArray(o.buy) ? o.buy.slice() : null,
+    recipeId:safeIdOrNull(o.recipeId), createdAt:now(), updatedAt:now(), deletedAt:null};
 }
 /* the phone's IANA zone (America/New_York), or null where the browser will not say */
 function phoneTz(){ try{ return validTz(Intl.DateTimeFormat().resolvedOptions().timeZone); }catch(e){ return null; } }
@@ -1592,7 +1637,7 @@ function newAccount(){
   var owner = newMember('Me','owner');
   var kid = newKid('Lunchbox', 0);
   return {schema:SCHEMA, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-    members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:false, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap(), tz:phoneTz()};
+    members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:false, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap(), recipes:[], tz:phoneTz()};
 }
 
 /* migrations: keyed by the schema they upgrade FROM */
@@ -1601,7 +1646,7 @@ var MIGRATIONS = {
     var owner = newMember('Me','owner');
     var kid = newKid((old.settings && old.settings.kid) || 'Lunchbox', 0);
     var acct = {schema:2, id:uid('acc'), name:'My household', createdAt:now(), updatedAt:now(),
-      members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:false, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap()};
+      members:[owner], kids:[kid], activeKidId:kid.id, align:{on:true, updatedAt:now()}, reviewReminder:{on:false, updatedAt:now()}, packWhen:{v:'morning', updatedAt:now()}, pantry:nullMap(), recipes:[]};
     if(old.settings){
       kid.settings.days = old.settings.days || [1,2,3,4,5];
       kid.settings.noHeat = old.settings.noHeat !== false;
@@ -1675,7 +1720,7 @@ function normFood(kid, f){
     a: AISLES.indexOf(f.a) > -1 ? f.a : 'other',
     al:(Array.isArray(f.al) ? f.al : []).filter(function(x){ return ALLERGENS.some(function(y){ return y.k === x; }); }),
     buy:normBuy(f.buy, n),
-    recipe:normRecipe(f.recipe),
+    recipeId:safeIdOrNull(f.recipeId),
     img:(typeof f.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
     createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt), deletedAt: f.deletedAt ? safeStamp(f.deletedAt) : null};
 }
@@ -1685,11 +1730,14 @@ function normBuy(v, name){
   if(Array.isArray(v)) return v.map(function(x){ return safeStr(x, 40, '').trim(); }).filter(Boolean).slice(0, 8);
   var b = bankByName(name); return b && b.buy ? b.buy.slice() : null;
 }
-/* A recipe a parent wrote, pasted or imported. It arrives from outside the app
-   exactly as a food does — a paste, a backup, the other phone — so it is rebuilt
-   from a whitelist too: lines of plain text, a number of minutes and a number of
-   lunches, and where it came from. Anything unreadable is dropped rather than
-   rendered, and a recipe with neither an ingredient nor a step is no recipe. */
+/* A recipe a parent wrote, pasted or imported. It belongs to the household, not to
+   a lunchbox: the same blondies are the same blondies whichever kid is eating them,
+   so it is a record on the account with its own id, and a food points at one rather
+   than carrying a copy. It arrives from outside the app exactly as a food does — a
+   paste, a backup, the other phone — so it is rebuilt from a whitelist too: lines of
+   plain text, a number of minutes and a number of servings, and where it came from.
+   Anything unreadable is dropped rather than rendered, and a recipe with neither an
+   ingredient nor a step is no recipe. */
 var ING_MAX = 40, STEP_MAX = 30;
 function safeHttps(v){ return (typeof v === 'string' && v.length <= 300 && /^https:\/\/[^\s<>"']+$/.test(v)) ? v : null; }
 function normRecipe(v){
@@ -1702,6 +1750,23 @@ function normRecipe(v){
      never carried in from outside, so a pasted recipe cannot claim to be one of ours */
   return {m:(m > 0 && m <= 1440) ? m : 0, y:(y > 0 && y <= 99) ? y : 0, ing:ing, steps:steps,
     src:safeStr(v.src, 60, '').replace(/\s+/g, ' ').trim(), url:safeHttps(v.url)};
+}
+/* one recipe in the household's library: the recipe itself, plus who it is and when */
+var RECIPES_MAX = 300;
+function normLibRecipe(v){
+  v = plainObj(v);
+  var r = normRecipe(v); if(!r) return null;
+  var n = safeStr(v.n, 80, '').replace(/\s+/g, ' ').trim(); if(!n) return null;
+  r.id = safeId(v.id, 'rec'); r.n = n;
+  r.createdAt = safeStamp(v.createdAt); r.updatedAt = safeStamp(v.updatedAt);
+  r.deletedAt = v.deletedAt ? safeStamp(v.deletedAt) : null;
+  return r;
+}
+function newLibRecipe(name, rec){
+  var r = normRecipe(rec) || {m:0, y:0, ing:[], steps:[], src:'', url:null};
+  r.id = uid('rec'); r.n = String(name).trim().slice(0, 80);
+  r.createdAt = now(); r.updatedAt = now(); r.deletedAt = null;
+  return r;
 }
 function normStamped(v){
   v = plainObj(v);
@@ -1795,12 +1860,40 @@ function normOptIn(v){
   return {on: o.on === true, updatedAt: safeStamp(o.updatedAt, '')};
 }
 function packsAtNight(){ return !!(S.packWhen && S.packWhen.v === 'evening'); }
+/* Until v18 a recipe was a field on a food, so the same dish carried a copy in every
+   lunchbox that held it. A document written by that build — a phone that has not
+   updated, a backup, an export — is carried forward here rather than left behind:
+   each per-food recipe becomes one library record, matched by the food's name so the
+   copies collapse back into one, and the food is left pointing at it. */
+function liftFoodRecipes(doc, acct){
+  var byName = nullMap();
+  acct.recipes.forEach(function(r){ if(!r.deletedAt) byName[normKey(r.n)] = r; });
+  (Array.isArray(doc.kids) ? doc.kids : []).slice(0, 20).forEach(function(k, i){
+    var kid = acct.kids[i]; if(!kid) return;
+    (Array.isArray(k.foods) ? k.foods : []).forEach(function(was, j){
+      var f = kid.foods[j];
+      if(!f || f.recipeId || !was || !was.recipe) return;
+      var key = normKey(f.n), have = byName[key];
+      if(!have){
+        if(acct.recipes.length >= RECIPES_MAX) return;
+        have = normLibRecipe(Object.assign({}, newLibRecipe(f.n, was.recipe),
+          {createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt)}));
+        if(!have) return;
+        byName[key] = have; acct.recipes.push(have);
+      }
+      f.recipeId = have.id;
+    });
+  });
+}
 function normalizeAccount(doc){
   if(!isAccount(doc)) return null;
   var acct = {schema:SCHEMA, id:safeId(doc.id,'acc'), name:safeStr(doc.name, 60, 'My household'),
     createdAt:safeStamp(doc.createdAt), updatedAt:safeStamp(doc.updatedAt),
     members:doc.members.slice(0, 50).map(normMember), kids:doc.kids.slice(0, 20).map(normKid),
-    activeKidId:null, align:normAlign(doc.align), reviewReminder:normOptIn(doc.reviewReminder), packWhen:normPackWhen(doc.packWhen), pantry:nullMap(), onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
+    activeKidId:null, align:normAlign(doc.align), reviewReminder:normOptIn(doc.reviewReminder), packWhen:normPackWhen(doc.packWhen), pantry:nullMap(),
+    recipes:(Array.isArray(doc.recipes) ? doc.recipes : []).slice(0, RECIPES_MAX).map(normLibRecipe).filter(Boolean),
+    onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
+  liftFoodRecipes(doc, acct);
   if(!acct.members.length) acct.members = [newMember('Me','owner')];
   if(!acct.members.some(function(m){ return m.role === 'owner' && !m.deletedAt; })) acct.members[0].role = 'owner';
   var live = acct.kids.filter(function(k){ return !k.deletedAt; });
@@ -2325,7 +2418,7 @@ function planWeek(kid, align, ahead){
   var shortfall = [];
   catsFor(kid).forEach(function(c){ if(!fillCategory(kid, week, c)) shortfall.push(c.plural); });
   if(ahead){ kid.next = week; }
-  else { kid.week = week; prune(kid, ws); if(kid.next && kid.next.start <= week.start) kid.next = null; }
+  else { kid.week = week; prune(kid, ws); pruneRecipes(); if(kid.next && kid.next.start <= week.start) kid.next = null; }
   touch(kid); save();
   return shortfall;
 }
@@ -2344,6 +2437,12 @@ function prune(kid, ws){
   Object.keys(kid.packed || {}).forEach(function(d){ if(d < floorPacked) delete kid.packed[d]; });
   Object.keys(kid.eaten || {}).forEach(function(d){ if(d < floorEaten) delete kid.eaten[d]; });
   kid.foods = kid.foods.filter(function(f){ return !f.deletedAt || new Date(f.deletedAt).getTime() > floorTomb; });
+}
+/* a removed recipe's tombstone goes the way of every other one */
+function pruneRecipes(){
+  if(!S || !Array.isArray(S.recipes)) return;
+  var floorTomb = addDays(today(), -90).getTime();
+  S.recipes = S.recipes.filter(function(r){ return !r.deletedAt || new Date(r.deletedAt).getTime() > floorTomb; });
 }
 /* What one lunchbox's week holds, by name — the shape another lunchbox tries to
    copy. Names, not ids: two kids who both eat cheese toastie have two food rows. */
@@ -2722,7 +2821,7 @@ function openSheet(title, html, state){
   sheetEl.classList.add('open'); backEl.classList.add('open'); bodyEl.scrollTop = 0;
   document.body.style.overflow = 'hidden';
 }
-function closeSheet(){ sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null;
+function closeSheet(){ sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
   UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = ''; }
 backEl.addEventListener('click', closeSheet);
 document.getElementById('sheetClose').addEventListener('click', closeSheet);
@@ -3087,7 +3186,7 @@ function viewPack(){
       /* only what is worth standing at the counter for: a parent about to walk out of
          the door does not need to be told there is a recipe for a ham sandwich */
       var mr = f && recipeFor(f);
-      return !!mr && (!!f.recipe || mr.m >= 10);
+      return !!mr && (!!(f.recipeId || libByName(f.n)) || mr.m >= 10);
     });
   if(making.length)
     box += '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'
@@ -3245,13 +3344,60 @@ function viewFoods(){
      never stuck with what it has */
   h += gated()
     ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add your own \u2014 part of the Household plan">'+svg('lock',17)+'Add your own</button>'
-      + '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Import a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Import a recipe</button>'
       + '<button class="btn wide" data-act="ideas">'+svg('plus',17)+'Browse the idea bank</button>'
       + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank, and every recipe in it, is free.</span>'+premiumTag()+'</p>'
     : isHelper() ? ''
     : '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button>'
-      + '<button class="btn wide" data-act="recipe-import">'+svg('book',17)+'Import a recipe</button>'
-      + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words, or one read off a recipe page.</span>'+premiumTag()+'</p>' : '');
+      + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words.</span>'+premiumTag()+'</p>' : '');
+  return h + '</div>';
+}
+
+/* ======================================================== the Recipes tab
+   Recipes belong to the household, not to a lunchbox: the same blondies are the
+   same blondies whichever kid is eating them. So this is one list for everybody,
+   with no lunchbox tabs across the top — the parent's own first, the idea bank's
+   behind them, and a box to search when seventy of them is too many to scroll. */
+function recipeRow(e){
+  var r = e.r, name = recipeName(e), on = recipeOn(e), head = cookHead(r);
+  var meta = head || '';
+  if(on.length) meta += (meta ? ' · ' : '') + (kids().length > 1 ? 'on ' + listNames(on) : 'on the food list');
+  return '<button class="item" data-act="cook-recipe" data-id="'+esc(e.own ? r.id : '')+'" data-name="'+esc(name)+'">'
+    + '<span class="grow"><span class="nm">'+esc(name)+(e.own ? '' : ' <span class="chip">Idea bank</span>')+'</span>'
+    + '<span class="meta">'+esc(meta || 'Tap to cook it')+'</span></span>'
+    + '<span class="go">'+svg('chev',16)+'</span></button>';
+}
+function viewRecipes(){
+  var find = normKey(UI.recipeFind || ''), all = allRecipes();
+  var hit = !find ? all : all.filter(function(e){
+    if(normKey(recipeName(e)).indexOf(find) > -1) return true;
+    return e.r.ing.some(function(l){ return normKey(l).indexOf(find) > -1; });
+  });
+  var mine = hit.filter(function(e){ return e.own; }), bank = hit.filter(function(e){ return !e.own; });
+  var h = '<div class="stack"><div><p class="view-sub">Recipes</p>'
+    + '<h2 class="view-title">What you cook</h2></div>';
+  if(!isHelper())
+    h += gated()
+      ? '<button class="btn ghost wide" data-act="upgrade" data-why="recipe" aria-label="Import a recipe — part of the Household plan">'+svg('lock',17)+'Import a recipe</button>'
+      : '<button class="btn wide" data-act="recipe-import">'+svg('book',17)+'Import a recipe</button>';
+  /* the search box earns its place at seventy recipes and not before */
+  if(all.length > 12)
+    h += '<div class="field" style="margin:0"><label for="rqFind" class="sr-only">Find a recipe</label>'
+      +  '<input type="search" id="rqFind" data-find="recipe" placeholder="Find a recipe, or an ingredient" '
+      +  'autocomplete="off" autocapitalize="off" maxlength="60" value="'+esc(UI.recipeFind || '')+'"></div>';
+  if(!hit.length)
+    h += '<div class="empty"><p>Nothing matches &#8220;'+esc(UI.recipeFind || '')+'&#8221;.</p>'
+      +  '<button class="btn ghost" data-act="recipe-clear-find">Show them all</button></div>';
+  if(mine.length){
+    h += '<div><div class="sect-head"><h3>Yours</h3><span class="count">'+mine.length+'</span></div><div class="list">'
+      +  mine.map(recipeRow).join('')+'</div></div>';
+  } else if(!find && !isHelper()){
+    h += '<div class="empty"><p>Nothing of your own yet. Paste in a recipe, or give the app the address of one, '
+      +  'and it is yours to cook from on any phone in the household.</p></div>';
+  }
+  if(bank.length)
+    h += '<div><div class="sect-head"><h3>From the idea bank</h3><span class="count">'+bank.length+'</span></div><div class="list">'
+      +  bank.map(recipeRow).join('')+'</div>'
+      +  (find ? '' : '<p class="hint muted" style="margin:8px 0 0">Free, for good, whether the food is on a list or not.</p>')+'</div>';
   return h + '</div>';
 }
 
@@ -3779,7 +3925,7 @@ function addOwnLabel(){
    decides what the school rules do with it, so it is never settled silently. */
 function addOwnSheet(pre){
   pre = pre || {};
-  UI.recipeDraft = pre.recipe || null;
+  UI.foodRecipeId = pre.recipeId || null;
   var cats = addCats(), pc = cats.some(function(c){ return c.k === pre.c; }) ? pre.c : cats[0].k;
   var on = function(list, v){ return (Array.isArray(list) ? list : []).indexOf(v) > -1; };
   var h = (pre.recipe ? recipeCard(pre.recipe) : '')
@@ -3850,10 +3996,17 @@ function parsePasted(raw){
     if(HEAD_STEP.test(bare)){ mode = 's'; return; }
     if(HEAD_SKIP.test(bare)){ mode = 'x'; return; }
     if(mode === 'x') return;
-    var y = l.match(/\b(?:serves|servings?|makes|yields?)\b[^0-9]{0,12}(\d{1,2})/i);
-    if(y && !yld){ yld = +y[1]; if(/^(?:serves|servings?|makes|yields?)\b/i.test(l)) return; }
-    var t = l.match(/\b(?:total|cook|bake|prep|ready in|time)\b[^0-9]{0,16}(\d{1,3})\s*(m|min|mins|minutes?|h|hr|hrs|hours?)\b/i);
-    if(t && l.length < 60){ mins += /^h/i.test(t[2]) ? +t[1] * 60 : +t[1]; return; }
+    /* A numbered line is a step the recipe numbered, so it is never read as a time or
+       a yield: "2. Stir it together and bake 28 minutes" is something to do, not a
+       statement that the recipe takes 28 minutes. For the rest, the time or yield word
+       has to be at the front of the line — a label — rather than anywhere in a sentence. */
+    var numbered = NUMBERED.test(l);
+    if(!numbered){
+      var y = l.match(/\b(?:serves|servings?|makes|yields?)\b[^0-9]{0,12}(\d{1,2})/i);
+      if(y && !yld && y.index < 20){ yld = +y[1]; if(/^(?:serves|servings?|makes|yields?)\b/i.test(l)) return; }
+      var t = l.match(/\b(?:total|cook|bake|prep|ready in|active|time)\b[^0-9]{0,16}(\d{1,3})\s*(m|min|mins|minutes?|h|hr|hrs|hours?)\b/i);
+      if(t && t.index < 20 && l.length < 60){ mins += /^h/i.test(t[2]) ? +t[1] * 60 : +t[1]; return; }
+    }
     /* the numbering comes off first, so a numbered step is read as a step and not,
        because it opens with a digit, as an amount */
     var body = stripNum(l);
@@ -3908,13 +4061,12 @@ function guessAisle(buy){
   return best || 'other';
 }
 var SWEET_RE = /cookie|muffin|brownie|blondie|cupcake|cake\b|bread\b|bars?\b|scone|donut|doughnut|biscuit|pudding|granola|flapjack|slice\b|bites?\b|balls?\b|squares?\b|treats?\b|truffle/i;
-function guessFood(rec){
-  var title = rec.title || '', all = [title].concat(rec.ing || []);
-  var c = SWEET_RE.test(title) ? 'sweet' : 'main';
-  var buy = buyFrom(rec.ing || []);
-  var t = c === 'sweet' ? ['sweet','soft'] : ['hearty'];
-  if(/chicken|turkey|beef|tuna|salmon|egg|bean|lentil|chickpea|cheese|yogurt|tofu|quinoa/i.test(all.join(' '))) t.push('protein');
-  return {n:title, c:c, a:guessAisle(buy), buy:buy, t:t, al:guessAllergens(all), recipe:rec};
+function guessCat(rec){ return SWEET_RE.test(rec.n || rec.title || '') ? 'sweet' : 'main'; }
+function guessTags(rec){
+  var all = [(rec.n || rec.title || '')].concat(rec.ing || []).join(' ');
+  var t = guessCat(rec) === 'sweet' ? ['sweet','soft'] : ['hearty'];
+  if(/chicken|turkey|beef|tuna|salmon|egg|bean|lentil|chickpea|cheese|yogurt|tofu|quinoa/i.test(all)) t.push('protein');
+  return t;
 }
 
 /* ---- the sheet: an address, or the words themselves */
@@ -3957,25 +4109,33 @@ function recipeCard(r){
     + (r.steps.length ? '<ol class="steps" style="margin-top:12px">'+r.steps.map(function(s){ return '<li>'+esc(s)+'</li>'; }).join('')+'</ol>' : '')
     + '</div></details></div>';
 }
-/* what came back, for the parent to correct before it becomes a food */
+/* What came back, to be named and kept. It goes into the household's library, which
+   is the thing a parent came here for; whether it also becomes a food in a lunchbox
+   is a separate question, asked afterwards rather than assumed. */
 function recipeReview(rec){
-  rec = normRecipe(rec) ? Object.assign(normRecipe(rec), {title:safeStr(rec.title, 80, '').trim()}) : null;
-  if(!rec){ recipeMsg('There was no recipe in that. Try pasting the ingredients and the steps.', true); return; }
-  var to = UI.importTo;
-  if(to){
-    var k = kidById(to.kidId) || activeKid(), f = k && foodById(k, to.id);
-    if(!f){ closeSheet(); return; }
-    UI.recipeDraft = rec;
-    openSheet('Add a recipe', '<div class="stack" style="gap:14px">'+recipeCard(rec)
-      + '<button class="btn primary wide" data-act="recipe-attach">Add it to '+esc(f.n)+'</button>'
-      + '<button class="btn ghost wide" data-act="recipe-import">Start again</button></div>');
-    return;
-  }
-  var pre = guessFood(rec);
-  if(!pre.n){ recipeMsg('That recipe has no name. Paste it again with the name on the first line.', true); return; }
-  addOwnSheet(pre);
+  var clean = normRecipe(rec);
+  if(!clean){ recipeMsg('There was no recipe in that. Try pasting the ingredients and the steps.', true); return; }
+  clean.title = safeStr(rec.title, 80, '').trim();
+  UI.recipeDraft = clean;
+  var to = UI.importTo, tk = to && (kidById(to.kidId) || activeKid()), tf = tk && foodById(tk, to.id);
+  var name = clean.title || (tf ? tf.n : '');
+  var h = '<div class="stack" style="gap:14px">' + recipeCard(clean)
+    + '<div class="field"><label for="rsName">Call it</label>'
+    + '<input type="text" id="rsName" autocomplete="off" maxlength="80" value="'+esc(name)+'"></div>'
+    + (tf ? '<p class="hint muted" style="margin:0">It goes on '+esc(tf.n)+' as well.</p>' : '')
+    + '<button class="btn primary wide" data-act="recipe-save">Keep this recipe</button>'
+    + '<button class="btn ghost wide" data-act="recipe-import">Read a different one</button></div>';
+  openSheet('Check it over', h);
+  if(!name) setTimeout(function(){ var el = document.getElementById('rsName'); if(el) el.focus(); }, 220);
 }
-
+/* kept — and now, separately, would you like it in a lunchbox? */
+function recipeOfferFood(r){
+  openSheet(r.n, '<div class="stack" style="gap:14px">'
+    + '<p class="hint muted" style="margin:0">Saved to your recipes. You can cook from it whenever you like.</p>'
+    + '<p style="margin:0">Put it on a food list too, and it can be planned into a week, shopped for and packed.</p>'
+    + '<button class="btn primary wide" data-act="recipe-to-food" data-id="'+esc(r.id)+'">'+svg('plus',17)+'Add it to the food list</button>'
+    + '<button class="btn ghost wide" data-act="sheet-close">Not now</button></div>');
+}
 /* ========================================================= cook mode
    A food that has a recipe can be cooked from the app: what to buy and what to
    do, the amounts scaled to how many lunches are being made, in cups or in
@@ -3986,15 +4146,37 @@ var UNITS_KEY = 'lunchsorted-units';
 function metricPref(){ try{ return localStorage.getItem(UNITS_KEY) === 'metric'; }catch(e){ return false; } }
 function setMetricPref(v){ try{ localStorage.setItem(UNITS_KEY, v ? 'metric' : 'us'); }catch(e){} }
 function cookFood(){
-  var c = UI.cook; if(!c) return null;
+  var c = UI.cook; if(!c || !c.id) return null;
   var k = kidById(c.kidId) || activeKid();
   return k ? foodById(k, c.id) : null;
+}
+/* What is on screen, and what it is called. A recipe reaches cook mode two ways: as
+   the recipe of a food in a lunchbox, or on its own from the Recipes tab, where there
+   may be no food anywhere that uses it. */
+function cookRecipe(){
+  var c = UI.cook; if(!c) return null;
+  return c.rec || recipeFor(cookFood());
+}
+function cookTitle(){
+  var c = UI.cook; if(!c) return '';
+  return c.name || (cookFood() || {}).n || '';
+}
+function cookStart(r, name, foodId, kidId){
+  if(!r || !name) return;
+  UI.cook = {kidId:kidId || (activeKid() || {}).id, id:foodId || null, rec:foodId ? null : r, name:name,
+    makes:r.y || 0, metric:metricPref(), step:-1, ticked:nullMap()};
+  cookSheet();
 }
 function cookOpen(kidId, foodId){
   var k = kidById(kidId) || activeKid(), f = k && foodById(k, foodId), r = recipeFor(f);
   if(!f || !r) return;
-  UI.cook = {kidId:k.id, id:f.id, makes:r.y || 0, metric:metricPref(), step:-1, ticked:nullMap()};
-  cookSheet();
+  cookStart(r, f.n, f.id, k.id);
+}
+/* from the Recipes tab: the household's own by id, or the idea bank's by name */
+function cookOpenRecipe(id, name){
+  var own = id ? libById(id) : null, r = own || recipeByName(name);
+  if(!r) return;
+  cookStart(r, own ? own.n : name, null, null);
 }
 /* how much of the recipe to make: the number of lunches a parent asked for over
    the number it was written for. A recipe that never said stays at one. */
@@ -4030,8 +4212,8 @@ function cookIngList(r, tickable){
   }).join('') + '</div>';
 }
 function cookSheet(keepScroll){
-  var f = cookFood(), r = recipeFor(f), c = UI.cook;
-  if(!f || !r || !c){ closeSheet(); return; }
+  var c = UI.cook, r = cookRecipe(), f = cookFood(), title = cookTitle();
+  if(!c || !r || !title){ closeSheet(); return; }
   var at = keepScroll ? bodyEl.scrollTop : 0;
   var h;
   if(c.step < 0){
@@ -4055,8 +4237,11 @@ function cookSheet(keepScroll){
         +  r.steps.map(function(s){ return '<li>'+esc(stepLine(s, c.metric))+'</li>'; }).join('')+'</ol></div>'
         +  '<button class="btn primary wide" data-act="cook-step" data-i="0">'+svg('check',17)+'Cook it step by step</button>';
     }
+    /* a recipe opened on its own can be put on a food list from where it is read */
+    if(!f && r.id && !recipeOn({r:r, own:true}).length && !isHelper())
+      h += '<button class="btn ghost wide" data-act="recipe-to-food" data-id="'+esc(r.id)+'">'+svg('plus',17)+'Add it to the food list</button>';
     if(r.src || r.url){
-      h += '<p class="hint" style="margin:0">From '+esc(r.src || 'the web')
+      h += '<p class="hint muted" style="margin:0">From '+esc(r.src || 'the web')
         +  (r.url ? ' · ' + (nativePlugin('Browser')
               ? '<button class="linkbtn" data-act="recipe-site" data-url="'+esc(r.url)+'">the original</button>'
               : '<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">the original</a>') : '')+'</p>';
@@ -4075,7 +4260,7 @@ function cookSheet(keepScroll){
       + '<details class="more"><summary>What you need</summary><div style="margin-top:8px">'+cookIngList(r, false)+'</div></details>'
       + '</div>';
   }
-  openSheet(f.n, h);
+  openSheet(title, h);
   sheetEl.classList.toggle('cooking', c.step >= 0);
   if(keepScroll) bodyEl.scrollTop = at;
   /* the step is what changed, so that is what is read out and what focus lands on;
@@ -4099,7 +4284,7 @@ function foodSheet(kidId, foodId){
   if(r){
     h += '<div><div class="sect-head"><h3>Recipe</h3>'+(cookHead(r, f) ? '<span class="count">'+esc(cookHead(r, f))+'</span>' : '')+'</div></div>'
       +  '<button class="btn primary wide" data-act="cook" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('book',17)+'Open the recipe</button>';
-    if(f.recipe && !isHelper()) h += '<button class="btn ghost wide" data-act="recipe-clear" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">Remove this recipe</button>';
+    if(!isHelper()) h += '<p class="hint muted" style="margin:0">Every recipe lives on the Recipes tab, where they can be changed or removed.</p>';
   } else if(!isHelper()){
     /* a recipe on a food is written to the household, so it wears the same lock and
        the same tag as writing a food by hand — on screen, never hidden */
@@ -4191,7 +4376,7 @@ function exportText(){
 var TABS = [
   {k:'pack', label:'Pack', icon:'pack'}, {k:'week', label:'Week', icon:'week'},
   {k:'shop', label:'Shop', icon:'shop'}, {k:'foods',label:'Foods',icon:'foods'},
-  {k:'setup',label:'Account',icon:'account'}
+  {k:'recipes',label:'Recipes',icon:'book'}, {k:'setup',label:'Account',icon:'account'}
 ];
 function render(){
   if(!S) return;
@@ -4220,6 +4405,7 @@ function render(){
       UI.tab==='week'  ? viewWeek()
     : UI.tab==='shop'  ? viewShop()
     : UI.tab==='foods' ? viewFoods()
+    : UI.tab==='recipes' ? viewRecipes()
     : viewSetup()) + '</div>');
   var owed = !isHelper() && !gated() && reviewOwed();
   document.getElementById('tabs').innerHTML = TABS.map(function(t){
@@ -4249,9 +4435,23 @@ var BOX_TABS = ['pack', 'week', 'foods'];
 
 /* ---------------------------------------------------------------- events */
 var HELPER_OK = ['tab','help','help-site','whats-new','whats-new-ok','week-ahead','home-ok','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
-  'food-open','cook','cook-tick','cook-step','cook-units','cook-makes','cook-done','recipe-site',
+  'food-open','cook','cook-recipe','recipe-clear-find','cook-tick','cook-step','cook-units','cook-makes','cook-done','recipe-site','sheet-close',
   'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit',
   'pane','pane-done','delete-account'];   /* without these a caretaker cannot reach Sign out or Leave, which now sit a pane deep */
+/* The recipe search filters as it is typed. The field is re-rendered by render(),
+   which would take the keyboard's focus with it, so the list alone is redrawn and
+   the input left exactly where the thumb put it. */
+document.addEventListener('input', function(ev){
+  var el = ev.target;
+  if(!el || el.getAttribute('data-find') !== 'recipe' || !S) return;
+  UI.recipeFind = String(el.value || '').slice(0, 60);
+  var view = document.getElementById('view');
+  if(!view) return;
+  var at = el.selectionStart;
+  view.innerHTML = viewRecipes();
+  var again = document.getElementById('rqFind');
+  if(again){ again.focus(); try{ again.setSelectionRange(at, at); }catch(e){} }
+});
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
   if(!el || !S) return;
@@ -4346,7 +4546,9 @@ document.addEventListener('click', function(ev){
   }
 
   /* navigation */
-  if(act==='tab'){ UI.weekAhead = 0; if(el.getAttribute('data-tab')==='pack' && UI.tab==='pack' && reviewOwed()) UI.reviewLater = {};   /* the dot is a door: tapping Pack again brings the questions back */ if(UI.tab !== 'setup') UI.lastTab = paneLabel(); UI.tab = el.getAttribute('data-tab'); UI.pane = ''; render(); window.scrollTo(0,0); return; }
+  if(act==='tab'){ UI.weekAhead = 0; if(el.getAttribute('data-tab')==='pack' && UI.tab==='pack' && reviewOwed()) UI.reviewLater = {};   /* the dot is a door: tapping Pack again brings the questions back */ if(UI.tab !== 'setup') UI.lastTab = paneLabel(); UI.tab = el.getAttribute('data-tab'); UI.pane = '';
+    UI.recipeFind = '';                    /* leaving the tab clears the search: coming back to a filtered list reads as a list with recipes missing */
+    render(); window.scrollTo(0,0); return; }
   if(act==='box-settings'){ if(UI.pane==='box') closePane(); else if(paneOK('box')) openPane('box'); return; }
   if(act==='pane'){ var pn = el.getAttribute('data-pane'); if(!paneOK(pn)) return; openPane(pn); return; }
   if(act==='pane-done' || act==='box-done'){ closePane(); return; }
@@ -4579,14 +4781,11 @@ document.addEventListener('click', function(ev){
       buy:(document.getElementById('nfBuy').value||'').split(',').map(function(x){ return x.trim().slice(0, 40); }).filter(Boolean).slice(0, 8),
       t:[].slice.call(document.querySelectorAll('#nfTags .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
       al:[].slice.call(document.querySelectorAll('#nfAl .tg[aria-pressed="true"]')).map(function(x){ return x.getAttribute('data-v'); }),
-      recipe:UI.recipeDraft
+      recipeId:UI.foodRecipeId
     };
-    if(UI.recipeDraft && !docRoomFor(docBytes(UI.recipeDraft) * Math.max(1, addTargets().length) + 400)){
-      toast('No room for another recipe \u2014 remove one first'); return;
-    }
     var r5 = addFoodTo(addTargets(), own5);
     if(!r5.added.length){ toast(addFailLine(n, r5)); return; }
-    save(); closeSheet(); render(); toast(addedLine(n, r5) + (own5.recipe ? ', with its recipe' : '')); return;
+    save(); closeSheet(); render(); toast(addedLine(n, r5) + (own5.recipeId ? ', with its recipe' : '')); return;
   }
   if(act==='food-photo'){
     var pf = foodById(kid, el.getAttribute('data-id')); if(!pf) return;
@@ -4598,11 +4797,12 @@ document.addEventListener('click', function(ev){
     }
     pickPhoto(pf.id); return;
   }
-  /* importing a recipe writes a food, so it sits behind the same door as writing
-     one by hand; the idea bank and its recipes stay free either way */
-  if(act==='recipe-import'){ if(gated()){ closeSheet(); upgradeSheet('food'); return; } recipeImportSheet(null, null); return; }
+  /* Writing a recipe into the household is behind the same door as writing a food:
+     it is the parent's own words either way. Reading and cooking one — theirs or the
+     bank's — is free, and so is the tab it lives on. */
+  if(act==='recipe-import'){ if(gated()){ closeSheet(); upgradeSheet('recipe'); return; } recipeImportSheet(null, null); return; }
   if(act==='recipe-add'){
-    if(gated()){ closeSheet(); upgradeSheet('food'); return; }
+    if(gated()){ closeSheet(); upgradeSheet('recipe'); return; }
     recipeImportSheet(el.getAttribute('data-kid'), el.getAttribute('data-id')); return;
   }
   if(act==='recipe-fetch'){
@@ -4628,29 +4828,64 @@ document.addEventListener('click', function(ev){
     if(!String(txt).trim()){ if(te) te.focus(); recipeMsg('Paste the recipe in the box first.', true); return; }
     recipeReview(parsePasted(txt)); return;
   }
-  if(act==='recipe-attach'){
-    if(gated()){ closeSheet(); upgradeSheet('food'); return; }     /* a sheet open across the last night of the trial */
-    var ak = UI.importTo && (kidById(UI.importTo.kidId) || activeKid()), af = ak && foodById(ak, UI.importTo.id);
-    var ar = UI.recipeDraft && normRecipe(UI.recipeDraft);
-    if(!af || !ar){ closeSheet(); return; }
-    if(!docRoomFor(docBytes(ar) + 200)){ closeSheet(); toast('No room for another recipe \u2014 remove one first'); return; }
-    /* the same dish in another lunchbox is the same dish: the recipe goes on every
-       copy of it, exactly as a food added from the bank goes into every box */
-    var n = 0;
+  /* A recipe is kept for its own sake. It goes into the household's library first;
+     putting it on a lunchbox's food list is a separate thing a parent may or may not
+     want, and is offered next rather than done for them. */
+  if(act==='recipe-save'){
+    if(gated()){ closeSheet(); upgradeSheet('recipe'); return; }    /* a sheet open across the last night of the trial */
+    var draft = UI.recipeDraft;
+    if(!draft){ closeSheet(); return; }
+    var nameEl = document.getElementById('rsName');
+    var rname = (nameEl ? nameEl.value : (draft.title || '')).trim().slice(0, 80);
+    if(!rname){ if(nameEl) nameEl.focus(); toast('Give the recipe a name first'); return; }
+    if(libRecipes().length >= RECIPES_MAX){ toast('That is as many recipes as a household can hold'); return; }
+    var made = normLibRecipe(newLibRecipe(rname, draft));
+    if(!made){ closeSheet(); toast('There was no recipe in that'); return; }
+    if(!docRoomFor(docBytes(made) + 200)){ closeSheet(); toast('No room for another recipe \u2014 remove one first'); return; }
+    S.recipes = (Array.isArray(S.recipes) ? S.recipes : []).concat([made]);
+    /* a food already on a list under this name gets pointed at it, in every lunchbox */
+    var linked = 0;
     kids().forEach(function(k2){
       foodsOf(k2).forEach(function(f2){
-        if(normKey(f2.n) !== normKey(af.n)) return;
-        f2.recipe = normRecipe(ar); touch(f2); touch(k2); n++;
+        if(normKey(f2.n) !== normKey(rname) || f2.recipeId) return;
+        f2.recipeId = made.id; touch(f2); touch(k2); linked++;
       });
     });
-    if(!n){ closeSheet(); return; }
+    var to = UI.importTo, tk = to && (kidById(to.kidId) || activeKid()), tf = tk && foodById(tk, to.id);
+    if(tf && !tf.recipeId){ tf.recipeId = made.id; touch(tf); touch(tk); linked++; }
+    save(); UI.recipeDraft = null; UI.importTo = null;
+    closeSheet(); UI.tab = 'recipes'; render();
+    if(linked){ toast('Saved to your recipes, and onto ' + rname); return; }
+    toast('Saved to your recipes', null);
+    recipeOfferFood(made);                       /* would you like it on the food list too? */
+    return;
+  }
+  if(act==='recipe-to-food'){
+    if(gated()){ closeSheet(); upgradeSheet('food'); return; }
+    var src = libById(el.getAttribute('data-id')); if(!src) return;
+    closeSheet();
+    addOwnSheet({n:src.n, recipeId:src.id, recipe:src, c:guessCat(src), a:guessAisle(buyFrom(src.ing)),
+      buy:buyFrom(src.ing), t:guessTags(src), al:guessAllergens([src.n].concat(src.ing))});
+    return;
+  }
+  if(act==='recipe-delete'){
+    if(isHelper()) return;
+    var dr = libById(el.getAttribute('data-id')); if(!dr) return;
+    dr.deletedAt = now(); touch(dr);
+    /* the foods that pointed at it fall back to whatever they can find by name */
+    kids().forEach(function(k2){ foodsOf(k2).forEach(function(f2){ if(f2.recipeId === dr.id){ f2.recipeId = null; touch(f2); touch(k2); } }); });
     save(); closeSheet(); render();
-    toast('Recipe saved to ' + af.n + (n > 1 ? ' in ' + NUMWORD[Math.min(n, 7)].toLowerCase() + ' lunchboxes' : '')); return;
+    toast('Recipe removed', function(){
+      dr.deletedAt = null; touch(dr); save(); render();
+    });
+    return;
   }
   /* recipes: reading one, and cooking from it. Nothing here changes the household,
      so a caretaker may do all of it and none of it is pushed to the other phone. */
   if(act==='food-open'){ foodSheet(el.getAttribute('data-kid'), el.getAttribute('data-id')); return; }
   if(act==='cook'){ cookOpen(el.getAttribute('data-kid'), el.getAttribute('data-id')); return; }
+  if(act==='cook-recipe'){ cookOpenRecipe(el.getAttribute('data-id'), el.getAttribute('data-name')); return; }
+  if(act==='recipe-clear-find'){ UI.recipeFind = ''; render(); return; }
   if(act==='cook-tick'){
     if(!UI.cook) return;
     var ti = el.getAttribute('data-i'), off = !!UI.cook.ticked[ti];
@@ -4677,24 +4912,11 @@ document.addEventListener('click', function(ev){
     cookAgain('cook-makes', el.getAttribute('data-v')); return;
   }
   if(act==='cook-done'){ closeSheet(); toast('Nice one'); return; }
+  if(act==='sheet-close'){ closeSheet(); return; }
   if(act==='recipe-site'){
     var ru = el.getAttribute('data-url') || '';
     if(!/^https:\/\/[^\s<>"']+$/.test(ru)) return;
     var rb = nativePlugin('Browser'); if(rb) rb.open({url:ru}).catch(function(){});
-    return;
-  }
-  if(act==='recipe-clear'){
-    var qk = kidById(el.getAttribute('data-kid')) || kid, qf = qk && foodById(qk, el.getAttribute('data-id'));
-    if(!qf || !qf.recipe) return;
-    var was = qf.recipe, wasId = qf.id, wasKid = qk.id;
-    qf.recipe = null; touch(qf); touch(qk); save(); closeSheet(); render();
-    /* a food named after one in the idea bank falls back to the bank's recipe, which
-       is not gone and never was theirs to lose; say which of the two just happened */
-    toast(recipeFor(qf) ? 'Your recipe removed \u2014 the idea bank\u2019s is back' : 'Recipe removed', function(){
-      var bk = kidById(wasKid), bf = bk && foodById(bk, wasId);
-      if(!bf) return;
-      bf.recipe = was; touch(bf); touch(bk); save(); render();
-    });
     return;
   }
   if(act==='food-photo-pick'){ closeSheet(); pickPhoto(el.getAttribute('data-id')); return; }
