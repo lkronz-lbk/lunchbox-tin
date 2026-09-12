@@ -3393,7 +3393,7 @@ function recipeRow(e, where){
   var meta = head || '';
   if(on.length) meta += (meta ? ' · ' : '') + (kids().length > 1 ? 'on ' + listNames(on) : 'on the food list');
   return '<button class="item" data-act="cook-recipe" data-id="'+esc(e.own ? r.id : '')+'" data-name="'+esc(name)+'">'
-    + '<span class="grow"><span class="nm">'+esc(name)+(e.own ? '' : ' <span class="chip">Idea bank</span>')+'</span>'
+    + '<span class="grow"><span class="nm">'+esc(name)+'</span>'
     + '<span class="meta">'+esc(meta || 'Tap to cook it')+'</span></span>'
     + '<span class="go">'+svg('chev',16)+'</span></button>';
 }
@@ -3410,6 +3410,7 @@ function recipeUsage(){
   });
   return by;
 }
+var RECIPE_FIND_AT = 8;
 function recipeLists(){
   var find = normKey(UI.recipeFind || ''), all = allRecipes(), where = recipeUsage();
   var hit = !find ? all : all.filter(function(e){
@@ -3425,11 +3426,9 @@ function recipeLists(){
     /* a caretaker is looking at the household's recipes, which are not theirs */
     h += '<div><div class="sect-head"><h3>'+(isHelper() ? 'The household\u2019s' : 'Yours')+'</h3><span class="count">'+mine.length+'</span></div>'
       +  '<div class="list">'+mine.map(function(e){ return recipeRow(e, where); }).join('')+'</div></div>';
-  } else if(!find && !isHelper()){
-    h += '<div class="empty"><p>Nothing of your own yet.</p></div>';
   }
   if(bank.length)
-    h += '<div><div class="sect-head"><h3>From the idea bank</h3><span class="count">'+bank.length+'</span></div><div class="list">'
+    h += '<div><div class="sect-head"><h3>Comes with the app</h3><span class="count">'+bank.length+'</span></div><div class="list">'
       +  bank.map(function(e){ return recipeRow(e, where); }).join('')+'</div>'
       +  (find ? '' : '<p class="hint muted" style="margin:8px 0 0">Free, for good, whether the food is on a list or not.</p>')+'</div>';
   return h;
@@ -3443,10 +3442,14 @@ function viewRecipes(){
         + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Keeping a recipe of your own is the Household plan. Every recipe below stays free to cook from.</span>'+premiumTag()+'</p>'
       : '<button class="btn wide" data-act="recipe-import">'+svg('book',17)+'Import a recipe</button>'
         + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A recipe of your own, from a page or pasted in.</span>'+premiumTag()+'</p>' : '');
-  h += '<div class="field" style="margin:0"><label for="rqFind" class="sr-only">Find a recipe</label>'
-    + '<input type="search" id="rqFind" data-find="recipe" placeholder="Find a recipe, or an ingredient" '
-    + 'autocomplete="off" autocapitalize="off" maxlength="60" value="'+esc(UI.recipeFind || '')+'"></div>'
-    + '<div id="rqList" class="stack">' + recipeLists() + '</div>';
+  /* a search box over a list you can see all of is furniture: it appears once there
+     is more here than fits a screen, and stays while a search is running so it cannot
+     vanish from under a parent mid-type */
+  if(UI.recipeFind || allRecipes().length >= RECIPE_FIND_AT)
+    h += '<div class="field" style="margin:0"><label for="rqFind" class="sr-only">Find a recipe</label>'
+      +  '<input type="search" id="rqFind" data-find="recipe" placeholder="Find a recipe, or an ingredient" '
+      +  'autocomplete="off" autocapitalize="off" maxlength="60" value="'+esc(UI.recipeFind || '')+'"></div>';
+  h += '<div id="rqList" class="stack">' + recipeLists() + '</div>';
   return h + '</div>';
 }
 function viewBox(){
@@ -4303,12 +4306,17 @@ function cookSheet(keepScroll){
     h += '<span class="toggles" style="margin-left:auto">'
       +  '<button class="tg" data-act="cook-units" data-v="us" aria-pressed="'+(!c.metric)+'">Cups</button>'
       +  '<button class="tg" data-act="cook-units" data-v="metric" aria-pressed="'+(!!c.metric)+'">Grams</button></span></div>';
+    /* A parent who opened a recipe is going to cook it, and a long ingredient list is
+       what they read on the way. So the way in sits above the reading: fifteen rows and
+       six steps used to stand between opening this and the button, which is three
+       screens of flicking to reach the only thing most people want. */
+    if(r.steps.length)
+      h += '<button class="btn primary wide" data-act="cook-step" data-i="0">'+svg('check',17)+'Cook it step by step</button>';
     h += '<div><div class="sect-head"><h3>What you need</h3><span class="count">'+r.ing.length+'</span></div>'
       +  cookIngList(r, true)+'</div>';
     if(r.steps.length){
       h += '<div><div class="sect-head"><h3>How it goes</h3><span class="count">'+r.steps.length+'</span></div><ol class="steps">'
-        +  r.steps.map(function(s){ return '<li>'+esc(stepLine(s, c.metric))+'</li>'; }).join('')+'</ol></div>'
-        +  '<button class="btn primary wide" data-act="cook-step" data-i="0">'+svg('check',17)+'Cook it step by step</button>';
+        +  r.steps.map(function(s){ return '<li>'+esc(stepLine(s, c.metric))+'</li>'; }).join('')+'</ol></div>';
     }
     /* a recipe opened on its own can be put on a food list from where it is read */
     /* only when the recipe was opened on its own: at the counter, mid-box, a Remove

@@ -9,5 +9,6 @@ ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 # throwaway probes and screenshots a review run leaves in the root. Named, so
 # nothing in the repository is invisible to `git status` by accident.
 /.ux-*.mjs
+/ux-tmp*.mjs
 /tmp-*.mjs
 /shot-*.png

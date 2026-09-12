@@ -2598,6 +2598,14 @@ try {
     check('the recipe opens with what to buy, what to do, and how long it takes',
       /35 minutes, plus 2 hours chilling/.test(await cooking()) && /makes 6 lunches/.test(await cooking())
       && /1 cup quinoa/.test(await cooking()) && /Rinse the quinoa/.test(await cooking()), (await cooking()).slice(0, 140));
+    check('and the way in is at the top, not under a screen and a half of ingredients',
+      await pr2.evaluate(() => {
+        const b = document.querySelector('#sheetBody [data-act="cook-step"][data-i="0"]');
+        const list = document.querySelector('#sheetBody .list'), body = document.querySelector('#sheetBody');
+        if (!b || !list) return false;
+        const top = b.getBoundingClientRect().top - body.getBoundingClientRect().top;
+        return top < list.getBoundingClientRect().top - body.getBoundingClientRect().top && top < body.clientHeight;
+      }));
     check('and the waiting is in the head and in the first step, not sprung at the end',
       /Start this the evening before/.test(await cooking())
       && (await cooking()).indexOf('Start this the evening before') < (await cooking()).indexOf('Rinse the quinoa'));
@@ -2759,11 +2767,11 @@ try {
 
     /* ---- the tab it all lives on, which is not per-lunchbox */
     await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(400);
-    check('the Recipes tab is on the bottom bar, with the household’s own above the idea bank’s',
+    check('the Recipes tab is on the bottom bar, with the household’s own above the two the app ships',
       (await pr2.$$eval('nav.tabs [data-tab="recipes"]', a => a.length)) === 1
       && /Yours/.test(await pr2.textContent('#view'))
-      && /From the idea bank/.test(await pr2.textContent('#view'))
-      && (await pr2.textContent('#view')).indexOf('Yours') < (await pr2.textContent('#view')).indexOf('From the idea bank'));
+      && /Comes with the app/.test(await pr2.textContent('#view'))
+      && (await pr2.textContent('#view')).indexOf('Yours') < (await pr2.textContent('#view')).indexOf('Comes with the app'));
     const barOK = () => pr2.evaluate(() => {
       const bar = document.querySelector('nav.tabs');
       const fits = [...bar.children].every(b => {
@@ -2780,6 +2788,20 @@ try {
       /Easy turkey pinwheels/.test(await pr2.textContent('#view'))
       && /on the food list/.test(await pr2.textContent('#view'))
       && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) >= 3);
+    check('a short list carries no search box to ignore, and no dashed panel saying nothing is there',
+      (await pr2.$$eval('#rqFind', a => a.length)) === 0
+      && (await pr2.$$eval('#view .empty', a => a.length)) === 0);
+    await pr2.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted')), t = new Date().toISOString();
+      for (let i = 1; i <= 6; i++) d.recipes.push({ id: 'rec_fill' + i, n: 'Filler ' + i, m: 10, y: 4,
+        ing: ['1 cup rolled oats'], steps: ['Stir it.'], src: '', url: null, createdAt: t, updatedAt: t, deletedAt: null });
+      localStorage.setItem('lunchsorted', JSON.stringify(d));
+    });
+    await pr2.reload(); await pr2.waitForTimeout(600);
+    await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(400);
+    check('and it arrives once the list is longer than a screen',
+      (await pr2.$$eval('#rqFind', a => a.length)) === 1
+      && (await pr2.$$eval('[data-act="cook-recipe"]', a => a.length)) === 9);
     await pr2.fill('#rqFind', 'quinoa'); await pr2.waitForTimeout(350);
     check('the search finds a recipe by name and keeps the keyboard where it was',
       (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent))).join('|').includes('Mediterranean quinoa salad')
@@ -2787,7 +2809,7 @@ try {
       && await pr2.evaluate(() => document.activeElement && document.activeElement.id === 'rqFind'));
     await pr2.fill('#rqFind', 'lemon'); await pr2.waitForTimeout(350);
     check('and by an ingredient, which is how a parent shops the cupboard',
-      (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent.replace(/\s*Idea bank\s*$/, '').trim())))
+      (await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent.trim())))
         .sort().join('|') === 'Bean & avocado wrap|Mediterranean quinoa salad',
       await pr2.$$eval('[data-act="cook-recipe"] .nm', a => a.map(b => b.textContent.trim())));
     await pr2.click('[data-act="tab"][data-tab="pack"]'); await pr2.waitForTimeout(300);
@@ -2879,7 +2901,7 @@ try {
 
     /* ---- removing one from the library, and what that leaves behind */
     /* the bank's recipes are nobody's to remove, so the button is not on them */
-    const bankRow = await pr2.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => /Idea bank/.test(b.textContent)));
+    const bankRow = await pr2.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => !b.getAttribute('data-id')));
     await bankRow.asElement().click(); await pr2.waitForTimeout(350);
     check('and the idea bank\u2019s recipes carry no Remove, because they were never the household\u2019s to lose',
       (await pr2.$$eval('[data-act="recipe-delete"]', a => a.length)) === 0);

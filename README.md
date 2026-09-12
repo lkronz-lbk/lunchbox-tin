@@ -57,8 +57,12 @@ food list from a 200-item library and produce a planned week immediately. From t
   Share plugin in the iPhone app.
 - **Recipes** — the sixth tab, and the household's, not a lunchbox's: one list however
   many kids are packed for, so it carries no lunchbox tabs. What the household has kept
-  sits above the two the app ships with, with a search that matches a name or an ingredient
-  ("lemon" for what is in the cupboard) and a row that opens straight into cooking. The
+  sits above the two the app ships with, each row opening straight into cooking. The search
+  matches a name or an ingredient ("oats" for what is in the cupboard) and appears only once
+  there are `RECIPE_FIND_AT` recipes to search — a box over a list you can see all of is
+  furniture — staying put while a search runs so it cannot vanish mid-type. The section
+  heading says where a row came from, so the rows themselves carry no badge, and there is no
+  empty panel under the Import button announcing that nothing has been imported. The
   two are free to cook from, food list or no food list; keeping one of your own is
   the Household plan. Those two — a Mediterranean quinoa salad and a bean and avocado wrap —
   come from the USDA's Recipes for Healthy Kids competition, written and tasted by school
@@ -89,8 +93,10 @@ food list from a 200-item library and produce a planned week immediately. From t
   its name and its tombstone, so it stops riding every sync. The lift's id is worked out
   from the name (`liftedId`), not minted at random, so two phones normalising the same v17
   document agree on it and the merge collapses them instead of keeping both.
-- **Cooking one** — **Cook it step by step** is one step on the screen at a time with a
-  progress bar, the amounts of whatever that step names underneath it (`stepIng` *claims*
+- **Cooking one** — **Cook it step by step** is the first thing under the head, above the
+  ingredients rather than below them and the steps both — a parent who opened a recipe came
+  to cook it, and the reading is what they do on the way. It is one step on the screen at a
+  time with a progress bar, the amounts of whatever that step names underneath it (`stepIng` *claims*
   an ingredient's own name, then its last word, at a word boundary, rather than merely
   matching: words a step spends on one ingredient are gone, so the white pepper cannot
   read itself into a step that says red pepper. A head that is a kind of something
