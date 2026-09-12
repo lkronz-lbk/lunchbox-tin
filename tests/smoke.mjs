@@ -2602,17 +2602,23 @@ try {
 
     /* ---- the tab it all lives on, which is not per-lunchbox */
     await pr2.click('[data-act="tab"][data-tab="recipes"]'); await pr2.waitForTimeout(400);
-    check('the Recipes tab is on the bottom bar and belongs to the household, not to a lunchbox',
+    check('the Recipes tab is on the bottom bar, with the household’s own above the idea bank’s',
       (await pr2.$$eval('nav.tabs [data-tab="recipes"]', a => a.length)) === 1
-      && (await pr2.$$eval('.boxtabs', a => a.length)) === 0
       && /Yours/.test(await pr2.textContent('#view'))
-      && /From the idea bank/.test(await pr2.textContent('#view')));
-    check('and every tab on the bar is still big enough to hit, with nothing running off the edge',
-      await pr2.evaluate(() => {
-        const bar = document.querySelector('nav.tabs');
-        return [...bar.children].every(b => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44)
-          && bar.scrollWidth <= bar.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth;
-      }));
+      && /From the idea bank/.test(await pr2.textContent('#view'))
+      && (await pr2.textContent('#view')).indexOf('Yours') < (await pr2.textContent('#view')).indexOf('From the idea bank'));
+    const barOK = () => pr2.evaluate(() => {
+      const bar = document.querySelector('nav.tabs');
+      const fits = [...bar.children].every(b => {
+        const r = b.getBoundingClientRect(), s = b.querySelector('span');
+        return r.width >= 44 && r.height >= 44 && s.scrollWidth <= s.clientWidth + 0.5;
+      });
+      return fits && bar.scrollWidth <= bar.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth;
+    });
+    check('and every tab on the bar is big enough to hit, with no label clipped and nothing off the edge', await barOK());
+    await pr2.setViewportSize({ width: 320, height: 568 }); await pr2.waitForTimeout(300);
+    check('and it holds on the narrowest phone anyone carries, which is what a sixth tab put at risk', await barOK());
+    await pr2.setViewportSize({ width: 375, height: 812 }); await pr2.waitForTimeout(300);
     check('a recipe of the household\u2019s own says where it is used; the bank\u2019s say they are the bank\u2019s',
       /Easy turkey pinwheels/.test(await pr2.textContent('#view'))
       && /on the food list/.test(await pr2.textContent('#view'))
@@ -2645,8 +2651,17 @@ try {
       const stamp = { createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', deletedAt: null,
         kidId: k.id, c: 'main', a: 'other', t: [], al: [], buy: null };
       const legacy = { m: 40, y: 12, ing: ['1 cup oats', '2 tbsp honey'], steps: ['Stir it.', 'Bake it.'], src: 'old.example', url: null };
+      /* a second lunchbox, so "once, however many boxes held it" is actually exercised */
+      const two = JSON.parse(JSON.stringify(k));
+      two.id = 'kid_second'; two.name = 'Sam'; two.week = null; two.next = null;
+      two.foods = two.foods.map(f => ({ ...f, id: f.id.replace(/^food_/, 'food_s'), kidId: two.id }));
+      d.kids.push(two);
       k.foods.push({ id: 'food_leg1', n: 'Legacy bars', ...stamp, recipe: legacy });
-      if (ks[1]) ks[1].foods.push({ id: 'food_leg2', n: 'Legacy bars', ...stamp, kidId: ks[1].id, recipe: legacy });
+      two.foods.push({ id: 'food_leg2', n: 'Legacy bars', ...stamp, kidId: two.id, recipe: legacy });
+      /* and a food normFood will refuse, sitting ahead of a good one: pairing by position
+         would marry this recipe to the wrong food, and its ingredient list with it */
+      k.foods.unshift({ id: 'food_bogus', n: 'Peanut bars', ...stamp, c: 'NOT_A_COMPARTMENT',
+        recipe: { m: 5, y: 4, ing: ['2 cups peanut butter'], steps: ['Stir.'], src: '', url: null } });
       k.foods.push({ id: 'food_hostile', n: 'Sneaky salad', ...stamp, recipe: {
         ing: ['1 cup oats'], steps: ['Stir it <img src=x onerror="window.__ls_bad=1"> well.'],
         url: 'javascript:window.__ls_bad=1', src: 'x'.repeat(300), m: 1e9, y: -4, l: 1 } });
@@ -2660,14 +2675,25 @@ try {
       const bars = (d.recipes || []).filter(r => r.n === 'Legacy bars');
       const pointing = d.kids.flatMap(k => k.foods).filter(f => f.n === 'Legacy bars');
       const bad = (d.recipes || []).find(r => r.n === 'Sneaky salad');
-      return { bars: bars.length, ing: bars[0] && bars[0].ing.length, id: bars[0] && /^rec_/.test(bars[0].id),
+      const wrong = (d.recipes || []).filter(r => (r.ing || []).some(l => /peanut/i.test(l)));
+      return { bars: bars.length, ing: bars[0] && bars[0].ing.length, id: bars[0] && /^rec_/.test(bars[0].id), wrong: wrong.map(r => r.n),
         pointing: pointing.length, allPoint: pointing.length > 0 && pointing.every(f => f.recipeId === (bars[0] || {}).id),
         copies: d.kids.flatMap(k => k.foods).filter(f => f.recipe).length,
         badUrl: bad && bad.url, badSrc: bad && bad.src.length, badM: bad && bad.m, badY: bad && bad.y, badL: bad && bad.l,
         empties: (d.recipes || []).filter(r => r.n === 'Nothing salad' || r.n === 'Silly salad').length };
     });
     check('a recipe written the old way, on the food, is carried into the library — once, however many lunchboxes held it',
-      lifted.bars === 1 && lifted.ing === 2 && lifted.id && lifted.pointing >= 1 && lifted.allPoint && lifted.copies === 0, lifted);
+      lifted.bars === 1 && lifted.ing === 2 && lifted.id && lifted.pointing === 2 && lifted.allPoint && lifted.copies === 0, lifted);
+    check('and a food the app cannot read takes its recipe with it, rather than handing the ingredients to the food after it',
+      lifted.wrong.length === 0, lifted.wrong);
+    /* The lift runs on every document this phone normalises — its own, and the server's
+       on every pull. A random id would mean two phones lifting the same v17 document
+       minted two ids for one recipe, and a union keyed on id would keep both forever. */
+    const firstId = await pr2.evaluate(() => (JSON.parse(localStorage.getItem('lunchsorted')).recipes || []).find(r => r.n === 'Legacy bars').id);
+    await pr2.goto(BASE + '/app/'); await pr2.waitForTimeout(600);
+    const afterAgain = await pr2.evaluate(() => (JSON.parse(localStorage.getItem('lunchsorted')).recipes || []).filter(r => r.n === 'Legacy bars').map(r => r.id));
+    check('and lifting the same document again works out the same id, so two phones do not end up with two copies',
+      afterAgain.length === 1 && afterAgain[0] === firstId, { first: firstId, now: afterAgain });
     check('and is rebuilt from the whitelist on the way in: no address it cannot open, no nonsense numbers, and it cannot claim to be one of ours',
       lifted.badUrl === null && lifted.badSrc <= 60 && lifted.badM === 0 && lifted.badY === 0 && !lifted.badL, lifted);
     check('a recipe with nothing in it, or one that is not a recipe at all, is not carried anywhere', lifted.empties === 0, lifted);
@@ -2685,13 +2711,21 @@ try {
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
 
     /* ---- removing one from the library, and what that leaves behind */
-    const barsId = await pr2.evaluate(() => (JSON.parse(localStorage.getItem('lunchsorted')).recipes || []).find(r => r.n === 'Legacy bars').id);
-    const bars = await pr2.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => /Legacy bars/.test(b.textContent)));
-    await bars.asElement().click(); await pr2.waitForTimeout(350);
+    /* the bank's recipes are nobody's to remove, so the button is not on them */
+    const bankRow = await pr2.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => /Idea bank/.test(b.textContent)));
+    await bankRow.asElement().click(); await pr2.waitForTimeout(350);
+    check('and the idea bank\u2019s recipes carry no Remove, because they were never the household\u2019s to lose',
+      (await pr2.$$eval('[data-act="recipe-delete"]', a => a.length)) === 0);
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
-    await pr2.evaluate(id => { document.querySelector('#view').insertAdjacentHTML('afterbegin',
-      '<button id="delprobe" data-act="recipe-delete" data-id="' + id + '">x</button>'); }, barsId);
-    await pr2.click('#delprobe'); await pr2.waitForTimeout(400);
+    const barsAgain = await pr2.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => /Legacy bars/.test(b.textContent)));
+    await barsAgain.asElement().click(); await pr2.waitForTimeout(400);
+    check('a recipe of the household\u2019s own can be removed from where it is read, and the idea bank\u2019s cannot',
+      (await pr2.$$eval('[data-act="recipe-delete"]', a => a.length)) === 1
+      && (await pr2.evaluate(() => {
+           const b = document.querySelector('[data-act="recipe-delete"]');
+           return b.getBoundingClientRect().height >= 44;
+         })));
+    await pr2.click('[data-act="recipe-delete"]'); await pr2.waitForTimeout(400);
     const afterDelete = await pr2.evaluate(() => {
       const d = JSON.parse(localStorage.getItem('lunchsorted'));
       const r = (d.recipes || []).find(x => x.n === 'Legacy bars');
@@ -2700,6 +2734,19 @@ try {
     });
     check('removing a recipe tombstones it, unhooks the foods that used it, and takes none of them off the list',
       afterDelete.tomb && afterDelete.stillPointing === 0 && afterDelete.foodStays >= 1, afterDelete);
+    check('and the tombstone carries no text with it, so a removed recipe stops riding every sync',
+      await pr2.evaluate(() => {
+        const r = (JSON.parse(localStorage.getItem('lunchsorted')).recipes || []).find(x => x.n === 'Legacy bars');
+        return r && r.deletedAt && r.ing.length === 0 && r.steps.length === 0;
+      }));
+    await pr2.click('[data-act="undo"]'); await pr2.waitForTimeout(400);
+    check('and Undo puts the recipe back with its steps, and hooks the foods up again',
+      await pr2.evaluate(() => {
+        const d = JSON.parse(localStorage.getItem('lunchsorted'));
+        const r = (d.recipes || []).find(x => x.n === 'Legacy bars');
+        return !!r && !r.deletedAt && r.steps.length === 2
+          && d.kids.flatMap(k => k.foods).some(f => f.recipeId === r.id);
+      }));
     await ctxR2.close();
   }
   {

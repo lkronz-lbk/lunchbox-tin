@@ -69,7 +69,13 @@ food list from a 200-item library and produce a planned week immediately. From t
   document written by v17, with the recipe still on the food, is lifted on the way
   through `normalizeAccount`: one library record per food name, however many boxes held
   it. A food resolves to a recipe by `recipeId`, then the library by name, then the
-  bank's by name — the same fallback `buy` uses.
+  bank's by name — the same fallback `buy` uses. A recipe of the household's named after
+  a bank dish replaces the bank's row on the tab; removing yours brings it back. Keeping
+  one points every same-named food at it, in every lunchbox, with an Undo. The cap is 300
+  records (`RECIPES_MAX`), and the byte ceiling bites first: a removed recipe keeps only
+  its name and its tombstone, so it stops riding every sync. The lift's id is worked out
+  from the name (`liftedId`), not minted at random, so two phones normalising the same v17
+  document agree on it and the merge collapses them instead of keeping both.
 - **Cooking one** — **Cook it step by step** is one step on the screen at a time with a
   progress bar, the ingredients behind a summary, and a box to tick per ingredient —
   none of which is written to the document, because a half-made recipe is not something
@@ -166,7 +172,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   free-text avoid list, the kid's say. Optional **snack** and **drink** compartments per
   lunchbox: switching one on seeds a few foods and fills the current week, so the tin never
   grows an empty cell.
-- **Account** — the fifth tab is a short list of rows, each opening its own page over the
+- **Account** — the sixth tab is a short list of rows, each opening its own page over the
   tab with a Done button that comes back to the row it left. **Account** (or **This phone**
   signed out): who this phone is signed in as, sign out, leave the household, backup and
   copy-out/paste-in transfer between phones, clear the plans, delete the account, and
@@ -226,12 +232,18 @@ forward).
       function responses instead, every app open becomes a function call (remove that rule).
 - [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form.
 - [ ] Reshoot the marketing and store screenshots on a machine that can reach
-      fonts.gstatic.com: `public/img/screen-pack.*` (the box now carries a "Making it?"
-      line), `store/screenshots/02-pack.png` (the same) and `06-foods.png` (the Foods
-      rows now carry a Recipe tag). Every shot also predates the sixth tab, so the bottom
-      bar is wrong in all of them. Worth adding one of the Recipes tab while you are
-      there. `npm run dev`, then `npm run shots`; `node scripts/store-shots.mjs` for the
-      store set. Shot where the fonts cannot load, they come out in the fallback face.
+      fonts.gstatic.com. The bottom bar shows five tabs in the three marketing shots that
+      include it: `public/img/screen-week.*`, `screen-pack.*` and `screen-shop.*`.
+      `screen-kidpick.*` is the handover screen and has no bar; the six
+      `store/screenshots/*.png` and the three `public/img/mail-day*.png` are all cropped
+      above it, so none of those nine is wrong about the tab. Separately stale:
+      `screen-pack.*` and `store/screenshots/02-pack.png` (the box now carries a
+      "Making it?" row) and `06-foods.png` (the Foods rows now carry a Recipe tag).
+      Add a Recipes shot to both sets — `public/img/screen-recipes.png|webp` as a fifth
+      figure on the site (widen `.shots` to `repeat(5,1fr)`), and
+      `store/screenshots/07-recipes.png` as a seventh store slot. `npm run dev`, then
+      `npm run shots`; `node scripts/store-shots.mjs` for the store set. Shot where the
+      fonts cannot load, they come out in the fallback face.
 - [ ] Run `npm run csp` after any change to `public/app/index.html` (the test suite refuses
       a stale hash), and bump `VERSION` in `public/app/sw.js` when icons, the manifest or the
       fonts change. The shell itself refreshes one launch behind a deploy without a bump.

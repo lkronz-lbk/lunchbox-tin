@@ -197,10 +197,14 @@ a.btn{text-decoration:none}
 
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
-input[type=text],input[type=email],input[type=time],select,textarea{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-md);
+input[type=text],input[type=email],input[type=time],input[type=search],input[type=url],select,textarea{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-md);
   padding:11px 12px;min-height:44px;width:100%}   /* the 16px above stands: under it iOS zooms */
 textarea{min-height:70px;resize:vertical}
-input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none}
+input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,input[type=search]:focus,input[type=url]:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none}
+/* iOS gives a search field a capsule and its own tiny clear button, both well under
+   44px and neither in this app's language */
+input[type=search]{-webkit-appearance:none;appearance:none}
+input[type=search]::-webkit-search-decoration,input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
 .btn:disabled{cursor:default;background:var(--surface-2);border-color:var(--line-strong);color:var(--ink-3);box-shadow:none}
 .btn:disabled svg{opacity:.6}
 .item .nm,.item .meta,.kv span{overflow-wrap:anywhere}
@@ -857,7 +861,8 @@ var BANK = [
    A food may carry a recipe, so a parent who planned a quinoa salad never has
    to leave the app to find out how to make it. The idea bank's cooked dishes
    carry one built in; a food a parent wrote or imported carries its own on the
-   record (food.recipe), and the bank's is the fallback, exactly as `buy` works.
+   record on the household (S.recipes), pointed at by food.recipeId, and the bank's is
+   the fallback for a food of that name, exactly as `buy` works.
    Amounts are written the way a recipe is written, as text; parseIng reads the
    number and the unit off the front, which is all cook mode needs to halve
    them, double them, or say them in grams.
@@ -1019,17 +1024,27 @@ function recipeByName(n){
    A food resolves to a recipe three ways, in order: the one it was given, one of the
    household's own by the same name, and failing both the idea bank's — the same
    fallback `buy` uses, so a list seeded before any of this existed gets them too. */
-function libRecipes(){ return (S && Array.isArray(S.recipes) ? S.recipes : []).filter(function(r){ return !r.deletedAt; }); }
-function libById(id){
-  if(!id) return null;
-  var hit = libRecipes().filter(function(r){ return r.id === id; })[0];
-  return hit || null;
+/* One pass over the library, kept until the library changes. recipeFor() runs once per
+   row of the Foods tab, so scanning the list per lookup made that page cost foods ×
+   recipes — a straight regression on what used to be a field read. */
+var LIB_IDX = null;
+function libIndex(){
+  var rows = (S && Array.isArray(S.recipes)) ? S.recipes : [];
+  if(LIB_IDX && LIB_IDX.rows === rows && LIB_IDX.n === rows.length) return LIB_IDX;
+  var live = [], byId = nullMap(), byName = nullMap();
+  rows.forEach(function(r){
+    if(!r || r.deletedAt) return;
+    live.push(r); byId[r.id] = r;
+    var key = normKey(r.n);
+    if(!byName[key]) byName[key] = r;              /* first wins, so a name resolves the same way every time */
+  });
+  LIB_IDX = {rows:rows, n:rows.length, live:live, byId:byId, byName:byName};
+  return LIB_IDX;
 }
-function libByName(n){
-  if(!n) return null;
-  var key = normKey(n);
-  return libRecipes().filter(function(r){ return normKey(r.n) === key; })[0] || null;
-}
+function libDirty(){ LIB_IDX = null; }             /* after any write to S.recipes */
+function libRecipes(){ return libIndex().live; }
+function libById(id){ return id ? (libIndex().byId[id] || null) : null; }
+function libByName(n){ return n ? (libIndex().byName[normKey(n)] || null) : null; }
 function recipeFor(f){
   if(!f) return null;
   return libById(f.recipeId) || libByName(f.n) || recipeByName(f.n);
@@ -1041,11 +1056,15 @@ function allRecipes(){
   libRecipes().slice().sort(function(a, b){ return (a.n || '').localeCompare(b.n || ''); }).forEach(function(r){
     seen[normKey(r.n)] = 1; out.push({r:r, own:true});
   });
+  var bank = [];
   BANK.forEach(function(b){
     var r = recipeByName(b.n);
-    if(r && !seen[normKey(b.n)]){ seen[normKey(b.n)] = 1; out.push({r:r, own:false, name:b.n}); }
+    if(r && !seen[normKey(b.n)]){ seen[normKey(b.n)] = 1; bank.push({r:r, own:false, name:b.n}); }
   });
-  return out;
+  /* one screen, one ordering: the bank is authored in compartment order, which reads as
+     no order at all next to an alphabetical list above it */
+  bank.sort(function(a, b){ return a.name.localeCompare(b.name); });
+  return out.concat(bank);
 }
 /* the name a recipe goes by, whether it is the household's or the bank's */
 function recipeName(e){ return e.own ? e.r.n : e.name; }
@@ -1405,7 +1424,7 @@ function upgradeSheet(why){
         : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.' : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
         : forever ? 'You have the yearly plan. Pay once and it never renews: the year you have paid for runs to its end and is not charged again.'
         : 'The Household plan is everything the free planner is not.')+'</p>';
-  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Your own foods \u2014 in your own words, or read off a recipe page</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
+  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Your own foods and your own recipes \u2014 in your own words, pasted in, or read off any page</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
   if(!signedIn()){
     h += '<p class="hint" style="margin:0">Sign in first — the Household plan belongs to the household, so it works on every phone.</p>'
       +  '<button class="btn primary wide" data-act="go-signin" data-why="'+esc(why || '')+'" data-close="1">Sign in</button>';
@@ -1767,6 +1786,29 @@ function newLibRecipe(name, rec){
   r.createdAt = now(); r.updatedAt = now(); r.deletedAt = null;
   return r;
 }
+/* An id every phone works out the same way, from the name. The v17 lift runs on every
+   document normalisation — this phone's at boot, the server's on every pull — so a
+   random id would mean two phones lifting the same old document minted two ids for one
+   recipe, and a union keyed on id would keep both. Derived from the name, they agree,
+   and the merge collapses them the way it is supposed to. */
+/* The cap is on rows, tombstones included, but a tombstone must never push out a live
+   recipe: the merge sorts oldest first, so a plain slice would drop the newest thing the
+   parent kept. Live records are taken first, and whatever room is left goes to the
+   tombstones, which only have to survive long enough to travel. */
+function normRecipeList(v){
+  var rows = (Array.isArray(v) ? v : []).slice(0, RECIPES_MAX * 2).map(normLibRecipe).filter(Boolean);
+  var live = rows.filter(function(r){ return !r.deletedAt; }).slice(0, RECIPES_MAX);
+  var dead = rows.filter(function(r){ return r.deletedAt; }).slice(0, Math.max(0, RECIPES_MAX - live.length));
+  return live.concat(dead);
+}
+function liftedId(name){
+  var k = normKey(name), a = 0x811c9dc5, b = 0x01000193;
+  for(var i = 0; i < k.length; i++){
+    a = ((a ^ k.charCodeAt(i)) * 16777619) >>> 0;
+    b = ((b + k.charCodeAt(i) * (i + 7)) * 2654435761) >>> 0;
+  }
+  return 'rec_' + a.toString(36) + b.toString(36) + k.length.toString(36);
+}
 function normStamped(v){
   v = plainObj(v);
   var out = {at:safeStamp(v.at), by:safeIdOrNull(v.by)};
@@ -1863,20 +1905,32 @@ function packsAtNight(){ return !!(S.packWhen && S.packWhen.v === 'evening'); }
    lunchbox that held it. A document written by that build — a phone that has not
    updated, a backup, an export — is carried forward here rather than left behind:
    each per-food recipe becomes one library record, matched by the food's name so the
-   copies collapse back into one, and the food is left pointing at it. */
+   copies collapse back into one, and the food is left pointing at it.
+
+   Foods are paired by id, never by position. normKid drops a food it cannot read and
+   compacts the list, so one bad food ahead of a good one would shift every index after
+   it and marry a recipe to the wrong food — which, on a list where a nut-free sandwich
+   could inherit a peanut butter ingredient list, is not a cosmetic bug. A food whose id
+   did not survive simply misses its old recipe, which is the safe way to fail. */
 function liftFoodRecipes(doc, acct){
   var byName = nullMap();
   acct.recipes.forEach(function(r){ if(!r.deletedAt) byName[normKey(r.n)] = r; });
   (Array.isArray(doc.kids) ? doc.kids : []).slice(0, 20).forEach(function(k, i){
     var kid = acct.kids[i]; if(!kid) return;
-    (Array.isArray(k.foods) ? k.foods : []).forEach(function(was, j){
-      var f = kid.foods[j];
-      if(!f || f.recipeId || !was || !was.recipe) return;
+    k = plainObj(k);
+    var wasById = nullMap();
+    (Array.isArray(k.foods) ? k.foods : []).slice(0, 500).forEach(function(was){
+      was = plainObj(was);
+      if(typeof was.id === 'string' && was.recipe) wasById[was.id] = was.recipe;
+    });
+    kid.foods.forEach(function(f){
+      if(f.recipeId || f.deletedAt) return;      /* a food removed months ago does not bring its recipe back */
+      var had = wasById[f.id]; if(!had) return;
       var key = normKey(f.n), have = byName[key];
       if(!have){
         if(acct.recipes.length >= RECIPES_MAX) return;
-        have = normLibRecipe(Object.assign({}, newLibRecipe(f.n, was.recipe),
-          {createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt)}));
+        have = normLibRecipe(Object.assign({}, newLibRecipe(f.n, had),
+          {id:liftedId(f.n), createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt)}));
         if(!have) return;
         byName[key] = have; acct.recipes.push(have);
       }
@@ -1890,7 +1944,7 @@ function normalizeAccount(doc){
     createdAt:safeStamp(doc.createdAt), updatedAt:safeStamp(doc.updatedAt),
     members:doc.members.slice(0, 50).map(normMember), kids:doc.kids.slice(0, 20).map(normKid),
     activeKidId:null, align:normAlign(doc.align), reviewReminder:normOptIn(doc.reviewReminder), packWhen:normPackWhen(doc.packWhen), pantry:nullMap(),
-    recipes:(Array.isArray(doc.recipes) ? doc.recipes : []).slice(0, RECIPES_MAX).map(normLibRecipe).filter(Boolean),
+    recipes:normRecipeList(doc.recipes),
     onboardedAt: doc.onboardedAt ? safeStamp(doc.onboardedAt) : null, tz:validTz(doc.tz)};
   liftFoodRecipes(doc, acct);
   if(!acct.members.length) acct.members = [newMember('Me','owner')];
@@ -2442,6 +2496,7 @@ function pruneRecipes(){
   if(!S || !Array.isArray(S.recipes)) return;
   var floorTomb = addDays(today(), -90).getTime();
   S.recipes = S.recipes.filter(function(r){ return !r.deletedAt || new Date(r.deletedAt).getTime() > floorTomb; });
+  libDirty();
 }
 /* What one lunchbox's week holds, by name — the shape another lunchbox tries to
    copy. Names, not ids: two kids who both eat cheese toastie have two food rows. */
@@ -2805,6 +2860,7 @@ function rollover(kid){
   if(kid.week && !weekIsStale(kid)) return false;
   if(kid.week) archiveWeek(kid);
   kid.week = kid.next; kid.next = null; touch(kid.week); touch(kid);
+  pruneRecipes();                                  /* the week turning over is housekeeping time, drawn or not */
   return true;
 }
 function rolloverAll(){ var any = false; kids().forEach(function(k){ if(rollover(k)) any = true; }); if(any) save(); }
@@ -3185,7 +3241,10 @@ function viewPack(){
       /* only what is worth standing at the counter for: a parent about to walk out of
          the door does not need to be told there is a recipe for a ham sandwich */
       var mr = f && recipeFor(f);
-      return !!mr && (!!(f.recipeId || libByName(f.n)) || mr.m >= 10);
+      /* worth standing at the counter for: one of the household's own, or something
+         the bank says takes real time. recipeFor already resolved it, so `id` says
+         which of the two it was without asking the library again. */
+      return !!mr && (!!mr.id || mr.m >= 10);
     });
   if(making.length)
     box += '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'
@@ -3356,8 +3415,9 @@ function viewFoods(){
    same blondies whichever kid is eating them. So this is one list for everybody,
    with no lunchbox tabs across the top — the parent's own first, the idea bank's
    behind them, and a box to search when seventy of them is too many to scroll. */
-function recipeRow(e){
-  var r = e.r, name = recipeName(e), on = recipeOn(e), head = cookHead(r);
+function recipeRow(e, where){
+  var r = e.r, name = recipeName(e), head = cookHead(r);
+  var on = where ? (where[normKey(name)] || (e.own && where['#' + r.id]) || []) : recipeOn(e);
   var meta = head || '';
   if(on.length) meta += (meta ? ' · ' : '') + (kids().length > 1 ? 'on ' + listNames(on) : 'on the food list');
   return '<button class="item" data-act="cook-recipe" data-id="'+esc(e.own ? r.id : '')+'" data-name="'+esc(name)+'">'
@@ -3365,41 +3425,58 @@ function recipeRow(e){
     + '<span class="meta">'+esc(meta || 'Tap to cook it')+'</span></span>'
     + '<span class="go">'+svg('chev',16)+'</span></button>';
 }
-function viewRecipes(){
-  var find = normKey(UI.recipeFind || ''), all = allRecipes();
+/* which lunchboxes use what, in one walk of the food lists rather than one per row */
+function recipeUsage(){
+  var by = nullMap();
+  kids().forEach(function(k){
+    foodsOf(k).forEach(function(f){
+      [normKey(f.n)].concat(f.recipeId ? ['#' + f.recipeId] : []).forEach(function(key){
+        if(!by[key]) by[key] = [];
+        if(by[key].indexOf(k) < 0) by[key].push(k);
+      });
+    });
+  });
+  return by;
+}
+function recipeLists(){
+  var find = normKey(UI.recipeFind || ''), all = allRecipes(), where = recipeUsage();
   var hit = !find ? all : all.filter(function(e){
     if(normKey(recipeName(e)).indexOf(find) > -1) return true;
     return e.r.ing.some(function(l){ return normKey(l).indexOf(find) > -1; });
   });
   var mine = hit.filter(function(e){ return e.own; }), bank = hit.filter(function(e){ return !e.own; });
-  var h = '<div class="stack"><div><p class="view-sub">Recipes</p>'
-    + '<h2 class="view-title">What you cook</h2></div>';
-  if(!isHelper())
-    h += gated()
-      ? '<button class="btn ghost wide" data-act="upgrade" data-why="recipe" aria-label="Import a recipe — part of the Household plan">'+svg('lock',17)+'Import a recipe</button>'
-      : '<button class="btn wide" data-act="recipe-import">'+svg('book',17)+'Import a recipe</button>';
-  /* the search box earns its place at seventy recipes and not before */
-  if(all.length > 12)
-    h += '<div class="field" style="margin:0"><label for="rqFind" class="sr-only">Find a recipe</label>'
-      +  '<input type="search" id="rqFind" data-find="recipe" placeholder="Find a recipe, or an ingredient" '
-      +  'autocomplete="off" autocapitalize="off" maxlength="60" value="'+esc(UI.recipeFind || '')+'"></div>';
+  var h = '';
   if(!hit.length)
     h += '<div class="empty"><p>Nothing matches &#8220;'+esc(UI.recipeFind || '')+'&#8221;.</p>'
       +  '<button class="btn ghost" data-act="recipe-clear-find">Show them all</button></div>';
   if(mine.length){
-    h += '<div><div class="sect-head"><h3>Yours</h3><span class="count">'+mine.length+'</span></div><div class="list">'
-      +  mine.map(recipeRow).join('')+'</div></div>';
+    /* a caretaker is looking at the household's recipes, which are not theirs */
+    h += '<div><div class="sect-head"><h3>'+(isHelper() ? 'The household\u2019s' : 'Yours')+'</h3><span class="count">'+mine.length+'</span></div>'
+      +  '<div class="list">'+mine.map(function(e){ return recipeRow(e, where); }).join('')+'</div></div>';
   } else if(!find && !isHelper()){
-    h += '<div class="empty"><p>Nothing of your own yet. Paste in a recipe, or give the app the address of one, '
-      +  'and it is yours to cook from on any phone in the household.</p></div>';
+    h += '<div class="empty"><p>Nothing of your own yet.</p></div>';
   }
   if(bank.length)
     h += '<div><div class="sect-head"><h3>From the idea bank</h3><span class="count">'+bank.length+'</span></div><div class="list">'
-      +  bank.map(recipeRow).join('')+'</div>'
+      +  bank.map(function(e){ return recipeRow(e, where); }).join('')+'</div>'
       +  (find ? '' : '<p class="hint muted" style="margin:8px 0 0">Free, for good, whether the food is on a list or not.</p>')+'</div>';
+  return h;
+}
+function viewRecipes(){
+  var h = '<div class="stack"><div><p class="view-sub">Recipes</p>'
+    + '<h2 class="view-title">What you cook</h2></div>';
+  if(!isHelper())
+    h += gated()
+      ? '<button class="btn ghost wide" data-act="upgrade" data-why="recipe" aria-label="Import a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Import a recipe</button>'
+        + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Keeping a recipe of your own is the Household plan. Every recipe below stays free to cook from.</span>'+premiumTag()+'</p>'
+      : '<button class="btn wide" data-act="recipe-import">'+svg('book',17)+'Import a recipe</button>'
+        + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A recipe of your own, from a page or pasted in.</span>'+premiumTag()+'</p>' : '');
+  h += '<div class="field" style="margin:0"><label for="rqFind" class="sr-only">Find a recipe</label>'
+    + '<input type="search" id="rqFind" data-find="recipe" placeholder="Find a recipe, or an ingredient" '
+    + 'autocomplete="off" autocapitalize="off" maxlength="60" value="'+esc(UI.recipeFind || '')+'"></div>'
+    + '<div id="rqList" class="stack">' + recipeLists() + '</div>';
   return h + '</div>';
 }
-
 function viewBox(){
   var kid = activeKid(), s = kid.settings, many = kids().length > 1;
   /* the page says what it is and offers the way out at the top, like every other
@@ -3945,8 +4022,8 @@ function addOwnSheet(pre){
     + ALLERGENS.map(function(a){ return '<button class="tg" data-nf="al" data-v="'+a.k+'" aria-pressed="'+on(pre.al, a.k)+'">'+a.label+'</button>'; }).join('')
     + '</div>'+(pre.recipe ? '<span class="hint" style="color:var(--warn)">Read from the recipe. Check it before you save &mdash; the school rules go by this.</span>' : '')+'</div>' + targetRow('')
     + '<button class="btn primary wide" id="nfSave" data-act="save-own" style="white-space:normal;height:auto;min-height:48px;padding:10px 16px">'+esc(addOwnLabel())+'</button>'
-    + (pre.recipe ? '<button class="btn ghost wide" data-act="recipe-import">Read a different one</button>' : '');
-  openSheet(pre.recipe ? 'Check it over' : 'Add your own', h);
+    + ((pre.recipe && !pre.recipeId) ? '<button class="btn ghost wide" data-act="recipe-import">Read a different one</button>' : '');
+  openSheet(pre.recipeId ? 'Add it to the list' : pre.recipe ? 'Check it over' : 'Add your own', h);
   setTimeout(function(){ var el = document.getElementById('nfName'); if(el && !pre.n) el.focus(); }, 220);
 }
 
@@ -4123,9 +4200,18 @@ function recipeReview(rec){
     + '<input type="text" id="rsName" autocomplete="off" maxlength="80" value="'+esc(name)+'"></div>'
     + (tf ? '<p class="hint muted" style="margin:0">It goes on '+esc(tf.n)+' as well.</p>' : '')
     + '<button class="btn primary wide" data-act="recipe-save">Keep this recipe</button>'
+    /* keeping it and packing it are different things, but a parent who wants both should
+       not need a whole extra screen to say so */
+    + (tf || gated() ? '' : '<button class="btn wide" data-act="recipe-save" data-then="food">Keep it, and add the food</button>')
     + '<button class="btn ghost wide" data-act="recipe-import">Read a different one</button></div>';
   openSheet('Check it over', h);
   if(!name) setTimeout(function(){ var el = document.getElementById('rsName'); if(el) el.focus(); }, 220);
+}
+/* the food this recipe would make, with everything the app can work out filled in */
+function recipeToFood(r){
+  closeSheet();
+  addOwnSheet({n:r.n, recipeId:r.id, recipe:r, c:guessCat(r), a:guessAisle(buyFrom(r.ing)),
+    buy:buyFrom(r.ing), t:guessTags(r), al:guessAllergens([r.n].concat(r.ing))});
 }
 /* kept — and now, separately, would you like it in a lunchbox? */
 function recipeOfferFood(r){
@@ -4237,8 +4323,17 @@ function cookSheet(keepScroll){
         +  '<button class="btn primary wide" data-act="cook-step" data-i="0">'+svg('check',17)+'Cook it step by step</button>';
     }
     /* a recipe opened on its own can be put on a food list from where it is read */
-    if(!f && r.id && !recipeOn({r:r, own:true}).length && !isHelper())
-      h += '<button class="btn ghost wide" data-act="recipe-to-food" data-id="'+esc(r.id)+'">'+svg('plus',17)+'Add it to the food list</button>';
+    /* only when the recipe was opened on its own: at the counter, mid-box, a Remove
+       button under the step-by-step one is not what a parent is reaching for */
+    if(r.id && !f && !isHelper()){
+      if(!recipeOn({r:r, own:true}).length)
+        h += gated()
+          ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add it to the food list \u2014 part of the Household plan">'+svg('lock',17)+'Add it to the food list</button>'
+          : '<button class="btn ghost wide" data-act="recipe-to-food" data-id="'+esc(r.id)+'">'+svg('plus',17)+'Add it to the food list</button>';
+      /* one of the household's own can be removed from where it is read; the idea
+         bank's cannot, because it was never theirs to lose */
+      h += '<button class="btn ghost wide" data-act="recipe-delete" data-id="'+esc(r.id)+'">'+svg('trash',17)+'Remove this recipe</button>';
+    }
     if(r.src || r.url){
       h += '<p class="hint muted" style="margin:0">From '+esc(r.src || 'the web')
         +  (r.url ? ' · ' + (nativePlugin('Browser')
@@ -4283,13 +4378,13 @@ function foodSheet(kidId, foodId){
   if(r){
     h += '<div><div class="sect-head"><h3>Recipe</h3>'+(cookHead(r, f) ? '<span class="count">'+esc(cookHead(r, f))+'</span>' : '')+'</div></div>'
       +  '<button class="btn primary wide" data-act="cook" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('book',17)+'Open the recipe</button>';
-    if(!isHelper()) h += '<p class="hint muted" style="margin:0">Every recipe lives on the Recipes tab, where they can be changed or removed.</p>';
+    if(!isHelper()) h += '<p class="hint muted" style="margin:0">Every recipe lives on the Recipes tab, where one of your own can be removed.</p>';
   } else if(!isHelper()){
     /* a recipe on a food is written to the household, so it wears the same lock and
        the same tag as writing a food by hand — on screen, never hidden */
     h += '<p class="hint muted" style="margin:0">No recipe yet. Paste one in, or give the app the address of one on the web.</p>'
       +  (gated()
-          ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Add a recipe</button>'
+          ? '<button class="btn ghost wide" data-act="upgrade" data-why="recipe" aria-label="Add a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Add a recipe</button>'
           : '<button class="btn wide" data-act="recipe-add" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('plus',17)+'Add a recipe</button>')
       +  (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A recipe of your own.</span>'+premiumTag()+'</p>' : '');
   }
@@ -4322,8 +4417,8 @@ function helpSheet(){
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
     ['How do I clear a phone?', 'Signed out, Erase everything on the Account tab. Signed in the lunches are the household\u2019s \u2014 Sign out leaves them behind, and Delete my account and data ends the account itself. Clear the plans keeps your foods.'],
-    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank \u2014 recipes and all \u2014 to fill it from. Foods in your own words or read off a recipe page, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
-    ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, or bringing one in from a recipe page, is part of the Household plan. The idea bank, and every recipe in it, stays free.']
+    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank \u2014 recipes and all \u2014 to fill it from. Foods in your own words, recipes of your own, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
+    ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, or keeping a recipe of your own, is part of the Household plan. The idea bank, and every recipe in it, stays free.']
   ];
   if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.']);
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
@@ -4419,7 +4514,10 @@ function render(){
      the whole household with nothing to switch — so the header carries a
      lunchbox only where there is one lunchbox to carry. */
   var multiKid = kids().length>1, pagerHere = multiKid && (UI.pane==='box' || (BOX_TABS.indexOf(UI.tab) > -1 && !UI.pane));
-  var householdView = multiKid && UI.tab==='shop' && !UI.pane;
+  /* Shop and Recipes are the household's: one list however many lunchboxes, so neither
+     carries the lunchbox pill, the folder tabs, or the gear that opens one box's settings */
+  var HOUSEHOLD_TABS = ['shop', 'recipes'];
+  var householdView = HOUSEHOLD_TABS.indexOf(UI.tab) > -1 && !UI.pane;
   var gear = (isHelper() || (signedIn() && !Account.me)) ? '' : '<button class="iconbtn" data-act="box-settings" aria-label="Lunchbox settings" aria-pressed="'+(UI.pane==='box')+'">'+svg('setup',18)+'</button>';
   var help = '<button class="iconbtn" data-act="help" aria-label="Help">'+svg('help',19)+'</button>';
   document.getElementById('who').innerHTML = (!kid ? ''
@@ -4444,12 +4542,12 @@ document.addEventListener('input', function(ev){
   var el = ev.target;
   if(!el || el.getAttribute('data-find') !== 'recipe' || !S) return;
   UI.recipeFind = String(el.value || '').slice(0, 60);
-  var view = document.getElementById('view');
-  if(!view) return;
-  var at = el.selectionStart;
-  view.innerHTML = viewRecipes();
-  var again = document.getElementById('rqFind');
-  if(again){ again.focus(); try{ again.setSelectionRange(at, at); }catch(e){} }
+  /* Only the list is replaced. Rebuilding the field the thumb is typing in would tear
+     down the keyboard's own state — the composition buffer on Android, predictive text
+     and the undo stack on iOS — several times a word, and restoring focus afterwards
+     does not put any of that back. */
+  var list = document.getElementById('rqList');
+  if(list) list.innerHTML = recipeLists();
 });
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
@@ -4837,11 +4935,14 @@ document.addEventListener('click', function(ev){
     var nameEl = document.getElementById('rsName');
     var rname = (nameEl ? nameEl.value : (draft.title || '')).trim().slice(0, 80);
     if(!rname){ if(nameEl) nameEl.focus(); toast('Give the recipe a name first'); return; }
-    if(libRecipes().length >= RECIPES_MAX){ toast('That is as many recipes as a household can hold'); return; }
+    /* normalisation keeps the first RECIPES_MAX rows, tombstones among them, so the
+       save-time check counts rows too: counting only the live ones would let a save
+       through that the next reload silently dropped */
+    if((Array.isArray(S.recipes) ? S.recipes.length : 0) >= RECIPES_MAX){ toast('That is as many recipes as a household can hold \u2014 remove one first'); return; }
     var made = normLibRecipe(newLibRecipe(rname, draft));
     if(!made){ closeSheet(); toast('There was no recipe in that'); return; }
     if(!docRoomFor(docBytes(made) + 200)){ closeSheet(); toast('No room for another recipe \u2014 remove one first'); return; }
-    S.recipes = (Array.isArray(S.recipes) ? S.recipes : []).concat([made]);
+    S.recipes = (Array.isArray(S.recipes) ? S.recipes : []).concat([made]); libDirty();
     /* a food already on a list under this name gets pointed at it, in every lunchbox */
     var linked = 0;
     kids().forEach(function(k2){
@@ -4852,30 +4953,52 @@ document.addEventListener('click', function(ev){
     });
     var to = UI.importTo, tk = to && (kidById(to.kidId) || activeKid()), tf = tk && foodById(tk, to.id);
     if(tf && !tf.recipeId){ tf.recipeId = made.id; touch(tf); touch(tk); linked++; }
-    save(); UI.recipeDraft = null; UI.importTo = null;
-    closeSheet(); UI.tab = 'recipes'; render();
-    if(linked){ toast('Saved to your recipes, and onto ' + rname); return; }
-    toast('Saved to your recipes', null);
-    recipeOfferFood(made);                       /* would you like it on the food list too? */
+    save();
+    var cameFromFood = !!tf, onto = tf ? tf.n : rname, thenFood = el.getAttribute('data-then') === 'food';
+    UI.recipeDraft = null; UI.importTo = null;
+    closeSheet();
+    /* a parent who started from a food is put back where they were, not dropped on a
+       list of seventy; one who started from the Recipes tab stays on it */
+    if(!cameFromFood) UI.tab = 'recipes';
+    render();
+    if(thenFood && !linked){ recipeToFood(made); return; }
+    if(linked){
+      toast('Saved to your recipes, and onto ' + onto + (linked > 1 ? ' in every lunchbox that has it' : ''), function(){
+        kids().forEach(function(k3){ foodsOf(k3).forEach(function(f3){ if(f3.recipeId === made.id){ f3.recipeId = null; touch(f3); touch(k3); } }); });
+        made.deletedAt = now(); made.ing = []; made.steps = []; touch(made); libDirty(); save(); render();
+      });
+      return;
+    }
+    /* the sheet says "saved" in its first line, so a toast underneath it would be the
+       same words twice, over the button it is asking them to press */
+    recipeOfferFood(made);
     return;
   }
   if(act==='recipe-to-food'){
     if(gated()){ closeSheet(); upgradeSheet('food'); return; }
     var src = libById(el.getAttribute('data-id')); if(!src) return;
-    closeSheet();
-    addOwnSheet({n:src.n, recipeId:src.id, recipe:src, c:guessCat(src), a:guessAisle(buyFrom(src.ing)),
-      buy:buyFrom(src.ing), t:guessTags(src), al:guessAllergens([src.n].concat(src.ing))});
-    return;
+    recipeToFood(src); return;
   }
   if(act==='recipe-delete'){
     if(isHelper()) return;
     var dr = libById(el.getAttribute('data-id')); if(!dr) return;
+    var wasIng = dr.ing, wasSteps = dr.steps, wasSrc = dr.src, wasUrl = dr.url;
     dr.deletedAt = now(); touch(dr);
-    /* the foods that pointed at it fall back to whatever they can find by name */
-    kids().forEach(function(k2){ foodsOf(k2).forEach(function(f2){ if(f2.recipeId === dr.id){ f2.recipeId = null; touch(f2); touch(k2); } }); });
+    /* a tombstone keeps only enough to travel: the text of a removed recipe is up to
+       twenty-odd kilobytes, and it would ride every sync for ninety days otherwise */
+    dr.ing = []; dr.steps = []; dr.src = ''; dr.url = null; libDirty();
+    /* the foods that pointed at it fall back to whatever they can find by name; which
+       ones those were is remembered, so an undo puts the links back too */
+    var wasOn = [];
+    kids().forEach(function(k2){ foodsOf(k2).forEach(function(f2){ if(f2.recipeId === dr.id){ wasOn.push([k2.id, f2.id]); f2.recipeId = null; touch(f2); touch(k2); } }); });
     save(); closeSheet(); render();
     toast('Recipe removed', function(){
-      dr.deletedAt = null; touch(dr); save(); render();
+      dr.deletedAt = null; dr.ing = wasIng; dr.steps = wasSteps; dr.src = wasSrc; dr.url = wasUrl; touch(dr); libDirty();
+      wasOn.forEach(function(pair){
+        var k3 = kidById(pair[0]), f3 = k3 && foodById(k3, pair[1]);
+        if(f3){ f3.recipeId = dr.id; touch(f3); touch(k3); }
+      });
+      save(); render();
     });
     return;
   }
