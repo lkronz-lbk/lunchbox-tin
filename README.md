@@ -109,7 +109,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   thing back in play, so an ingredient divided over two lines shows both), the
   full list behind a summary, and a box to tick per ingredient —
   none of which is written to the document, because a half-made recipe is not something
-  the other phone needs. **Cups or grams** converts what can honestly be converted, both
+  the other phone needs. **US or metric** converts what can honestly be converted, both
   ways: a cup of a thing whose density we know is weighed, a pourable thing is given in
   millilitres, an oven set in Fahrenheit carries its Celsius, anything under about 15 g
   stays a spoonful, a cup of cherry tomatoes stays a cup, and a recipe written in grams
@@ -117,7 +117,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   mains, whatever the recipe counted in for anything else — and scale every amount,
   rounded to the eighths a measuring cup is marked in. Amounts are stored as the text a
   recipe writes (`parseIng` reads the number and the unit off the front), so a line the
-  app cannot read is shown exactly as written rather than mangled. The cups-or-grams
+  app cannot read is shown exactly as written rather than mangled. The US-or-metric
   choice is kept on the phone (`lunchsorted-units`), not in the household document.
   The recipe also reaches a parent where they need it: a **Recipe** tag on the Foods
   list, a button on the compartment sheet on Week, and named under the box on Pack.
