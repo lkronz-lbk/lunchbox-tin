@@ -109,7 +109,7 @@ food list from a 200-item library and produce a planned week immediately. From t
   thing back in play, so an ingredient divided over two lines shows both), the
   full list behind a summary, and a box to tick per ingredient —
   none of which is written to the document, because a half-made recipe is not something
-  the other phone needs. **US or metric** converts what can honestly be converted, both
+  the other phone needs. **US** or **Metric** converts what can honestly be converted, both
   ways: a cup of a thing whose density we know is weighed, a pourable thing is given in
   millilitres, an oven set in Fahrenheit carries its Celsius, anything under about 15 g
   stays a spoonful, a cup of cherry tomatoes stays a cup, and a recipe written in grams
