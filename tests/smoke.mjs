@@ -2698,6 +2698,27 @@ try {
       await pr2.$$eval('ul.steping li', a => a.map(b => b.textContent)));
     await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
     await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
+
+    /* the box is where a parent is standing: on the step, not three taps back on the
+       overview — and the step and the folded whole list are two views of one tick */
+    await pr2.click('[data-act="cook-step"][data-i="2"]'); await pr2.waitForTimeout(250);
+    check('the amounts under a step each carry a box to tick, at a size a floury thumb can hit',
+      await pr2.$$eval('ul.steping .item', a => a.length > 0
+        && a.every(b => b.getAttribute('data-act') === 'cook-tick'
+          && b.querySelector('.box') && b.getBoundingClientRect().height >= 44)),
+      await pr2.$$eval('ul.steping .item', a => a.map(b => b.getBoundingClientRect().height)));
+    const stepTi = await pr2.$$eval('ul.steping .item', a => a[0].getAttribute('data-ti'));
+    await pr2.click('ul.steping .item'); await pr2.waitForTimeout(250);
+    check('ticking it in the step ticks the same ingredient in the whole list folded under it',
+      await pr2.$eval(`details.more .item[data-ti="${stepTi}"]`, e => e.className.includes('done'))
+      && await pr2.$$eval('ul.steping .item', a => a[0].getAttribute('aria-pressed') === 'true'),
+      stepTi);
+    /* a step that names nothing offers nothing: no label, no empty list */
+    await pr2.click('[data-act="cook-step"][data-i="3"]'); await pr2.waitForTimeout(250);
+    check('a step that calls for none of the ingredients shows no list and no heading for one',
+      (await pr2.$$eval('ul.steping .item', a => a.length)) === 0
+      && (await pr2.$$eval('.steplbl', a => a.length)) === 0);
+    await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
 
     /* the other one the app ships, which nothing else in the suite exercises: its own
