@@ -340,10 +340,12 @@ nav.tabs svg{width:21px;height:21px}
 .prog{height:5px;border-radius:999px;background:var(--line);outline:1px solid var(--line-strong);overflow:hidden}
 .prog span{display:block;height:100%;background:var(--accent)}
 .cookstep{margin:0;font-size:19px;line-height:1.5}
-/* the amounts this step calls for, under the step itself */
-ul.steping{list-style:none;margin:14px 0 0;padding:12px 0 0;border-top:1px solid var(--line);
-  display:flex;flex-wrap:wrap;gap:6px 16px}
-ul.steping li{font-family:var(--f-mono);font-size:13.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+/* the amounts this step calls for, under the step itself, one tickable row each */
+.steplbl{margin:15px 0 0;padding:13px 0 0;border-top:1px solid var(--line);font-family:var(--f-mono);
+  font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+ul.steping{list-style:none;margin:2px 0 0;padding:0;display:block}
+ul.steping .item{min-height:44px;padding:4px 0;border-top:0}
+ul.steping .item .nm{font-family:var(--f-mono);font-size:13.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .cookstep:focus{outline:none}
 .btn.sm.step{min-width:44px;padding:0 10px;font-size:17px}
 /* a label a screen reader reads and a sighted parent does not need, because the
@@ -1183,11 +1185,14 @@ function stepIng(r, i, scale, metric){
     for(var k = 0; !row.hit && k < row.names.length; k++) if(whole[row.names[k]]) row.hit = true;
   });
   var out = [], seen = nullMap();
-  rows.forEach(function(row){
+  rows.forEach(function(row, idx){
     if(!row.hit) return;
     var said = ingLine(row.line, scale, metric);
-    if(seen[said]) return; seen[said] = 1;
-    out.push(said);
+    /* two lines that read the same are one row, and ticking it ticks both: a parent
+       who put the olive oil in has put all of the step's olive oil in */
+    if(seen[said]){ seen[said].is.push(idx); return; }
+    seen[said] = {is:[idx], said:said};
+    out.push(seen[said]);
   });
   return out;
 }
@@ -4309,8 +4314,8 @@ function cookIngList(r, tickable){
   return '<div class="list">' + r.ing.map(function(line, i){
     var txt = ingLine(line, scale, c.metric);
     /* the same list, mid-recipe: what has already gone in still reads as gone in */
-    if(!tickable) return '<div class="item'+(c.ticked[i] ? ' done' : '')+'"><span class="grow"><span class="nm">'+esc(txt)+'</span></span></div>';
-    return '<button class="item'+(c.ticked[i] ? ' done' : '')+'" data-act="cook-tick" data-i="'+i+'">'
+    if(!tickable) return '<div class="item'+(c.ticked[i] ? ' done' : '')+'" data-ti="'+i+'"><span class="grow"><span class="nm">'+esc(txt)+'</span></span></div>';
+    return '<button class="item'+(c.ticked[i] ? ' done' : '')+'" data-act="cook-tick" data-i="'+i+'" data-ti="'+i+'" aria-pressed="'+(!!c.ticked[i])+'">'
       + '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(txt)+'</span></span></button>';
   }).join('') + '</div>';
 }
@@ -4382,15 +4387,21 @@ function cookSheet(keepScroll){
       + '<div class="card"><p class="cookstep" tabindex="-1">Step '+(i + 1)+'. '+esc(stepLine(r.steps[i], c.metric))+'</p>'
       + (function(){
           /* how much of what this step names, at the moment it is being read, rather
-             than three taps back behind "What you need" */
+             than three taps back behind "What you need" — and a box against each, because
+             the thing a parent loses track of at the counter is which ones already went in */
           var mine = stepIng(r, i, scale, c.metric);
-          return mine.length ? '<ul class="steping">'+mine.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>' : '';
+          if(!mine.length) return '';
+          return '<p class="steplbl">In this step</p><ul class="steping">'+mine.map(function(x){
+            var on = x.is.every(function(t){ return c.ticked[t]; });
+            return '<li><button class="item'+(on ? ' done' : '')+'" data-act="cook-tick" data-ti="'+x.is.join(' ')+'" aria-pressed="'+on+'">'
+              + '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(x.said)+'</span></span></button></li>';
+          }).join('')+'</ul>';
         })()
       + '</div>'
       + (last ? '<button class="btn primary wide" data-act="cook-done">'+svg('check',17)+'That is lunch sorted</button>'
               : '<button class="btn primary wide" data-act="cook-step" data-i="'+(i + 1)+'">Next step</button>')
       + (i > 0 ? '<button class="btn ghost wide" data-act="cook-step" data-i="'+(i - 1)+'">Back a step</button>' : '')
-      + '<details class="more"><summary>What you need</summary><div style="margin-top:8px">'+cookIngList(r, false)+'</div></details>'
+      + '<details class="more"><summary>What you need</summary><div style="margin-top:8px">'+cookIngList(r, true)+'</div></details>'
       + '</div>';
   }
   openSheet(title, h);
@@ -5055,9 +5066,19 @@ document.addEventListener('click', function(ev){
     return; }
   if(act==='cook-tick'){
     if(!UI.cook) return;
-    var ti = el.getAttribute('data-i'), off = !!UI.cook.ticked[ti];
-    if(off) delete UI.cook.ticked[ti]; else UI.cook.ticked[ti] = 1;
-    el.classList.toggle('done', !off);          /* one line changed, so one class changes: no rebuild, no scroll to restore */
+    var ids = String(el.getAttribute('data-ti') || '').split(' ').filter(Boolean);
+    if(!ids.length) return;
+    var off = !!UI.cook.ticked[ids[0]];
+    ids.forEach(function(t){ if(off) delete UI.cook.ticked[t]; else UI.cook.ticked[t] = 1; });
+    /* the same ingredient is on screen twice while cooking — in the step, and in the
+       whole list folded under it — so every row for it changes together. Classes, not a
+       rebuild: no scroll to restore, and the step is not read out again mid-tick */
+    ids.forEach(function(t){
+      bodyEl.querySelectorAll('[data-ti~="'+t+'"]').forEach(function(e){
+        e.classList.toggle('done', !off);
+        if(e.hasAttribute('aria-pressed')) e.setAttribute('aria-pressed', String(!off));
+      });
+    });
     return;
   }
   if(act==='cook-step'){ if(!UI.cook) return;
