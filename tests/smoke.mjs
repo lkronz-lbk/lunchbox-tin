@@ -2713,9 +2713,15 @@ try {
       await pr2.$$eval('ul.steping .item', a => a.map(b => b.textContent.trim())));
     const stepTi = await pr2.$$eval('ul.steping .item', a => a[0].getAttribute('data-ti'));
     await pr2.click('ul.steping .item'); await pr2.waitForTimeout(250);
+    /* struck where it stands: the row repaints itself rather than the step being rebuilt,
+       which is what keeps the scroll and stops the step being read out again mid-tick */
+    check('the row strikes through where it was tapped, without the step being rebuilt',
+      await pr2.$$eval('ul.steping .item', a => a[0].className.includes('done')
+        && a[0].getAttribute('aria-pressed') === 'true'),
+      await pr2.$$eval('ul.steping .item', a => a[0].getAttribute('aria-pressed')));
     await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
     check('ticking it in the step is the same tick the whole recipe shows',
-      await pr2.$eval(`.list .item[data-ti="${stepTi}"]`, e => e.className.includes('done')), stepTi);
+      await pr2.$eval(`.list .item[data-ti~="${stepTi.split(' ')[0]}"]`, e => e.className.includes('done')), stepTi);
     /* a step that names nothing offers nothing: no heading, no empty list */
     for (const n of [0, 1, 2, 3]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
     check('a step that calls for none of the ingredients shows no list and no heading for one',
