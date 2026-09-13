@@ -2707,17 +2707,20 @@ try {
         && a.every(b => b.getAttribute('data-act') === 'cook-tick'
           && b.querySelector('.box') && b.getBoundingClientRect().height >= 44)),
       await pr2.$$eval('ul.steping .item', a => a.map(b => b.getBoundingClientRect().height)));
+    check('and the step lists only what that step needs, not the whole recipe over again',
+      (await pr2.$$eval('ul.steping .item', a => a.length)) === 2
+      && (await pr2.$$eval('#sheetBody .list .item, #sheetBody details', a => a.length)) === 0,
+      await pr2.$$eval('ul.steping .item', a => a.map(b => b.textContent.trim())));
     const stepTi = await pr2.$$eval('ul.steping .item', a => a[0].getAttribute('data-ti'));
     await pr2.click('ul.steping .item'); await pr2.waitForTimeout(250);
-    check('ticking it in the step ticks the same ingredient in the whole list folded under it',
-      await pr2.$eval(`details.more .item[data-ti="${stepTi}"]`, e => e.className.includes('done'))
-      && await pr2.$$eval('ul.steping .item', a => a[0].getAttribute('aria-pressed') === 'true'),
-      stepTi);
-    /* a step that names nothing offers nothing: no label, no empty list */
-    await pr2.click('[data-act="cook-step"][data-i="3"]'); await pr2.waitForTimeout(250);
+    await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
+    check('ticking it in the step is the same tick the whole recipe shows',
+      await pr2.$eval(`.list .item[data-ti="${stepTi}"]`, e => e.className.includes('done')), stepTi);
+    /* a step that names nothing offers nothing: no heading, no empty list */
+    for (const n of [0, 1, 2, 3]) { await pr2.click(`[data-act="cook-step"][data-i="${n}"]`); await pr2.waitForTimeout(250); }
     check('a step that calls for none of the ingredients shows no list and no heading for one',
       (await pr2.$$eval('ul.steping .item', a => a.length)) === 0
-      && (await pr2.$$eval('.steplbl', a => a.length)) === 0);
+      && !/What you need/.test(await cooking()));
     await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
     await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
 

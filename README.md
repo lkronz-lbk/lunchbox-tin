@@ -107,11 +107,14 @@ food list from a 200-item library and produce a planned week immediately. From t
   (`HEAD_KIND`) answers to the word in front of it, so "fold in the feta" finds the feta
   cheese; and a word the step said as one ingredient's whole name puts every line of that
   thing back in play, so an ingredient divided over two lines shows both), each with a
-  box to tick as it goes in, and the full list behind a summary, tickable too. An
-  ingredient is one thing however many rows show it: `stepIng` carries the indices it
-  drew from (`data-ti`, space-separated where two lines read alike), and a tick toggles
-  every row for it by class rather than rebuilding, so the sheet neither scrolls nor
-  reads the step out again mid-tick. None of it is written to the document, because a
+  box to tick as it goes in. **What you need**, on a step, is what that step needs, open
+  rather than folded — a list a parent has to ask for is a list they cook without, and the
+  whole recipe is already one tap away above. An ingredient is one thing however many rows
+  show it: `stepIng` carries the indices it drew from (`data-ti`, space-separated where two
+  lines read alike), a row is done only when all of them are in, and a tick re-reads every
+  row for it from its own indices rather than rebuilding, so the sheet neither scrolls nor
+  reads the step out again mid-tick. The way on follows the amounts and sticks to the floor
+  of the sheet on a step too tall for the screen, so it is never what falls off it. None of it is written to the document, because a
   half-made recipe is not something the other phone needs. **US** or **Metric** converts what can honestly be converted, both
   ways: a cup of a thing whose density we know is weighed, a pourable thing is given in
   millilitres, an oven set in Fahrenheit carries its Celsius, anything under about 15 g
