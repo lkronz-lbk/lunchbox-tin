@@ -13,9 +13,10 @@
 
    With no arguments it records all of them. Output in store/clips/ as
    1080×1920 MP4 (9:16, the reel and video-pin shape): the phone scaled to the
-   full height on the app's own ground colour, with a tap dot wherever a finger
-   would be. No captions burned in — the words belong in the edit, where they
-   can be changed.
+   full height on the app's own ground colour. Every tap paints a dot, presses
+   the thing under it, and drops a soft tick into the audio; --silent leaves the
+   audio track off. No captions burned in — the words belong in the edit, where
+   they can be changed.
 
    Needs an ffmpeg that can encode H.264 — the one Playwright ships cannot (it
    is built for WebM only), and Instagram and Pinterest both want MP4. The
@@ -69,13 +70,40 @@ const BASE = 'http://127.0.0.1:' + server.address().port;
 let chromium; try { ({ chromium } = await import('playwright')); } catch { ({ chromium } = await import('playwright-core')); }
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
-/* A finger is not a cursor: every scripted tap paints a dot where a thumb would
-   be, so the clip reads as somebody using a phone rather than a robot. */
+/* A finger is not a cursor. Every scripted tap does three things a real one
+   does: a dot lands where the thumb would be, the thing underneath visibly
+   gives under it, and a small tick is mixed into the audio at that moment. */
 const TAP = `
 .__tap{position:fixed;z-index:99999;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;
   background:rgba(22,36,30,.22);border:2px solid rgba(22,36,30,.45);pointer-events:none;transform:scale(.5);opacity:0}
 .__tap.on{transform:scale(1);opacity:1}
-@media (prefers-color-scheme:dark){.__tap{background:rgba(230,238,231,.22);border-color:rgba(230,238,231,.5)}}`;
+.__press{transform:scale(.96)!important;filter:brightness(.93)!important}
+@media (prefers-color-scheme:dark){.__tap{background:rgba(230,238,231,.22);border-color:rgba(230,238,231,.5)}
+  .__press{filter:brightness(1.1)!important}}`;
+
+/* A 30ms tick: a soft sine with a fast decay and a little noise for texture.
+   Kept quiet — a harsh click is worse than no click at all, and most people
+   watch with the sound off anyway. Written as a 16-bit WAV the length of the
+   clip, with a tick dropped in at each tap. */
+function clickTrack(times, seconds, file) {
+  const RATE = 44100, n = Math.ceil(seconds * RATE) + RATE;
+  const pcm = new Int16Array(n);
+  for (const t of times) {
+    const at = Math.round(t * RATE);
+    for (let i = 0; i < RATE * 0.03 && at + i < n; i++) {
+      const env = Math.exp(-i / (RATE * 0.0055));
+      const tone = Math.sin(2 * Math.PI * 1350 * i / RATE) * 0.6 + (Math.random() * 2 - 1) * 0.16;
+      pcm[at + i] = Math.max(-32768, Math.min(32767, pcm[at + i] + tone * env * 0.15 * 32767));
+    }
+  }
+  const head = Buffer.alloc(44), bytes = Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+  head.write('RIFF', 0); head.writeUInt32LE(36 + bytes.length, 4); head.write('WAVE', 8);
+  head.write('fmt ', 12); head.writeUInt32LE(16, 16); head.writeUInt16LE(1, 20); head.writeUInt16LE(1, 22);
+  head.writeUInt32LE(RATE, 24); head.writeUInt32LE(RATE * 2, 28); head.writeUInt16LE(2, 32); head.writeUInt16LE(16, 34);
+  head.write('data', 36); head.writeUInt32LE(bytes.length, 40);
+  fs.writeFileSync(file, Buffer.concat([head, bytes]));
+  return file;
+}
 
 let clip = null, frameNo = 0;
 
@@ -85,10 +113,15 @@ async function newRun(name, { dark = false } = {}) {
     colorScheme: dark ? 'dark' : 'light',
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LunchSortedApp/1'
   });
+  /* on the context and before any navigation: a style tag added to the page
+     is thrown away by the next goto, which is how the dots went missing */
+  await ctx.addInitScript((css) => {
+    const add = () => { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); };
+    if (document.head) add(); else document.addEventListener('DOMContentLoaded', add);
+  }, TAP);
   const page = await ctx.newPage();
   page.on('pageerror', e => console.error('page error:', e.message));
-  await page.addStyleTag({ content: TAP }).catch(() => {});
-  clip = { name, page, ctx, dark, dir: path.join(WORK, name) };
+  clip = { name, page, ctx, dark, dir: path.join(WORK, name), taps: [] };
   fs.rmSync(clip.dir, { recursive: true, force: true });
   fs.mkdirSync(clip.dir, { recursive: true });
   frameNo = 0;
@@ -113,10 +146,15 @@ async function tap(selector, { settle = 0.35 } = {}) {
       const d = document.createElement('div');
       d.className = '__tap'; d.style.left = x + 'px'; d.style.top = y + 'px';
       document.body.appendChild(d); requestAnimationFrame(() => d.classList.add('on'));
-      setTimeout(() => d.remove(), 700);
+      setTimeout(() => d.remove(), 800);
     }, [box.x + box.width / 2, box.y + box.height / 2]);
-    await frame(3);
+    await frame(2);
   }
+  /* the press: the thing under the thumb gives, and the tick lands here */
+  clip.taps.push(frameNo / FPS);
+  await el.evaluate(e => e.classList.add('__press')).catch(() => {});
+  await frame(2);
+  await el.evaluate(e => e.classList.remove('__press')).catch(() => {});
   await el.click({ force: true });
   await clip.page.waitForTimeout(settle * 1000);
   await frame(2);
@@ -137,22 +175,26 @@ async function scroll(distance, seconds = 1.2) {
 }
 
 async function finish() {
-  const { name, ctx, dir, dark } = clip;
+  const { name, ctx, dir, dark, taps } = clip;
   await ctx.close();
   const out = path.join(OUT, name + '.mp4');
   const bg = (dark ? GROUND.dark : GROUND.light).replace('#', '0x');
+  const silent = process.argv.includes('--silent');
+  const wav = silent ? null : clickTrack(taps, frameNo / FPS, path.join(dir, 'clicks.wav'));
   /* the phone is 390×844, which is taller than 9:16 — so it is scaled to the
      full frame height and the app's own ground colour fills the sides, the way
      the pins hold a phone on a coloured field */
   execFileSync(ffmpeg(), [
     '-y', '-loglevel', 'error',
     '-framerate', String(FPS), '-i', path.join(dir, '%05d.png'),
+    ...(wav ? ['-i', wav] : []),
     '-vf', `scale=-2:1920:flags=lanczos,pad=1080:1920:(ow-iw)/2:0:${bg}`,
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p',
+    ...(wav ? ['-c:a', 'aac', '-b:a', '128k', '-shortest'] : []),
     '-movflags', '+faststart', out
   ], { stdio: 'inherit' });
   const kb = Math.round(fs.statSync(out).size / 1024);
-  console.log(`  ${name}.mp4 — ${frameNo} frames, ${(frameNo / FPS).toFixed(1)}s, ${kb}KB`);
+  console.log(`  ${name}.mp4 — ${frameNo} frames, ${(frameNo / FPS).toFixed(1)}s, ${taps.length} taps, ${kb}KB`);
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
