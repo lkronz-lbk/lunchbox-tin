@@ -29,6 +29,18 @@ food list from a 200-item library and produce a planned week immediately. From t
   (crunchy, soft, protein, tangy, sweet, salty, juicy, hearty, light), two at most. Keep a
   compartment and it survives the next shuffle; shuffling that one compartment on purpose
   un-keeps it. Every compartment that can change shows a small swap arrow; a kept one, a lock.
+  **Write something in** on the compartment sheet takes a name and nothing else — tonight's
+  leftovers going into tomorrow's box. It is one compartment on one day: kept, so a shuffle
+  leaves it alone; not on the food list (`food.once`, which `foodsOf` filters out), so it is
+  never drawn, never offered to another lunchbox and never on the Foods tab; and never on the
+  shopping list, because it is already in the house. The compartment carries a pencil and the
+  day a *Written in* chip. Only the name is checked against the rules, and the sheet says so
+  rather than letting the silence read as a pass — a write-in that breaks a rule is flagged and
+  swept like any other food. It never trades: the kid's pick leaves it where the parent put it,
+  because Monday's leftovers would not keep till Thursday. Change it and Clear it are in the same
+  sheet; clearing draws the compartment again. Part of the Household plan, like the parent's own
+  foods. A write-in no week, archived day or answered question points at is tombstoned
+  (`pruneWriteIns`) at the next plan.
 - **More than one lunchbox** — Plan the week draws them together: the fullest food list leads,
   and every other box starts from the same foods, swapping only where that box's school rules or
   its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
@@ -163,7 +175,14 @@ food list from a 200-item library and produce a planned week immediately. From t
   already in the bag is never offered or traded. What the kid chose locks against a shuffle
   and is marked `picker: 'kid'` with the adult who handed the phone over; the part or box
   the kid passed on loses its mark. A manual swap or shuffle clears the mark. Both ways are
-  in for the beta testers to compare; one may go. In the iPhone app a "Remind us the night
+  in for the beta testers to compare; one may go. **Either way, one box or the whole week**:
+  Pack's button is the next box, for the night before, and Week's *Let them pick the week* hands
+  the phone over once and walks the days — the next box, then the next, until no day has anything
+  left to be held up against, which is how the last box ends up being simply what is left. Bars
+  along the top count the boxes reached; the dots still count the parts within one. A trade only
+  ever reaches forward, so a box already settled is never traded back into, and each choice is
+  saved as it is made, so stopping halfway keeps it. Week shows only that button; the per-day one
+  is Pack's. In the iPhone app a "Remind us the night
   before" switch with a time (on by default at 6pm beside the kid's say, household settings)
   schedules a local notification only on evenings before one of that lunchbox's pack days
   that still has a box to pick. A food can carry a **photo** of the real thing, for the
