@@ -124,6 +124,12 @@ are the obvious additions but are unvalidated; use them knowing that.
 >
 > #schoollunch #schoollunchideas #lunchboxideas #packedlunch #<town>moms
 
+> **The screen recordings are made, not filmed.** `node scripts/store-clips.mjs`
+> drives the real app and writes `week`, `rules`, `shop` and `kidpick` to
+> `store/clips/` as 1080×1920 MP4 with tap dots — no captions burned in, so the
+> words below go on in the edit. Re-run it after any UI change. What it cannot
+> make is the human half: the counter, the hands, the kitchen, your voice.
+
 ### Reel 1 — Week three
 
 **On screen, beat by beat:**

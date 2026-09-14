@@ -67,6 +67,9 @@ Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
 - `store/`: the App Store listing (`listing.md`: every field, the privacy answers, the review
   notes) and its screenshots, made by `scripts/store-shots.mjs` + `scripts/store-compose.py`
   with the two brand fonts checked in beside them (both SIL Open Font License).
+  `scripts/store-clips.mjs` records the same walk as video for reels and video pins
+  (1080×1920 MP4 into `store/clips/`, which is not committed — re-record after a UI
+  change). It needs an ffmpeg that can do H.264; Playwright's cannot.
 - `docs/marketing/`: the plan (`README.md`), the twelve-month calendar, and the tool
   decisions. Sourced, and meant to be edited as things are learned.
 - `tests/smoke.mjs`: one file, one command, real browser, real functions against PGlite.
