@@ -124,11 +124,12 @@ are the obvious additions but are unvalidated; use them knowing that.
 >
 > #schoollunch #schoollunchideas #lunchboxideas #packedlunch #<town>moms
 
-> **Filming these:** the shot list is in [filming.md](filming.md) — tap by tap,
-> with the phone and app setup that keeps the first-run sign-in screen out of
-> the shot. `node scripts/store-clips.mjs` also records the same four walks
-> automatically into `store/clips/`, which is useful as filler b-roll but films
-> the reveal from onboarding, so the sign-in step shows. Prefer the real phone.
+> **Filming these:** the shot list for a real phone is in
+> [filming.md](filming.md), tap by tap. `node scripts/store-clips.mjs` records
+> the same four walks automatically into `store/clips/` — both start from a
+> planned week and film the reveal from Shuffle, so the first-run sign-in screen
+> never appears. Shoot both and cut with whichever take is better; the phone
+> footage has hesitation and a real thumb, the generated footage is exact.
 
 ### Reel 1 — Week three
 

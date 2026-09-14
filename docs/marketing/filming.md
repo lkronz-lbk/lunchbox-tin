@@ -5,7 +5,9 @@ go with them. Captions and timings for each reel are in
 [launch-copy.md](launch-copy.md); this is how to get the footage.
 
 Budget about **an hour once**, and you will have enough to cut reels into
-November.
+November. `node scripts/store-clips.mjs` records the same four walks from the
+app automatically, to the same recipe — shoot both and use whichever take is
+better.
 
 ---
 

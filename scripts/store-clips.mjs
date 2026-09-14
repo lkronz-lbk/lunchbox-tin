@@ -6,6 +6,11 @@
 
      CHROMIUM_PATH=/path/to/chrome node scripts/store-clips.mjs [clip ...]
 
+   Onboarding is walked off-camera and every clip starts from a planned week:
+   on a first run the app offers to sign you in between the last question and
+   the week arriving, which is exactly where the reveal should be. The reveal is
+   filmed from Shuffle instead.
+
    With no arguments it records all of them. Output in store/clips/ as
    1080×1920 MP4 (9:16, the reel and video-pin shape): the phone scaled to the
    full height on the app's own ground colour, with a tap dot wherever a finger
@@ -151,54 +156,60 @@ async function finish() {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-/* walk onboarding to a planned week; every clip starts from here */
-async function onboard(page, name) {
+/* Onboarding happens BEFORE the camera rolls. On a first run the app offers to
+   sign you in between the last question and the week appearing, and that screen
+   has no business in a clip about lunches — it used to flash across the exact
+   moment the week arrives. So every clip starts from a planned week, and the
+   reveal is filmed from Shuffle, which draws the same week with one tap and can
+   be repeated as often as you like. */
+async function ready(page, name = 'Emma') {
   await page.goto(BASE + '/app/');
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(700);
   await page.fill('#obName', name);
-  await page.waitForTimeout(200);
+  await page.click('[data-act="ob-go"]');
+  await page.waitForTimeout(1400);
+  if (await page.$('[data-act="ob-later"]')) { await page.click('[data-act="ob-later"]'); await page.waitForTimeout(800); }
+  await page.click('[data-act="tab"][data-tab="week"]').catch(() => {});
+  await page.waitForTimeout(400);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(3800);   /* let the "Your week is ready" toast clear */
 }
 
 /* ---- the clips ---- */
 const CLIPS = {
-  /* 1 · three questions, then the week appears. The one that sells it. */
+  /* 1 · one tap, and the week draws itself. The one that sells it. */
   async week() {
     const page = await newRun('week');
-    await onboard(page, 'Emma');
-    await hold(1.2);
-    await tap('[data-act="ob-go"]', { settle: 1.1 });
-    if (await page.$('[data-act="ob-later"]')) await tap('[data-act="ob-later"]');
-    await hold(1.6);
+    await ready(page);
+    await hold(1.4);
+    await tap('[data-act="plan-kid"]', { settle: 1.3 });
+    await hold(2.2);
     await scroll(700, 1.6);
-    await hold(1.1);
-    await scroll(520, 1.3);
     await hold(1.2);
+    await scroll(520, 1.3);
+    await hold(1.4);
     await finish();
   },
 
-  /* 2 · the rules go on, and the week is drawn again around them */
+  /* 2 · the rules go on, and the plan is re-checked around them */
   async rules() {
     const page = await newRun('rules');
-    await onboard(page, 'Emma');
-    await tap('[data-act="ob-go"]', { settle: 1.0 });
-    if (await page.$('[data-act="ob-later"]')) await tap('[data-act="ob-later"]');
-    await hold(0.6);
-    await tap('[data-act="box-settings"]', { settle: 0.6 });
+    await ready(page);
+    await hold(1.0);
+    await tap('[data-act="box-settings"]', { settle: 0.7 });
     await scroll(520, 1.0);
-    await hold(0.6);
-    /* cold-only and nut-free are already on from onboarding and visibly so —
-       these are the two that start off, so the clip shows them going on */
+    await hold(0.7);
+    /* cold-only and nut-free came on in onboarding and are visibly already set —
+       these two start off, so the clip shows them going on */
     await tap('[data-act="rule"][data-k="shortWindow"]');
-    await hold(0.5);
+    await hold(0.6);
     await tap('[data-act="rule"][data-k="noIce"]');
-    await hold(0.5);
+    await hold(0.6);
     await scroll(240, 0.7);
     await tap('[data-act="allergen"][data-k="dairy"]');
-    await hold(1.4);   /* long enough to read "… broke the rules — drawn again" */
-    await tap('[data-act="box-done"]', { settle: 0.7 });
-    await hold(0.5);
-    await tap('[data-act="plan-kid"]', { settle: 1.2 });
-    await hold(1.6);
+    await hold(1.8);   /* long enough to read "… broke the rules — drawn again" */
+    await tap('[data-act="box-done"]', { settle: 0.8 });
+    await hold(0.8);
     await scroll(620, 1.4);
     await hold(1.4);
     await finish();
@@ -207,46 +218,44 @@ const CLIPS = {
   /* 3 · the list writes itself, and the pantry gets ticked off */
   async shop() {
     const page = await newRun('shop');
-    await onboard(page, 'Emma');
-    await tap('[data-act="ob-go"]', { settle: 1.0 });
-    if (await page.$('[data-act="ob-later"]')) await tap('[data-act="ob-later"]');
-    await hold(0.8);
-    await tap('[data-act="tab"][data-tab="shop"]', { settle: 0.7 });
-    await hold(1.4);
+    await ready(page);
+    await hold(1.0);
+    await tap('[data-act="tab"][data-tab="shop"]', { settle: 0.8 });
+    await hold(1.6);
     await scroll(560, 1.3);
-    await hold(0.7);
+    await hold(0.8);
     /* by index, not "the first one": a tick re-renders the list, and tapping
        the first row three times just ticks the same row three times */
     for (let i = 0; i < 3; i++) {
       await tap(`.list .item[data-act="have"] >> nth=${i}`, { settle: 0.3 });
-      await hold(0.3);
+      await hold(0.35);
     }
-    await hold(1.3);
+    await hold(1.6);
     await finish();
   },
 
   /* 4 · the phone goes across the table */
   async kidpick() {
     const page = await newRun('kidpick');
-    await onboard(page, 'Emma');
-    await tap('[data-act="ob-go"]', { settle: 1.0 });
-    if (await page.$('[data-act="ob-later"]')) await tap('[data-act="ob-later"]');
-    await hold(0.5);
-    await tap('[data-act="box-settings"]', { settle: 0.6 });
-    await tap('[data-act="kidpick-on"]', { settle: 0.4 });
-    await tap('[data-act="box-done"]', { settle: 0.6 });
-    await tap('[data-act="tab"][data-tab="pack"]', { settle: 0.7 });
-    await hold(1.0);
+    await ready(page);
+    /* turning their say on is setup, not story — do it before the camera rolls */
+    await page.click('[data-act="box-settings"]'); await page.waitForTimeout(500);
+    await page.click('[data-act="kidpick-on"]').catch(() => {}); await page.waitForTimeout(400);
+    await page.click('[data-act="box-done"]'); await page.waitForTimeout(500);
+    await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(600);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(400);
+    await hold(1.6);
     if (await page.$('[data-act="kid-start"]')) {
-      await tap('[data-act="kid-start"]', { settle: 0.9 });
-      await hold(1.5);
-      /* all four compartments, so the sequence finishes rather than stalling
-         halfway through with the dots part-filled */
+      await tap('[data-act="kid-start"]', { settle: 1.0 });
+      await hold(1.6);
+      /* all four compartments, so the run finishes rather than stalling halfway
+         through with the dots part-filled */
       for (let i = 0; i < 4 && await page.$('[data-act="kid-pick"]'); i++) {
         await tap('[data-act="kid-pick"] >> nth=' + (i % 2), { settle: 0.9 });
-        await hold(0.7);
+        await hold(0.8);
       }
-      await hold(1.6);
+      await hold(1.8);
     }
     await finish();
   }
