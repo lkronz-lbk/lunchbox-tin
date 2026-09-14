@@ -124,11 +124,11 @@ are the obvious additions but are unvalidated; use them knowing that.
 >
 > #schoollunch #schoollunchideas #lunchboxideas #packedlunch #<town>moms
 
-> **The screen recordings are made, not filmed.** `node scripts/store-clips.mjs`
-> drives the real app and writes `week`, `rules`, `shop` and `kidpick` to
-> `store/clips/` as 1080×1920 MP4 with tap dots — no captions burned in, so the
-> words below go on in the edit. Re-run it after any UI change. What it cannot
-> make is the human half: the counter, the hands, the kitchen, your voice.
+> **Filming these:** the shot list is in [filming.md](filming.md) — tap by tap,
+> with the phone and app setup that keeps the first-run sign-in screen out of
+> the shot. `node scripts/store-clips.mjs` also records the same four walks
+> automatically into `store/clips/`, which is useful as filler b-roll but films
+> the reveal from onboarding, so the sign-in step shows. Prefer the real phone.
 
 ### Reel 1 — Week three
 
