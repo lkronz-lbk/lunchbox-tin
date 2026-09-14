@@ -35,12 +35,20 @@ food list from a 200-item library and produce a planned week immediately. From t
   never drawn, never offered to another lunchbox and never on the Foods tab; and never on the
   shopping list, because it is already in the house. The compartment carries a pencil and the
   day a *Written in* chip. Only the name is checked against the rules, and the sheet says so
-  rather than letting the silence read as a pass — a write-in that breaks a rule is flagged and
-  swept like any other food. It never trades: the kid's pick leaves it where the parent put it,
+  rather than letting the silence read as a pass. A write-in whose name trips a rule goes in
+  flagged and excused (`day.over`), the way a food a parent taps "use it anyway" does — the parent
+  typed it deliberately, and a lock alone would not survive `enforceRules`. A rule turned on
+  afterwards carries no such excuse, so the sweep takes it like any other food. For the same
+  reason the day stops claiming anything it cannot know: `dayFlags` drops *No protein* on a day
+  holding a write-in rather than warning about a box it cannot read. It never trades: the kid's pick leaves it where the parent put it,
   because Monday's leftovers would not keep till Thursday. Change it and Clear it are in the same
   sheet; clearing draws the compartment again. Part of the Household plan, like the parent's own
   foods. A write-in no week, archived day or answered question points at is tombstoned
-  (`pruneWriteIns`) at the next plan.
+  (`pruneWriteIns`) at the next Plan the week — an answered review keeps one alive for as long as
+  that eat row lives, which is the point of keeping it. Whatever replaces one (a shuffle, another
+  food off the list) tombstones it and hands it to the Undo, because a write-in is on no list and
+  losing it silently loses it for good. `normKid` caps live foods before dead ones, so the
+  tombstones can never push the parent's newest real foods off the end.
 - **More than one lunchbox** — Plan the week draws them together: the fullest food list leads,
   and every other box starts from the same foods, swapping only where that box's school rules or
   its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
@@ -179,7 +187,11 @@ food list from a 200-item library and produce a planned week immediately. From t
   Pack's button is the next box, for the night before, and Week's *Let them pick the week* hands
   the phone over once and walks the days — the next box, then the next, until no day has anything
   left to be held up against, which is how the last box ends up being simply what is left. Bars
-  along the top count the boxes reached; the dots still count the parts within one. A trade only
+  along the top count every box the run can still reach, filled as it goes; the dots still count
+  the parts within one. On **Each part** a written-in compartment is skipped and the rest of the
+  box is still offered; on **Whole box** that whole day is, because the box trades as one — so the
+  button is offered only when `loadPickDay` says there is really a question to ask, rather than
+  opening on a toast. A trade only
   ever reaches forward, so a box already settled is never traded back into, and each choice is
   saved as it is made, so stopping halfway keeps it. Week shows only that button; the per-day one
   is Pack's. In the iPhone app a "Remind us the night
@@ -384,7 +396,7 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
-- **Help** — the ? at the top of every tab opens a sheet: sixteen one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: eighteen one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 

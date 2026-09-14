@@ -465,6 +465,77 @@ try {
   await page.waitForTimeout(200);
   check('a pantry tick moves an item out of the buy count', head !== await page.textContent('.count'));
 
+  /* ------------------------------------------------------- writing one in
+     One compartment, one day, a name the parent typed: on no list, never drawn,
+     and never thrown away without a way back. */
+  {
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+    const wDay = await page.$eval('.daycard:not(.past) [data-act="slot"][data-cat="main"]', e => e.getAttribute('data-day'));
+    const foodsBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt && !f.once).length);
+    await page.click('.daycard:not(.past) [data-act="slot"][data-cat="main"]'); await page.waitForTimeout(300);
+    check('the compartment sheet offers a write-in', !!(await page.$('[data-act="write-in"]')));
+    await page.click('[data-act="write-in"]'); await until(page, () => !!document.getElementById('wiName'));
+    await page.fill('#wiName', 'Leftover spaghetti');
+    await page.click('[data-act="write-save"]'); await page.waitForTimeout(350);
+
+    const st = await page.evaluate((d) => {
+      const a = JSON.parse(localStorage.getItem('lunchsorted')), k = a.kids[0];
+      const day = k.week.days.find(x => x.d === d), f = k.foods.find(x => x.id === day.slots.main);
+      return {name: f && f.n, once: f && f.once, kept: !!day.lock.main,
+        onList: k.foods.filter(x => !x.deletedAt && !x.once).length,
+        drawable: k.foods.some(x => !x.deletedAt && !x.once && x.n === 'Leftover spaghetti')};
+    }, wDay);
+    check('a write-in goes in that compartment, kept, flagged once', st.name === 'Leftover spaghetti' && st.once === true && st.kept, st);
+    check('and it never joins the food list, so it is never drawn again', st.onList === foodsBefore && !st.drawable, st);
+    check('the day says so, and the compartment carries a pencil beside the lock',
+      (await page.$$eval('.daycard:not(.past) .chip', a => a.map(c => c.textContent))).includes('Written in')
+      && (await page.$$eval('.daycard:not(.past) .cmp .wrote', a => a.length)) > 0);
+    check('a day the app cannot read stops claiming the box has no protein',
+      !(await page.$$eval('.daycard:not(.past) .chip', a => a.map(c => c.textContent))).includes('No protein'));
+
+    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
+    check('and it never reaches the shopping list, because it is already in the fridge',
+      !(await page.$$eval('[data-act="have"] .nm', a => a.map(x => x.textContent))).some(n => /spaghetti/i.test(n)));
+    await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(300);
+    check('and it is not on the Foods tab',
+      !(await page.$$eval('[data-act="food-open"] .nm', a => a.map(x => x.textContent))).some(n => /spaghetti/i.test(n)));
+
+    /* it survives the draw it was written against, because it is kept */
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+    await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(400); await goShuffle(page);
+    const survived = await page.evaluate((d) => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+      const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
+      return f && f.n; }, wDay);
+    check('Shuffle all leaves a write-in where the parent put it', survived === 'Leftover spaghetti', survived);
+
+    /* and a reload rebuilds it from the whitelist still flagged once */
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    const afterBoot = await page.evaluate((d) => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+      const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
+      return {n: f && f.n, once: f && f.once}; }, wDay);
+    check('and normFood carries the flag through a reload, so it does not become a food', afterBoot.n === 'Leftover spaghetti' && afterBoot.once === true, afterBoot);
+
+    /* shuffling that one compartment is the path that used to eat it silently */
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+    await page.click('.daycard:not(.past) [data-act="slot"][data-cat="main"]'); await page.waitForTimeout(300);
+    await page.click('[data-act="sheet-shuffle"]'); await page.waitForTimeout(350);
+    const gone = await page.evaluate((d) => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+      const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
+      return f && f.n; }, wDay);
+    check('Shuffle this one replaces a write-in, and says which words it took', gone !== 'Leftover spaghetti'
+      && /Leftover spaghetti/.test(await page.textContent('#toast')), gone);
+    check('and the sheet gets out of the way, so the Undo can actually be tapped', !(await page.$('.sheet.open')));
+    await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
+    const back = await page.evaluate((d) => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+      const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
+      return {n: f && f.n, live: f && !f.deletedAt}; }, wDay);
+    check('and Undo puts the typed words back, off the tombstone', back.n === 'Leftover spaghetti' && back.live, back);
+  }
+
   /* -------------------------------------------------- a photo on a food */
   {
     await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
@@ -1720,6 +1791,12 @@ try {
   check('a caretaker is told why the app will not let them change anything, on the tab they land on', /Read-only on this phone — checkmarks stay here/.test(await p3.textContent('#view')));
   const helperState = await p3.evaluate(() => fetch('/api/household').then(r => r.json()));
   check('a helper gets the plan and the foods in it, and nothing else', helperState.me.role === 'helper' && helperState.doc.kids.every(k => k.settings.avoidAllergens.length === 0 && k.foods.every(f => f.al.length === 0)) && helperState.members.every(m => !m.email || m.userId === helperState.me.userId));
+  /* a write-in must reach the caretaker still marked one, or their copy turns it into
+     a food on the Foods tab and a line on the shopping list for what is already home */
+  check('a write-in reaches a caretaker still flagged once, so it stays off their lists',
+    helperState.doc.kids.every(k => (k.foods || []).every(f => f.once === !!f.once))
+    && helperState.doc.kids.flatMap(k => k.foods || []).filter(f => /Leftover/i.test(f.n)).every(f => f.once === true),
+    helperState.doc.kids.flatMap(k => (k.foods || []).map(f => ({n: f.n, once: f.once}))).filter(f => /Leftover/i.test(f.n)));
   /* the library is the household's, so a caretaker is sent only the recipes for the
      boxes they can see, and never where a parent found one */
   check('a caretaker gets the recipes for the boxes they are packing, not the whole library, and not their sources',
