@@ -430,6 +430,25 @@ text to `''` for a release with nothing to say.
 
 ### Backlog (ideas to revisit, not scheduled)
 
+- **A launch history, not one note.** `WHATS_NEW` holds a single release, and `whatsNew()`
+  fires only when `seen !== APP_BUILD`, so the only thing a phone can ever be shown is the
+  newest build's note. A parent who was last in on v20 and opens on v22 hears about v22 and
+  never learns v21 happened at all — at a three-day cadence that is most of the recent work.
+  Make it `RELEASES`, newest first, with `WHATS_NEW = RELEASES[0]` so the banner and the
+  walkthrough are unchanged; have `whatsNew()` count how many releases are newer than `seen`
+  so a parent who missed two is told so; give the What's new sheet an *Earlier updates* foot,
+  one row per release by title and date, tapping into that release's steps; and put a
+  permanent *What's new* beside "More answers" in `helpSheet()`, since today the note is
+  reachable exactly once and then gone. Dates and titles only — the build tag is an ID and
+  never belongs on a parent's screen. Cap the list at about six and drop the oldest, or the
+  file grows forever. `scripts/csp.mjs:22` and `tests/smoke.mjs:19` both regex
+  `var WHATS_NEW = {build:'…', text:'…'}` and must be repointed at `RELEASES[0]`; while there,
+  have `npm run csp` also refuse a list out of order or with a duplicate build. Decided
+  2026-09-13: seed it with v22, v21 and v20 (v20's six steps are recoverable verbatim from
+  `e569604`) and put the way in on the help sheet. One wrinkle to handle when it is built —
+  v21's steps were deliberately v20's six with one swapped, because that banner still had to
+  onboard anyone who had skipped the recipes launch; in a history that prints the same six
+  cards twice, so v21's entry should carry only its real delta and v20's the launch in full.
 - **Home-cooked or store-bought.** Setup asks whether sides and sweets are mostly cooked at
   home or bought ready-made. A family that never bakes should not be offered a slice of
   zucchini bread unless there is a store-bought equivalent to recommend in its place; foods
