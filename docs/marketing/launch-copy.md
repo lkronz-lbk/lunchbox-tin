@@ -4,112 +4,113 @@ Paste-ready text for the September launch. The images live on the design canvas;
 this is everything that goes in a box next to them.
 
 Written against `.claude/skills/pinterest-pinning-checklist` (Lila Bloom's, which
-is the house method) — see [the keyword warning](#the-keyword-warning) first.
+is the house method). Lead terms come from [keywords.md](keywords.md).
 
 ---
 
-## The keyword warning
+## Keywords
 
-The pinning checklist says a pin title must lead with a term validated in
-`lila-bloom-keyword-clusters.md`. **That file has no school-lunch cluster** —
-every validated term in it belongs to a Lila Bloom affiliate category (indoor
-active, road trip, sideline, backyard, playroom, gymnastics, bedroom,
-screen-free). Nothing in it covers lunches.
+Settled. The content pipeline app's topic 17 (school lunchbox prep, run 13
+September 2026) supplies the lead terms, and they live in
+[keywords.md](keywords.md) with their momentum tags and the three rising terms we
+deliberately do **not** chase because the product can't back them.
 
-So the lead terms below are **⚠️ unvalidated**: they are the obvious candidates,
-not confirmed ones. Before you commit to a title, put these five into Pinterest
-Trends and keep the winner:
+Two method notes carried over from the house pinning checklist:
 
-- `school lunch ideas`
-- `easy school lunch ideas`
-- `lunch box ideas for kids`
-- `packed lunch ideas for kids`
-- `nut free school lunch`
-
-Whichever wins becomes the lead term for every pin. It takes ten minutes and it
-is the highest-leverage ten minutes in this document.
-
-Two more notes on method:
-
-- **`#ad` is not needed here.** It is required for affiliate content. Lunch
-  Sorted is your own product, so there is nothing to disclose — and the
-  checklist's rule of *no hashtags on Pinterest other than `#ad`* means these
-  descriptions carry no hashtags at all. (Instagram is the opposite; see below.)
-- **Boards.** Neither existing board fits. Make a new one on the Lunch Sorted
-  account — "School Lunch Ideas" — with a keyword-led board description, plus
-  "Nut-Free Lunches" for the allergy angle. Don't pin the same image to both in
-  the same week; space repins by at least seven days.
+- **No hashtags in Pinterest descriptions, and no `#ad`.** `#ad` is for affiliate
+  content; Lunch Sorted is our own product, so there is nothing to disclose.
+  Instagram is the opposite — see below.
+- **Boards.** Three new ones on the Lunch Sorted account (School Lunch Ideas,
+  Nut-Free Lunches, Bento Lunchbox Ideas). Don't pin one image to two boards in
+  the same week.
 
 ---
 
 ## Pinterest
 
-Link for all three, with the campaign name changed per pin:
+Link for all four, changing the campaign name per pin:
 
 ```
 https://lunchsorted.app/?utm_source=pinterest&utm_medium=social&utm_campaign=<campaign>
 ```
 
-Netlify Analytics reports by path, not by query string, so the UTM alone won't
-show up in your numbers. Adding a `/pin` redirect would make these countable —
-one line in `netlify.toml`, not yet done.
+Netlify Analytics reports by path, not query string, so the UTM alone won't show
+up in the numbers. A `/pin` redirect would make these countable — one line in
+`netlify.toml`, not yet done.
 
 ### Pin 1 — Week three (`pin-1-week-three.png`)
 
-**Title:** School Lunch Ideas: A Whole Week Planned in About a Minute *(58 chars)*
+Lead term: `bento box lunch ideas kids` — tier 1, **rising**. The image shows a
+four-compartment tin, which is what the term describes.
+
+**Title:** Bento Box Lunch Ideas for Kids: A Week Planned in About a Minute *(63 chars)*
 
 **Description:**
-> School lunch ideas for the whole week, planned in about a minute. Answer three questions and it builds five boxes — a main, side, fruit and sweet — matched so each one actually works together, then writes the grocery list for you. Free to use, ages 5-11. Plan this week's lunches!
+> Bento box lunch ideas for kids, planned a week at a time instead of one box at a time. Answer three questions and it fills five compartment boxes — a main, side, fruit and sweet — matched so each one works together, then writes the grocery list. Free, ages 5-11. Plan this week's lunches!
 
-**Campaign:** `week-three`
-**Board:** School Lunch Ideas
-**Topics:** School Lunch, Kids Lunch Ideas, Lunch Box Ideas, Parenting Tips, Family Life
+**Campaign:** `bento-week` · **Board:** Bento Lunchbox Ideas
+**Topics:** School Lunch, Kids Lunch Ideas, Lunch Box Ideas, Bento, Family Life
 
 ### Pin 2 — School rules (`pin-2-school-rules.png`)
+
+Lead term: `nut-free school lunch ideas` — tier 2, **rising**, and named in the
+research headline as a wide-open lane.
 
 **Title:** Nut-Free School Lunch Ideas for a No-Microwave Classroom *(56 chars)*
 
 **Description:**
-> Nut-free school lunch ideas that still work when there's no microwave and twenty minutes to eat. Set your school's rules once — nut-free, seed-free, dairy-free, cold only — and nothing that breaks them gets planned again. Flagged, never silently dropped. Free, ages 5-11. Try it this week!
+> Nut-free school lunch ideas that still work with no microwave and twenty minutes to eat. Set your school's rules once — nut-free, seed-free, dairy-free, cold only — and anything that breaks them gets flagged with the reason instead of quietly disappearing. Free, ages 5-11. Try it this week!
 
-**Campaign:** `school-rules`
-**Board:** Nut-Free Lunches
+**Campaign:** `nut-free` · **Board:** Nut-Free Lunches
 **Topics:** School Lunch, Food Allergies, Kids Lunch Ideas, Parenting Tips, Back To School
 
 ### Pin 3 — The list (`pin-3-shopping-list.png`)
 
-**Title:** School Lunch Prep: Plan Five Lunches, Get the Grocery List *(58 chars)*
+Lead term: `meal prep lunch box` — tier 2, **rising**.
+
+**Title:** Meal Prep Lunch Box: Plan Five Lunches, Get the Grocery List *(58 chars)*
 
 **Description:**
-> School lunch prep without the Sunday spiral: plan five lunches and the grocery list writes itself, grouped by aisle with quantities. Tick off what the pantry already has and shop the rest. One list covers every kid in the house. Free to use, ages 5-11. Plan your week!
+> Meal prep lunch box planning without the Sunday spiral: plan five lunches and the grocery list writes itself, grouped by aisle with quantities. Tick off what the pantry already has and shop the rest. One list covers every kid. Free, ages 5-11. Plan your week!
 
-**Campaign:** `shopping-list`
-**Board:** School Lunch Ideas
+**Campaign:** `meal-prep` · **Board:** School Lunch Ideas
 **Topics:** School Lunch, Meal Planning, Kids Lunch Ideas, Grocery List, Family Life
 
-> Topics are **not editable after posting** — add all five at the time you post.
-> Search Pinterest's own suggested list and take the closest match to each.
+### Pin 4 — Kid-led packing (`pin-4-kid-led.png`)
+
+Lead term: `kid led lunchbox packing` — tier 3, **rising**, wide open, and the one
+feature no competitor can copy.
+
+**Title:** Kid-Led Lunchbox Packing: Let Them Choose, Inside Your Rules *(58 chars)*
+
+**Description:**
+> Kid-led lunchbox packing without handing over the whole decision. The night before, your child picks tomorrow's lunch from the week you already planned — every option already inside your school's rules and already shopped for. A lunch they chose comes home emptier. Free, ages 5-11. Try it tonight!
+
+**Campaign:** `kid-led` · **Board:** School Lunch Ideas
+**Topics:** School Lunch, Kids Lunch Ideas, Parenting Tips, Picky Eaters, Family Life
+
+> Topics are **not editable after posting** — add all five when you post, taking
+> the closest match from Pinterest's own suggested list.
 
 ---
 
 ## Instagram
 
 Opposite rules to Pinterest: hashtags help, but few and relevant beats thirty
-generic. **Five to eight per post**, always including one local tag.
+generic. **Five per post, maximum**, always including one local tag.
 
 ### The hashtag sets
 
-**Core** (use on nearly everything)
-`#schoollunch #schoollunchideas #lunchboxideas #packedlunch #lunchboxinspiration`
+From the pipeline run, which caps it at **five per post**. Each set below mixes
+broad, mid and niche, and always spends one slot on local — see
+[keywords.md](keywords.md) for the full validated list.
 
-**Allergy** (pin 2, the rules reel, anything constraint-led)
-`#nutfreelunch #nutfreeschool #foodallergymom #allergyfriendly #dairyfreekids`
-
-**Parent** (the founder reel, the mental-load angle)
-`#momlife #schoolmom #mentalload #backtoschool #busymom`
-
-**Local** — fill these in yourself: `#<town>moms`, `#<town>ma`, `#<school>`,
-`#<county>parents`. These are the ones that will actually reach your people.
+**General:** `#schoollunch #lunchboxideas #schoollunchideas #packedlunch #<town>moms`
+**Bento / week angle:** `#lunchbox #bentolunch #lunchboxideas #lunchboxinspo #<town>moms`
+**Kid-led angle:** `#lunchboxmom #schoollunch #funlunch #lunchboxlove #<town>moms`
+**Allergy angle:** `#schoollunch #lunchboxideas #healthylunchbox #packedlunch #<town>moms`
+— the pipeline's set has no allergy tags. `#nutfreelunch` and `#foodallergymom`
+are the obvious additions but are unvalidated; use them knowing that.
 
 ### Post 1 — the carousel (App Store images)
 
@@ -121,7 +122,7 @@ generic. **Five to eight per post**, always including one local tag.
 >
 > lunchsorted.app — link in bio.
 >
-> #schoollunch #schoollunchideas #lunchboxideas #packedlunch #momlife #<town>moms
+> #schoollunch #schoollunchideas #lunchboxideas #packedlunch #<town>moms
 
 ### Reel 1 — Week three
 
@@ -142,7 +143,7 @@ generic. **Five to eight per post**, always including one local tag.
 >
 > Free to plan at lunchsorted.app 🥪
 >
-> #schoollunch #lunchboxideas #schoollunchideas #momlife #mentalload #<town>moms
+> #schoollunch #lunchboxideas #schoollunchideas #packedlunch #<town>moms
 
 ### Reel 2 — The rules
 
@@ -163,7 +164,7 @@ generic. **Five to eight per post**, always including one local tag.
 >
 > Free to plan at lunchsorted.app
 >
-> #nutfreelunch #nutfreeschool #foodallergymom #schoollunch #lunchboxideas #<town>moms
+> #schoollunch #lunchboxideas #healthylunchbox #nutfreelunch #<town>moms
 
 ### Reel 3 — The list
 
@@ -182,7 +183,7 @@ generic. **Five to eight per post**, always including one local tag.
 >
 > Free to plan at lunchsorted.app
 >
-> #schoollunch #lunchboxideas #mealplanning #groceryhaul #momlife #<town>moms
+> #schoollunch #lunchboxideas #packedlunch #lunchboxmom #<town>moms
 
 ### Launch day post (`post-launch.png`)
 
@@ -194,7 +195,7 @@ generic. **Five to eight per post**, always including one local tag.
 >
 > lunchsorted.app
 >
-> #schoollunch #schoollunchideas #lunchboxideas #<town>moms #<school>
+> #schoollunch #schoollunchideas #lunchboxideas #backtoschool #<town>moms
 
 ### Tester quote posts (`post-tester-quote.png`)
 
@@ -204,7 +205,7 @@ One a day for four days after launch. Caption is the quote in full, then:
 >
 > Free to plan at lunchsorted.app
 >
-> #schoollunch #lunchboxideas #momlife #<town>moms
+> #schoollunch #lunchboxideas #lunchboxlove #packedlunch #<town>moms
 
 **Get permission in writing before you post anyone's words or name**, even in a
 friendly group. A screenshot of them saying "yes, go ahead" is enough.
@@ -215,7 +216,7 @@ friendly group. A screenshot of them saying "yes, go ahead" is enough.
 
 | Asset | Pinterest | Instagram | Facebook |
 |---|---|---|---|
-| pin-1 / 2 / 3 | ✓ feed pin | — | — |
+| pin-1 / 2 / 3 / 4 | ✓ feed pin | — | — |
 | reel covers 1-3 | ✓ as video pin covers | ✓ reel cover | ✓ cross-post |
 | post-launch | — | ✓ feed | ✓ group |
 | post-tester-quote | — | ✓ feed | ✓ group |
