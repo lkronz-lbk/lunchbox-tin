@@ -63,8 +63,22 @@ Never again:
 3. Build only on a branch that contains `origin/main`. If `dev` is behind, bring it level first
    (`git merge --ff-only origin/main` from `dev`). If that refuses, `dev` has diverged: stop and
    say so rather than build on it.
-4. Commit before the session ends. Uncommitted work left across sessions interleaves with the
-   next session's and cannot be split apart afterwards.
+4. **Work in your own worktree, not the shared checkout.** A branch is not isolation: every
+   branch in one clone writes the same files on disk, so two sessions on two branches are still
+   two writers on `public/app/index.html`. Several sessions run here at once — twelve on
+   2026-09-13 — and a session that reads a whole file, edits it and writes it back silently
+   drops whatever another session wrote in between. `git status` looks clean afterwards, because
+   the clobbering write is an ordinary write. So: `git worktree add .claude/worktrees/<name>
+   origin/main` (or the EnterWorktree tool), build there, and merge the branch back when it is
+   done. Never switch the shared checkout's branch — another session is standing in it.
+5. Commit before the session ends, and stage the paths you touched — never `-a`, and never a
+   file you did not edit. Uncommitted work left across sessions interleaves with the next
+   session's and cannot be split apart afterwards. On 2026-09-13 the write-in branch was
+   committed from the shared checkout and carried off two other sessions' work — a trademark
+   scrub, a removed capability and two help answers — which had to be unpicked commit by commit.
+   If you ever suspect a commit caught someone else's work, do not eyeball the diff for it:
+   replay your own edits onto a clean `origin/main` and diff that against what you committed.
+   Anything left over is not yours.
 
 ## Layout
 
