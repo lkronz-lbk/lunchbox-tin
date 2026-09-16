@@ -1575,17 +1575,19 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v22';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v23';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
-   v20 shipped the recipe work and v21 the per-step amount boxes, so v22's note is
-   the delta against them: two things a parent gained — writing one food into one box by hand, and
-   handing the phone over once for the whole week instead of every morning. The
+   v20 shipped the recipe work and v21 the per-step amount boxes. v22 went to production as a
+   row on Pack that had squeezed itself, carrying v21's note for the phones that never opened
+   v21 — a screen that moved has no note of its own — so this build is v23, and its note is the
+   delta against all three: two things a parent gained — writing one food into one box by hand,
+   and handing the phone over once for the whole week instead of every morning. The
    walkthrough is those two and nothing else; the recipe steps have been seen.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v22', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, and hand the phone over once to let them pick the whole week.',
+var WHATS_NEW = {build:'lunchsorted-v23', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, and hand the phone over once to let them pick the whole week.',
   steps:[
     ['Write one in', 'Tap a compartment on Week and Write something in. Whatever you type goes into that one box on that one day \u2014 kept, so a shuffle leaves it alone; off the food list, so it is never drawn again; and off the shopping list, because it is already in your fridge.'],
     ['One line, not a form', 'A write-in asks for the name and nothing else \u2014 at six in the morning that is all there is time for. So the name is all we can check it against: if it trips a rule it goes in flagged, but nuts or dairy hiding inside \u201cleftover pasta\u201d are yours to catch. The compartment carries a pencil and the day says Written in, so you can see which ones are yours.'],
@@ -1598,6 +1600,11 @@ function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){}
 function whatsNew(){
   var seen = ''; try{ seen = localStorage.getItem(SEEN_KEY) || ''; }catch(e){}
   if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
+  /* a carried-forward note names the build it was already shown as, and that phone is left alone:
+     the banner is not dismissed by an OK, only by reading the walk-through behind Show me, so a
+     repeat would sit over the box every morning until a parent re-read what they read on Monday.
+     Its `seen` is left where it is, so the next build's note still reaches them. */
+  if(seen === WHATS_NEW.seenAs) return;
   if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text && !UI.notice) UI.notice = WHATS_NEW.text;
 }
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
@@ -3450,7 +3457,7 @@ function viewPack(){
       /* the pick's own button cannot sit inside the row's, so that row is a div and the day
          carries its own button instead — the day is still the way through to Week */
       var tag = pick ? 'div' : 'button', inner = pick ? 'button' : 'span';
-      h += '<'+tag+' class="item'+(pick ? ' pickday' : '')+'"'+(pick ? '' : ' data-act="go-week"')+'><'+inner+' class="grow"'+(pick ? ' data-act="go-week"' : '')+'><span class="nm">'+esc(l.full)+(pick ? ' <span class="qty" style="font-size:12px">'+esc(l.date)+'</span>' : '')+(pickedBy ? ' <span class="chip picked">'+esc(pickedBy)+'</span>' : '')+'</span>'
+      h += '<'+tag+' class="item'+(pick ? ' pickday' : '')+'"'+(pick ? '' : ' data-act="go-week"')+'><'+inner+' class="grow"'+(pick ? ' data-act="go-week"' : '')+'><span class="nm">'+esc(l.full)+(pick ? ' <span class="qty">'+esc(l.date)+'</span>' : '')+(pickedBy ? ' <span class="chip picked">'+esc(pickedBy)+'</span>' : '')+'</span>'
         +  '<span class="meta">'+esc(what || 'nothing picked')+'</span></'+inner+'>'
         +  (pick ? '<span class="row pickctl" style="gap:8px;flex-wrap:wrap">'+pick+'</span>' : '<span class="qty">'+esc(l.date)+'</span>')
         +  '</'+tag+'>';
@@ -4674,6 +4681,7 @@ function helpSheet(){
     ['Can I plan the week after?', 'Yes. On Week, tap Next beside the date; Plan it draws the week. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
     ['Tonight\u2019s leftovers are going in tomorrow \u2014 can I just write that in?', 'Yes. On Week, tap the compartment and Write something in. It goes in that one box on that one day, kept so a shuffle leaves it alone, off the food list so it is never drawn into another week, and off the shopping list because it is already in your fridge. We have only the name to go on. If the name trips a rule it goes in flagged, like any food you used anyway \u2014 but a name that says nothing about what is in it tells us nothing, so check that one yourself. For the same reason the day stops claiming anything about protein or an ice pack. A compartment you wrote in is never traded away by the kid\u2019s pick: on Each part it is skipped, and on Whole box that whole day is, because the box trades as one. Writing your own foods in is part of the Household plan.'],
+    ['Where do they pick their box?', 'On Pack, on the next box with nothing in the bag \u2014 today\u2019s, or the next day under Coming up. Switch it on with \u201cThey pick their box each day\u201d in the lunchbox settings. Tapping the day itself goes to Week.'],
     ['Can they pick the whole week at once?', 'Yes. Switch on \u201cThey pick their box each day\u201d in the lunchbox settings, and Week carries Let them pick the week. It hands the phone over once: they choose the next box, then the one after, until there is nothing left to choose between. Every choice saves as it is made, so you can stop early and keep what they picked. Pack still has the one-box version for the morning.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],

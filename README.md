@@ -396,7 +396,7 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
-- **Help** — the ? at the top of every tab opens a sheet: eighteen one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: nineteen one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 

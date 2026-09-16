@@ -16,7 +16,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'publ
 /* the walk-through must have a card for every step this build claims, no more — and a
    build that claims nothing must say nothing, which is the usual case */
 const APP_SRC = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'app', 'index.html'), 'utf8');
-const NOTE_TEXT = (APP_SRC.match(/var WHATS_NEW = \{build:'[^']*', text:'([^']*)'/) || [,''])[1];
+const NOTE_TEXT = (APP_SRC.match(/var WHATS_NEW = \{build:'[^']*',(?: seenAs:'[^']*',)? text:'([^']*)'/) || [,''])[1];   /* a note carried forward names the build it was shown as, between the two */
 const APP_BUILD = (APP_SRC.match(/var APP_BUILD = '([^']+)'/) || [,''])[1];
 const STEP_COUNT = (APP_SRC.match(/steps:\[([\s\S]*?)\n  \]\};/) || [,''])[1].split('\n').filter(l => l.trim().startsWith('[')).length;
 const POLICIES = readPolicies(fs.readFileSync(path.join(ROOT, '..', 'netlify.toml'), 'utf8'));
@@ -421,6 +421,17 @@ try {
     } else {
       check('a phone that had the app is told what changed on the first open after an update',
         /New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1);
+      /* a note carried forward from an earlier build is for the phones that missed it: the ones that
+         already read it there are not told twice, and there is no OK on a news banner to make it go away */
+      const seenAs = (APP_SRC.match(/var WHATS_NEW = \{build:'[^']*', seenAs:'([^']*)'/) || [,''])[1];
+      if (seenAs) {
+        await page.evaluate(b => localStorage.setItem('lunchsorted-seen', b), seenAs);
+        await page.reload(); await page.waitForTimeout(600);
+        check('and a phone that already read it on the build it was carried from is left alone',
+          !/New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0);
+        await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
+        await page.reload(); await page.waitForTimeout(600);
+      }
       await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
       check('the note follows to the next tab, once, and is green not amber', (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1 && !!(await page.$('.banner.good')));
       await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
@@ -1998,18 +2009,22 @@ try {
   check('and the day it lands on still reads across the row, not one letter at a time', await pb.evaluate(() => {
     const row = document.querySelector('.item.pickday'); if(!row) return false;
     const grow = row.querySelector('.grow');
-    return !!grow && grow.getBoundingClientRect().width > row.getBoundingClientRect().width * 0.6;
+    return !!grow && grow.getBoundingClientRect().width > row.getBoundingClientRect().width * 0.5;   /* the collapse measured 2% of the row; half is nowhere near it, and does not depend on the tag being there */
   }), await pb.evaluate(() => { const r = document.querySelector('.item.pickday'); return r ? [Math.round(r.getBoundingClientRect().width), Math.round(r.querySelector('.grow').getBoundingClientRect().width)] : 'no pick row'; }));
   /* and the other half of the same squeeze: the card hides what overflows it, so a tag and a
-     button that cannot break in two leave the parent a button with its right-hand edge cut off */
-  check('and neither the tag nor the button is cut off by the card', await pb.evaluate(() => {
+     button that cannot break in two leave the parent a button with its right-hand edge cut off.
+     That one only bites on the narrowest phone, so this check is the one place the suite is not
+     375 wide — at 375 it passes whether or not the fix is there, which is no check at all. */
+  await pb.setViewportSize({width:320, height:812}); await pb.waitForTimeout(250);
+  check('and neither the tag nor the button is cut off by the card, on the narrowest phone', await pb.evaluate(() => {
     const row = document.querySelector('.item.pickday'); if(!row) return false;
     const list = row.closest('.list').getBoundingClientRect();
     return [...row.querySelectorAll('button, .chip')].every(e => e.getBoundingClientRect().right <= list.right);
   }), await pb.evaluate(() => { const r = document.querySelector('.item.pickday'); if(!r) return 'no pick row';
     const l = r.closest('.list').getBoundingClientRect();
     return [...r.querySelectorAll('button, .chip')].map(e => e.textContent.trim().slice(0,18)+': '+Math.round(e.getBoundingClientRect().right - l.right)); }));
-  await pb.click('[data-act="pack-all"]'); await pb.waitForTimeout(250);   /* un-tick: leave the fixture as it was */
+  await pb.setViewportSize({width:375, height:812}); await pb.waitForTimeout(250);   /* the rest of this fixture is a 375 phone */
+  await pb.click('[data-act="pack-all"]'); await pb.waitForTimeout(250);   /* un-tick: the box reads unpacked again, though the off rows stay */
   check('no banner nags in week one', (await pb.$$eval('.banner', a => a.filter(b => /three weeks/.test(b.textContent)).length)) === 0);
   await setBorn(19); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
   check('with three days left the app says when everything ends, once', /three weeks of everything end on [A-Z][a-z]{2} \d{1,2}/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) >= 1);
