@@ -185,6 +185,15 @@ a.btn{text-decoration:none}
 .item .nm{display:block;font-size:14.5px;line-height:1.3}
 .item .meta{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.05em}
 .item .go{flex:none;display:inline-flex;align-items:center;color:var(--ink-3)}
+/* the day the kid's pick lands on carries the plan tag and the pick button; on a phone
+   they are wider than the space left beside the day's foods, so they take a line of
+   their own rather than squeezing the day down to one letter a row */
+/* the tag and the button travel together wherever the pick is offered — the box header,
+   a day on Week, the row below — and break onto two lines rather than off the card edge */
+.pickwrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;margin-left:auto}
+.item.pickday{flex-wrap:wrap;row-gap:8px}
+.item.pickday .grow{flex:1 1 11rem}
+.item.pickday .pickctl{flex:1 1 auto;justify-content:flex-end}
 .item.done .nm{text-decoration:line-through;color:var(--ink-2)}
 .box{width:22px;height:22px;flex:none;border:1.5px solid var(--line-strong);border-radius:6px;
   display:flex;align-items:center;justify-content:center;color:transparent}
@@ -1556,17 +1565,20 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v21';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v22';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
-   v20 shipped the recipe work as one launch and is live, so v21's note is the delta
-   against it: the amounts on a step now carry a box, which is a thing a parent gained.
-   The walkthrough is still the whole recipe launch — a v20 parent has seen those steps,
-   but the sentence in the banner names what is actually new and Show me is their choice.
+   v20 shipped the recipe work as one launch and is live; v21's note is the delta
+   against it, the box against every amount on a step. v22 only straightens a row on
+   Pack, which is a screen that moved, so it has nothing of its own to say — and it
+   carries v21's sentence and walk-through forward rather than dropping them, because
+   v21 landed two days ago and a phone that never opened it would otherwise go from
+   v20 to v22 and never hear about recipes at all. The cost is one repeat for the few
+   who did open v21; the note is per-build and never catches up on a build skipped.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v21', text:'New: cooking a recipe step by step now puts a box against every amount that step needs, to tick as it goes in.',
+var WHATS_NEW = {build:'lunchsorted-v22', seenAs:'lunchsorted-v21', text:'New: cooking a recipe step by step now puts a box against every amount that step needs, to tick as it goes in.',
   steps:[
     ['A tab of their own', 'Recipes is on the bottom bar now. Foods belong to each lunchbox; recipes belong to the household, so they are one list however many kids you pack for.'],
     ['Two we can stand behind', 'A Mediterranean quinoa salad and a bean and avocado wrap come with the app, free to cook from. Both were written and taste-tested by school teams of cooks, chefs, parents and students for the USDA. We do not write our own \u2014 a recipe nobody has cooked is not something to hand you at six in the morning.'],
@@ -1580,6 +1592,11 @@ function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){}
 function whatsNew(){
   var seen = ''; try{ seen = localStorage.getItem(SEEN_KEY) || ''; }catch(e){}
   if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
+  /* a carried-forward note names the build it was already shown as, and that phone is left alone:
+     the banner is not dismissed by an OK, only by reading the walk-through behind Show me, so a
+     repeat would sit over the box every morning until a parent re-read what they read on Monday.
+     Its `seen` is left where it is, so the next build's note still reaches them. */
+  if(seen === WHATS_NEW.seenAs) return;
   if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text && !UI.notice) UI.notice = WHATS_NEW.text;
 }
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
@@ -3141,7 +3158,7 @@ function pickButton(kid, day){
   if(!target || target.d !== day.d || pickChoices(kid).length < 2) return '';
   var who = kidRef(kid) ? esc(kidRef(kid)) : 'them', picked = day.kidPick && Object.keys(day.kidPick).length;
   if(gated()) return '<button class="btn sm" data-act="upgrade" data-why="kidpick" style="margin-left:auto">'+svg('lock',13)+'Let '+who+' pick</button>';
-  return '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">'+premiumTag()
+  return '<span class="pickwrap">'+premiumTag()
     + '<button class="btn sm" data-act="kid-start" data-kid="'+esc(kid.id)+'">'+(picked ? 'Pick again' : 'Let '+who+' pick')+'</button></span>';
 }
 /* Several lunchboxes: a row of folder tabs, one tap each, the same on Pack,
@@ -3196,7 +3213,7 @@ function householdReady(dateStr){
 }
 function viewPack(){
   var kid = activeKid(), ks = kids(), multi = ks.length>1;
-  var news = UI.notice === WHATS_NEW.text;                        /* news waits behind the trial and the plan; an error does not */
+  var news = !!WHATS_NEW.text && UI.notice === WHATS_NEW.text;    /* news waits behind the trial and the plan; an error does not, and a build with no note has no news */
   var top = '<div class="stack">' + (news ? trialBanner() + planBanner() + noticeBanner() : noticeBanner() + trialBanner() + planBanner()) + kidPager(true);
   if(!ks.some(function(k){ return foodsOf(k).length; }))
     return top + '<p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
@@ -3276,10 +3293,13 @@ function viewPack(){
       var pick = pickButton(kid, x);
       var pickedBy = (x.kidPick && Object.keys(x.kidPick).length) ? (kidLabel(kid) ? kidLabel(kid)+' picked' : 'Picked') : '';
       /* the day the kid's pick would change carries the button, so the pick lands where it is seen */
-      h += '<'+(pick ? 'div' : 'button')+' class="item"'+(pick ? '' : ' data-act="go-week"')+'><span class="grow"><span class="nm">'+esc(l.full)+(pick ? ' <span class="qty" style="font-size:12px">'+esc(l.date)+'</span>' : '')+(pickedBy ? ' <span class="chip picked">'+esc(pickedBy)+'</span>' : '')+'</span>'
-        +  '<span class="meta">'+esc(what || 'nothing picked')+'</span></span>'
-        +  (pick ? '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">'+pick+'</span>' : '<span class="qty">'+esc(l.date)+'</span>')
-        +  '</'+(pick ? 'div' : 'button')+'>';
+      /* the pick's own button cannot sit inside the row's, so that row is a div and the day
+         carries its own button instead — the day is still the way through to Week */
+      var tag = pick ? 'div' : 'button', inner = pick ? 'button' : 'span';
+      h += '<'+tag+' class="item'+(pick ? ' pickday' : '')+'"'+(pick ? '' : ' data-act="go-week"')+'><'+inner+' class="grow"'+(pick ? ' data-act="go-week"' : '')+'><span class="nm">'+esc(l.full)+(pick ? ' <span class="qty">'+esc(l.date)+'</span>' : '')+(pickedBy ? ' <span class="chip picked">'+esc(pickedBy)+'</span>' : '')+'</span>'
+        +  '<span class="meta">'+esc(what || 'nothing picked')+'</span></'+inner+'>'
+        +  (pick ? '<span class="row pickctl" style="gap:8px;flex-wrap:wrap">'+pick+'</span>' : '<span class="qty">'+esc(l.date)+'</span>')
+        +  '</'+tag+'>';
     });
     h += '</div></div>';
   }
@@ -4467,6 +4487,7 @@ function helpSheet(){
     ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Shuffle all draws them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top \u2014 in the settings too.'],
     ['Can I plan the week after?', 'Yes. On Week, tap Next beside the date; Plan it draws the week. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
+    ['Where do they pick their box?', 'On Pack, on the next box with nothing in the bag \u2014 today\u2019s, or the next day under Coming up. Switch it on with \u201cThey pick their box each day\u201d in the lunchbox settings. Tapping the day itself goes to Week.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
     ['How do I clear a phone?', 'Signed out, Erase everything on the Account tab. Signed in the lunches are the household\u2019s \u2014 Sign out leaves them behind, and Delete my account and data ends the account itself. Clear the plans keeps your foods.'],

@@ -18,7 +18,9 @@ const hashes = tags.map(m => "'sha256-" + crypto.createHash('sha256').update(m[2
 const appBuild = (html.match(/var APP_BUILD = '([^']+)'/) || [])[1];
 const swVersion = (fs.readFileSync('public/app/sw.js', 'utf8').match(/var VERSION = '([^']+)'/) || [])[1];
 if (!appBuild || appBuild !== swVersion) throw new Error(`APP_BUILD in public/app/index.html (${appBuild}) must equal VERSION in public/app/sw.js (${swVersion})`);
-/* the "What's new" note is written per build: a new build with last build's note is a note that was forgotten */
+/* the "What's new" note is tagged per build: this compares the tag only, so a note deliberately
+   carried forward — v22 ships v21's, so a phone that skipped v21 still hears it — passes once it is
+   re-tagged, and a note left on the old tag, which is the forgotten one, does not */
 const noteBuild = (html.match(/var WHATS_NEW = \{build:'([^']+)'/) || [])[1];
 if (noteBuild !== appBuild) throw new Error(`WHATS_NEW.build in public/app/index.html (${noteBuild}) must equal APP_BUILD (${appBuild}): write this build's note, or '' for none`);
 
