@@ -1991,6 +1991,25 @@ try {
   await pb.click('[data-act="kidpick-on"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="tab"][data-tab="pack"]'); await pb.waitForTimeout(250);
   check('kid\'s pick is on, with the tag beside it', (await pb.$$eval('[data-act="kid-start"]', a => a.length)) === 1 && (await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length)) >= 1);
+  /* Pack this box and the pick moves down to the next day, in Coming up, where the day and
+     its foods share the row with the tag. The tag will not wrap, so it used to take the row
+     and leave the day a column one letter wide: "Wednesday" read down the screen. */
+  await pb.click('[data-act="pack-all"]'); await pb.waitForTimeout(250);
+  check('and the day it lands on still reads across the row, not one letter at a time', await pb.evaluate(() => {
+    const row = document.querySelector('.item.pickday'); if(!row) return false;
+    const grow = row.querySelector('.grow');
+    return !!grow && grow.getBoundingClientRect().width > row.getBoundingClientRect().width * 0.6;
+  }), await pb.evaluate(() => { const r = document.querySelector('.item.pickday'); return r ? [Math.round(r.getBoundingClientRect().width), Math.round(r.querySelector('.grow').getBoundingClientRect().width)] : 'no pick row'; }));
+  /* and the other half of the same squeeze: the card hides what overflows it, so a tag and a
+     button that cannot break in two leave the parent a button with its right-hand edge cut off */
+  check('and neither the tag nor the button is cut off by the card', await pb.evaluate(() => {
+    const row = document.querySelector('.item.pickday'); if(!row) return false;
+    const list = row.closest('.list').getBoundingClientRect();
+    return [...row.querySelectorAll('button, .chip')].every(e => e.getBoundingClientRect().right <= list.right);
+  }), await pb.evaluate(() => { const r = document.querySelector('.item.pickday'); if(!r) return 'no pick row';
+    const l = r.closest('.list').getBoundingClientRect();
+    return [...r.querySelectorAll('button, .chip')].map(e => e.textContent.trim().slice(0,18)+': '+Math.round(e.getBoundingClientRect().right - l.right)); }));
+  await pb.click('[data-act="pack-all"]'); await pb.waitForTimeout(250);   /* un-tick: leave the fixture as it was */
   check('no banner nags in week one', (await pb.$$eval('.banner', a => a.filter(b => /three weeks/.test(b.textContent)).length)) === 0);
   await setBorn(19); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
   check('with three days left the app says when everything ends, once', /three weeks of everything end on [A-Z][a-z]{2} \d{1,2}/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) >= 1);
