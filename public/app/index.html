@@ -292,23 +292,71 @@ nav.tabs svg{width:21px;height:21px}
 }
 
 /* --- first run --- */
-.ob{min-height:100svh;display:flex;flex-direction:column;justify-content:center;gap:22px;
-  max-width:600px;margin:0 auto;
-  padding:calc(34px + var(--sat)) 20px calc(34px + var(--sab))}
-.ob h1{font-family:var(--f-display);font-size:clamp(30px,8.5vw,40px);font-weight:700;letter-spacing:-0.025em;
-  line-height:1.08;margin:0;text-wrap:balance}
-.ob .lede{font-size:16.5px;color:var(--ink-2);margin:8px 0 0;max-width:38ch}
-.ob .q{display:flex;flex-direction:column;gap:9px}
+/* The questions sit under the same header as every other screen: the brand keeps its
+   strip of ground behind the clock here too, rather than the first screen a parent
+   ever sees being the one that starts at the very top of the glass. The header and
+   the safe areas are the .app's, as everywhere else, so the questions own only what
+   is left over — and they are sized to fit in it, because a parent answering these
+   wants to see all of them before starting on the first. */
+body.first-run .app{min-height:100svh;display:flex;flex-direction:column;
+  padding-bottom:calc(14px + var(--sab))}
+body.first-run .topbar{align-items:center;margin-bottom:12px}
+/* the questions are the .app's last child through <main>, so the run of room the
+   header leaves has to be handed down before .ob can centre itself in it */
+body.first-run #view{flex:1;display:flex;flex-direction:column;min-height:0}
+.topbar .hdrlink{background:none;border:0;color:var(--ink-2);font-size:13.5px;text-decoration:underline;
+  text-underline-offset:3px;min-height:44px;padding:0 2px;white-space:nowrap}
+/* centred while it fits, top-aligned once it does not: a parent with the text size
+   turned up must still be able to scroll back to the headline, and a plain centred
+   column puts its overflow out of reach at both ends */
+.ob{flex:1;display:flex;flex-direction:column;justify-content:center;gap:11px}
+.ob{justify-content:safe center}
+.ob h1{font-family:var(--f-display);font-size:clamp(24px,6.6vw,32px);font-weight:700;letter-spacing:-0.025em;
+  line-height:1.1;margin:0;text-wrap:balance}
+.ob .lede{font-size:14.5px;color:var(--ink-2);margin:5px 0 0;max-width:45ch}
+.ob .q{display:flex;flex-direction:column;gap:6px}
 .ob .q > span,.ob .q > label{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.14em;
   text-transform:uppercase;color:var(--ink-3)}
-.ob .go{margin-top:4px}
+/* the chips keep their 44px of height and give up side room instead, so the last
+   question's three answers sit on one line rather than spilling onto a second */
+.ob .toggles{gap:6px}
+.ob .tg{padding:0 11px;font-size:13px}
+.ob .go{margin-top:0}
 .ob .skip{background:none;border:0;color:var(--ink-3);font-size:13.5px;text-decoration:underline;
   text-underline-offset:3px;min-height:44px}
-.ob .skip.top{align-self:flex-start;padding:0;margin-top:-6px}
-.oblogo{display:grid;grid-template-columns:1fr 1fr;gap:2px;width:64px;height:64px;border-radius:14px;
-  border:2px solid var(--line-strong);background:var(--line-strong);overflow:hidden;margin-bottom:4px}
+.oblogo{display:grid;grid-template-columns:1fr 1fr;gap:2px;width:40px;height:40px;border-radius:10px;
+  border:2px solid var(--line-strong);background:var(--line-strong);overflow:hidden;margin-bottom:7px}
 .oblogo i:nth-child(1){background:var(--c-main)} .oblogo i:nth-child(2){background:var(--c-side)}
 .oblogo i:nth-child(3){background:var(--c-fruit)} .oblogo i:nth-child(4){background:var(--c-sweet)}
+/* a short phone — an SE, or one with the text size turned up — gives the headline
+   and the reassurance under it less room before the answers start, and drops the
+   mark altogether: the header above it is already carrying the name */
+@media (max-height:700px){
+  .obq{gap:9px}
+  .obq h1{font-size:clamp(21px,5.6vw,26px)}
+  .obq .lede{font-size:13.5px;margin-top:4px}
+  .obq .oblogo{display:none}
+}
+
+/* --- the wait before the first screen --- */
+/* The lunchbox fills in a compartment at a time over whatever the phone is still
+   doing: reading the saved week, waking the fonts, asking the server who we are.
+   It is scenery only — it never takes a tap — and it goes on the first render.
+   The tiles rest visible and animate *from* nothing, so a phone set to reduce
+   motion, where the global rule turns every animation off, still sees the mark. */
+.splash{position:fixed;inset:0;z-index:70;background:var(--ground);pointer-events:none;
+  display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity .3s ease}
+.splash.off{opacity:0}
+.splash .mark{display:grid;grid-template-columns:1fr 1fr;gap:3px;width:76px;height:76px;border-radius:17px;
+  border:2px solid var(--line-strong);background:var(--line-strong);overflow:hidden;
+  animation:splash-breathe 1.9s ease-in-out .85s infinite}
+.splash .mark i{animation:splash-fill .52s cubic-bezier(.2,.9,.3,1.35) backwards}
+.splash .mark i:nth-child(1){background:var(--c-main);animation-delay:.04s}
+.splash .mark i:nth-child(2){background:var(--c-side);animation-delay:.16s}
+.splash .mark i:nth-child(3){background:var(--c-fruit);animation-delay:.28s}
+.splash .mark i:nth-child(4){background:var(--c-sweet);animation-delay:.40s}
+@keyframes splash-fill{from{transform:scale(.35);opacity:0}}
+@keyframes splash-breathe{50%{transform:scale(1.055)}}
 
 /* --- kid's pick: which of the week's boxes is next --- */
 .kidmode{position:fixed;inset:0;z-index:60;background:var(--ground);display:flex;flex-direction:column;
@@ -449,6 +497,8 @@ textarea.codebox:not([readonly]){font-size:16px}   /* a parent types into this o
 </style>
 </head>
 <body>
+
+<div class="splash" id="splash" aria-hidden="true"><i class="mark"><i></i><i></i><i></i><i></i></i></div>
 
 <div class="app">
   <div class="topbar">
@@ -1575,19 +1625,23 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v23';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v24';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
    v20 shipped the recipe work and v21 the per-step amount boxes. v22 went to production as a
    row on Pack that had squeezed itself, carrying v21's note for the phones that never opened
-   v21 — a screen that moved has no note of its own — so this build is v23, and its note is the
+   v21 — a screen that moved has no note of its own — so v23's note is the
    delta against all three: two things a parent gained — writing one food into one box by hand,
    and handing the phone over once for the whole week instead of every morning. The
    walkthrough is those two and nothing else; the recipe steps have been seen.
+   v24 is the first screen a parent ever sees getting the header the rest of the app already
+   had, the questions fitting on one screen, and a mark that fills in while the app wakes:
+   nothing a parent gained or lost, so v23's note rides on under seenAs and the phones that
+   already read it are left alone.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v23', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, and hand the phone over once to let them pick the whole week.',
+var WHATS_NEW = {build:'lunchsorted-v24', seenAs:'lunchsorted-v23', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, and hand the phone over once to let them pick the whole week.',
   steps:[
     ['Write one in', 'Tap a compartment on Week and Write something in. Whatever you type goes into that one box on that one day \u2014 kept, so a shuffle leaves it alone; off the food list, so it is never drawn again; and off the shopping list, because it is already in your fridge.'],
     ['One line, not a form', 'A write-in asks for the name and nothing else \u2014 at six in the morning that is all there is time for. So the name is all we can check it against: if it trips a rule it goes in flagged, but nuts or dairy hiding inside \u201cleftover pasta\u201d are yours to catch. The compartment carries a pencil and the day says Written in, so you can see which ones are yours.'],
@@ -3173,12 +3227,11 @@ function viewOnboard(){
   var chip = function(act, val, on, label){
     return '<button class="tg" data-act="'+act+'" data-v="'+val+'" aria-pressed="'+(on?'true':'false')+'">'+label+'</button>';
   };
-  return '<div class="ob">' + noticeBanner()
+  return '<div class="ob obq">' + noticeBanner()
     + '<div><div class="oblogo"><i></i><i></i><i></i><i></i></div>'
     + '<h1>A week of packed lunches, in about a minute.</h1>'
-    + '<p class="lede">Answer a few things and we&#8217;ll build the week, match what goes with what, '
-    + 'and hand you the shopping list. You can change any of it after.</p>'
-    + '<button class="skip top" data-act="ob-signin">Already signed up? Sign in</button></div>'
+    + '<p class="lede">We&#8217;ll build the week, pair every box and write the shopping '
+    + 'list. Change any of it after.</p></div>'
     + '<div class="q"><span>Whose lunch is this?</span>'
     + '<input type="text" id="obName" value="'+esc(o.name)+'" placeholder="Their name, or leave it blank" autocomplete="off" maxlength="40"></div>'
     + '<div class="q"><span>What can go in the box?</span><div class="toggles">'
@@ -4743,20 +4796,44 @@ var TABS = [
   {k:'foods',label:'Foods',icon:'foods'}, {k:'shop', label:'Shop', icon:'shop'},
   {k:'recipes',label:'Recipes',icon:'book'}, {k:'setup',label:'Account',icon:'account'}
 ];
+/* The splash is scenery over a boot that is usually instant, so it is held long
+   enough for the mark to finish filling in rather than blinking out half-drawn. */
+var SPLASH_AT = Date.now(), splashGone = false;
+function dropSplash(){
+  if(splashGone) return;
+  splashGone = true;
+  var s = document.getElementById('splash');
+  if(!s) return;
+  setTimeout(function(){
+    s.classList.add('off');
+    /* a phone set to reduce motion never runs the fade, so the removal is on a
+       timer rather than on transitionend, which would never arrive */
+    setTimeout(function(){ if(s.parentNode) s.parentNode.removeChild(s); }, 360);
+  }, Math.max(0, 760 - (Date.now() - SPLASH_AT)));
+}
+/* nothing to show is still better than a mark that turns out to be a hang: if the
+   saved week never comes back, the splash lifts anyway and leaves the app beneath */
+setTimeout(dropSplash, 6000);
 function render(){
   if(!S) return;
+  dropSplash();
   var kid = activeKid();
   var kidEl = document.getElementById('kid');
   document.body.style.overflow = (UI.kid || sheetEl.classList.contains('open')) ? 'hidden' : '';
   if(UI.kid){ kidEl.innerHTML = viewKid(); kidEl.hidden = false; return; }   /* the views beneath wait for the hand-back */
   kidEl.innerHTML = ''; kidEl.hidden = true;
   if(!S.onboardedAt || UI.obEmail){
+    document.body.classList.add('first-run');
     document.getElementById('view').innerHTML = UI.obEmail ? viewObEmail() : viewOnboard();
     document.getElementById('tabs').style.display = 'none';
-    document.querySelector('.topbar').style.display = 'none';
-    document.getElementById('who').innerHTML = '';
+    document.querySelector('.topbar').style.display = '';
+    /* the way back in rides in the header, where it costs the questions no room;
+       once the link is on its way the parent is already signing in, so it goes */
+    document.getElementById('who').innerHTML = UI.obEmail ? ''
+      : '<button class="hdrlink" data-act="ob-signin">Sign in</button>';
     return;
   }
+  document.body.classList.remove('first-run');
   document.getElementById('tabs').style.display = '';
   document.querySelector('.topbar').style.display = '';
   if(UI.pane && (!paneOK(UI.pane) || (UI.pane !== 'box' && UI.tab !== 'setup'))) UI.pane = '';   /* only the settings sit over a lunchbox tab */

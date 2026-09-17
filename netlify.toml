@@ -73,7 +73,7 @@
   for = "/app/*"
   [headers.values]
 <<<<<<< HEAD
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-enY0jE0acPYLcZ2SGQ0NcEPK/kCDxBiLnbMeSJJt3yo=' 'sha256-qRhtSdZZAujSkFer7k+4oqJR/sFTOvV1n/hHtp5JvJw=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-enY0jE0acPYLcZ2SGQ0NcEPK/kCDxBiLnbMeSJJt3yo=' 'sha256-BAnIe4QgkbmfOkBn9EMU1VqvO53z62Jn4KwvqYzK7J0=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 =======
     Content-Security-Policy = "default-src 'none'; script-src 'sha256-enY0jE0acPYLcZ2SGQ0NcEPK/kCDxBiLnbMeSJJt3yo=' 'sha256-fRLzcBWL8nQrEHdgnAcILpqbdS2Gv5vmgL3zzi6xUTM=' 'sha256-SbpgugZI68LG1iUVdCgkblUJ5WuJUNx93jC5POs5UBQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 >>>>>>> origin/main
