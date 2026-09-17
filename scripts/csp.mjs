@@ -67,8 +67,31 @@ export const LANDING_CSP = SITE_CSP
   .replace("img-src 'self' data:", "img-src 'self' data: https://www.googletagmanager.com https://*.google-analytics.com")
   .replace("frame-ancestors", "connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com; frame-ancestors");
 
+/* The file has to be TOML before any of the rest of this means anything. Both
+   readers below take the FIRST Content-Security-Policy in a block, which is what
+   let dev ship a netlify.toml with a merge conflict still in it: the live half was
+   maintained, the dead half sat under it, --check called the policy up to date, and
+   the smoke suite served the app from the good line — while Netlify would have
+   failed the whole file on parse and applied no header in it at all. So the shape
+   of the file is checked before its contents, and by something that cannot be
+   fooled by reading only the first match. */
+export function assertParseable(toml) {
+  const lines = toml.split('\n');
+  const marks = lines
+    .map((l, i) => (/^(<{7}|={7}|>{7})(\s|$)/.test(l) ? i + 1 : 0))
+    .filter(Boolean);
+  if (marks.length) throw new Error('netlify.toml has unresolved merge conflict markers on line(s) ' + marks.join(', ') + ' — Netlify fails the whole file on a parse error, so no header, redirect or build command in it is applied. Resolve the conflict, then run `npm run csp`.');
+  for (const block of toml.split('[[headers]]').slice(1)) {
+    const path = (block.match(/for = "([^"]+)"/) || [, '?'])[1];
+    const n = (block.match(/^\s*Content-Security-Policy = "/gm) || []).length;
+    if (n > 1) throw new Error('netlify.toml declares Content-Security-Policy ' + n + ' times for "' + path + '"; TOML forbids a duplicate key, and only the first would ever be read here');
+  }
+  return toml;
+}
+
 export function readPolicies(toml) {
   /* one block at a time, so a block without a CSP can't borrow the next one's */
+  assertParseable(toml);
   const out = {};
   for (const block of toml.split('[[headers]]').slice(1)) {
     const path = block.match(/for = "([^"]+)"/), csp = block.match(/Content-Security-Policy = "([^"]*)"/);
@@ -78,7 +101,7 @@ export function readPolicies(toml) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith('csp.mjs')) {
-  let toml = fs.readFileSync('netlify.toml', 'utf8');
+  let toml = assertParseable(fs.readFileSync('netlify.toml', 'utf8'));
   if (process.argv.includes('--check')) {
     const have = readPolicies(toml);
     const want = {'/app/*': APP_CSP, '/': LANDING_CSP, '/index.html': LANDING_CSP, '/privacy.html': SITE_CSP, '/terms.html': SITE_CSP, '/help.html': SITE_CSP, '/feedback.html': SITE_CSP, '/thanks.html': SITE_CSP, '/on-the-list.html': SITE_CSP, '/back.html': BACK_CSP};

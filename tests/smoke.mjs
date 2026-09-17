@@ -288,8 +288,50 @@ try {
   /* ---------------------------------------------------------- first run */
   await page.goto(BASE+'/app/');
   await page.waitForTimeout(500);
-  check('onboarding takes the whole screen on first run',
-    await page.$eval('nav.tabs', e => getComputedStyle(e).display === 'none'));
+  check('first run hides the tab bar but keeps the app\u2019s own header',
+    await page.evaluate(() => getComputedStyle(document.querySelector('nav.tabs')).display === 'none'
+      && getComputedStyle(document.querySelector('.topbar')).display !== 'none'
+      && /Lunch/.test(document.querySelector('.topbar .brand').textContent)
+      && document.getElementById('who').innerHTML === ''   /* the header is the brand and nothing else here */
+      && document.body.classList.contains('first-run')));
+  /* the whole point of the layout: a parent answers all of it without scrolling.
+     The viewport the suite runs at is the one in tests/smoke.mjs's context. */
+  check('the questions and both buttons fit on one screen, with the safe areas a phone asks for',
+    await page.evaluate(() => {
+      const d = document.documentElement;
+      d.style.setProperty('--sat', '59px'); d.style.setProperty('--sab', '34px');
+      const over = d.scrollHeight - d.clientHeight;
+      const go = document.querySelector('[data-act="ob-go"]').getBoundingClientRect();
+      const skip = document.querySelector('[data-act="ob-skip"]').getBoundingClientRect();
+      const small = [...document.querySelectorAll('.ob button, .ob input')].filter(e => e.getBoundingClientRect().height < 43.5);
+      d.style.removeProperty('--sat'); d.style.removeProperty('--sab');
+      return over === 0 && go.bottom <= d.clientHeight && skip.bottom <= d.clientHeight && small.length === 0;
+    }));
+  check('the way back in is a sentence a new parent can rule out, not a bare word',
+    await page.$eval('.ob [data-act="ob-signin"]', e => /already signed up/i.test(e.textContent)));
+  /* the boot cover is over a live screen, so while it is opaque it has to take the
+     taps aimed at what it hides — a stray one used to reach Join their household */
+  check('the boot splash swallows taps while it covers the app, and then goes',
+    await (async () => {
+      const c = await phone();          /* the suite's own phone: clock pinned, fonts blocked */
+      const pg = await c.newPage();
+      await pg.goto(BASE+'/app/', {waitUntil:'commit'});
+      await pg.waitForFunction(() => document.querySelector('[data-act="ob-go"]'));
+      const swallowed = await pg.evaluate(() => {
+        const s = document.getElementById('splash');
+        if(!s || +getComputedStyle(s).opacity < 0.99) return 'gone';   /* raced us; the removal is checked below */
+        const at = document.querySelector('[data-act="ob-go"]').getBoundingClientRect();
+        const hit = document.elementFromPoint(Math.round(at.left + at.width/2), Math.round(at.top + at.height/2));
+        return (hit === s || s.contains(hit)) ? 'swallowed' : 'leaked';
+      });
+      const left = await pg.evaluate(async () => {
+        const t = Date.now();
+        while(document.getElementById('splash') && Date.now() - t < 9000) await new Promise(r => setTimeout(r, 25));
+        return !document.getElementById('splash');
+      });
+      await c.close();
+      return swallowed !== 'leaked' && left;
+    })());
 
   await page.fill('#obName', 'Nia');
   await page.evaluate(() => { document.getElementById('obName').__kept = true; });

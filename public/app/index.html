@@ -300,23 +300,28 @@ nav.tabs svg{width:21px;height:21px}
    wants to see all of them before starting on the first. */
 body.first-run .app{min-height:100svh;display:flex;flex-direction:column;
   padding-bottom:calc(14px + var(--sab))}
-body.first-run .topbar{align-items:center;margin-bottom:12px}
+body.first-run .topbar{align-items:center;margin-bottom:9px}
 /* the questions are the .app's last child through <main>, so the run of room the
-   header leaves has to be handed down before .ob can centre itself in it */
+   header leaves has to be handed down before .ob can centre itself in it. A notice
+   is a sibling above them, never inside: the column has no slack left, and a banner
+   in it pushes the button a parent came for off the bottom of the screen. */
 body.first-run #view{flex:1;display:flex;flex-direction:column;min-height:0}
-.topbar .hdrlink{background:none;border:0;color:var(--ink-2);font-size:13.5px;text-decoration:underline;
-  text-underline-offset:3px;min-height:44px;padding:0 2px;white-space:nowrap}
-/* centred while it fits, top-aligned once it does not: a parent with the text size
-   turned up must still be able to scroll back to the headline, and a plain centred
-   column puts its overflow out of reach at both ends */
-.ob{flex:1;display:flex;flex-direction:column;justify-content:center;gap:11px}
-.ob{justify-content:safe center}
+/* Centred while it fits, top-aligned once it does not, so a parent with the text
+   size turned up can still reach the headline. Auto margins do that everywhere;
+   justify-content:safe center would too, but only from Safari 17, and the iPhone
+   shell ships back to iOS 15 — there it is dropped and plain centring puts the
+   overflow out of reach at both ends, which is the bug, not the fix. */
+.ob{flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:9px}
+.ob > :first-child{margin-top:auto}
+.ob > :last-child{margin-bottom:auto}
 .ob h1{font-family:var(--f-display);font-size:clamp(24px,6.6vw,32px);font-weight:700;letter-spacing:-0.025em;
   line-height:1.1;margin:0;text-wrap:balance}
-.ob .lede{font-size:14.5px;color:var(--ink-2);margin:5px 0 0;max-width:45ch}
-.ob .q{display:flex;flex-direction:column;gap:6px}
+.ob .lede{font-size:14.5px;color:var(--ink-2);margin:5px 0 0}
+.ob .q{display:flex;flex-direction:column;gap:5px}
+/* these four lines are the whole screen now, so they carry --ink-2: --ink-3 is
+   3.6:1 on the ground in light, and 10.5px of it wants 4.5:1 */
 .ob .q > span,.ob .q > label{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--ink-3)}
+  text-transform:uppercase;color:var(--ink-2)}
 /* the chips keep their 44px of height and give up side room instead, so the last
    question's three answers sit on one line rather than spilling onto a second */
 .ob .toggles{gap:6px}
@@ -324,6 +329,7 @@ body.first-run #view{flex:1;display:flex;flex-direction:column;min-height:0}
 .ob .go{margin-top:0}
 .ob .skip{background:none;border:0;color:var(--ink-3);font-size:13.5px;text-decoration:underline;
   text-underline-offset:3px;min-height:44px}
+.ob .skip.top{align-self:flex-start;padding:0;margin-top:-4px}
 .oblogo{display:grid;grid-template-columns:1fr 1fr;gap:2px;width:40px;height:40px;border-radius:10px;
   border:2px solid var(--line-strong);background:var(--line-strong);overflow:hidden;margin-bottom:7px}
 .oblogo i:nth-child(1){background:var(--c-main)} .oblogo i:nth-child(2){background:var(--c-side)}
@@ -332,10 +338,13 @@ body.first-run #view{flex:1;display:flex;flex-direction:column;min-height:0}
    and the reassurance under it less room before the answers start, and drops the
    mark altogether: the header above it is already carrying the name */
 @media (max-height:700px){
-  .obq{gap:9px}
-  .obq h1{font-size:clamp(21px,5.6vw,26px)}
-  .obq .lede{font-size:13.5px;margin-top:4px}
-  .obq .oblogo{display:none}
+  .ob{gap:7px}
+  .ob h1{font-size:clamp(19px,5.2vw,24px);line-height:1.06}
+  .ob .lede{font-size:12.5px;margin-top:4px}
+  .ob .q{gap:4px}
+  .ob .q > span,.ob .q > label{font-size:10px}
+  .ob .skip.top{margin-top:-9px}
+  .ob .oblogo{display:none}
 }
 
 /* --- the wait before the first screen --- */
@@ -344,17 +353,24 @@ body.first-run #view{flex:1;display:flex;flex-direction:column;min-height:0}
    It is scenery only — it never takes a tap — and it goes on the first render.
    The tiles rest visible and animate *from* nothing, so a phone set to reduce
    motion, where the global rule turns every animation off, still sees the mark. */
-.splash{position:fixed;inset:0;z-index:70;background:var(--ground);pointer-events:none;
-  display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity .3s ease}
-.splash.off{opacity:0}
+/* It takes the taps it covers. The app beneath is live and rendered, and a parent
+   cannot see it: left transparent to pointers, a tap from muscle memory lands on a
+   compartment, a tab, or Build this week's lunches, and the screen it acted on was
+   never on screen. Only the fading copy lets taps through, and it is gone in 200ms. */
+.splash{position:fixed;inset:0;z-index:70;background:var(--ground);
+  display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity .2s ease}
+.splash.off{opacity:0;pointer-events:none}
 .splash .mark{display:grid;grid-template-columns:1fr 1fr;gap:3px;width:76px;height:76px;border-radius:17px;
   border:2px solid var(--line-strong);background:var(--line-strong);overflow:hidden;
-  animation:splash-breathe 1.9s ease-in-out .85s infinite}
-.splash .mark i{animation:splash-fill .52s cubic-bezier(.2,.9,.3,1.35) backwards}
-.splash .mark i:nth-child(1){background:var(--c-main);animation-delay:.04s}
-.splash .mark i:nth-child(2){background:var(--c-side);animation-delay:.16s}
-.splash .mark i:nth-child(3){background:var(--c-fruit);animation-delay:.28s}
-.splash .mark i:nth-child(4){background:var(--c-sweet);animation-delay:.40s}
+  animation:splash-breathe 1.9s ease-in-out .42s infinite}
+/* the fill finishes at .16 + .22 = .38s, inside the hold below, so the mark is
+   whole before it fades rather than blinking out mid-bounce. The breathe picks up
+   where the fill ends, so it is only ever seen on a boot that is actually slow. */
+.splash .mark i{animation:splash-fill .22s cubic-bezier(.2,.9,.3,1.35) backwards}
+.splash .mark i:nth-child(1){background:var(--c-main);animation-delay:.01s}
+.splash .mark i:nth-child(2){background:var(--c-side);animation-delay:.06s}
+.splash .mark i:nth-child(3){background:var(--c-fruit);animation-delay:.11s}
+.splash .mark i:nth-child(4){background:var(--c-sweet);animation-delay:.16s}
 @keyframes splash-fill{from{transform:scale(.35);opacity:0}}
 @keyframes splash-breathe{50%{transform:scale(1.055)}}
 
@@ -3227,11 +3243,11 @@ function viewOnboard(){
   var chip = function(act, val, on, label){
     return '<button class="tg" data-act="'+act+'" data-v="'+val+'" aria-pressed="'+(on?'true':'false')+'">'+label+'</button>';
   };
-  return '<div class="ob obq">' + noticeBanner()
-    + '<div><div class="oblogo"><i></i><i></i><i></i><i></i></div>'
-    + '<h1>A week of packed lunches, in about a minute.</h1>'
-    + '<p class="lede">We&#8217;ll build the week, pair every box and write the shopping '
-    + 'list. Change any of it after.</p></div>'
+  return noticeBanner() + '<div class="ob obq">'
+    + '<div><h1>A week of packed lunches, in about a minute.</h1>'
+    + '<p class="lede">Answer a few things and we&#8217;ll build the week, match what goes with what, '
+    + 'and hand you the shopping list. You can change any of it after.</p>'
+    + '<button class="skip top" data-act="ob-signin">Already signed up? Sign in</button></div>'
     + '<div class="q"><span>Whose lunch is this?</span>'
     + '<input type="text" id="obName" value="'+esc(o.name)+'" placeholder="Their name, or leave it blank" autocomplete="off" maxlength="40"></div>'
     + '<div class="q"><span>What can go in the box?</span><div class="toggles">'
@@ -4796,9 +4812,11 @@ var TABS = [
   {k:'foods',label:'Foods',icon:'foods'}, {k:'shop', label:'Shop', icon:'shop'},
   {k:'recipes',label:'Recipes',icon:'book'}, {k:'setup',label:'Account',icon:'account'}
 ];
-/* The splash is scenery over a boot that is usually instant, so it is held long
-   enough for the mark to finish filling in rather than blinking out half-drawn. */
-var SPLASH_AT = Date.now(), splashGone = false;
+/* The splash covers a boot that is usually instant — the saved week is read out of
+   localStorage — so the hold is only as long as the mark takes to fill in, and not
+   a moment of manufactured waiting on top. Every launch pays it, twice a day, so
+   the number is the animation's own length and nothing more. */
+var SPLASH_AT = Date.now(), splashGone = false, SPLASH_HOLD = 400;
 function dropSplash(){
   if(splashGone) return;
   splashGone = true;
@@ -4808,12 +4826,9 @@ function dropSplash(){
     s.classList.add('off');
     /* a phone set to reduce motion never runs the fade, so the removal is on a
        timer rather than on transitionend, which would never arrive */
-    setTimeout(function(){ if(s.parentNode) s.parentNode.removeChild(s); }, 360);
-  }, Math.max(0, 760 - (Date.now() - SPLASH_AT)));
+    setTimeout(function(){ if(s.parentNode) s.parentNode.removeChild(s); }, 240);
+  }, Math.max(0, SPLASH_HOLD - (Date.now() - SPLASH_AT)));
 }
-/* nothing to show is still better than a mark that turns out to be a hang: if the
-   saved week never comes back, the splash lifts anyway and leaves the app beneath */
-setTimeout(dropSplash, 6000);
 function render(){
   if(!S) return;
   dropSplash();
@@ -4827,10 +4842,7 @@ function render(){
     document.getElementById('view').innerHTML = UI.obEmail ? viewObEmail() : viewOnboard();
     document.getElementById('tabs').style.display = 'none';
     document.querySelector('.topbar').style.display = '';
-    /* the way back in rides in the header, where it costs the questions no room;
-       once the link is on its way the parent is already signing in, so it goes */
-    document.getElementById('who').innerHTML = UI.obEmail ? ''
-      : '<button class="hdrlink" data-act="ob-signin">Sign in</button>';
+    document.getElementById('who').innerHTML = '';
     return;
   }
   document.body.classList.remove('first-run');
@@ -5952,6 +5964,15 @@ Store.load().then(function(r){
 })();
 </script>
 <script>
+/* The splash's last resort, and deliberately not in the block above: if the app's
+   script throws or is refused — a CSP hash that drifted is the way that happens —
+   then nothing in it runs, its own six-second timer included, and a parent is left
+   watching a lunchbox breathe forever. A blank screen at least reads as broken.
+   This block is small enough to be read at a glance and shares nothing with it. */
+setTimeout(function(){
+  var s = document.getElementById('splash');
+  if(s && s.parentNode) s.parentNode.removeChild(s);
+}, 7000);
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('/app/sw.js').catch(function(){ /* offline support is a bonus, not a requirement */ });
