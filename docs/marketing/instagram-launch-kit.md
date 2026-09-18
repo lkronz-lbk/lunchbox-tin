@@ -55,37 +55,41 @@ without looks like it started yesterday.
 
 ## 2 · The carousel — the post that explains the app
 
-Seven slides, 1080×1350 (4:5, the tallest Instagram allows in feed, so it takes
+Six slides, 1080×1350 (4:5, the tallest Instagram allows in feed, so it takes
 the most screen). This is the post you pin to the top of the profile and the one
 everyone who taps through from a reel will read.
 
-`carousel-1.png` … `carousel-7.png`
+`carousel-1.png` … `carousel-6.png`
 
-| Slide | What it does |
-|---|---|
-| 1 | The offer in one line, and a swipe cue |
-| 2 | The problem, in a parent's words |
-| 3 | How it works, three steps |
-| 4 | The week — it matches the box, not just fills it |
-| 5 | The rules, built in |
-| 6 | The kid's pick |
-| 7 | What it costs, and where to go |
+It follows the onboarding journey in order — the week you already have, then
+each thing you can do to it — so a stranger sees a phone screen on slide one and
+knows it is an app before they swipe. Headlines are five words or fewer; the
+screenshot is the slide, the words are the label.
+
+| Slide | Screen | Headline |
+|---|---|---|
+| 1 | The planned week | Five lunches. One tap. |
+| 2 | Swapping one compartment | Not that one? Swap it. |
+| 3 | The shopping list, ticked | Tick what's already home. |
+| 4 | The idea bank | Only food they'll eat. |
+| 5 | The Pack tab | Then it's just a checklist. |
+| 6 | — | Where to go, and what it costs |
 
 **Caption:**
 
-> I built a lunch planner because by week three I had run out of ideas.
+> Five packed lunches a week. Every week. Until June.
 >
-> Three questions — what can go in the box, what has to stay out, how picky they are — and it plans the whole week. It matches each box so it actually works together, respects your school's rules, and writes the shopping list for you.
+> This plans all five in one minute — matched boxes, your school's rules built in, and the grocery list written for you. Swap anything you don't like. Tick off what's already in the cupboard.
 >
-> Free to plan, nothing to download, works with no signal at the kitchen counter. The iPhone app is with Apple now.
+> Free to plan, nothing to download. The iPhone app is with Apple now.
 >
 > lunchsorted.app — link in bio.
 >
 > #schoollunch #lunchboxideas #schoollunchideas #packedlunch #<town>moms
 
 **Alt text** (set per slide, Advanced settings → Write alt text): describe what
-is on the slide plainly. Slide 4: "The planner showing a week of five lunchboxes,
-each with a main, side, fruit and sweet."
+is on the slide plainly. Slide 1: "The planner showing a week of five
+lunchboxes, each with a main, side, fruit and sweet."
 
 **Pin it to your profile** as soon as it is posted.
 

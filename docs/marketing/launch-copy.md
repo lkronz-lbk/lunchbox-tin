@@ -112,13 +112,18 @@ broad, mid and niche, and always spends one slot on local — see
 — the pipeline's set has no allergy tags. `#nutfreelunch` and `#foodallergymom`
 are the obvious additions but are unvalidated; use them knowing that.
 
-### Post 1 — the carousel (App Store images)
+### Post 1 — the carousel (six slides, rendered from the design canvas)
 
-> I built a lunch planner because I was out of ideas by week three.
+Six slides that walk the onboarding journey in order: the planned week, swapping
+a compartment, the shopping list ticked off, the idea bank, the Pack tab, then
+where to go. Screenshot-led — the app is visible on slide one. The full slide
+table is in [instagram-launch-kit.md](instagram-launch-kit.md).
+
+> Five packed lunches a week. Every week. Until June.
 >
-> Three questions — what can go in the box, what has to stay out, how picky they are — and it plans the week, matches each box so it works together, and writes the grocery list. Five minutes on a Sunday instead of five panics at 7am.
+> This plans all five in one minute — matched boxes, your school's rules built in, and the grocery list written for you. Swap anything you don't like. Tick off what's already in the cupboard.
 >
-> It's free to plan, there's nothing to download, and it works with no signal in the kitchen.
+> Free to plan, nothing to download. The iPhone app is with Apple now.
 >
 > lunchsorted.app — link in bio.
 >
