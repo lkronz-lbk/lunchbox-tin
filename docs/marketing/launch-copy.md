@@ -43,7 +43,7 @@ up in the numbers. A `/pin` redirect would make these countable — one line in
 Lead term: `bento box lunch ideas kids` — tier 1, **rising**. The image shows a
 four-compartment tin, which is what the term describes.
 
-**Title:** Bento Box Lunch Ideas for Kids: A Week Planned in About a Minute *(63 chars)*
+**Title:** Bento Box Lunch Ideas for Kids: A Week Packed in One Minute *(58 chars)*
 
 **Description:**
 > Bento box lunch ideas for kids, planned a week at a time instead of one box at a time. Answer three questions and it fills five compartment boxes — a main, side, fruit and sweet — matched so each one works together, then writes the grocery list. Free, ages 5-11. Plan this week's lunches!
@@ -146,7 +146,7 @@ are the obvious additions but are unvalidated; use them knowing that.
 **Caption:**
 > Week three is when it stops being cute and starts being a chore. Five lunches a week, every week, until June.
 >
-> This plans the whole week in about a minute — and tells you *why* each box goes together, which is the bit a Pinterest board never does.
+> This plans the whole week in one minute — and tells you *why* each box goes together, which is the bit a Pinterest board never does.
 >
 > Free to plan at lunchsorted.app 🥪
 >

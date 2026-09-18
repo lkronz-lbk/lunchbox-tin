@@ -74,7 +74,7 @@ no screenshot puts a child's face on a page (7).
 ## What we say
 
 The positioning is already right on the site and does not need re-inventing:
-**a week of school lunches in about a minute, matched so each box goes together,
+**a week of packed school lunches in one minute, matched so each box goes together,
 with the shopping list built for you.**
 
 Four proof points, in the order that persuades:

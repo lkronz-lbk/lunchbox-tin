@@ -77,6 +77,15 @@ Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
 
 ## Conventions
 
+- **What to call it.** "Packed school lunches", never a bare "school lunch": a school
+  lunch is the one bought in the cafeteria, and this plans the one that goes in a box.
+  And the week is planned **in one minute**, not "about a minute" — the hedge costs more
+  than it protects. `public/index.html` and everything in `docs/marketing/` say this
+  already. Two places still carry the old wording on purpose and are owed the change:
+  `public/app/index.html` (the onboarding headline and the meta description) at the next
+  app deploy, and `store/listing.md` once the App Store review in flight has cleared —
+  editing listing metadata mid-review is not worth the risk. Use the new wording in any
+  new string from here.
 - The words on the marketing page are editable at `/admin/copy`; the wording in
   `public/index.html` stays the source of truth and the fallback. Layout is not editable
   there, and a change to that page's markup means running `npm run copy`.

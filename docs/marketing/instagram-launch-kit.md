@@ -23,11 +23,11 @@ as the domain — it is the whole point of the name.
 **Name field** (30 characters, and *searchable* — this is the one people
 overlook):
 
-> `Lunch Sorted · School Lunches`
+> `Lunch Sorted · Packed Lunches`
 
 **Bio** (150 characters):
 
-> Plan a week of school lunches in about a minute.
+> Plan a week of packed school lunches in one minute.
 > Your school's rules built in — nut-free, no microwave, picky.
 > Free, no download ↓
 
@@ -136,7 +136,7 @@ not hunting at posting time. Volume: original audio down to 0, music at 40–60%
 
 > Week three is when packing lunch stops being cute and starts being a chore. Five a week, every week, until June.
 >
-> This plans the whole week in about a minute — and tells you *why* each box goes together, which is the bit a Pinterest board never does.
+> This plans the whole week in one minute — and tells you *why* each box goes together, which is the bit a Pinterest board never does.
 >
 > Free to plan, link in bio.
 >

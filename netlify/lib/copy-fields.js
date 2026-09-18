@@ -10,7 +10,7 @@ export const FIELDS = [
     "page": "index.html",
     "plain": true,
     "tags": [],
-    "original": "Lunch Sorted — a week of school lunches in about a minute"
+    "original": "Lunch Sorted — a week of packed school lunches in one minute"
   },
   {
     "key": "home.meta.description",
@@ -37,7 +37,7 @@ export const FIELDS = [
     "page": "index.html",
     "plain": true,
     "tags": [],
-    "original": "A week of packed school lunches in about a minute — matched boxes, school rules respected, shopping list built for you."
+    "original": "A week of packed school lunches in one minute — matched boxes, school rules respected, shopping list built for you."
   },
   {
     "key": "home.nav.cta",
@@ -55,7 +55,7 @@ export const FIELDS = [
     "page": "index.html",
     "plain": false,
     "tags": [],
-    "original": "Lunch, sorted. A week of school lunches in about a minute."
+    "original": "Lunch, sorted. A week of packed school lunches in one minute."
   },
   {
     "key": "home.hero.lede",
