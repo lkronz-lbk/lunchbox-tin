@@ -191,7 +191,7 @@ export const MAX_COPY = 1200;
 export function checkValue(v) {
   const s = String(v == null ? '' : v).replace(/\r\n/g, '\n').trim();
   /* markup with no words in it would leave a blank headline or a blank price */
-  if (!s || !s.replace(/<[^>]*>/g, '').trim()) return { error: 'This needs some words in it. To go back to the wording it started with, tick the box under it.' };
+  if (!s || !s.replace(/<[^>]*>/g, '').trim()) return { error: 'This needs some words in it. To go back to the wording it started with, check the box under it.' };
   if (s.length > MAX_COPY) return { error: `This is ${s.length} characters; the limit is ${MAX_COPY}.` };
   return { value: s.replace(/\s*\n\s*/g, ' ') };
 }

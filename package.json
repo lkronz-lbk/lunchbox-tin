@@ -10,9 +10,10 @@
     "csp": "node scripts/csp.mjs",
     "copy": "node scripts/copy.mjs",
     "migrate": "node scripts/migrate.mjs",
-    "pretest": "node scripts/csp.mjs --check && node scripts/copy.mjs --check",
+    "pretest": "node scripts/csp.mjs --check && node scripts/copy.mjs --check && node scripts/language.mjs --check",
     "ios:sync": "npx cap sync ios",
-    "ios:open": "npx cap open ios"
+    "ios:open": "npx cap open ios",
+    "language": "node scripts/language.mjs"
   },
   "devDependencies": {
     "@capacitor/app": "^7.1.2",

@@ -33,15 +33,18 @@ author and the Netlify + Neon stack. Read `README.md` first; it is the product s
 ```
 npm ci
 npm run dev           # static server on :8099 (no API)
-npm test              # CSP check, then the Playwright smoke suite with an in-process Postgres
+npm test              # CSP, copy and language checks, then the Playwright smoke suite on an in-process Postgres
 npm run csp           # regenerate the CSP hashes in netlify.toml after any change to public/app/index.html
 npm run copy          # regenerate netlify/lib/copy-fields.js after adding or renaming a data-copy name
+npm run language      # the house language rules: American English, packed school lunches, in one minute
 npm run migrate       # apply netlify/database/migrations/*.sql (needs NETLIFY_DATABASE_URL)
 ```
 
 Run `npm run csp` before every commit that touches the app; `npm test` refuses a stale hash.
 Run `npm run copy` after any change to the `data-copy` names on the marketing page; `npm test`
 refuses a stale list.
+Run `npm run language` before any commit that writes words; `npm test` refuses a break. The
+rules, and the two standing exceptions, are under Conventions → Language.
 Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
 
 ## Layout
@@ -77,29 +80,41 @@ Bump `VERSION` in `public/app/sw.js` on every deploy that changes the app.
 
 ## Conventions
 
-- **American English, everywhere.** Color, not colour. Canceled, check off, gray,
-  center, sanitizer, flavored. Never "tick" as a verb in anything a person reads —
-  a parent *checks off* the pantry, and the mark itself is a *checkmark*. This
-  covers user-visible strings, the marketing pages, `docs/`, `README.md`, commit
-  messages and code comments alike. The `.tick` class and the `ticked()` helper
-  keep their names; they are identifiers, not words on a screen.
+### Language
 
-- **What to call it.** "Packed school lunches", never a bare "school lunch": a school
-  lunch is the one bought in the cafeteria, and this plans the one that goes in a box.
-  And the week is planned **in one minute**, not "about a minute" — the hedge costs more
-  than it protects. `public/index.html` and everything in `docs/marketing/` say this
-  already. Two places still carry the old wording on purpose and are owed the change:
-  `public/app/index.html` (the onboarding headline and the meta description) at the next
-  app deploy, and `store/listing.md` once the App Store review in flight has cleared —
-  editing listing metadata mid-review is not worth the risk. Use the new wording in any
-  new string from here.
-- **Owed at the next app deploy**, together with the wording above and for the same
-  reason (`public/app/index.html` is frozen while the review is in flight): four
-  strings that are not American English — `Flavoured water` (the food list),
-  `Tick what is already home.` (the pantry hint), `Backup cancelled` (the toast) and
-  `Read-only on this phone — ticks stay here`. `store/listing.md` is owed the same pass;
-  `scripts/store-compose.py` already carries the new screenshot caption, so the
-  committed screenshots are one regeneration behind it.
+Three rules. They are checked, not remembered: `npm run language` lists every
+break and `npm test` refuses a commit that has one. If a change here needs an
+exception, add it to the `FROZEN` or `EXEMPT` map in `scripts/language.mjs`
+with the reason — never by loosening a pattern.
+
+1. **American English.** Color, canceled, gray, center, sanitizer, flavored.
+   And never "tick" as a word a person reads: a parent **checks off** the
+   pantry, and the mark is a **checkmark**. Covers user-visible strings, the
+   marketing pages, `docs/`, `README.md`, test names, commit messages and code
+   comments alike. Identifiers are exempt and stay as they are — `.tick`,
+   `ticked()` — because they are names, not words on a screen, and renaming
+   them means touching sync.
+2. **"Packed school lunches"**, never a bare "school lunch". A school lunch is
+   the one bought in the cafeteria; this plans the one that goes in a box.
+3. **"In one minute"**, never "about a minute". The hedge costs more than it
+   protects.
+
+Two exceptions the check already knows about, both deliberate:
+
+- **Frozen files.** `public/app/index.html` and `store/listing.md` still carry
+  the old wording because the App Store review is in flight and editing either
+  mid-review is not worth the risk. The app owes: the onboarding headline, the
+  meta description, `Flavoured water`, `Tick what is already home.`,
+  `Backup cancelled`, and `Read-only on this phone — ticks stay here`. Pay both
+  off at the next app deploy and delete them from `FROZEN`. The committed App
+  Store screenshots are one regeneration behind `scripts/store-compose.py`,
+  which already carries the new captions.
+- **Search terms are data, not voice.** `docs/marketing/keywords.md` and the
+  pin titles in `launch-copy.md` lead on what a parent actually types into
+  Pinterest. "Nut-free school lunch ideas" is a search term; correcting it just
+  means nobody finds us. In any other Markdown file a phrase in quotes or
+  backticks is treated the same way, so quoting a term is how you cite one.
+
 - The words on the marketing page are editable at `/admin/copy`; the wording in
   `public/index.html` stays the source of truth and the fallback. Layout is not editable
   there, and a change to that page's markup means running `npm run copy`.

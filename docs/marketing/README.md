@@ -248,7 +248,7 @@ the iPhone launch and gets perhaps four emails all year. The **trial sequence**
 already exists in the product (`cron-trial.js`: three days before the end, and
 the day after).
 
-What the benchmark data says to change: behaviour-triggered beats time-based by
+What the benchmark data says to change: behavior-triggered beats time-based by
 a wide margin, a welcome should land within minutes, no more than two emails in
 the first 48 hours, and people who touch the core feature in the first three
 days convert several times better (10, [secondary]/[vendor]). We already send a

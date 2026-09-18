@@ -40,7 +40,7 @@ async function ensureHousehold(user, withDoc) {
 }
 
 /* a helper sees the pack list and nothing else: the lunchboxes' names, this week's
-   plan, the foods it names, and the ticks; no rules, allergens, history or addresses */
+   plan, the foods it names, and the checkmarks; no rules, allergens, history or addresses */
 function helperView(doc) {
   if (!doc) return doc;
   const kids = (doc.kids || []).filter(k => !k.deletedAt).map(k => {
@@ -98,7 +98,7 @@ export default async function handler(req) {
 
     if (req.method === 'PUT' && !action) {
       const h = await ensureHousehold(user);
-      if (h.role === 'helper') return fail('Helpers can tick the pack list but not change the plan', 403);
+      if (h.role === 'helper') return fail('Helpers can check off the pack list but not change the plan', 403);
       if (await throttled('put:' + user.id, 600, 3600)) return fail('Too many changes in an hour; try again shortly', 429);
       const raw = await req.text();
       if (Buffer.byteLength(raw, 'utf8') > MAX_DOC_BYTES) return fail('That is more than a household should hold', 413);
@@ -151,7 +151,7 @@ export default async function handler(req) {
         await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
         if (owned) { if (paid(have)) await cancelSubscription(have.stripe_subscription_id); await q`DELETE FROM households WHERE id = ${have.id}`; }
       }
-      /* the phone says which member it is, so the name typed there and its ticks stay its own */
+      /* the phone says which member it is, so the name typed there and its checkmarks stay its own */
       const memberId = (typeof body.memberId === 'string' && MEMBER_ID.test(body.memberId)) ? body.memberId : 'mem_' + Math.random().toString(36).slice(2, 10);
       await q`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${used.household_id}, ${user.id}, ${used.role}, ${memberId})`;
       return json(await state(user));

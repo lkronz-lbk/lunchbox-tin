@@ -172,7 +172,7 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
   a.kids[0].packed['2026-09-01'] = {main:{at:t1, by:'mem_a'}}; b.kids[0].packed['2026-09-01'] = {side:{at:t2, by:'mem_b'}};
   a.pantry['apples'] = {have:true, at:t1}; b.pantry['bread'] = {have:true, at:t2};
   m = M.merge(a, b);
-  check('merge: ticks from both phones are kept', !!(m.kids[0].packed['2026-09-01'].main && m.kids[0].packed['2026-09-01'].side) && !!(m.pantry.apples && m.pantry.bread));
+  check('merge: checkmarks from both phones are kept', !!(m.kids[0].packed['2026-09-01'].main && m.kids[0].packed['2026-09-01'].side) && !!(m.pantry.apples && m.pantry.bread));
   a = clone(); b = clone(); b.members.push({id:'mem_b', name:'Sam', updatedAt:t2, deletedAt:null});
   b.kids.push({id:'kid_2', name:'Ollie', hue:1, createdAt:t2, updatedAt:t2, deletedAt:null, settings:{days:[1], updatedAt:t2}, foods:[], week:null, packed:{}, eaten:{}, past:[]});
   m = M.merge(a, b);
@@ -190,7 +190,7 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
   a.kids[0].packed['2026-09-01'] = {main:{at:t2, by:'mem_a', off:true}}; b.kids[0].packed['2026-09-01'] = {main:{at:t1, by:'mem_b'}};
   a.pantry.bread = {have:false, at:t2}; b.pantry.bread = {have:true, at:t1};
   m = M.merge(a, b);
-  check('merge: an un-tick travels and wins over the older tick', m.kids[0].packed['2026-09-01'].main.off === true && m.pantry.bread.have === false);
+  check('merge: an uncheck travels and wins over the older checkmark', m.kids[0].packed['2026-09-01'].main.off === true && m.pantry.bread.have === false);
   a = clone(); b = clone();
   const dayA = {d:'2026-08-31', dow:1, slots:{main:'f1'}, lock:{}, kidPick:{}}, dayB = {d:'2026-08-31', dow:1, slots:{main:'f2'}, lock:{}, kidPick:{}};
   a.kids[0].week = {id:'w1', kidId:'kid_1', start:'2026-08-31', createdAt:t1, updatedAt:t1, days:[dayA, {d:'2026-09-03', dow:4, slots:{main:'f1'}, lock:{}, kidPick:{}}]};
@@ -260,7 +260,7 @@ try {
   const before = await page.textContent('.count');
   await page.click('.cmp[data-act="toggle"]');
   await page.waitForTimeout(200);
-  check('ticking a compartment moves the progress count',
+  check('checking off a compartment moves the progress count',
     before !== await page.textContent('.count'));
   check('packing records who and when', await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
@@ -276,7 +276,7 @@ try {
   await page.click('[data-act="kidpick-on"]'); await page.waitForTimeout(250);
   await page.click('[data-act="box-done"]'); await page.waitForTimeout(250);
   check('Done returns to the tab underneath', (await page.$$eval('[data-act="kid-start"]', a => a.length)) === 1 && !/School rules/.test(await page.textContent('#view')));
-  /* today's box already has two things in the bag (ticked above), so it is not on offer: what was packed stays as it was */
+  /* today's box already has two things in the bag (checked off above), so it is not on offer: what was packed stays as it was */
   const weekBefore = await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return k.week.days.map(d => ({d: d.d, slots: Object.assign({}, d.slots), touched: Object.keys(k.packed[d.d] || {}).length > 0})); });
   const offered = weekBefore.filter(d => !d.touched);
   /* "each part": the main first, this day's against a later day's; the kid's pick trades the two */
@@ -318,7 +318,7 @@ try {
   const head = await page.textContent('.count');
   await page.click('.list .item');
   await page.waitForTimeout(200);
-  check('a pantry tick moves an item out of the buy count', head !== await page.textContent('.count'));
+  check('a pantry checkmark moves an item out of the buy count', head !== await page.textContent('.count'));
 
   /* -------------------------------------------------- second lunchbox */
   await page.click('[data-act="box-settings"]');
@@ -789,13 +789,13 @@ try {
   check('a food named "Constructor" does not crash the shopping list', (await page.textContent('#view')).includes('Constructor'));
 
   /* destructive actions */
-  await page.click('.list .item'); await page.waitForTimeout(150);            /* tick one pantry row */
+  await page.click('.list .item'); await page.waitForTimeout(150);            /* check off one pantry row */
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
   await page.click('[data-act="clear-week"]'); await page.waitForTimeout(200);
   check('"Clear the plans" needs a second tap', (await page.textContent('[data-act="clear-week"]')).includes('again'));
   await page.click('[data-act="clear-week"]'); await page.waitForTimeout(250);
   const afterClear = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return {week: d.kids[0].week, pantry: Object.keys(d.pantry).length}; });
-  check('clearing the plans leaves the shopping ticks alone', afterClear.week === null && afterClear.pantry >= 1, afterClear);
+  check('clearing the plans leaves the shopping checkmarks alone', afterClear.week === null && afterClear.pantry >= 1, afterClear);
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300);
   await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(200);
@@ -826,7 +826,7 @@ try {
   await page.goto(BASE+'/app/'); await page.waitForTimeout(300);
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300);
-  check('a re-plan prunes ancient ticks, outcomes and tombstones', await page.evaluate(() => {
+  check('a re-plan prunes ancient checkmarks, outcomes and tombstones', await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
     return !k.packed['2020-01-06'] && !k.eaten['2020-01-06'] && !k.foods.some(f => f.id === 't_old');
   }));
@@ -988,7 +988,7 @@ try {
   const notOwner = await p2.evaluate(id => fetch('/api/household/remove', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({userId:id})}).then(r => r.status), srv.me.userId);
   check('only the owner can remove someone', notOwner === 403, notOwner);
 
-  /* an edit on each phone reaches the other; an un-tick holds */
+  /* an edit on each phone reaches the other; an uncheck holds */
   await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
   await page.click('[data-act="add-own"]'); await page.waitForTimeout(350);
   await page.fill('#nfName', 'Shared test food'); await page.click('[data-act="save-own"]');
@@ -998,9 +998,9 @@ try {
   await p2.click('.list .item[data-act="have"] >> nth=0');
   await until(p2, k => !!JSON.parse(localStorage.getItem('lunchsorted')).pantry[k], pantryKey);   /* the save is debounced */
   const first = await p2.evaluate(k => JSON.parse(localStorage.getItem('lunchsorted')).pantry[k].have, pantryKey);
-  check('a pantry tick reaches the server', await until(p2, a => fetch('/api/household').then(r => r.json()).then(j => !!j.doc.pantry[a.k] && j.doc.pantry[a.k].have === a.v), {k: pantryKey, v: first}), {pantryKey, first});
+  check('a pantry checkmark reaches the server', await until(p2, a => fetch('/api/household').then(r => r.json()).then(j => !!j.doc.pantry[a.k] && j.doc.pantry[a.k].have === a.v), {k: pantryKey, v: first}), {pantryKey, first});
   await p2.click('.list .item[data-act="have"] >> nth=0');                                   /* and straight back */
-  check('an un-tick reaches the server as a row, not an absence', await until(p2, a => fetch('/api/household').then(r => r.json()).then(j => !!j.doc.pantry[a.k] && j.doc.pantry[a.k].have === !a.v), {k: pantryKey, v: first}), {pantryKey, first});
+  check('an uncheck reaches the server as a row, not an absence', await until(p2, a => fetch('/api/household').then(r => r.json()).then(j => !!j.doc.pantry[a.k] && j.doc.pantry[a.k].have === !a.v), {k: pantryKey, v: first}), {pantryKey, first});
   await p2.goto(BASE+'/app/'); await p2.waitForLoadState('load');
   check('a food added on one phone reaches the other', await until(p2, () => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === 'Shared test food'))));
   await page.goto(BASE+'/app/'); await page.waitForLoadState('load');
@@ -1010,7 +1010,7 @@ try {
     server: await fetch('/api/household').then(r => r.json()).then(j => ({v: j.version, row: j.doc.pantry[k] || null, me: j.me.memberId})),
     line: (document.getElementById('syncLine') || {}).textContent || document.querySelector('#view').textContent.slice(0, 120),
     device: localStorage.getItem('lunchsorted-device'), errors: window.__errs || null }), pantryKey);
-  check('an un-tick on the other phone holds here instead of coming back', held, holdDetail ? {pantryKey, first, ...holdDetail, pageErrors: errors.slice(-3)} : {pantryKey, first});
+  check('an uncheck on the other phone holds here instead of coming back', held, holdDetail ? {pantryKey, first, ...holdDetail, pageErrors: errors.slice(-3)} : {pantryKey, first});
 
   /* a helper sees the pack list and cannot change the plan */
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
@@ -1192,9 +1192,9 @@ try {
   await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
   check('the morning review is locked in place: the question shows, the answers wait for the plan', /How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('.chip.lock', a => a.length)) >= 1);
   await pb.click('[data-act="tab"][data-tab="shop"]'); await pb.waitForTimeout(250);
-  check('the shopping list is still free, the pantry tick is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
+  check('the shopping list is still free, the pantry checkmark is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
   await pb.click('[data-act="have"]'); await pb.waitForTimeout(300);
-  check('a pantry tick opens the sheet instead', /pantry that remembers/.test(await pb.textContent('#sheetBody')) && await pb.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('lunchsorted')).pantry).length === 0));
+  check('a pantry checkmark opens the sheet instead', /pantry that remembers/.test(await pb.textContent('#sheetBody')) && await pb.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('lunchsorted')).pantry).length === 0));
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
   const bcfg = await pb.evaluate(() => fetch('/api/billing').then(r => r.json()));
   check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 2900 && bcfg.prices.lifetime.amount === 7900 && bcfg.prices.year.interval === 'year', bcfg);

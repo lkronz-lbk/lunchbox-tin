@@ -1,5 +1,5 @@
 /* /admin/copy — the words on the home page, editable by the people named in
-   ADMIN_EMAILS. Layout, colours and structure are not here on purpose: this
+   ADMIN_EMAILS. Layout, colors and structure are not here on purpose: this
    screen changes wording only.
 
    Two steps, and the split is deliberate. Saving writes rows into site_copy and
@@ -126,7 +126,7 @@ function form(values, errors = {}, flash = '', state = {}) {
   const publish = `<form method="POST" action="/admin/copy"><input type="hidden" name="publish" value="1"><button class="btn" type="submit">Put the words on the site</button></form>`;
   const orphans = (state.orphans || []).length;
   return `<h1>The words on the home page</h1>
-<p class="sub">${siteEnv() === 'production' ? 'The live site' : `The ${esc(siteEnv())} copy — edits here never reach lunchsorted.app`} · wording only: the layout, the colours and the screenshots are not editable here</p>
+<p class="sub">${siteEnv() === 'production' ? 'The live site' : `The ${esc(siteEnv())} copy — edits here never reach lunchsorted.app`} · wording only: the layout, the colors and the screenshots are not editable here</p>
 ${flash ? `<div class="flash">${flash}</div>` : ''}
 ${state.waiting ? `<div class="flash">Saved words are waiting for the site. ${publish}</div>` : ''}
 ${orphans ? `<div class="flash">${orphans} saved string${orphans === 1 ? '' : 's'} no longer match anything on the page — the page was changed after they were written, so they do nothing.

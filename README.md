@@ -1,6 +1,6 @@
 # Lunch Sorted
 
-Plan a week of packed school lunches in about a minute. A static site: a marketing
+Plan a week of packed school lunches in one minute. A static site: a marketing
 page, and an installable offline web app. No build step, no framework, no server.
 
 - **Landing page** — `public/index.html`

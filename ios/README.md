@@ -17,7 +17,7 @@ What the shell adds, and where:
   app's `appUrlOpen` listener closes Safari and polls for the paid row. Payments
   never touch StoreKit.
 - **Icon and launch screen.** `App/App/Assets.xcassets`: the 1024 icon from
-  `public/icons`, and a light and a dark launch image on the app's ground colours.
+  `public/icons`, and a light and a dark launch image on the app's ground colors.
 - **Offline.** `WKAppBoundDomains` in `Info.plist` and `limitsNavigationsToAppBoundDomains`
   in the config: that is what lets a remote page register its service worker in a
   WKWebView, so the app opens without a network once it has loaded once. Verify on a
@@ -39,7 +39,7 @@ npm run ios:sync      # writes Package.swift and App/App/capacitor.config.json
 npm run ios:open      # opens App/App.xcodeproj
 ```
 
-Xcode → the App target → Signing & Capabilities → tick "Automatically manage
+Xcode → the App target → Signing & Capabilities → check "Automatically manage
 signing" and pick the team. Run on a simulator or a plugged-in phone. Swift
 packages resolve on first open (Capacitor and the two plugins, from
 `node_modules`, so `npm ci` first).
