@@ -15,7 +15,7 @@ export const FIELDS = [
   {
     "key": "home.meta.description",
     "label": "The description in Google",
-    "note": "The grey lines under the title in a Google result. Around 150 characters.",
+    "note": "The gray lines under the title in a Google result. Around 150 characters.",
     "page": "index.html",
     "plain": true,
     "tags": [],
@@ -195,7 +195,7 @@ export const FIELDS = [
   {
     "key": "home.what.main-label",
     "label": "Green compartment: the small word",
-    "note": "The small coloured word above the heading.",
+    "note": "The small colored word above the heading.",
     "page": "index.html",
     "plain": false,
     "tags": [],
@@ -271,7 +271,7 @@ export const FIELDS = [
     "page": "index.html",
     "plain": false,
     "tags": [],
-    "original": "Every planned box rolls into one list grouped by aisle, with quantities. Tick off what the pantry already has and shop the rest. More than one kid? One list covers them all."
+    "original": "Every planned box rolls into one list grouped by aisle, with quantities. Check off what the pantry already has and shop the rest. More than one kid? One list covers them all."
   },
   {
     "key": "home.what.sweet-label",

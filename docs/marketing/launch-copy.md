@@ -71,7 +71,7 @@ Lead term: `meal prep lunch box` — tier 2, **rising**.
 **Title:** Meal Prep Lunch Box: Plan Five Lunches, Get the Grocery List *(58 chars)*
 
 **Description:**
-> Meal prep lunch box planning without the Sunday spiral: plan five lunches and the grocery list writes itself, grouped by aisle with quantities. Tick off what the pantry already has and shop the rest. One list covers every kid. Free, ages 5-11. Plan your week!
+> Meal prep lunch box planning without the Sunday spiral: plan five lunches and the grocery list writes itself, grouped by aisle with quantities. Check off what the pantry already has and shop the rest. One list covers every kid. Free, ages 5-11. Plan your week!
 
 **Campaign:** `meal-prep` · **Board:** School Lunch Ideas
 **Topics:** School Lunch, Meal Planning, Kids Lunch Ideas, Grocery List, Family Life
@@ -115,13 +115,13 @@ are the obvious additions but are unvalidated; use them knowing that.
 ### Post 1 — the carousel (six slides, rendered from the design canvas)
 
 Six slides that walk the onboarding journey in order: the planned week, swapping
-a compartment, the shopping list ticked off, the idea bank, the Pack tab, then
+a compartment, the shopping list checked off, the idea bank, the Pack tab, then
 where to go. Screenshot-led — the app is visible on slide one. The full slide
 table is in [instagram-launch-kit.md](instagram-launch-kit.md).
 
 > Five packed lunches a week. Every week. Until June.
 >
-> This plans all five in one minute — matched boxes, your school's rules built in, and the grocery list written for you. Swap anything you don't like. Tick off what's already in the cupboard.
+> This plans all five in one minute — matched boxes, your school's rules built in, and the grocery list written for you. Swap anything you don't like. Check off what's already in the cupboard.
 >
 > Free to plan, nothing to download. The iPhone app is with Apple now.
 >
@@ -185,13 +185,13 @@ table is in [instagram-launch-kit.md](instagram-launch-kit.md).
 | 0.0s | *I planned 5 lunches and it wrote my grocery list.* | Screen: the finished week |
 | 3.0s | *One tap.* | Screen: tapping through to Shop |
 | 5.0s | *Sorted by aisle.* | Screen: scrolling the list |
-| 9.0s | *Tick what you already have.* | Screen: ticking items off |
+| 9.0s | *Check off what you already have.* | Screen: checking items off |
 | 12.0s | *lunchsorted.app* | End card |
 
 **Caption:**
 > Planning the lunches was never the whole job. The list was.
 >
-> Five boxes planned, one grocery list, grouped by aisle, with the pantry ticked off. One list covers every kid.
+> Five boxes planned, one grocery list, grouped by aisle, with the pantry checked off. One list covers every kid.
 >
 > Free to plan at lunchsorted.app
 >

@@ -1,0 +1,38 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  :root{
+    --ground:#E9EEE6; --line-strong:#1E3329; --ink:#16241E;
+    --c-main:#2E5A48; --c-side:#8A5309; --c-fruit:#A2304C; --c-sweet:#57448A;
+  }
+  html,body{margin:0;background:#888}
+  .art{width:1080px;height:1080px;position:relative;overflow:hidden}
+
+  /* A — full bleed: the four compartments run to every edge, a ground-coloured
+     cross between them. Circle-cropped it still reads as four quarters. */
+  .bleed{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+         gap:26px;background:var(--ground)}
+  .bleed i{display:block}
+  .bleed i:nth-child(1){background:var(--c-main)}
+  .bleed i:nth-child(2){background:var(--c-side)}
+  .bleed i:nth-child(3){background:var(--c-fruit)}
+  .bleed i:nth-child(4){background:var(--c-sweet)}
+
+  /* B — the tin, sized so it fills the circle instead of floating in it. The
+     ground runs to the edge, the tin's corners tuck just inside the crop. */
+  .field{background:var(--ground);display:grid;place-items:center}
+  .tin{width:730px;height:730px;border-radius:128px;background:var(--line-strong);
+       border:14px solid var(--line-strong);
+       display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:14px;overflow:hidden}
+  .tin i{display:block}
+  .tin i:nth-child(1){background:var(--c-main)}
+  .tin i:nth-child(2){background:var(--c-side)}
+  .tin i:nth-child(3){background:var(--c-fruit)}
+  .tin i:nth-child(4){background:var(--c-sweet)}
+
+  /* C — full bleed on the dark ground, for a dark-mode grid */
+  .dark{--ground:#0E1815}
+</style>
+<div class="art bleed" id="A"><i></i><i></i><i></i><i></i></div>
+<div class="art field" id="B"><div class="tin"><i></i><i></i><i></i><i></i></div></div>
+<div class="art bleed dark" id="C"><i></i><i></i><i></i><i></i></div>

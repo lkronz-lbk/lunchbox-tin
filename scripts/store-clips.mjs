@@ -13,7 +13,7 @@
 
    With no arguments it records all of them. Output in store/clips/ as
    1080×1920 MP4 (9:16, the reel and video-pin shape): the phone scaled to the
-   full height on the app's own ground colour. Every tap paints a dot and
+   full height on the app's own ground color. Every tap paints a dot and
    presses the thing under it. No audio and no captions burned in: the reels get
    trending audio and their words in the edit, and anything baked in here is
    only something to strip out later. --clicks adds a tap track if you want one.
@@ -72,7 +72,7 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 
 /* A finger is not a cursor. Every scripted tap does three things a real one
    does: a dot lands where the thumb would be, the thing underneath visibly
-   gives under it, and a small tick is mixed into the audio at that moment. */
+   gives under it, and a small click is mixed into the audio at that moment. */
 const TAP = `
 .__tap{position:fixed;z-index:99999;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;
   background:rgba(22,36,30,.22);border:2px solid rgba(22,36,30,.45);pointer-events:none;transform:scale(.5);opacity:0}
@@ -81,10 +81,10 @@ const TAP = `
 @media (prefers-color-scheme:dark){.__tap{background:rgba(230,238,231,.22);border-color:rgba(230,238,231,.5)}
   .__press{filter:brightness(1.1)!important}}`;
 
-/* A 30ms tick: a soft sine with a fast decay and a little noise for texture.
+/* A 30ms click: a soft sine with a fast decay and a little noise for texture.
    Kept quiet — a harsh click is worse than no click at all, and most people
    watch with the sound off anyway. Written as a 16-bit WAV the length of the
-   clip, with a tick dropped in at each tap. */
+   clip, with a click dropped in at each tap. */
 function clickTrack(times, seconds, file) {
   const RATE = 44100, n = Math.ceil(seconds * RATE) + RATE;
   const pcm = new Int16Array(n);
@@ -150,7 +150,7 @@ async function tap(selector, { settle = 0.35 } = {}) {
     }, [box.x + box.width / 2, box.y + box.height / 2]);
     await frame(2);
   }
-  /* the press: the thing under the thumb gives, and the tick lands here */
+  /* the press: the thing under the thumb gives, and the click lands here */
   clip.taps.push(frameNo / FPS);
   await el.evaluate(e => e.classList.add('__press')).catch(() => {});
   await frame(2);
@@ -180,11 +180,11 @@ async function finish() {
   const out = path.join(OUT, name + '.mp4');
   const bg = (dark ? GROUND.dark : GROUND.light).replace('#', '0x');
   /* silent by default: these get trending audio laid over them in the edit,
-     and a tick track underneath one is just something else to strip out */
+     and a click track underneath one is just something else to strip out */
   const wav = process.argv.includes('--clicks') ? clickTrack(taps, frameNo / FPS, path.join(dir, 'clicks.wav')) : null;
   /* the phone is 390×844, which is taller than 9:16 — so it is scaled to the
-     full frame height and the app's own ground colour fills the sides, the way
-     the pins hold a phone on a coloured field */
+     full frame height and the app's own ground color fills the sides, the way
+     the pins hold a phone on a colored field */
   execFileSync(ffmpeg(), [
     '-y', '-loglevel', 'error',
     '-framerate', String(FPS), '-i', path.join(dir, '%05d.png'),
@@ -258,7 +258,7 @@ const CLIPS = {
     await finish();
   },
 
-  /* 3 · the list writes itself, and the pantry gets ticked off */
+  /* 3 · the list writes itself, and the pantry gets checked off */
   async shop() {
     const page = await newRun('shop');
     await ready(page);
@@ -267,8 +267,8 @@ const CLIPS = {
     await hold(1.6);
     await scroll(560, 1.3);
     await hold(0.8);
-    /* by index, not "the first one": a tick re-renders the list, and tapping
-       the first row three times just ticks the same row three times */
+    /* by index, not "the first one": a checkmark re-renders the list, and tapping
+       the first row three times just checks the same row three times */
     for (let i = 0; i < 3; i++) {
       await tap(`.list .item[data-act="have"] >> nth=${i}`, { settle: 0.3 });
       await hold(0.35);

@@ -38,7 +38,7 @@ the moment you answer the last one. Splice the week on from a Shuffle take.)
   the screen dimming mid-scroll.
 - **Low Power Mode off** — it dims the display and can drop the frame rate.
 - **Brightness up**, and clean the screen.
-- **Screen Recording in Control Centre**: Settings → Control Centre → add
+- **Screen Recording in Control Center**: Settings → Control Center → add
   Screen Recording. Swipe down from the top-right, tap the record button, wait
   for the three-second countdown, then start tapping. Red pill at the top to
   stop.
@@ -127,14 +127,14 @@ Start on the **WEEK** tab.
 | 2 | Tap **SHOP** in the bottom bar | pause 2s |
 | 3 | Let the list sit — the aisle headings are the point | 2s |
 | 4 | Slow scroll down one screen | pause 2s |
-| 5 | Tap the tick box on three items, one at a time | pause 1s between each |
+| 5 | Tap the checkbox on three items, one at a time | pause 1s between each |
 | 6 | Let the counter at the top settle | hold 3s |
 | 7 | Stop | — |
 
 **About 16 seconds.** Watch the counter at the top — "20 to buy · 0 already
 home" becoming "17 to buy · 3 already home" is the satisfying bit.
 
-Afterwards, un-tick them for the next take.
+Afterwards, uncheck them for the next take.
 
 ### Clip D — Kid's pick
 

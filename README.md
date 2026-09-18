@@ -55,7 +55,7 @@ food list from a 200-item library and produce a planned week immediately. From t
 - **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and "Erase everything"
-  are two-tap, deleting a food offers Undo, and the shopping ticks survive a plan clear.
+  are two-tap, deleting a food offers Undo, and the shopping checkmarks survive a plan clear.
 - **Rules re-check the plan.** Changing any rule sweeps the week on screen: a food that now
   breaks a rule leaves its compartment — locked, kid-picked or not — and the compartment is
   drawn again, with a toast saying how many changed. Switching a compartment off clears it
@@ -64,8 +64,8 @@ food list from a 200-item library and produce a planned week immediately. From t
   are still ahead and only covers the days still to come; otherwise it goes into next week. An
   existing plan is re-drawn in place until its last day has gone by, and a re-draw never touches
   a day that has already gone: what was packed stays exactly as it was, for the review and the
-  pack ticks. The shopping list likewise skips days already gone. The morning review only asks about a
-  day the plan already existed on, or that had something ticked into the bag.
+  pack checkmarks. The shopping list likewise skips days already gone. The morning review only asks about a
+  day the plan already existed on, or that had something checked into the bag.
 - **Lunchbox settings** — the gear beside the lunchbox name on Week, Pack, Shop and Foods:
   lunchboxes, name, pack days, per-lunchbox school rules (cold-only, no ice pack, short
   eating time, no chocolate or candy), allergen exclusions (including seeds & sesame), a
@@ -87,8 +87,8 @@ account            one household — a server only ever has to filter by account
 ```
 
 Every entity (account, member, lunchbox, food, week) carries `id`/`createdAt`/`updatedAt`;
-event rows (packed ticks, pantry ticks, eat answers, kid picks) carry `at`/`by`. Deletion is a
-`deletedAt` tombstone (kept for ninety days; `prune()` also drops packed ticks from before the
+event rows (packed checkmarks, pantry checkmarks, eat answers, kid picks) carry `at`/`by`. Deletion is a
+`deletedAt` tombstone (kept for ninety days; `prune()` also drops packed checkmarks from before the
 current week and eat answers older than a year, so the document stays bounded),
 so a future sync can merge and propagate removals. **All persistence goes through the
 `Store` object** — two async methods over `localStorage`. Replacing those two bodies with
@@ -229,8 +229,8 @@ writes the same one.
   `PUT` with the version you last saw; if the server has moved on you get `409` with its
   copy, merge, and try again. The merge rules are the first script block in
   `public/app/index.html` (`window.LSMerge`): newer `updatedAt` wins per record, a newer
-  deletion beats an older edit, packed and eat and pantry ticks merge by their own `at`
-  stamps (an un-tick is a row marked `off`, so it travels too; a review row's stamp is its
+  deletion beats an older edit, packed and eat and pantry checkmarks merge by their own `at`
+  stamps (an uncheck is a row marked `off`, so it travels too; a review row's stamp is its
   latest answer), the newer plan wins day by day except that a day already gone keeps the
   plan that existed on it, lists come out in a fixed order so both phones compute the same
   document, and the local copy wins ties. The test suite runs the block on its own. A push
@@ -240,9 +240,9 @@ writes the same one.
   link that works once, for a week; opening it lands at the top of the Account tab with the sign-in
   card and the inviter's name. A phone that already has lunches brings them into the
   household when it joins, and keeps the member it already was. A helper receives only the
-  plan, the foods in it and the ticks (no rules, allergens, history or addresses), cannot
+  plan, the foods in it and the checkmarks (no rules, allergens, history or addresses), cannot
   push (the server refuses, and the app says "Only a parent can change the plan"), and
-  their ticks stay on their phone.
+  their checkmarks stay on their phone.
 - **Leaving** a household leaves the lunches with it: the phone starts fresh in its own
   empty household. Being removed signs that person's phones out; whatever is on their phone
   stays there. **Delete my account** removes the household from the server and from that
@@ -261,7 +261,7 @@ writes the same one.
   about one request in twenty-five.
 - **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
   drive three browser contexts through sign-in by link and by code, a forged sign-in form,
-  invite, joining with lunches of one's own, an edit on each phone, an un-tick round trip,
+  invite, joining with lunches of one's own, an edit on each phone, an uncheck round trip,
   a helper's refused push, sign-out and delete, plus the merge rules on their own.
 
 ## Billing
@@ -273,13 +273,13 @@ pick, the morning review and resting, a pantry that carries over, every lunchbox
 parent's phone and a helper's pack list. **Every household gets all of it for its first 21
 days**, no card, counted from the account document's `createdAt` (the same clock on every
 phone and on the server), and then drops to free with the premium pieces locked in place,
-not hidden: the kid's-pick button, the review card and the pantry tick stay on screen with
+not hidden: the kid's-pick button, the review card and the pantry checkmark stays on screen with
 a lock and open the plan sheet. During the three weeks the same pieces wear a small
 "Household plan" tag so it is clear what is being tried; three days before the end a banner
 says when, and once after it says what changed, each dismissable once. With no `STRIPE_*`
 variables in a deploy nothing is gated or tagged and the app is exactly the free one.
 Nothing is ever taken away: a household whose plan or trial ends keeps every lunchbox,
-member, tick and outcome it has, and cannot add more.
+member, checkmark and outcome it has, and cannot add more.
 
 - **Checkout** (`POST /api/billing/checkout {plan, client?}`) opens Stripe's hosted page for the
   signed-in household (owner or adult; a helper cannot buy). The session carries the
@@ -345,7 +345,7 @@ member, tick and outcome it has, and cannot add more.
   in, a signed-in parent who is not listed gets not-found.
 - **The words on the home page**, at `/admin/copy`, for the same people and nobody else:
   every string on the marketing page in reading order, with what it is for, and a way to
-  put the committed wording back. Wording only — the layout, the colours and the
+  put the committed wording back. Wording only — the layout, the colors and the
   screenshots are not editable there, and the planner is not editable at all.
   How an edit reaches the site: it is saved as a row in `site_copy`, then the
   `NETLIFY_BUILD_HOOK` is pinged; the build runs `node scripts/copy.mjs --apply`, which

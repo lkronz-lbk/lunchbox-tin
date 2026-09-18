@@ -24,7 +24,7 @@ and dated by the time anyone is.
 - Turn on Netlify Analytics; add the `/pin`, `/pta`, `/ph` landing redirects.
 - Set up the Lunch Sorted Pinterest account: five boards, keyword-led
   descriptions, using the existing keyword-cluster method.
-- Build six Canva pin templates in the four compartment colours.
+- Build six Canva pin templates in the four compartment colors.
 - Write and publish the **first three guides**.
 - One screen-recording afternoon → twelve clips banked. Do this once; it
   supplies the whole year.

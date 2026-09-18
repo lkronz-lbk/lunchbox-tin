@@ -300,7 +300,7 @@ Store listing (`store/listing.md`) and its screenshots.
 To make, in this order:
 
 1. **Six Canva pin templates** in the Lunch Sorted palette (the four
-   compartment colours are the brand and nothing else needs inventing).
+   compartment colors are the brand and nothing else needs inventing).
 2. **Eight to twelve guides** on `/guides/`.
 3. **One 40-second explainer** — the whole product, one take, no voice actor.
 4. **Twelve short demo clips**, one per week, from the same afternoon of

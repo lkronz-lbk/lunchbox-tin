@@ -44,8 +44,19 @@ you genuinely have two destinations.
 **Category:** App Page. **Contact:** the email button on, pointing at
 hello@lunchsorted.app.
 
-**Profile picture:** the four-compartment tin mark on the ground colour. It
-reads at 32px, which is the only size that matters.
+**Profile picture:** three versions in `avatar/`, all 1080×1080, all tested at
+32px because that is the only size that matters. Instagram crops a square to a
+circle, so upload the square and let it crop.
+
+| File | What it is |
+|---|---|
+| `avatar-a-full-bleed.png` | The four compartments run to every edge, a pale cross between them. Nothing is lost to the crop. |
+| `avatar-b-tin-filled.png` | The tin itself, sized so its corners tuck just inside the circle instead of floating in the middle of it. |
+| `avatar-c-full-bleed-dark.png` | A, with the dark ground. Use it if the grid ends up dark. |
+
+A is the one to start with: at 32px the four colors are still four colors, which
+is the whole job of a profile picture that small. `avatar.html` is the source —
+open it and re-screenshot at 1080 if the brand colors ever move.
 
 **Highlights** — make three empty ones now and fill as you go: *How it works*,
 *Real weeks*, *Questions*. A profile with highlights looks established; one
@@ -70,7 +81,7 @@ screenshot is the slide, the words are the label.
 |---|---|---|
 | 1 | The planned week | Five lunches. One tap. |
 | 2 | Swapping one compartment | Not that one? Swap it. |
-| 3 | The shopping list, ticked | Tick what's already home. |
+| 3 | The shopping list, checked off | Check off what's home. |
 | 4 | The idea bank | Only food they'll eat. |
 | 5 | The Pack tab | Then it's just a checklist. |
 | 6 | — | Where to go, and what it costs |
@@ -79,7 +90,7 @@ screenshot is the slide, the words are the label.
 
 > Five packed lunches a week. Every week. Until June.
 >
-> This plans all five in one minute — matched boxes, your school's rules built in, and the grocery list written for you. Swap anything you don't like. Tick off what's already in the cupboard.
+> This plans all five in one minute — matched boxes, your school's rules built in, and the grocery list written for you. Swap anything you don't like. Check off what's already in the cupboard.
 >
 > Free to plan, nothing to download. The iPhone app is with Apple now.
 >
@@ -172,11 +183,11 @@ not hunting at posting time. Volume: original audio down to 0, music at 40–60%
 | 0.0s | I planned 5 lunches and it wrote my grocery list. |
 | 3.0s | One tap. |
 | 5.0s | Sorted by aisle. |
-| 9.0s | Tick what you already have. |
+| 9.0s | Check off what you already have. |
 
 > Planning the lunches was never the whole job. The list was.
 >
-> Five boxes planned, one grocery list grouped by aisle, the pantry ticked off. One list covers every kid in the house.
+> Five boxes planned, one grocery list grouped by aisle, the pantry checked off. One list covers every kid in the house.
 >
 > Free to plan, link in bio.
 >
