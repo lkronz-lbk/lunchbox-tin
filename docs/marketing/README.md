@@ -5,8 +5,10 @@ The week-by-week schedule is in [calendar.md](calendar.md); the tool decisions,
 with prices and verdicts, are in [tools.md](tools.md); the paste-ready titles,
 descriptions, captions and hashtags for the September launch are in
 [launch-copy.md](launch-copy.md), the Pinterest keyword clusters behind them in
-[keywords.md](keywords.md), and the shot list for filming the app on a real
-phone in [filming.md](filming.md).
+[keywords.md](keywords.md), the shot list for filming the app on a real phone in
+[filming.md](filming.md), and the day-one Instagram kit — profile, carousel,
+reels, schedule and the mechanics of actually posting them — in
+[instagram-launch-kit.md](instagram-launch-kit.md).
 
 **Since this was written:** sign-in moved into onboarding, and a local moms
 Facebook group filled a beta quickly. That brought the launch forward to the end

@@ -13,10 +13,10 @@
 
    With no arguments it records all of them. Output in store/clips/ as
    1080×1920 MP4 (9:16, the reel and video-pin shape): the phone scaled to the
-   full height on the app's own ground colour. Every tap paints a dot, presses
-   the thing under it, and drops a soft tick into the audio; --silent leaves the
-   audio track off. No captions burned in — the words belong in the edit, where
-   they can be changed.
+   full height on the app's own ground colour. Every tap paints a dot and
+   presses the thing under it. No audio and no captions burned in: the reels get
+   trending audio and their words in the edit, and anything baked in here is
+   only something to strip out later. --clicks adds a tap track if you want one.
 
    Needs an ffmpeg that can encode H.264 — the one Playwright ships cannot (it
    is built for WebM only), and Instagram and Pinterest both want MP4. The
@@ -179,8 +179,9 @@ async function finish() {
   await ctx.close();
   const out = path.join(OUT, name + '.mp4');
   const bg = (dark ? GROUND.dark : GROUND.light).replace('#', '0x');
-  const silent = process.argv.includes('--silent');
-  const wav = silent ? null : clickTrack(taps, frameNo / FPS, path.join(dir, 'clicks.wav'));
+  /* silent by default: these get trending audio laid over them in the edit,
+     and a tick track underneath one is just something else to strip out */
+  const wav = process.argv.includes('--clicks') ? clickTrack(taps, frameNo / FPS, path.join(dir, 'clicks.wav')) : null;
   /* the phone is 390×844, which is taller than 9:16 — so it is scaled to the
      full frame height and the app's own ground colour fills the sides, the way
      the pins hold a phone on a coloured field */
