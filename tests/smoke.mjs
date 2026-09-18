@@ -309,6 +309,26 @@ try {
     }));
   check('the way back in is a sentence a new parent can rule out, not a bare word',
     await page.$eval('.ob [data-act="ob-signin"]', e => /already signed up/i.test(e.textContent)));
+  /* Both first-run screens render noticeBanner(), so a corrupt-save message or an invite
+     reaches a parent there — but the what's-new note must not. It is a delta against a
+     build they were last in on, and a phone still answering the questions has not been in
+     on any build: whatsNew() marks the build seen and returns before the note is set. */
+  check('the what\u2019s-new note stays off the first-run screens, however old the build a phone last saw',
+    await (async () => {
+      await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
+      await page.reload(); await page.waitForTimeout(600);
+      const onQuestions = await page.evaluate(t => !!document.querySelector('.ob')
+        && !/New: /.test(document.getElementById('view').textContent)
+        && !document.querySelector('[data-act="whats-new"]'), NOTE_TEXT);
+      await page.click('[data-act="ob-signin"]'); await page.waitForTimeout(300);
+      const onSignIn = await page.evaluate(() => !!document.querySelector('.ob')
+        && !/New: /.test(document.getElementById('view').textContent)
+        && !document.querySelector('[data-act="whats-new"]'));
+      /* and the build is stamped seen, so finishing the questions does not spring it either */
+      const stamped = await page.evaluate(() => localStorage.getItem('lunchsorted-seen'));
+      await page.click('[data-act="ob-later"]'); await page.waitForTimeout(400);
+      return onQuestions && onSignIn && stamped === APP_BUILD;
+    })());
   /* the boot cover is over a live screen, so while it is opaque it has to take the
      taps aimed at what it hides — a stray one used to reach Join their household */
   check('the boot splash swallows taps while it covers the app, and then goes',
