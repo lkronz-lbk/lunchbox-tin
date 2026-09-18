@@ -92,10 +92,22 @@ launch morning.
   places is most of what a brand is at this stage.
 - **Cover:** `facebook-cover.png` (1640×856), rendered from the design canvas.
   Dark ground, the headline on the left, the planned week bleeding off the right
-  edge. Facebook crops the top and bottom on a desktop and a sliver off each
-  side on a phone, so the text keeps a clear band above and below and starts
-  well in from the left; the phone is the one thing allowed to run off the edge,
-  because losing a slice of it costs nothing.
+  edge.
+
+  Facebook shows a cover in three different shapes and center-crops the same
+  upload to each one, which is what catches people out — a design that looks
+  right in the uploader loses its left edge on a phone. Measured:
+
+  | Where | Shape | What it takes |
+  |---|---|---|
+  | Desktop | 820×312 (2.63:1) | 27% off the top and bottom |
+  | Phone | 640×360 (1.78:1) | 7% off each side |
+  | Phone, tighter | ~1.55:1 | up to 10% off each side |
+
+  So every word sits inside a **260px side margin and a 150px one top and
+  bottom**, which survives all three. The phone is the only thing allowed past
+  that line, because losing a slice of it costs nothing. Re-crop and check all
+  three before replacing this file.
 - **Action button:** *Use app*, pointing at lunchsorted.app.
 - **About + email:** the bio text, and hello@lunchsorted.app.
 
