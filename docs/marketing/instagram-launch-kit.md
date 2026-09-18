@@ -91,9 +91,11 @@ launch morning.
 - **Profile picture:** the same `avatar-a-full-bleed.png`. The same mark in both
   places is most of what a brand is at this stage.
 - **Cover:** `facebook-cover.png` (1640×856), rendered from the design canvas.
-  Facebook crops the sides on a phone and lays the profile picture over the
-  bottom-left on a desktop, so everything readable sits in a centred column with
-  the corners left empty.
+  Dark ground, the headline on the left, the planned week bleeding off the right
+  edge. Facebook crops the top and bottom on a desktop and a sliver off each
+  side on a phone, so the text keeps a clear band above and below and starts
+  well in from the left; the phone is the one thing allowed to run off the edge,
+  because losing a slice of it costs nothing.
 - **Action button:** *Use app*, pointing at lunchsorted.app.
 - **About + email:** the bio text, and hello@lunchsorted.app.
 
