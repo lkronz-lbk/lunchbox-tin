@@ -17,8 +17,22 @@ canvas. Keyword and hashtag sources in [keywords.md](keywords.md).
 Set this up **before** the first post. An account with one reel and no bio
 converts nobody.
 
-**Username:** `@lunchsorted` if free, else `@lunchsortedapp`. Keep it the same
-as the domain — it is the whole point of the name.
+**Account type: Business.** A personal account shows you no Insights — no
+reach, no profile visits, no link taps, which is three of the four numbers in
+section 6 — and it cannot take the email button, the category, or scheduling
+from Meta Business Suite. Switching keeps the followers, posts and handle, and
+it is reversible.
+
+> **Check the audio library the moment you switch.** Business accounts have
+> historically had a narrower commercial-music library than personal or Creator
+> ones — licensing, not a setting — so trending tracks can come back greyed out.
+> Since "pick something with the ↗ arrow" is load-bearing for every reel here,
+> open a new reel, scroll the trending list, and try one. If the tracks you want
+> are unavailable, switch to **Creator**: you keep Insights, the contact button
+> and scheduling, and lose only the App Page category, which is the smaller loss.
+
+**Username:** `@lunch.sorted`. Keep it the same as the domain — it is the whole
+point of the name.
 
 **Name field** (30 characters, and *searchable* — this is the one people
 overlook):
@@ -61,6 +75,38 @@ open it and re-screenshot at 1080 if the brand colors ever move.
 **Highlights** — make three empty ones now and fill as you go: *How it works*,
 *Real weeks*, *Questions*. A profile with highlights looks established; one
 without looks like it started yesterday.
+
+### The Facebook page
+
+Every reel in this kit is three posts — Instagram, Facebook, then Pinterest as a
+video pin — so the page is worth the twenty minutes. Set it up now, not on
+launch morning.
+
+- **Link the page to the Instagram account** in Accounts Center. This is the
+  step everything else depends on: cross-posting, managing both from Meta
+  Business Suite, and any advertising later. Do it first and the rest is filling
+  in fields.
+- **Name** Lunch Sorted, **username** `facebook.com/lunchsorted` so it matches
+  everywhere else. **Category** App Page.
+- **Profile picture:** the same `avatar-a-full-bleed.png`. The same mark in both
+  places is most of what a brand is at this stage.
+- **Cover:** `facebook-cover.png` (1640×856), rendered from the design canvas.
+  Facebook crops the sides on a phone and lays the profile picture over the
+  bottom-left on a desktop, so everything readable sits in a centred column with
+  the corners left empty.
+- **Action button:** *Use app*, pointing at lunchsorted.app.
+- **About + email:** the bio text, and hello@lunchsorted.app.
+
+**Cross-posting:** the *Share to Facebook* toggle on an Instagram post does the
+job and keeps one upload. The exception is reels you want Facebook to rank on
+their own merits — uploading those natively to the page generally does better
+than a cross-post, so it is worth testing once you have three or four reels out.
+
+> **The moms group is not a place for the page.** Post there as *yourself*, from
+> your personal profile. A page posting into a community group reads as an ad,
+> converts worse, and in plenty of groups is against the rules outright. The
+> launch post in the calendar below is you talking to people who already know
+> you — keep it that way.
 
 ---
 

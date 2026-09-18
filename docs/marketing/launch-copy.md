@@ -230,11 +230,17 @@ friendly group. A screenshot of them saying "yes, go ahead" is enough.
 |---|---|---|---|
 | pin-1 / 2 / 3 / 4 | ✓ feed pin | — | — |
 | reel covers 1-3 | ✓ as video pin covers | ✓ reel cover | ✓ cross-post |
-| post-launch | — | ✓ feed | ✓ group |
-| post-tester-quote | — | ✓ feed | ✓ group |
+| post-launch | — | ✓ feed | ✓ group, as yourself |
+| post-tester-quote | — | ✓ feed | ✓ group, as yourself |
 | story-kids-pick | ✓ video pin | ✓ story | ✓ story |
 | handout | — | — | — (print / PTA email) |
+| carousel-1…6 | — | ✓ pinned feed post | ✓ cross-post |
+| avatar-a | ✓ profile | ✓ profile | ✓ page profile |
+| facebook-cover | — | — | ✓ page cover |
 
 Every reel is three posts: Instagram, then cross-posted to Facebook, then
 uploaded to Pinterest as a video pin with a keyword-led description of its own.
 Same file, three surfaces.
+
+Group posts go out from your **personal** profile, never from the page: a page
+posting into a community group reads as an ad and in many groups is not allowed.
