@@ -4754,6 +4754,7 @@ function helpSheet(){
     ['Can they pick the whole week at once?', 'Yes. Switch on \u201cThey pick their box each day\u201d in the lunchbox settings, and Week carries Let them pick the week. It hands the phone over once: they choose the next box, then the one after, until there is nothing left to choose between. Every choice saves as it is made, so you can stop early and keep what they picked. Pack still has the one-box version for the morning.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
+    ['I have a new phone \u2014 how do I get my lunches back?', 'Tap Already signed up? Sign in on the very first screen, before you answer the questions, and use the same email as before. Tap the link, or type the code into the box on that screen, and your lunchboxes, foods, rules and week come back.'],
     ['How do I clear a phone?', 'Signed out, Erase everything on the Account tab. Signed in the lunches are the household\u2019s \u2014 Sign out leaves them behind, and Delete my account and data ends the account itself. Clear the plans keeps your foods.'],
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from and its two recipes to cook from. Foods in your own words, recipes of your own, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
     ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, or keeping a recipe of your own, is part of the Household plan. The idea bank, and the recipes that come with it, stay free.']
@@ -5334,7 +5335,7 @@ document.addEventListener('click', function(ev){
   if(act==='food-photo'){
     var pf = foodById(kid, el.getAttribute('data-id')); if(!pf) return;
     if(pf.img){
-      openSheet(esc(pf.n), '<div class="stack" style="gap:10px"><img class="pic big" src="'+pf.img+'" alt="">'
+      openSheet(pf.n, '<div class="stack" style="gap:10px"><img class="pic big" src="'+pf.img+'" alt="">'   /* openSheet sets the title with textContent, so esc() here would show a food called "Mac & cheese" as "Mac &amp; cheese" */
         + '<button class="btn primary wide" data-act="food-photo-pick" data-id="'+esc(pf.id)+'">Take another</button>'
         + '<button class="btn ghost wide" data-act="food-photo-clear" data-id="'+esc(pf.id)+'">Remove the photo</button></div>');
       return;
@@ -5631,7 +5632,10 @@ document.addEventListener('click', function(ev){
     api('POST', '/api/auth/request', {email:em, beta:!!betaWaiting()}).then(function(r){
       Account.sending = false;
       if(r.status !== 200){ render(); toast(r.error || 'Could not send the link'); return; }
-      Account.linkSent = em; Account.devLink = r.devLink || ''; Account.devCode = r.devCode || ''; UI.obDraft = ''; render(); toast('Check your email');
+      /* development only, but it is a server-supplied string that becomes an href:
+         esc() closes an attribute breakout and nothing else, so the scheme is checked
+         here, once, rather than trusted at the two places that render it */
+      Account.linkSent = em; Account.devLink = /^https?:\/\//i.test(r.devLink || '') ? r.devLink : ''; Account.devCode = r.devCode || ''; UI.obDraft = ''; render(); toast('Check your email');
       if(!UI.obEmail){ var code = document.getElementById('signinCode'); if(code) code.focus(); }
     }).catch(function(){ Account.sending = false; render(); offline(); });
     return;

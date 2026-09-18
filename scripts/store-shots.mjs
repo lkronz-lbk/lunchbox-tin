@@ -46,7 +46,7 @@ const shot = async (name) => { const f = path.join(OUT, 'raw-' + name + '.png');
 fs.mkdirSync(OUT, { recursive: true });
 
 await page.goto(BASE + '/app/'); await wait(500);
-await page.addStyleTag({ content: '#toast{display:none!important}' });   /* no "Your week is ready" over the shots */
+await page.addStyleTag({ content: '#toast,#splash{display:none!important}' });   /* no "Your week is ready", and no boot mark, over the shots */
 await page.fill('#obName', 'Emma');
 await page.click('[data-act="ob-go"]'); await wait(900);
 if(await page.$('[data-act="ob-later"]')) { await page.click('[data-act="ob-later"]'); await wait(400); }

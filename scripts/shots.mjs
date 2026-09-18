@@ -102,7 +102,13 @@ const toEmma = async () => {
   await p.evaluate(id => { const b = document.querySelector('.boxtabs button[data-id="'+id+'"]'); if(b) b.click(); }, emma);
   await wait(400);
 };
-const hideToast = () => p.evaluate(() => document.getElementById('toast').classList.remove('show'));
+/* the toast, and the boot mark that covers everything for its first half-second:
+   a reshoot whose waits drift a little must not come back with a green square on it */
+const hideToast = () => p.evaluate(() => {
+  document.getElementById('toast').classList.remove('show');
+  const s = document.getElementById('splash');
+  if (s && s.parentNode) s.parentNode.removeChild(s);
+});
 
 async function shot(tab, name, extra) {
   await p.click(`[data-act="tab"][data-tab="${tab}"]`); await wait(500);

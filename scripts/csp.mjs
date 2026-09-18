@@ -23,6 +23,16 @@ if (!appBuild || appBuild !== swVersion) throw new Error(`APP_BUILD in public/ap
    re-tagged, and a note left on the old tag, which is the forgotten one, does not */
 const noteBuild = (html.match(/var WHATS_NEW = \{build:'([^']+)'/) || [])[1];
 if (noteBuild !== appBuild) throw new Error(`WHATS_NEW.build in public/app/index.html (${noteBuild}) must equal APP_BUILD (${appBuild}): write this build's note, or '' for none`);
+/* seenAs names the build this note was already shown as, so a phone that read it is not
+   shown it twice. It is the field that is easy to leave behind: carried forward once and
+   then forgotten, it goes on silencing the note for every phone that stopped at that
+   build, release after release — and unlike a stale note, nothing on screen ever says so.
+   So it must name a build that is not this one, and the note must actually be carried. */
+const seenAs = (html.match(/var WHATS_NEW = \{[^}]*?seenAs:'([^']*)'/) || [])[1];
+if (seenAs !== undefined) {
+  if (seenAs === appBuild) throw new Error(`WHATS_NEW.seenAs in public/app/index.html equals APP_BUILD (${appBuild}), which would hide this build's note from every phone: drop seenAs, or name the earlier build the note is carried from`);
+  if (!seenAs) throw new Error("WHATS_NEW.seenAs in public/app/index.html is empty: name the build the note was shown as, or remove the field");
+}
 
 export const APP_CSP = [
   "default-src 'none'",

@@ -21,7 +21,15 @@ need to be served over http, so use the server when testing install or offline.
 ## What the app does
 
 A name and three questions on first run — cold or microwave, what to keep out, how picky — seed a
-food list from a 200-item library and produce a planned week immediately. From there:
+food list from a 200-item library and produce a planned week immediately. All four sit on one
+screen with the app's own header above them, so a parent answers the lot without scrolling: the
+questions are sized to fit inside what the header and the phone's safe areas leave, and `body.first-run`
+in `public/app/index.html` is what hands them that room. The sign-in screens are the same shape.
+Before any of it, a fixed `.splash` covers the boot with the lunchbox mark filling in a compartment
+at a time. It takes the taps it covers — the app beneath is live and invisible, and a stray one
+used to reach *Join their household* — and it lifts on the first `render()`, on a hold no longer
+than the fill itself, with a last-resort timer in the small service-worker script block so a
+throwing app script cannot leave it up forever. From there:
 
 - **Week** — draws a main, side, fruit and sweet per pack day and *assigns* them to days
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
@@ -396,7 +404,7 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
-- **Help** — the ? at the top of every tab opens a sheet: nineteen one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: twenty one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 
@@ -440,11 +448,52 @@ ever shown once. `npm run csp`
 refuses a build whose note names an older build, so the note cannot be forgotten; set the
 text to `''` for a release with nothing to say.
 
+A release that only fixes something or moves a screen carries the last note forward rather than
+spending the banner on itself: re-tag `WHATS_NEW.build` to the new build and add
+`seenAs:'<the build the note was written for>'`. `whatsNew()` returns early on that value, so a
+phone that already read the walk-through is left alone — the banner is retired by *reading* it,
+not by an OK, so a repeat would sit over the box every morning until a parent re-read Monday's
+news — while a phone that skipped that build still hears it. `seenAs` is the field that is easy
+to leave behind, and a stale one silently silences every later note for the phones stuck on that
+build, so `npm run csp` refuses one that equals `APP_BUILD` or is empty. Drop the field the next
+time a note is actually written.
+
 ### Backlog (ideas to revisit, not scheduled)
 
+**Held until after the first App Store review.** Four findings from the v24 reviews are
+deliberately unfixed: each one changes what a screen looks like, and the review is running
+against the build as it stands. Take them together once it clears.
+
+- **The resting chip has no visible edge.** `.tg` is `1.5px solid var(--line)` on
+  `var(--surface)`: **1.40:1** in both themes, against a 3:1 minimum for a control's own
+  boundary — and `--surface` on `--ground` is 1.14:1, so the chip barely separates from the
+  page either. First run is four groups of them, so it is the first screen a parent reads and
+  the one where it matters most: "Cold only" beside "There's a microwave" can read as two
+  labels rather than a choice. Wants a `--line-mid` token that clears 3:1 in both `:root`
+  blocks, applied to `.tg` at rest — which touches every chip in the app, not just first run.
+
+- **"Welcome back" greets a parent who has never been here.** `viewObEmail()` keys
+  `back` off `!S.onboardedAt`, which is true for a brand-new phone too, so tapping
+  *Already signed up? Sign in* on first run answers "Welcome back. Where should we send the
+  sign-in link?" with an escape labelled "Not now — set up from scratch". `Store.hadAccount()`
+  already exists and is the right test. Left alone because it is exactly the screen an App
+  Review tester lands on, following the instruction in `store/listing.md`.
+
+- **320x568 still scrolls.** The first-run questions fit with no scrolling at 375x812,
+  375x667, 390x844 and 430x932, with real safe-area insets, in both themes. On an SE 1st gen
+  they overflow by ~140px and the breadth chips take two rows. It degrades properly — the
+  column top-aligns, nothing is out of reach — but the claim is not true there, and the iPhone
+  shell's deployment target is iOS 15.0, which that phone can run.
+
+- **The boot toasts spend part of their life behind the splash.** `.toast` is z-index 40 and
+  `.splash` is 70, and "Signed in", "Thank you — switching on the Household plan…" and "No
+  charge was made" all fire during boot. At a 400ms hold a 2s toast loses about a fifth of
+  itself rather than most of it, which is why this is not urgent; the fix is to defer those
+  four to `dropSplash()` rather than to raise the toast over a cover it is meant to be under.
+
 - **A launch history, not one note.** `WHATS_NEW` holds a single release, and `whatsNew()`
-  fires only when `seen !== APP_BUILD`, so the only thing a phone can ever be shown is the
-  newest build's note. A parent who was last in on v20 and opens on v22 hears about v22 and
+  fires only when `seen !== APP_BUILD` and `seen !== WHATS_NEW.seenAs` (see the note field
+  below), so the only thing a phone can ever be shown is the newest build's note. A parent who was last in on v20 and opens on v22 hears about v22 and
   never learns v21 happened at all — at a three-day cadence that is most of the recent work.
   Make it `RELEASES`, newest first, with `WHATS_NEW = RELEASES[0]` so the banner and the
   walkthrough are unchanged; have `whatsNew()` count how many releases are newer than `seen`
