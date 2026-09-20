@@ -538,6 +538,51 @@ try {
     .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea);
   check('one tap adds the food to every lunchbox', landed.length === 2 && landed.every(Boolean), [idea, landed]);
 
+  /* Two testers, the same morning: adding a food sent them back to the top of the bank,
+     so a week's shopping was one tap and a long scroll, one tap and a long scroll. The
+     sheet must not be redrawn under them, and a row tapped by mistake must come off. */
+  await page.evaluate(() => { document.getElementById('sheetBody').scrollTop = 1200; });
+  await page.waitForTimeout(150);
+  const wasAt = await page.evaluate(() => document.getElementById('sheetBody').scrollTop);
+  check('the idea bank is long enough that losing your place costs a scroll', wasAt > 0, wasAt);
+  /* a row already under their thumb down here, so the tap itself never scrolls the sheet
+     and what is measured after it is the app's doing and nobody else's */
+  const idea1b = await page.$$eval('[data-act="add-idea"]:not(.done)', a => {
+    const box = document.getElementById('sheetBody').getBoundingClientRect();
+    const hit = a.find(b => {
+      const r = b.getBoundingClientRect();
+      return r.top > box.top + 10 && r.bottom < box.bottom - 10;
+    });
+    return hit ? hit.getAttribute('data-name') : null;
+  });
+  await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]');
+  await page.waitForTimeout(350);
+  check('adding from the idea bank leaves the list exactly where it was',
+    (await page.evaluate(() => document.getElementById('sheetBody').scrollTop)) === wasAt,
+    await page.evaluate(() => document.getElementById('sheetBody').scrollTop));
+  check('and the row it was tapped on is ticked where it stands',
+    (await page.getAttribute('[data-act="add-idea"][data-name="' + idea1b + '"]', 'aria-pressed')) === 'true');
+
+  const hadOn = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
+    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea1b);
+  await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]');   /* tapped by mistake: tap it again */
+  await page.waitForTimeout(350);
+  const tookOff = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
+    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea1b);
+  check('tapping a ticked idea takes the food off every lunchbox it went on',
+    tookOff.length === 2 && tookOff.every(v => v === false), [idea1b, tookOff]);
+  check('and it unticks without redrawing the sheet under them',
+    (await page.getAttribute('[data-act="add-idea"][data-name="' + idea1b + '"]', 'aria-pressed')) === 'false'
+    && (await page.evaluate(() => document.getElementById('sheetBody').scrollTop)) === wasAt);
+  check('and taking it off offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
+  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
+  const backOn = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
+    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea1b);
+  check('and Undo puts it back on exactly the lunchboxes it came off, ticked again',
+    backOn.join() === hadOn.join()
+    && (await page.getAttribute('[data-act="add-idea"][data-name="' + idea1b + '"]', 'aria-pressed')) === 'true',
+    [idea1b, hadOn, backOn]);
+
   await page.click('[data-act="add-to"]');                     /* take the first box back out */
   await page.waitForTimeout(350);
   const only = await page.$$eval('[data-act="add-to"]', a => a.map(b => b.getAttribute('aria-pressed')));
