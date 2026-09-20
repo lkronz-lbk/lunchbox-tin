@@ -309,16 +309,18 @@ try {
     }));
   check('the way back in is a sentence a new parent can rule out, not a bare word',
     await page.$eval('.ob [data-act="ob-signin"]', e => /already signed up/i.test(e.textContent)));
-  /* Both first-run screens render noticeBanner(), so a corrupt-save message or an invite
+  /* The questions screen renders noticeBanner(), so a corrupt-save message or an invite
      reaches a parent there — but the what's-new note must not. It is a delta against a
      build they were last in on, and a phone still answering the questions has not been in
-     on any build: whatsNew() marks the build seen and returns before the note is set. */
+     on any build: whatsNew() marks the build seen and returns before the note is set.
+     viewObEmail() renders no banner at all today, so the sign-in half of this is a guard
+     against that changing, not a live assertion. */
   check('the what\u2019s-new note stays off the first-run screens, however old the build a phone last saw',
     await (async () => {
       await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
       await page.reload(); await page.waitForTimeout(600);
       const onQuestions = await page.evaluate(t => !!document.querySelector('.ob')
-        && !/New: /.test(document.getElementById('view').textContent)
+        && !!t && !document.getElementById('view').textContent.includes(t)
         && !document.querySelector('[data-act="whats-new"]'), NOTE_TEXT);
       await page.click('[data-act="ob-signin"]'); await page.waitForTimeout(300);
       const onSignIn = await page.evaluate(() => !!document.querySelector('.ob')

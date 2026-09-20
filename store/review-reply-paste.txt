@@ -1,5 +1,5 @@
 2. PURPOSE AND AUDIENCE
-Lunch Sorted plans a week of packed school lunches for the parent who makes them. It asks three questions, then plans five lunchboxes - a main, a side, a fruit and a sweet for each school day - matched so each box has contrast of texture and flavour, and rolls them into one shopping list by aisle.
+Lunch Sorted plans a week of packed school lunches for the parent who makes them. It asks three questions, then plans the five school days - a main, a side, a fruit and a sweet in each box - matched so each box has contrast of texture and flavor, and rolls them into one shopping list by aisle.
 
 The audience is parents and caregivers of school-age children in the US. The parent is the user throughout. A child sees one screen, the kid's pick, which the parent opens and hands over; it asks the child for nothing and collects nothing. Not in the Kids Category, and does not target children.
 
@@ -27,4 +27,4 @@ None. The app is offered in the United States only, in English (U.S.), and behav
 6. REGULATED MATERIAL AND THIRD-PARTY CONTENT
 Not a regulated industry: a meal planner, not a medical device or health service, making no nutritional or medical claims. Allergen settings are a filter a parent sets for their own child, flagging foods in that parent's own list; the app never advises on allergies.
 
-The only third-party material is the two included recipes, both from Recipes for Healthy Kids, developed for the US Department of Agriculture and published by the federal government, which places them in the public domain. Both are credited in the app and linked to the source: https://www.fna.usda.gov/tn/recipes-healthy-kids-cookbook-homes . The method and amounts are theirs, the wording of the steps ours. The fonts are under the SIL Open Font License. There is no other third-party content: no stock imagery, no licensed data, no brand names.
+The only third-party material is the two included recipes, both from Recipes for Healthy Kids, developed for the US Department of Agriculture and published by the federal government, which places them in the public domain. Both are credited in the app and linked to the source: https://www.fna.usda.gov/tn/recipes-healthy-kids-cookbook-homes . The method and amounts are theirs, the wording of the steps ours. The fonts are under the SIL Open Font License. There is no other third-party content: no stock imagery and no licensed data. No food in the idea bank is named after a brand.
