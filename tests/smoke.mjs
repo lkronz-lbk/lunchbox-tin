@@ -288,8 +288,70 @@ try {
   /* ---------------------------------------------------------- first run */
   await page.goto(BASE+'/app/');
   await page.waitForTimeout(500);
-  check('onboarding takes the whole screen on first run',
-    await page.$eval('nav.tabs', e => getComputedStyle(e).display === 'none'));
+  check('first run hides the tab bar but keeps the app\u2019s own header',
+    await page.evaluate(() => getComputedStyle(document.querySelector('nav.tabs')).display === 'none'
+      && getComputedStyle(document.querySelector('.topbar')).display !== 'none'
+      && /Lunch/.test(document.querySelector('.topbar .brand').textContent)
+      && document.getElementById('who').innerHTML === ''   /* the header is the brand and nothing else here */
+      && document.body.classList.contains('first-run')));
+  /* the whole point of the layout: a parent answers all of it without scrolling.
+     The viewport the suite runs at is the one in tests/smoke.mjs's context. */
+  check('the questions and both buttons fit on one screen, with the safe areas a phone asks for',
+    await page.evaluate(() => {
+      const d = document.documentElement;
+      d.style.setProperty('--sat', '59px'); d.style.setProperty('--sab', '34px');
+      const over = d.scrollHeight - d.clientHeight;
+      const go = document.querySelector('[data-act="ob-go"]').getBoundingClientRect();
+      const skip = document.querySelector('[data-act="ob-skip"]').getBoundingClientRect();
+      const small = [...document.querySelectorAll('.ob button, .ob input')].filter(e => e.getBoundingClientRect().height < 43.5);
+      d.style.removeProperty('--sat'); d.style.removeProperty('--sab');
+      return over === 0 && go.bottom <= d.clientHeight && skip.bottom <= d.clientHeight && small.length === 0;
+    }));
+  check('the way back in is a sentence a new parent can rule out, not a bare word',
+    await page.$eval('.ob [data-act="ob-signin"]', e => /already signed up/i.test(e.textContent)));
+  /* Both first-run screens render noticeBanner(), so a corrupt-save message or an invite
+     reaches a parent there — but the what's-new note must not. It is a delta against a
+     build they were last in on, and a phone still answering the questions has not been in
+     on any build: whatsNew() marks the build seen and returns before the note is set. */
+  check('the what\u2019s-new note stays off the first-run screens, however old the build a phone last saw',
+    await (async () => {
+      await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
+      await page.reload(); await page.waitForTimeout(600);
+      const onQuestions = await page.evaluate(t => !!document.querySelector('.ob')
+        && !/New: /.test(document.getElementById('view').textContent)
+        && !document.querySelector('[data-act="whats-new"]'), NOTE_TEXT);
+      await page.click('[data-act="ob-signin"]'); await page.waitForTimeout(300);
+      const onSignIn = await page.evaluate(() => !!document.querySelector('.ob')
+        && !/New: /.test(document.getElementById('view').textContent)
+        && !document.querySelector('[data-act="whats-new"]'));
+      /* and the build is stamped seen, so finishing the questions does not spring it either */
+      const stamped = await page.evaluate(() => localStorage.getItem('lunchsorted-seen'));
+      await page.click('[data-act="ob-later"]'); await page.waitForTimeout(400);
+      return onQuestions && onSignIn && stamped === APP_BUILD;
+    })());
+  /* the boot cover is over a live screen, so while it is opaque it has to take the
+     taps aimed at what it hides — a stray one used to reach Join their household */
+  check('the boot splash swallows taps while it covers the app, and then goes',
+    await (async () => {
+      const c = await phone();          /* the suite's own phone: clock pinned, fonts blocked */
+      const pg = await c.newPage();
+      await pg.goto(BASE+'/app/', {waitUntil:'commit'});
+      await pg.waitForFunction(() => document.querySelector('[data-act="ob-go"]'));
+      const swallowed = await pg.evaluate(() => {
+        const s = document.getElementById('splash');
+        if(!s || +getComputedStyle(s).opacity < 0.99) return 'gone';   /* raced us; the removal is checked below */
+        const at = document.querySelector('[data-act="ob-go"]').getBoundingClientRect();
+        const hit = document.elementFromPoint(Math.round(at.left + at.width/2), Math.round(at.top + at.height/2));
+        return (hit === s || s.contains(hit)) ? 'swallowed' : 'leaked';
+      });
+      const left = await pg.evaluate(async () => {
+        const t = Date.now();
+        while(document.getElementById('splash') && Date.now() - t < 9000) await new Promise(r => setTimeout(r, 25));
+        return !document.getElementById('splash');
+      });
+      await c.close();
+      return swallowed !== 'leaked' && left;
+    })());
 
   await page.fill('#obName', 'Nia');
   await page.evaluate(() => { document.getElementById('obName').__kept = true; });
@@ -476,6 +538,77 @@ try {
   await page.waitForTimeout(200);
   check('a pantry tick moves an item out of the buy count', head !== await page.textContent('.count'));
 
+  /* ------------------------------------------------------- writing one in
+     One compartment, one day, a name the parent typed: on no list, never drawn,
+     and never thrown away without a way back. */
+  {
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+    const wDay = await page.$eval('.daycard:not(.past) [data-act="slot"][data-cat="main"]', e => e.getAttribute('data-day'));
+    const foodsBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt && !f.once).length);
+    await page.click('.daycard:not(.past) [data-act="slot"][data-cat="main"]'); await page.waitForTimeout(300);
+    check('the compartment sheet offers a write-in', !!(await page.$('[data-act="write-in"]')));
+    await page.click('[data-act="write-in"]'); await until(page, () => !!document.getElementById('wiName'));
+    await page.fill('#wiName', 'Leftover spaghetti');
+    await page.click('[data-act="write-save"]'); await page.waitForTimeout(350);
+
+    const st = await page.evaluate((d) => {
+      const a = JSON.parse(localStorage.getItem('lunchsorted')), k = a.kids[0];
+      const day = k.week.days.find(x => x.d === d), f = k.foods.find(x => x.id === day.slots.main);
+      return {name: f && f.n, once: f && f.once, kept: !!day.lock.main,
+        onList: k.foods.filter(x => !x.deletedAt && !x.once).length,
+        drawable: k.foods.some(x => !x.deletedAt && !x.once && x.n === 'Leftover spaghetti')};
+    }, wDay);
+    check('a write-in goes in that compartment, kept, flagged once', st.name === 'Leftover spaghetti' && st.once === true && st.kept, st);
+    check('and it never joins the food list, so it is never drawn again', st.onList === foodsBefore && !st.drawable, st);
+    check('the day says so, and the compartment carries a pencil beside the lock',
+      (await page.$$eval('.daycard:not(.past) .chip', a => a.map(c => c.textContent))).includes('Written in')
+      && (await page.$$eval('.daycard:not(.past) .cmp .wrote', a => a.length)) > 0);
+    check('a day the app cannot read stops claiming the box has no protein',
+      !(await page.$$eval('.daycard:not(.past) .chip', a => a.map(c => c.textContent))).includes('No protein'));
+
+    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
+    check('and it never reaches the shopping list, because it is already in the fridge',
+      !(await page.$$eval('[data-act="have"] .nm', a => a.map(x => x.textContent))).some(n => /spaghetti/i.test(n)));
+    await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(300);
+    check('and it is not on the Foods tab',
+      !(await page.$$eval('[data-act="food-open"] .nm', a => a.map(x => x.textContent))).some(n => /spaghetti/i.test(n)));
+
+    /* it survives the draw it was written against, because it is kept */
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+    await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(400); await goShuffle(page);
+    const survived = await page.evaluate((d) => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+      const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
+      return f && f.n; }, wDay);
+    check('Shuffle all leaves a write-in where the parent put it', survived === 'Leftover spaghetti', survived);
+
+    /* and a reload rebuilds it from the whitelist still flagged once */
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    const afterBoot = await page.evaluate((d) => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+      const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
+      return {n: f && f.n, once: f && f.once}; }, wDay);
+    check('and normFood carries the flag through a reload, so it does not become a food', afterBoot.n === 'Leftover spaghetti' && afterBoot.once === true, afterBoot);
+
+    /* shuffling that one compartment is the path that used to eat it silently */
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+    await page.click('.daycard:not(.past) [data-act="slot"][data-cat="main"]'); await page.waitForTimeout(300);
+    await page.click('[data-act="sheet-shuffle"]'); await page.waitForTimeout(350);
+    const gone = await page.evaluate((d) => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+      const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
+      return f && f.n; }, wDay);
+    check('Shuffle this one replaces a write-in, and says which words it took', gone !== 'Leftover spaghetti'
+      && /Leftover spaghetti/.test(await page.textContent('#toast')), gone);
+    check('and the sheet gets out of the way, so the Undo can actually be tapped', !(await page.$('.sheet.open')));
+    await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
+    const back = await page.evaluate((d) => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+      const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
+      return {n: f && f.n, live: f && !f.deletedAt}; }, wDay);
+    check('and Undo puts the typed words back, off the tombstone', back.n === 'Leftover spaghetti' && back.live, back);
+  }
+
   /* -------------------------------------------------- a photo on a food */
   {
     await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
@@ -611,18 +744,18 @@ try {
   /* a whole compartment at once, and one Undo for the lot */
   /* one named section, so a handler that ignored data-c and added the whole bank would fail */
   const CAT = 'fruit';
-  const inCat = () => page.$$eval('[data-act="add-cat"][data-c="' + CAT + '"]',
-    a => { const list = a[0].closest('div').nextElementSibling;
-      const rows = [...list.querySelectorAll('[data-act="add-idea"]')];
-      return {total:rows.length, off:rows.filter(b => b.getAttribute('aria-pressed') === 'false').length}; });
-  const outsideOff = () => page.$$eval('[data-act="add-idea"]',
-    (a, c) => a.filter(b => b.getAttribute('aria-pressed') === 'false' && !b.closest('.list').previousElementSibling.querySelector('[data-c="' + c + '"]')).length, CAT);
+  const inCat = () => page.$$eval('.list.ideas[data-c="' + CAT + '"] [data-act="add-idea"]',
+    a => ({total:a.length, off:a.filter(b => b.getAttribute('aria-pressed') === 'false').length}));
+  const outsideOff = () => page.$$eval('.list.ideas:not([data-c="' + CAT + '"]) [data-act="add-idea"]',
+    a => a.filter(b => b.getAttribute('aria-pressed') === 'false').length);
   const catBefore = await inCat(), otherBefore = await outsideOff();
   await page.click('[data-act="add-cat"][data-c="' + CAT + '"]'); await page.waitForTimeout(600);
   const catToast = await page.textContent('#toast');
   const catAfter = await inCat(), otherAfter = await outsideOff();
   check('Add all ticks every food in that section, and says how many of what',
     catBefore.off > 0 && catAfter.off === 0 && /^\d+ fruit added/.test(catToast), [catBefore, catAfter, catToast]);
+  check('and the button goes, because it has nothing left to add',
+    !(await page.$('[data-act="add-cat"][data-c="' + CAT + '"]')));
   check('and leaves every other section exactly as it was', otherAfter === otherBefore, [otherBefore, otherAfter]);
   check('and offers one Undo for the lot', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
   await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(600);
@@ -1642,7 +1775,10 @@ try {
      going blank on a parent who will not remember why they are looking at an empty box. */
   const inBox = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
-    const day = k.week.days.find(x => Object.keys(x.slots).some(c => x.slots[c]));
+    const t = new Date(); t.setHours(0,0,0,0);
+    const today = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+    /* strictly ahead, so crossing 3pm mid-run cannot turn it into a day that has gone */
+    const day = k.week.days.find(x => x.d > today && Object.keys(x.slots).some(c => x.slots[c]));
     const cat = Object.keys(day.slots).find(c => day.slots[c]);
     const id = day.slots[cat];
     return {day:day.d, cat, id, name:k.foods.find(f => f.id === id).n};
@@ -1733,6 +1869,8 @@ try {
     /* one of the bank's, and one the parent wrote: only the first is the app's to sweep */
     k.foods.push({id:'t_old', kidId:k.id, n:'Turkey & cheese roll-ups', c:'main', t:[], a:'deli', al:[], createdAt:'2020-01-01T00:00:00Z', updatedAt:'2020-01-01T00:00:00Z', deletedAt:'2020-01-02T00:00:00Z'});
     k.foods.push({id:'t_mine', kidId:k.id, n:'Grandma\u2019s zucchini muffins', c:'side', t:[], a:'other', al:[], createdAt:'2020-01-01T00:00:00Z', updatedAt:'2020-01-01T00:00:00Z', deletedAt:'2020-01-02T00:00:00Z'});
+    /* a write-in is one day's leftovers, not a food the parent would ever look for again */
+    k.foods.push({id:'t_once', kidId:k.id, n:'Leftover shepherd\u2019s pie', c:'main', t:[], a:'other', al:[], once:true, createdAt:'2020-01-01T00:00:00Z', updatedAt:'2020-01-01T00:00:00Z', deletedAt:'2020-01-02T00:00:00Z'});
     localStorage.setItem('lunchsorted', JSON.stringify(d));
   });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(300);
@@ -1750,7 +1888,12 @@ try {
   check('and it is on the Foods tab under Taken off, with a way back',
     /Taken off/.test(await page.textContent('#view'))
     && (await page.$$eval('[data-act="food-back"]', a => a.length)) >= 1);
-  await page.click('[data-act="food-back"]'); await page.waitForTimeout(300);
+  /* Taken off is for words a parent cannot get back. A write-in was one day's leftovers,
+     swept the moment nothing points at it, and putting it back would mean nothing. */
+  check('but a write-in is swept, not archived',
+    !/Leftover shepherd/.test(await page.textContent('#view'))
+    && (await page.$$eval('[data-act="food-back"]', a => a.map(b => b.getAttribute('data-id')))).indexOf('t_once') < 0);
+  await page.click('[data-act="food-back"][data-id="t_mine"]'); await page.waitForTimeout(300);
   check('Put back puts it back on the list', await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
     return k.foods.some(f => f.id === 't_mine' && !f.deletedAt);
@@ -1914,6 +2057,12 @@ try {
   check('a caretaker is told why the app will not let them change anything, on the tab they land on', /Read-only on this phone — checkmarks stay here/.test(await p3.textContent('#view')));
   const helperState = await p3.evaluate(() => fetch('/api/household').then(r => r.json()));
   check('a helper gets the plan and the foods in it, and nothing else', helperState.me.role === 'helper' && helperState.doc.kids.every(k => k.settings.avoidAllergens.length === 0 && k.foods.every(f => f.al.length === 0)) && helperState.members.every(m => !m.email || m.userId === helperState.me.userId));
+  /* a write-in must reach the caretaker still marked one, or their copy turns it into
+     a food on the Foods tab and a line on the shopping list for what is already home */
+  check('a write-in reaches a caretaker still flagged once, so it stays off their lists',
+    helperState.doc.kids.every(k => (k.foods || []).every(f => f.once === !!f.once))
+    && helperState.doc.kids.flatMap(k => k.foods || []).filter(f => /Leftover/i.test(f.n)).every(f => f.once === true),
+    helperState.doc.kids.flatMap(k => (k.foods || []).map(f => ({n: f.n, once: f.once}))).filter(f => /Leftover/i.test(f.n)));
   /* the library is the household's, so a caretaker is sent only the recipes for the
      boxes they can see, and never where a parent found one */
   check('a caretaker gets the recipes for the boxes they are packing, not the whole library, and not their sources',

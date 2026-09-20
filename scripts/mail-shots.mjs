@@ -25,7 +25,7 @@ const shot = async (name, height, top = 0) => {
   await page.screenshot({ path: f, clip: { x: 0, y: top, width: 375, height } }); console.log('captured', name);
 };
 await page.goto(BASE + '/app/'); await wait(500);
-await page.addStyleTag({ content: '#toast{display:none!important}' });
+await page.addStyleTag({ content: '#toast,#splash{display:none!important}' });   /* the boot mark covers the app for its first half-second; a capture must never catch it */
 await page.fill('#obName', 'Emma');
 await page.click('[data-act="ob-go"]'); await wait(900);
 if (await page.$('[data-act="ob-later"]')) { await page.click('[data-act="ob-later"]'); await wait(400); }
@@ -64,7 +64,7 @@ await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsort
   k.past = [{d: iso, dow: y.getDay(), slots, lock: {}, kidPick: {}}]; k.packed = k.packed || {}; k.packed[iso] = {main:{at:new Date().toISOString(), by:null}};
   localStorage.setItem('lunchsorted', JSON.stringify(d)); });
 await page.reload(); await wait(600);
-await page.addStyleTag({ content: '#toast{display:none!important}' });
+await page.addStyleTag({ content: '#toast,#splash{display:none!important}' });   /* the boot mark covers the app for its first half-second; a capture must never catch it */
 await page.click('[data-act="tab"][data-tab="pack"]'); await wait(400);
 await shot('day6', 560);
 await browser.close(); server.close();

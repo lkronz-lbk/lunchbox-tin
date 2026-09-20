@@ -34,7 +34,7 @@ the enrolment, so settle it before launch.
 - [x] Primary language: English (U.S.)
 - [x] Primary category: Food & Drink
 - [x] Secondary category: Productivity
-- [ ] Content rights: **read the question on the page before answering — it asks whether
+- [x] Content rights: **read the question on the page before answering — it asks whether
       the app contains, displays OR ACCESSES third-party content, not whether we are
       licensed for it.** Two reasons the old "no" no longer holds, the second being the
       bigger one:
@@ -57,7 +57,7 @@ the enrolment, so settle it before launch.
 - [x] Price: Free
 - [x] Availability: United States only. Linking out to Stripe is what the US storefront
       permits, and the product rule depends on it.
-- [ ] Pre-orders: leave off. Pre-order needs App Review approval first and then a delayed
+- [x] Pre-orders: leave off. Pre-order needs App Review approval first and then a delayed
       release date, which trades launch speed for launch-day volume. Approval day should be
       release day.
 
@@ -90,7 +90,7 @@ the enrolment, so settle it before launch.
 > Everything you planned across all kids, in one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
 >
 > TWO RECIPES IN, THE REST YOU BRING
-> A Recipes tab of its own, for the whole household rather than one lunchbox. Two kid-tested recipes come with it, free, and once you have kept a few of your own you can search them by name or by what is already in the cupboard. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in cups or in grams, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
+> A Recipes tab of its own, for the whole household rather than one lunchbox. Two kid-tested recipes come with it, free, and once you have kept a few of your own you can search them by name or by what is already in the cupboard. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in US measures or metric, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
 
 > BUILT FOR MULTIPLE KIDS
 > Simplify shopping by matching all kids' lunchboxes, while honoring each school's rules with alternative options. Kids with wildly different preferences can have totally different lunchbox plans. You choose your setup, and one shopping list still covers them all.
@@ -128,23 +128,26 @@ the enrolment, so settle it before launch.
 
 ### Screenshots (6.9-inch, in this order)
 
-- [ ] Uploaded, regenerated after the last interface change
+- [x] Uploaded, regenerated after the last interface change
 
 1. `01-week.png`: A week of lunches in about a minute.
 2. `02-pack.png`: Mornings: one box, one check.
 3. `03-kidpick.png`: Hand them the phone. They pick.
 4. `04-shop.png`: The shopping list writes itself.
-5. `05-rules.png`: Your school's rules, respected.
-6. `06-foods.png`: Foods they'll actually eat.
+5. `05-recipes.png`: Recipes that make six lunches.
+6. `06-cook.png`: Cook it one step at a time.
+7. `07-rules.png`: Your school's rules, respected.
+8. `08-foods.png`: Foods they'll actually eat.
 
 They live in `screenshots/`, 1320×2868, the 6.9-inch slot, and App Store Connect scales
 them for the smaller phones. Regenerate with `CHROMIUM_PATH=… node scripts/store-shots.mjs`.
 No iPad screenshots: the app is iPhone-only (`TARGETED_DEVICE_FAMILY = 1`). No app preview
 video for version 1.
 
-### What's New (first version)
+### What's New (there is no field for it on a first release)
 
-- [ ] Pasted
+- [x] Nothing to do. App Store Connect only shows "What's New in This Version" from 1.1
+      onward; on a first release the description does that job. Keep the line below for 1.1.
 
 > The first release. A week of school lunches in about a minute, your school's rules respected, the shopping list built for you, and the kid's pick.
 
@@ -190,10 +193,10 @@ not target children. The one screen a child touches (kid's pick) asks nothing of
 
 ## App Review information (bottom of the version page)
 
-- [ ] Contact: your name, phone, hello@lunchsorted.app
-- [ ] Sign-in required: **Yes**, with the review account below
-- [ ] Notes pasted
-- [ ] Attachment: none needed
+- [x] Contact: your name, phone, hello@lunchsorted.app
+- [x] Sign-in required: **Yes**, with the review account below
+- [x] Notes pasted
+- [x] Attachment: none needed
 
 | | |
 |---|---|
@@ -270,38 +273,42 @@ The one worth a look:
 
 ## Account level, once each
 
-- [ ] Developer Program membership active, two-factor on
-- [ ] Free Apps agreement showing **Active** under Business. No bank or tax forms: the app
+- [x] Developer Program membership active, two-factor on
+- [x] Free Apps agreement showing **Active** under Business. No bank or tax forms: the app
       is free and the plan is sold on the web.
-- [ ] Seller name settled. Individual enrolment publishes your legal name on the product page.
-- [ ] `app.lunchsorted` registered under Identifiers with Associated Domains enabled
-- [ ] `hello@lunchsorted.app` actually delivers. Apple mails it and reviewers use it.
+- [x] Seller name: **Elizabeth Kronzek**, the legal entity on the account. A sole
+      proprietorship is not a separate legal person, so Lila Bloom Enterprises cannot be
+      the seller; it appears in the Copyright line instead. Do **not** sign the Paid Apps
+      Agreement: it exists for in-app purchase, and signing it pulls in tax and banking
+      forms this app has no use for. The Free Apps Agreement renews each September.
+- [x] `app.lunchsorted` registered under Identifiers with Associated Domains enabled
+- [x] `hello@lunchsorted.app` actually delivers. Apple mails it and reviewers use it.
 
 ## Getting a build up
 
-- [ ] App Store Connect API key, role **Admin** (cloud signing needs Admin to make the
+- [x] App Store Connect API key, role **Admin** (cloud signing needs Admin to make the
       certificate)
-- [ ] The four repository secrets from `ios/README.md`: `APPSTORE_KEY_ID`,
+- [x] The four repository secrets from `ios/README.md`: `APPSTORE_KEY_ID`,
       `APPSTORE_ISSUER_ID`, `APPSTORE_KEY_P8`, `APPLE_TEAM_ID`
-- [ ] TestFlight workflow run once and the build showing in App Store Connect. Do this early:
+- [x] TestFlight workflow run once and the build showing in App Store Connect. Do this early:
       first uploads are where signing surprises live.
-- [ ] Installed on your own phone as an internal tester. External testing needs a beta review
+- [x] Installed on your own phone as an internal tester. External testing needs a beta review
       and is not on the path to launch; skip it if speed matters.
-- [ ] Airplane mode opens the app, and a sign-in email link opens the app rather than Safari
+- [x] Airplane mode opens the app, and a sign-in email link opens the app rather than Safari
 
 ## Before you press Submit
 
-- [ ] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated;
+- [x] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated;
       signed in with them once and a week built, within a few days of submitting
-- [ ] Screenshots regenerated since the last interface change
-- [ ] Privacy policy URL loads and matches the App Privacy answers above
-- [ ] Build attached to the version. Export compliance asks nothing: the build carries
+- [x] Screenshots regenerated since the last interface change
+- [x] Privacy policy URL loads and matches the App Privacy answers above
+- [x] Build attached to the version. Export compliance asks nothing: the build carries
       `ITSAppUsesNonExemptEncryption = NO`
-- [ ] Version **1.0** in App Store Connect, matching `MARKETING_VERSION` in the Xcode
+- [x] Version **1.0** in App Store Connect, matching `MARKETING_VERSION` in the Xcode
       project. Both build routes read it from there. The build number is the workflow run
       number, or `CURRENT_PROJECT_VERSION` when you archive in Xcode; it only has to be
       unique within a version.
-- [ ] No risky deploy planned during review. The reviewer sees whatever is live on
+- [x] No risky deploy planned during review. The reviewer sees whatever is live on
       lunchsorted.app at the moment they look
 
 ## After approval

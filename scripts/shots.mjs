@@ -15,6 +15,11 @@ import { fileURLToPath } from 'node:url';
 /* the repository's own img directory, not one machine's copy of it */
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'img');
 const wait = ms => new Promise(r => setTimeout(r, ms));
+/* Which server to shoot. Work happens in a worktree now (CLAUDE.md), and the shared
+   checkout usually has :8099 already, serving its own public/ — shooting that would
+   put another branch's app in this branch's pictures. Point LS_SHOTS_BASE at your own
+   server's origin; without it nothing changes. */
+const BASE = (process.env.LS_SHOTS_BASE || 'http://127.0.0.1:8099').replace(/\/$/, '');
 
 const b = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const ctx = await b.newContext({ viewport: {width:375, height:812}, deviceScaleFactor:2, colorScheme:'light', timezoneId:'America/New_York' });
@@ -55,7 +60,7 @@ await ctx.addInitScript(() => {
 const p = await ctx.newPage();
 p.on('pageerror', e => console.log('PAGEERROR', e.message));
 try {
-  await p.goto('http://127.0.0.1:8099/app/index.html', {timeout:8000});   /* the address `npm run dev` prints: localhost can resolve to ::1, where nothing is listening */
+  await p.goto(BASE + '/app/index.html', {timeout:8000});   /* the address `npm run dev` prints: localhost can resolve to ::1, where nothing is listening */
 } catch (e) {
   console.error('No static server on :8099 — run `npm run dev` in another terminal first.');
   await b.close();
@@ -97,7 +102,13 @@ const toEmma = async () => {
   await p.evaluate(id => { const b = document.querySelector('.boxtabs button[data-id="'+id+'"]'); if(b) b.click(); }, emma);
   await wait(400);
 };
-const hideToast = () => p.evaluate(() => document.getElementById('toast').classList.remove('show'));
+/* the toast, and the boot mark that covers everything for its first half-second:
+   a reshoot whose waits drift a little must not come back with a green square on it */
+const hideToast = () => p.evaluate(() => {
+  document.getElementById('toast').classList.remove('show');
+  const s = document.getElementById('splash');
+  if (s && s.parentNode) s.parentNode.removeChild(s);
+});
 
 async function shot(tab, name, extra) {
   await p.click(`[data-act="tab"][data-tab="${tab}"]`); await wait(500);
@@ -132,6 +143,13 @@ await wait(600);
 /* picking usually closes the sheet itself; #sheetClose stays in the DOM either way */
 if (await p.locator('#sheetClose').isVisible()) { await p.click('#sheetClose'); await wait(400); }
 
+/* The kid's-pick switch goes on before the Week shot, not after: with it on, Week
+   carries "Let Emma pick the week" under the date, which is the half of that feature
+   the site is selling. Nothing else on Week, Pack, Shop or Recipes changes with it. */
+await p.click('[data-act="box-settings"]'); await wait(400);
+await p.click('[data-act="kidpick-on"]'); await wait(300);
+await p.click('[data-act="box-done"]'); await wait(400);
+
 await shot('week', 'screen-week');
 await shot('pack', 'screen-pack', async () => {
   /* Emma's box finished, so the household line has something to say */
@@ -162,14 +180,11 @@ await wait(350);
 await p.screenshot({ path: `${OUT}/screen-recipes.png` });
 console.log('shot', 'screen-recipes');
 
-/* The kid's pick: not a tab, and the switch has to go on first. Two options that look
-   alike sell the opposite of what this screen is for, so step past any part whose
-   pictures match before taking it. */
+/* The kid's pick: not a tab. The switch went on before the Week shot, so this picks up
+   where that left off. Two options that look alike sell the opposite of what this screen
+   is for, so step past any part whose pictures match before taking it. */
 await p.click('[data-act="tab"][data-tab="pack"]'); await wait(500);
 await toEmma();
-await p.click('[data-act="box-settings"]'); await wait(400);
-await p.click('[data-act="kidpick-on"]'); await wait(300);
-await p.click('[data-act="box-done"]'); await wait(400);
 await p.click('[data-act="kid-start"]'); await wait(600);
 const alike = () => p.evaluate(() => {
   const f = [...document.querySelectorAll('.pick')].map(x => { const i = x.querySelector('.pic'); return i ? i.src : (x.querySelector('.ic') || {}).textContent; });

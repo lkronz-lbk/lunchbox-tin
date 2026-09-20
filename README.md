@@ -21,7 +21,15 @@ need to be served over http, so use the server when testing install or offline.
 ## What the app does
 
 A name and three questions on first run — cold or microwave, what to keep out, how picky — seed a
-food list from a 200-item library and produce a planned week immediately. From there:
+food list from a 200-item library and produce a planned week immediately. All four sit on one
+screen with the app's own header above them, so a parent answers the lot without scrolling: the
+questions are sized to fit inside what the header and the phone's safe areas leave, and `body.first-run`
+in `public/app/index.html` is what hands them that room. The sign-in screens are the same shape.
+Before any of it, a fixed `.splash` covers the boot with the lunchbox mark filling in a compartment
+at a time. It takes the taps it covers — the app beneath is live and invisible, and a stray one
+used to reach *Join their household* — and it lifts on the first `render()`, on a hold no longer
+than the fill itself, with a last-resort timer in the small service-worker script block so a
+throwing app script cannot leave it up forever. From there:
 
 - **Week** — draws a main, side, fruit and sweet per pack day and *assigns* them to days
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
@@ -29,6 +37,26 @@ food list from a 200-item library and produce a planned week immediately. From t
   (crunchy, soft, protein, tangy, sweet, salty, juicy, hearty, light), two at most. Keep a
   compartment and it survives the next shuffle; shuffling that one compartment on purpose
   un-keeps it. Every compartment that can change shows a small swap arrow; a kept one, a lock.
+  **Write something in** on the compartment sheet takes a name and nothing else — tonight's
+  leftovers going into tomorrow's box. It is one compartment on one day: kept, so a shuffle
+  leaves it alone; not on the food list (`food.once`, which `foodsOf` filters out), so it is
+  never drawn, never offered to another lunchbox and never on the Foods tab; and never on the
+  shopping list, because it is already in the house. The compartment carries a pencil and the
+  day a *Written in* chip. Only the name is checked against the rules, and the sheet says so
+  rather than letting the silence read as a pass. A write-in whose name trips a rule goes in
+  flagged and excused (`day.over`), the way a food a parent taps "use it anyway" does — the parent
+  typed it deliberately, and a lock alone would not survive `enforceRules`. A rule turned on
+  afterwards carries no such excuse, so the sweep takes it like any other food. For the same
+  reason the day stops claiming anything it cannot know: `dayFlags` drops *No protein* on a day
+  holding a write-in rather than warning about a box it cannot read. It never trades: the kid's pick leaves it where the parent put it,
+  because Monday's leftovers would not keep till Thursday. Change it and Clear it are in the same
+  sheet; clearing draws the compartment again. Part of the Household plan, like the parent's own
+  foods. A write-in no week, archived day or answered question points at is tombstoned
+  (`pruneWriteIns`) at the next Plan the week — an answered review keeps one alive for as long as
+  that eat row lives, which is the point of keeping it. Whatever replaces one (a shuffle, another
+  food off the list) tombstones it and hands it to the Undo, because a write-in is on no list and
+  losing it silently loses it for good. `normKid` caps live foods before dead ones, so the
+  tombstones can never push the parent's newest real foods off the end.
 - **More than one lunchbox** — Plan the week draws them together: the fullest food list leads,
   and every other box starts from the same foods, swapping only where that box's school rules or
   its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
@@ -60,8 +88,12 @@ food list from a 200-item library and produce a planned week immediately. From t
   Foods and the second tap in the bank — go through `dropFoods`, which writes to no day at all,
   so a day that has gone is untouched by construction. A food in the parent's own words is kept
   after it comes off, under **Taken off** on the Foods tab with its photo and shopping line, and
-  **Put back** revives that same record; the ninety-day tombstone sweep leaves those alone,
-  because the bank's foods can be re-tapped and a parent's own words cannot. A lunchbox filled with "Fill the
+  **Put back** revives that same record; the ninety-day tombstone sweep leaves alone the most
+  recent of those that fit `ARCHIVE_MAX` (60) and `ARCHIVE_BYTES` (120KB, photos counted),
+  because the bank's foods can be re-tapped and a parent's own words cannot — and because a
+  shelf of photographed foods must never be what pushes a household past what the server takes.
+  A food is the parent's own when the bank has no such name, or the bank has it but they have
+  put a photo, a recipe, another compartment, another aisle or their own shopping line on it. A lunchbox filled with "Fill the
   list for me" is planned on its own until the next Plan the week matches it in; the toast after
   Plan the week says how many compartments had to differ.
 - **Plan ahead** — one more week (`kid.next`), reached by the Next button beside the week's date, drawn and
@@ -184,7 +216,18 @@ food list from a 200-item library and produce a planned week immediately. From t
   already in the bag is never offered or traded. What the kid chose locks against a shuffle
   and is marked `picker: 'kid'` with the adult who handed the phone over; the part or box
   the kid passed on loses its mark. A manual swap or shuffle clears the mark. Both ways are
-  in for the beta testers to compare; one may go. In the iPhone app a "Remind us the night
+  in for the beta testers to compare; one may go. **Either way, one box or the whole week**:
+  Pack's button is the next box, for the night before, and Week's *Let them pick the week* hands
+  the phone over once and walks the days — the next box, then the next, until no day has anything
+  left to be held up against, which is how the last box ends up being simply what is left. Bars
+  along the top count every box the run can still reach, filled as it goes; the dots still count
+  the parts within one. On **Each part** a written-in compartment is skipped and the rest of the
+  box is still offered; on **Whole box** that whole day is, because the box trades as one — so the
+  button is offered only when `loadPickDay` says there is really a question to ask, rather than
+  opening on a toast. A trade only
+  ever reaches forward, so a box already settled is never traded back into, and each choice is
+  saved as it is made, so stopping halfway keeps it. Week shows only that button; the per-day one
+  is Pack's. In the iPhone app a "Remind us the night
   before" switch with a time (on by default at 6pm beside the kid's say, household settings)
   schedules a local notification only on evenings before one of that lunchbox's pack days
   that still has a box to pick. A food can carry a **photo** of the real thing, for the
@@ -386,7 +429,7 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
-- **Help** — the ? at the top of every tab opens a sheet: eighteen one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: twenty-one one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 
@@ -430,8 +473,76 @@ ever shown once. `npm run csp`
 refuses a build whose note names an older build, so the note cannot be forgotten; set the
 text to `''` for a release with nothing to say.
 
+A release that only fixes something or moves a screen carries the last note forward rather than
+spending the banner on itself: re-tag `WHATS_NEW.build` to the new build and add
+`seenAs:'<the build the note was written for>'`. `whatsNew()` returns early on that value, so a
+phone that already read the walk-through is left alone — the banner is retired by *reading* it,
+not by an OK, so a repeat would sit over the box every morning until a parent re-read Monday's
+news — while a phone that skipped that build still hears it. `seenAs` is the field that is easy
+to leave behind, and a stale one silently silences every later note for the phones stuck on that
+build, so `npm run csp` refuses one that equals `APP_BUILD` or is empty. Drop the field the next
+time a note is actually written.
+
+`seenAs` holds one build, so it carries a note across **one** hop. Carrying the same note a
+second time — v23's note tagged v24, then tagged v25 with `seenAs` still naming v23 — shows it
+again to every phone that read it at v24, because only one of the two "already seen" builds can
+be named. So a second fix-only release in a row does not get a second tag: keep working on the
+unreleased build's tag until it ships, which is also why work on `dev` above the tag production
+is serving does not bump on every change. If a note ever genuinely needs two hops, `seenAs` has
+to become a list and the guard has to check all of them.
+
 ### Backlog (ideas to revisit, not scheduled)
 
+**Held until after the first App Store review.** Four findings from the v24 reviews are
+deliberately unfixed: each one changes what a screen looks like, and the review is running
+against the build as it stands. Take them together once it clears.
+
+- **The resting chip has no visible edge.** `.tg` is `1.5px solid var(--line)` on
+  `var(--surface)`: **1.40:1** in both themes, against a 3:1 minimum for a control's own
+  boundary — and `--surface` on `--ground` is 1.14:1, so the chip barely separates from the
+  page either. First run is four groups of them, so it is the first screen a parent reads and
+  the one where it matters most: "Cold only" beside "There's a microwave" can read as two
+  labels rather than a choice. Wants a `--line-mid` token that clears 3:1 in both `:root`
+  blocks, applied to `.tg` at rest — which touches every chip in the app, not just first run.
+
+- **"Welcome back" greets a parent who has never been here.** `viewObEmail()` keys
+  `back` off `!S.onboardedAt`, which is true for a brand-new phone too, so tapping
+  *Already signed up? Sign in* on first run answers "Welcome back. Where should we send the
+  sign-in link?" with an escape labelled "Not now — set up from scratch". `Store.hadAccount()`
+  already exists and is the right test. Left alone because it is exactly the screen an App
+  Review tester lands on, following the instruction in `store/listing.md`.
+
+- **320x568 still scrolls.** The first-run questions fit with no scrolling at 375x812,
+  375x667, 390x844 and 430x932, with real safe-area insets, in both themes. On an SE 1st gen
+  they overflow by ~140px and the breadth chips take two rows. It degrades properly — the
+  column top-aligns, nothing is out of reach — but the claim is not true there, and the iPhone
+  shell's deployment target is iOS 15.0, which that phone can run.
+
+- **The boot toasts spend part of their life behind the splash.** `.toast` is z-index 40 and
+  `.splash` is 70, and "Signed in", "Thank you — switching on the Household plan…" and "No
+  charge was made" all fire during boot. At a 400ms hold a 2s toast loses about a fifth of
+  itself rather than most of it, which is why this is not urgent; the fix is to defer those
+  four to `dropSplash()` rather than to raise the toast over a cover it is meant to be under.
+
+- **A launch history, not one note.** `WHATS_NEW` holds a single release, and `whatsNew()`
+  fires only when `seen !== APP_BUILD` and `seen !== WHATS_NEW.seenAs` (see the note field
+  below), so the only thing a phone can ever be shown is the newest build's note. A parent who was last in on v20 and opens on v22 hears about v22 and
+  never learns v21 happened at all — at a three-day cadence that is most of the recent work.
+  Make it `RELEASES`, newest first, with `WHATS_NEW = RELEASES[0]` so the banner and the
+  walkthrough are unchanged; have `whatsNew()` count how many releases are newer than `seen`
+  so a parent who missed two is told so; give the What's new sheet an *Earlier updates* foot,
+  one row per release by title and date, tapping into that release's steps; and put a
+  permanent *What's new* beside "More answers" in `helpSheet()`, since today the note is
+  reachable exactly once and then gone. Dates and titles only — the build tag is an ID and
+  never belongs on a parent's screen. Cap the list at about six and drop the oldest, or the
+  file grows forever. `scripts/csp.mjs:22` and `tests/smoke.mjs:19` both regex
+  `var WHATS_NEW = {build:'…', text:'…'}` and must be repointed at `RELEASES[0]`; while there,
+  have `npm run csp` also refuse a list out of order or with a duplicate build. Decided
+  2026-09-13: seed it with v22, v21 and v20 (v20's six steps are recoverable verbatim from
+  `e569604`) and put the way in on the help sheet. One wrinkle to handle when it is built —
+  v21's steps were deliberately v20's six with one swapped, because that banner still had to
+  onboard anyone who had skipped the recipes launch; in a history that prints the same six
+  cards twice, so v21's entry should carry only its real delta and v20's the launch in full.
 - **Home-cooked or store-bought.** Setup asks whether sides and sweets are mostly cooked at
   home or bought ready-made. A family that never bakes should not be offered a slice of
   zucchini bread unless there is a store-bought equivalent to recommend in its place; foods

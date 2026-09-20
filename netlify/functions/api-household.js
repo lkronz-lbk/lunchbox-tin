@@ -57,7 +57,7 @@ function helperView(doc) {
       settings: { days: (k.settings || {}).days || [1,2,3,4,5], noHeat: true, avoidAllergens: [], avoidText: '', slots: (k.settings || {}).slots || {}, updatedAt: (k.settings || {}).updatedAt },
       foods: (k.foods || []).filter(f => used.has(f.id)).map(f => {
         if (f.recipeId) wanted.add(f.recipeId);
-        return { id: f.id, kidId: f.kidId, n: f.n, c: f.c, t: f.t, a: f.a, al: [], buy: Array.isArray(f.buy) ? f.buy : null, recipeId: f.recipeId || null, img: f.img || null, createdAt: f.createdAt, updatedAt: f.updatedAt, deletedAt: f.deletedAt };
+        return { id: f.id, kidId: f.kidId, n: f.n, c: f.c, t: f.t, a: f.a, al: [], buy: Array.isArray(f.buy) ? f.buy : null, once: !!f.once, recipeId: f.recipeId || null, img: f.img || null, createdAt: f.createdAt, updatedAt: f.updatedAt, deletedAt: f.deletedAt };
       }),
       week: k.week, packed: k.packed || {}, eaten: {}, past: [] };
   });
