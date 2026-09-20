@@ -1937,7 +1937,7 @@ try {
       k.updatedAt = ts; doc.updatedAt = ts;
       return fetch('/api/household', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc, version: j.version }) }).then(r => r.status);
     }, marker);
-    const merged = async marker => until(page, m => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === m && !f.deletedAt)), marker, 4000);
+    const merged = async marker => until(page, m => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === m && !f.deletedAt)), marker, 5500);   /* the merge measured up to 3.4s on a fast Mac; a CI runner is slower, and the toast is up for 6s */
     /* the toast hides after 6s and goes pointer-events:none with it, so a slow
        runner would throw on the click and take the whole suite down */
     const tapUndo = async () => {
