@@ -157,6 +157,10 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
 /* ------------------------------------------------ merge rules, without a browser */
 {
   const html = fs.readFileSync(path.join(ROOT, 'app', 'index.html'), 'utf8');
+  /* one file, one scope: a second `function x(` quietly replaces the first, so a helper
+     named after a row builder makes the row builder run where the helper was meant to */
+  const twice = Object.entries((html.match(/^function [A-Za-z_$][\w$]*\(/gm) || []).reduce((m, d) => (m[d] = (m[d] || 0) + 1, m), {})).filter(([, n]) => n > 1).map(([d]) => d);
+  check('no function in the app is declared twice', twice.length === 0, twice);
   const block = html.match(/<script>\s*\/\* Merge rules([\s\S]*?)<\/script>/)[0].replace(/^<script>|<\/script>$/g, '');
   const w = {}; new Function('window', block)(w); const M = w.LSMerge;
   const t1 = '2026-09-01T10:00:00.000Z', t2 = '2026-09-02T10:00:00.000Z';
@@ -1931,6 +1935,23 @@ try {
       check('and it still comes off the list', kept.off, kept);
       if ((await page.$$eval('#toast.show [data-act="undo"]', a => a.length)) === 1) { await page.click('#toast.show [data-act="undo"]'); await page.waitForTimeout(400); }
       await page.evaluate(() => window.__pinHour(9));
+
+      /* the Undo behind a write-in keeps the same rule: offered before three, it refuses
+         after, and the compartment keeps the words rather than being rewritten */
+      await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+      await page.click(`[data-act="slot"][data-day="${todaySlot.day}"][data-cat="${todaySlot.cat}"]`); await page.waitForTimeout(300);
+      await page.click('[data-act="write-in"]'); await until(page, () => !!document.getElementById('wiName'));
+      await page.fill('#wiName', 'Leftover rice'); await page.click('[data-act="write-save"]'); await page.waitForTimeout(350);
+      check('writing into today before three offers Undo', (await page.$$eval('#toast.show [data-act="undo"]', a => a.length)) === 1);
+      await page.evaluate(() => window.__pinHour(16));          /* the box is home */
+      if ((await page.$$eval('#toast.show [data-act="undo"]', a => a.length)) === 1) { await page.click('#toast.show [data-act="undo"]'); await page.waitForTimeout(300); }
+      const late = await page.evaluate(g => {
+        const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0];
+        const d = (k.week ? k.week.days : []).find(y => y.d === g.day), f = d && k.foods.find(y => y.id === d.slots[g.cat]);
+        return { n: f && f.n, once: !!(f && f.once), live: !!(f && !f.deletedAt), toast: document.getElementById('toast').textContent };
+      }, todaySlot);
+      check('and tapped after three it leaves the day as it was packed, and says so', /That day has gone/.test(late.toast) && late.n === 'Leftover rice' && late.once && late.live, late);
+      await page.evaluate(() => window.__pinHour(9));
     }
   }
 
@@ -2169,7 +2190,7 @@ try {
       k.updatedAt = ts; doc.updatedAt = ts;
       return fetch('/api/household', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc, version: j.version }) }).then(r => r.status);
     }, marker);
-    const merged = async marker => until(page, m => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === m && !f.deletedAt)), marker, 4000);
+    const merged = async marker => until(page, m => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === m && !f.deletedAt)), marker, 5500);   /* the merge measured up to 3.4s on a fast Mac; a CI runner is slower, and the toast is up for 6s */
     /* the toast hides after 6s and goes pointer-events:none with it, so a slow
        runner would throw on the click and take the whole suite down */
     const tapUndo = async () => {
@@ -2222,6 +2243,160 @@ try {
     }, slot.id);
     check('Undo after that merge puts the photo back', pic.img && /Put back/.test(pic.toast), pic);
     check('and never says "Put back" over a photo it did not restore', pic.img || !/Put back/.test(pic.toast), pic);
+
+    /* The other Undos run the same race: a write-in saved, cleared, shuffled over and
+       chosen over; a box un-ticked; a recipe saved onto a food and a recipe removed.
+       Each one used to hold the records themselves. Between races the phone's own push
+       is waited for on the server, so the other phone's PUT is not itself the 409. */
+    const serverHas = (what, arg) => until(page, a => fetch('/api/household').then(r => r.json()).then(j => {
+      const k = j.doc.kids.filter(x => !x.deletedAt)[0];
+      if (a.what === 'food-live') return k.foods.some(f => f.id === a.arg && !f.deletedAt);
+      if (a.what === 'slot') return (k.week ? k.week.days : []).some(d => d.d === a.arg.day && d.slots[a.arg.cat] === a.arg.id);
+      if (a.what === 'packed') return !!(k.packed[a.arg] && Object.values(k.packed[a.arg]).some(r => !r.off));
+      if (a.what === 'recipe-live') return (j.doc.recipes || []).some(r => r.id === a.arg && !r.deletedAt);
+      return false;
+    }), {what, arg});
+    const settled = () => until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.doc.updatedAt === JSON.parse(localStorage.getItem('lunchsorted')).updatedAt));
+    const undoUp = async re => (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1 && re.test(await page.textContent('#toast'));
+    const openSlot = async () => { await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250); await page.click(`[data-act="slot"][data-day="${slot.day}"][data-cat="${slot.cat}"]`); await page.waitForTimeout(300); };
+    const writeIn = async name => { await openSlot(); await page.click('[data-act="write-in"]'); await until(page, () => !!document.getElementById('wiName')); await page.fill('#wiName', name); };
+    const slotState = () => page.evaluate(x => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(y => !y.deletedAt)[0];
+      const d = (k.week ? k.week.days : []).find(y => y.d === x.day), f = d && k.foods.find(y => y.id === d.slots[x.cat]);
+      return { id: d && d.slots[x.cat], n: f && f.n, once: !!(f && f.once), live: !!(f && !f.deletedAt), toast: document.getElementById('toast').textContent };
+    }, slot);
+
+    /* a write-in saved: Undo takes the words out and puts the food back */
+    await writeIn('Leftover curry');
+    check('this phone\u2019s own push has landed (third)', await settled());
+    check('the other phone gets in first, a third time', await aheadOnServer('RaceThree') === 200);
+    await page.click('[data-act="write-save"]'); await page.waitForTimeout(150);
+    check('writing one in offers Undo', await undoUp(/Leftover curry/));
+    check('and their document merges in while that toast is up', await merged('RaceThree'));
+    await tapUndo();
+    const ws = await slotState();
+    check('Undo after that merge takes the typed words out and puts the food back', ws.id === slot.id && /Put back/.test(ws.toast), ws);
+    check('and the words it took out are tombstoned, not left live on no list', await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(y => !y.deletedAt)[0].foods.some(f => f.n === 'Leftover curry' && !f.deletedAt)));
+
+    /* a write-in cleared: Undo puts the words back off the tombstone */
+    await writeIn('Leftover curry'); await page.click('[data-act="write-save"]'); await page.waitForTimeout(300);
+    const wiId = (await slotState()).id;
+    check('a write-in reaches the server', await serverHas('food-live', wiId), wiId);
+    check('this phone\u2019s own push has landed (fourth)', await settled());
+    check('the other phone gets in first, a fourth time', await aheadOnServer('RaceFour') === 200);
+    await openSlot(); await page.click('[data-act="write-clear"]'); await page.waitForTimeout(150);
+    check('clearing it offers Undo', await undoUp(/cleared/));
+    check('and their document merges in while that toast is up', await merged('RaceFour'));
+    await tapUndo();
+    const wc = await slotState();
+    check('Undo after that merge puts the typed words back in the compartment', wc.id === wiId && wc.live && wc.once && /Put back/.test(wc.toast), wc);
+
+    /* a write-in shuffled over */
+    check('and the put-back reaches the server', await serverHas('slot', { day: slot.day, cat: slot.cat, id: wiId }));
+    check('this phone\u2019s own push has landed (fifth)', await settled());
+    check('the other phone gets in first, a fifth time', await aheadOnServer('RaceFive') === 200);
+    await openSlot(); await page.click('[data-act="sheet-shuffle"]'); await page.waitForTimeout(150);
+    check('shuffling over a write-in offers Undo', await undoUp(/written in/));
+    check('and their document merges in while that toast is up', await merged('RaceFive'));
+    await tapUndo();
+    const sh = await slotState();
+    check('Undo after that merge puts the typed words back, off the tombstone', sh.id === wiId && sh.live && sh.once && /Put back/.test(sh.toast), sh);
+
+    /* a write-in chosen over, off the list */
+    check('and that put-back reaches the server', await serverHas('slot', { day: slot.day, cat: slot.cat, id: wiId }));
+    check('this phone\u2019s own push has landed (sixth)', await settled());
+    check('the other phone gets in first, a sixth time', await aheadOnServer('RaceSix') === 200);
+    await openSlot();
+    const pickId = await page.$eval('[data-act="pick"]:not(.done)', b => b.getAttribute('data-id'));
+    await page.click(`[data-act="pick"][data-id="${pickId}"]`); await page.waitForTimeout(150);
+    check('choosing off the list over a write-in offers Undo', await undoUp(/took its place|stays flagged/));
+    check('and their document merges in while that toast is up', await merged('RaceSix'));
+    await tapUndo();
+    const pk = await slotState();
+    check('Undo after that merge puts the typed words back where the parent put them', pk.id === wiId && pk.live && pk.once && /Put back/.test(pk.toast), pk);
+    await openSlot(); await page.click('[data-act="write-clear"]'); await page.waitForTimeout(300);   /* the fixture goes on without it */
+
+    /* a box un-ticked */
+    await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+    const packDay = await page.$eval('[data-act="pack-all"]', b => b.getAttribute('data-day'));
+    const wasPacked = (await page.$eval('[data-act="pack-all"]', b => b.getAttribute('aria-pressed'))) === 'true';
+    const packedState = () => page.evaluate(d => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(y => !y.deletedAt)[0];
+      const row = k.packed[d] || {}, day = (k.week ? k.week.days : []).find(y => y.d === d);
+      const cats = Object.keys(day ? day.slots : {}).filter(c => day.slots[c] && k.foods.some(f => f.id === day.slots[c] && !f.deletedAt));
+      return { ticked: cats.length > 0 && cats.every(c => row[c] && !row[c].off), toast: document.getElementById('toast').textContent };
+    }, packDay);
+    if (!wasPacked) { await page.click('[data-act="pack-all"]'); await page.waitForTimeout(200); }
+    check('the box is ticked', (await packedState()).ticked, packDay);
+    check('and the tick reaches the server', await serverHas('packed', packDay));
+    check('this phone\u2019s own push has landed (seventh)', await settled());
+    check('the other phone gets in first, a seventh time', await aheadOnServer('RaceSeven') === 200);
+    await page.click('[data-act="pack-all"]'); await page.waitForTimeout(150);
+    check('un-ticking offers Undo', await undoUp(/unpacked/));
+    check('and their document merges in while that toast is up', await merged('RaceSeven'));
+    await tapUndo();
+    check('Undo after that merge ticks the box again', (await packedState()).ticked, await packedState());
+    if (!wasPacked) { await page.click('[data-act="pack-all"]'); await page.waitForTimeout(200); }   /* as it was found */
+
+    /* a recipe saved onto a food, then one removed */
+    const foodName = await page.evaluate(id => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0].foods.find(f => f.id === id).n, slot.id);
+    const pasteRecipe = async () => {
+      await page.click('[data-act="tab"][data-tab="recipes"]'); await page.waitForTimeout(300);
+      await page.click('[data-act="recipe-import"]'); await until(page, () => !!document.getElementById('riText'));
+      await page.fill('#riText', `${foodName}\nServes 2\nPrep 5 minutes\n1 cup cooked rice\n2 tbsp soy sauce\n1. Mix the rice and the sauce.\n2. Pack it cold.`);
+      await page.click('[data-act="recipe-paste"]'); await until(page, () => !!document.getElementById('rsName'));
+    };
+    const recipeState = () => page.evaluate(n => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const r = (d.recipes || []).filter(x => x.n.toLowerCase() === n.toLowerCase()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
+      return { id: r && r.id, live: !!(r && !r.deletedAt), steps: r ? r.steps.length : -1,
+        linked: r ? d.kids.flatMap(k => k.foods).filter(f => f.recipeId === r.id && !f.deletedAt).length : 0, toast: document.getElementById('toast').textContent };
+    }, foodName);
+    await pasteRecipe();
+    check('this phone\u2019s own push has landed (eighth)', await settled());
+    check('the other phone gets in first, an eighth time', await aheadOnServer('RaceEight') === 200);
+    await page.click('[data-act="recipe-save"]'); await page.waitForTimeout(150);
+    check('saving a recipe onto a food offers Undo', await undoUp(/Saved to your recipes, and onto/));
+    check('and their document merges in while that toast is up', await merged('RaceEight'));
+    await tapUndo();
+    const rs = await recipeState();
+    check('Undo after that merge takes the recipe back off the library and off the food', !!rs.id && !rs.live && rs.linked === 0, rs);
+
+    await pasteRecipe(); await page.click('[data-act="recipe-save"]'); await page.waitForTimeout(300);
+    const rec = await recipeState();
+    check('a recipe saved onto a food is live and linked', rec.live && rec.linked >= 1, rec);
+    check('and reaches the server', await serverHas('recipe-live', rec.id), rec.id);
+    check('this phone\u2019s own push has landed (ninth)', await settled());
+    check('the other phone gets in first, a ninth time', await aheadOnServer('RaceNine') === 200);
+    await page.click('[data-act="tab"][data-tab="recipes"]'); await page.waitForTimeout(300);
+    await page.click(`[data-act="cook-recipe"][data-id="${rec.id}"]`); await page.waitForTimeout(300);
+    await page.click('[data-act="recipe-delete"]'); await page.waitForTimeout(150);
+    check('removing a recipe offers Undo', await undoUp(/Recipe removed/));
+    check('and their document merges in while that toast is up', await merged('RaceNine'));
+    const mid = await recipeState();
+    check('and the removal survives the merge: the tombstone travels, and the other phone\u2019s live copy does not bring it back', !!mid.id && !mid.live, mid);
+    await tapUndo();
+    const rd = await recipeState();
+    check('Undo after that merge puts the recipe back with its steps, hooks the food up again, and says so', rd.live && rd.steps === 2 && rd.linked >= 1 && /Put back/.test(rd.toast), rd);
+
+    /* a food of the parent's own put back from under Taken off: the Undo behind that
+       held the food and the lunchbox themselves */
+    check('this phone\u2019s own push has landed (tenth)', await settled());
+    await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(300);
+    await page.click(`[data-act="del-food"][data-id="${slot.id}"]`); await page.waitForTimeout(400);
+    check('a food with a photo waits under Taken off, with a way back', (await page.$$eval(`[data-act="food-back"][data-id="${slot.id}"]`, a => a.length)) === 1);
+    check('and its removal reaches the server', await until(page, id => fetch('/api/household').then(r => r.json()).then(j => j.doc.kids.filter(x => !x.deletedAt)[0].foods.some(f => f.id === id && f.deletedAt)), slot.id));
+    check('the other phone gets in first, a tenth time', await aheadOnServer('RaceTen') === 200);
+    await page.click(`[data-act="food-back"][data-id="${slot.id}"]`); await page.waitForTimeout(150);
+    check('putting it back offers Undo', await undoUp(/back on the list/));
+    check('and their document merges in while that toast is up', await merged('RaceTen'));
+    await tapUndo();
+    const fb = await page.evaluate(id => {
+      const f = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0].foods.find(y => y.id === id);
+      return { off: !!(f && f.deletedAt), toast: document.getElementById('toast').textContent };
+    }, slot.id);
+    check('Undo after that merge takes it off again, and says so', fb.off && /Taken off again/.test(fb.toast), fb);
+    await page.click(`[data-act="food-back"][data-id="${slot.id}"]`); await page.waitForTimeout(300);   /* back on the list, as it was found */
 
   }
 
