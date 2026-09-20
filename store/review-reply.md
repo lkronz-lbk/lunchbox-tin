@@ -15,7 +15,7 @@ recording before you open the app, and do not narrate.
 Delete the app first, so it opens as a parent's first run.
 
 1. **Launch** from the Home Screen. Let the launch screen show.
-2. **Register.** Answer the three onboarding questions. This is account creation in this
+2. **Register.** Answer the first screen — the name, and the three questions under it. This is account creation in this
    app: it makes the household. Then enter the throwaway email, tap "Email me the link",
    switch to Mail, open the email, and come back with the code or the link. A new
    household gets the whole plan free for three weeks, so everything below is unlocked.
@@ -58,8 +58,8 @@ Lunch Sorted plans a week of packed school lunches for a parent who makes them.
 
 The problem it solves: deciding what to pack, five days a week, for a child who will
 only eat certain things, inside whatever rules the school sends home. The app asks three
-questions, then plans five lunchboxes — a main, a side, a fruit and a sweet for each
-school day — matched so each box has some contrast of texture and flavour, and rolls
+questions, then plans the five school days — a main, a side, a fruit and a sweet for each
+school day — matched so each box has some contrast of texture and flavor, and rolls
 every planned box into one shopping list grouped by aisle.
 
 The audience is parents and caregivers of school-age children in the United States. The
@@ -72,8 +72,8 @@ the Kids Category and does not target children.
 
 **Signing in.** The review account is in App Review Information. On the sign-in screen,
 enter that email address, tap "Email me the link", then type the code into the "code from
-the email" field on the same screen. That address is sent no email; its code is fixed and
-does not expire. Tapping "Email me the link" is still required, because it opens the
+the email" field on the same screen. That address is sent no email and its code is fixed, but it is still checked
+inside the usual fifteen-minute window. Tapping "Email me the link" is still required, because it opens the
 window the code is checked against.
 
 That account is already set up with a planned week, so you land on lunches rather than an
@@ -145,4 +145,5 @@ credited in the app, on the recipe itself, with a link to the source:
 
 The method and the amounts are theirs; the wording of the steps is ours. The two fonts
 are licensed under the SIL Open Font License. There is no other third-party content:
-no stock imagery, no licensed data, no brand names.
+no stock imagery and no licensed data. No food in the idea bank is named
+after a brand.

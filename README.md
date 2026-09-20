@@ -316,12 +316,14 @@ forward).
       Where fonts.gstatic.com is unreachable, `LS_FONT_CACHE=<dir>` serves the brand faces
       from a cache (`fonts.css`, the woff2 files and a `map.txt` of "<url> <file>" lines)
       rather than letting the shot come out in the fallback face.
-- [ ] Reshoot the six store screenshots, which are still on the old bar: `npm run dev`,
-      then `node scripts/store-shots.mjs` (it takes `LS_FONT_CACHE` too once it is given
-      the same block). `02-pack.png` and `06-foods.png` need the same staging as above, or
-      the "Making it?" row and the Recipe tag have nothing to show. Add
-      `store/screenshots/07-recipes.png` as a seventh slot and list it in
-      `store/listing.md`, which still names six.
+- [ ] Reshoot `01-week.png` and `02-pack.png`: both were captured before the Babybel
+      rename and still carry the brand on the product page. `npm run dev`, then
+      `node scripts/store-shots.mjs` (it takes `LS_FONT_CACHE` too once it is given the
+      same block), then `scripts/store-compose.py`, which needs Pillow. There are eight
+      shots now — recipes and cook at 05/06, rules and foods moved to 07/08 — and
+      `store/listing.md` lists all eight. A version already In Review cannot have its
+      screenshots swapped without pulling the submission back, so upload at the next
+      editable moment.
 - [ ] Run `npm run csp` after any change to `public/app/index.html` (the test suite refuses
       a stale hash), and bump `VERSION` in `public/app/sw.js` when icons, the manifest or the
       fonts change. The shell itself refreshes one launch behind a deploy without a bump.
@@ -458,19 +460,46 @@ to leave behind, and a stale one silently silences every later note for the phon
 build, so `npm run csp` refuses one that equals `APP_BUILD` or is empty. Drop the field the next
 time a note is actually written.
 
-`seenAs` holds one build, so it carries a note across **one** hop. Carrying the same note a
-second time — v23's note tagged v24, then tagged v25 with `seenAs` still naming v23 — shows it
-again to every phone that read it at v24, because only one of the two "already seen" builds can
-be named. So a second fix-only release in a row does not get a second tag: keep working on the
-unreleased build's tag until it ships, which is also why work on `dev` above the tag production
-is serving does not bump on every change. If a note ever genuinely needs two hops, `seenAs` has
-to become a list and the guard has to check all of them.
+`seenAs` holds one build, so it carries a note across **one** hop: v23's note tagged v24, then
+tagged v25 with `seenAs` still naming v23, is shown again to every phone that read it at v24,
+because only one of the two "already seen" builds can be named. If a note ever genuinely needs
+two hops, `seenAs` has to become a list and the guard has to check all of them.
+
+That hazard is only real once the intervening build has actually shipped. **An unshipped tag is
+free to amend**: while `dev` sits above the tag production is serving, more work on it is more
+work on the same unreleased build, and it does not bump. A *shipped* build is the opposite —
+bump it, always, or the cache-first service worker keeps serving the old shell. Do not read the
+first rule as licence to skip the second. Nothing enforces either: `npm run csp` compares
+`APP_BUILD`, `VERSION` and `WHATS_NEW.build` to each other, and cannot tell that the app changed
+and the tag did not.
 
 ### Backlog (ideas to revisit, not scheduled)
 
-**Held until after the first App Store review.** Four findings from the v24 reviews are
+**Held until after the first App Store review.** These findings from the v24 reviews are
 deliberately unfixed: each one changes what a screen looks like, and the review is running
 against the build as it stands. Take them together once it clears.
+
+- **Every help question renders as a section label.** `.faq summary` is written to override
+  `.more summary` — body font, 15px, `letter-spacing:0`, `text-transform:none`, `--ink` — but it
+  is declared *before* it at identical specificity, so it loses all four. Every question in the
+  help sheet therefore comes out as 10.5px uppercase mono in `--ink-3`: the "FIVE LUNCHES" style,
+  twenty of them stacked, at **3.6:1** in light where 10.5px body text wants 4.5:1. The fix is to
+  move `.faq summary` after `.more summary`, which restyles the whole sheet.
+
+- **`06-cook.png` does not fill its canvas.** `CROP_BOT = {'cook': 840}` in
+  `scripts/store-compose.py` ends the phone frame ~500px above the bottom edge where every other
+  shot bleeds off it, so the sixth image in the gallery is a stubby phone. At most ~229 raw px can
+  come off and still bleed; what is below is the dimmed Recipes screen, which 05 already shows and
+  which reads fine. While reshooting: 05 and 06 are both *Bean & avocado wrap*, so two adjacent
+  store images show one recipe; the cook capture lands on "Stir **that** into the beans", a
+  dangling back-reference as the only sentence in the picture; and 05's caption leads with "Two
+  kid-tested ones come free" over an image showing one.
+
+- **The code field is focused for the wrong parent.** `if(!UI.obEmail){ … code.focus(); }` gives
+  the keyboard to the Account-tab parent and withholds it from the first-run one — who is the one
+  bouncing to Mail and back with a code in their head. And *Wrong address? Try another* blanks
+  `Account.linkSent` while `UI.obDraft` was already cleared on send, so the email field comes back
+  empty and a one-character typo is retyped in full.
 
 - **The resting chip has no visible edge.** `.tg` is `1.5px solid var(--line)` on
   `var(--surface)`: **1.40:1** in both themes, against a 3:1 minimum for a control's own
