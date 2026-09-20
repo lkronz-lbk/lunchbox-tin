@@ -523,6 +523,43 @@ try {
     }
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
+    /* the tick states: crossed off is ruled through, already-in-hand is not, and a
+       row that toggles says so out loud */
+    const shopRow = await page.$$eval('[data-act="have"]', a => a.slice(0, 1).map(b => ({
+      pressed: b.getAttribute('aria-pressed'), done: b.classList.contains('done') }))[0]);
+    check('a shopping row that is not ticked says so', shopRow && shopRow.pressed === 'false' && !shopRow.done, shopRow);
+    await page.click('[data-act="have"] >> nth=0'); await page.waitForTimeout(300);
+    const shopOn = await page.$$eval('[data-act="have"]', a => a.slice(0, 1).map(b => ({
+      pressed: b.getAttribute('aria-pressed'), done: b.classList.contains('done'),
+      line: getComputedStyle(b.querySelector('.nm')).textDecorationLine }))[0]);
+    check('ticking it flips aria-pressed and rules the name through', shopOn
+      && shopOn.pressed === 'true' && shopOn.done && shopOn.line.includes('line-through'), shopOn);
+    await page.click('[data-act="have"] >> nth=0'); await page.waitForTimeout(300);
+    check('and unticking it puts both back', await page.$eval('[data-act="have"]', b =>
+      b.getAttribute('aria-pressed') === 'false' && !b.classList.contains('done')));
+    check('the empty box is drawn with a border that clears 3:1 of the row it sits on, in both themes',
+      await page.evaluate(() => {
+        const lin = c => (c /= 255) <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
+        const L = s => { const [r,g,b] = s.match(/\d+/g).map(Number);
+          return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b); };
+        const box = document.querySelector('[data-act="have"] .box');
+        const root = document.documentElement, was = root.getAttribute('data-theme');
+        const ratio = () => {
+          /* .item paints nothing of its own, so walk up for the colour actually behind the box */
+          let bg = 'rgba(0, 0, 0, 0)';
+          for (let e = box; e; e = e.parentElement) {
+            const c = getComputedStyle(e).backgroundColor;
+            if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) { bg = c; break; }
+          }
+          const l1 = L(getComputedStyle(box).borderTopColor), l2 = L(bg);
+          const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
+          return (hi + 0.05) / (lo + 0.05);
+        };
+        const out = {};
+        for (const t of ['light', 'dark']) { root.setAttribute('data-theme', t); out[t] = ratio(); }
+        if (was === null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme', was);
+        return out.light >= 3 && out.dark >= 3;
+      }));
     await page.context().grantPermissions(['clipboard-read','clipboard-write']);
     await page.click('[data-act="copy-list"]'); await page.waitForTimeout(250);
     const txt = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
@@ -665,7 +702,7 @@ try {
   const targets = await page.$$eval('[data-act="add-to"]', a => a.map(b => b.getAttribute('aria-pressed')));
   check('the idea bank asks which lunchboxes, with all of them on', targets.length === 2 && targets.every(v => v === 'true'), targets);
 
-  const idea = await page.$$eval('[data-act="add-idea"]:not(.done)',
+  const idea = await page.$$eval('[data-act="add-idea"]:not(.ticked)',
     a => (a.find(b => !/gluten|nuts|dairy|egg|soy|fish|sesame/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
   await page.click('[data-act="add-idea"][data-name="' + idea + '"]');
   await page.waitForTimeout(350);
@@ -684,7 +721,7 @@ try {
 
   /* a food no rule of either box keeps out, so it lands on both and the removal is
      tested against both; scrolled to by hand, so the tap itself never moves the sheet */
-  const idea1b = await page.$$eval('[data-act="add-idea"]:not(.done)',
+  const idea1b = await page.$$eval('[data-act="add-idea"]:not(.ticked)',
     a => (a.find(b => !/gluten|nuts|dairy|egg|soy|fish|sesame/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
   await page.evaluate(n => document.querySelector('[data-act="add-idea"][data-name="' + n + '"]')
     .scrollIntoView({block: 'center'}), idea1b);
@@ -769,7 +806,24 @@ try {
   await page.waitForTimeout(350);
   const only = await page.$$eval('[data-act="add-to"]', a => a.map(b => b.getAttribute('aria-pressed')));
   check('a box can be taken out of the next add', only[0] === 'false' && only[1] === 'true', only);
-  const idea2 = await page.$$eval('[data-act="add-idea"]:not(.done)',
+  /* an idea already on the list is in hand, not struck off, and still yours to change:
+     no rule through the name, no dimming, and aria-pressed carrying the state because
+     the row is a real toggle */
+  const onList = await page.evaluate(() => {
+    const on = document.querySelector('[data-act="add-idea"].ticked');
+    const off = document.querySelector('[data-act="add-idea"]:not(.ticked)');
+    if (!on || !off) return null;
+    return { line: getComputedStyle(on.querySelector('.nm')).textDecorationLine,
+             pressed: on.getAttribute('aria-pressed'),
+             colour: getComputedStyle(on.querySelector('.nm')).color,
+             plain: getComputedStyle(off.querySelector('.nm')).color };
+  });
+  check('an idea already on the list keeps its tick, loses the line, and says it is pressed', onList
+    && !onList.line.includes('line-through') && onList.pressed === 'true', onList);
+  check('and the tick alone carries it — the name is not dimmed the way a bought thing is',
+    onList && onList.colour === onList.plain, onList);
+
+  const idea2 = await page.$$eval('[data-act="add-idea"]:not(.ticked)',
     a => (a.find(b => !/gluten|nuts|dairy|egg|soy|fish|sesame/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
   const hadIt = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
     .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea2);
@@ -1605,7 +1659,13 @@ try {
   /* a manual swap clears the "picked" mark */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
   await page.click('.daycard:not(.past) .tin .cmp[data-cat="main"] >> nth=0'); await page.waitForTimeout(350);
-  await page.click('#sheetBody .item:not(.done) >> nth=0'); await page.waitForTimeout(300);
+  /* the food in the compartment is the one going in the box, so it is never ruled through */
+  const inSlotRow = await page.$$eval('#sheetBody [data-act="pick"].ticked', a => a.map(b => ({
+    line: getComputedStyle(b.querySelector('.nm')).textDecorationLine,
+    said: (b.querySelector('.sr-only') || {}).textContent || '' })));
+  check('the swap sheet marks the food in the box without ruling it through', inSlotRow.length === 1
+    && !inSlotRow[0].line.includes('line-through') && inSlotRow[0].said === 'In the box', inSlotRow);
+  await page.click('#sheetBody .item:not(.ticked) >> nth=0'); await page.waitForTimeout(300);
   const starGone = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0], t = new Date(); t.setHours(0,0,0,0);
     const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
@@ -2479,7 +2539,7 @@ try {
   await pb.click('#sheetClose'); await pb.waitForTimeout(250);
   /* the idea bank must still add, or "free for good" is not true */
   await pb.click('[data-act="ideas"]'); await pb.waitForTimeout(350);
-  const freeIdea = await pb.$('#sheetBody [data-act="add-idea"]:not(.done)');
+  const freeIdea = await pb.$('#sheetBody [data-act="add-idea"]:not(.ticked)');
   if (freeIdea) { await freeIdea.click(); await pb.waitForTimeout(500); }
   await pb.click('#sheetClose').catch(() => {}); await pb.waitForTimeout(250);
   check('and the idea bank still adds a food on a lapsed household',

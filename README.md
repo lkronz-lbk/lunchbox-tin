@@ -506,6 +506,13 @@ and the tag did not.
 deliberately unfixed: each one changes what a screen looks like, and the review is running
 against the build as it stands. Take them together once it clears.
 
+One of the same class has since landed on `dev` and is *not* held: `--line-strong` in the two
+dark blocks went to `#5A8272`, so the empty box on a list clears 3:1, and the kid's-pick dots
+were taken off a .35 opacity in both themes. It is on `dev` rather than in this list because
+`dev` does not deploy — the build under review comes from `main`, which has not moved. It does
+mean the first chip below and the checkbox above it are now on opposite sides of the same
+3:1 line, so whatever ships them to `main` has to ship both.
+
 - **Every help question renders as a section label.** `.faq summary` is written to override
   `.more summary` — body font, 15px, `letter-spacing:0`, `text-transform:none`, `--ink` — but it
   is declared *before* it at identical specificity, so it loses all four. Every question in the
