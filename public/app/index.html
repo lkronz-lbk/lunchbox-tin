@@ -1684,25 +1684,24 @@ var APP_BUILD = 'lunchsorted-v24';     /* the same tag as VERSION in sw.js; npm 
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
-   v20 shipped the recipe work and v21 the per-step amount boxes, and both are live. v22 went to
-   production as a row on Pack that had squeezed itself, carrying v21's note for the phones that
-   never opened v21 — a screen that moved has no note of its own.
-   v23 and v24 have never shipped: production is still serving v22. So whatever ships next is one
-   release to a parent, and this is its one note — the write-ins and the kid's whole week from
-   v23, and the food list from the work after it. v24 was going to carry v23's note forward
-   untouched under `seenAs`, which is what that field is for; it cannot now, because the note is
-   no longer the one that was shown. A changed note is a new note, so `seenAs` goes and the
-   handful of internal phones that read the v23 wording see the fuller one once.
+   v20 shipped the recipe work and v21 the per-step amount boxes. v22 went to production as a
+   row on Pack that had squeezed itself, carrying v21's note for the phones that never opened
+   v21 — a screen that moved has no note of its own — so v23's note is the
+   delta against all three: two things a parent gained — writing one food into one box by hand,
+   and handing the phone over once for the whole week instead of every morning. The
+   walkthrough is those two and nothing else; the recipe steps have been seen.
+   v24 is the first screen a parent ever sees getting the header the rest of the app already
+   had, the questions fitting on one screen, and a mark that fills in while the app wakes:
+   nothing a parent gained or lost, so v23's note rides on under seenAs and the phones that
+   already read it are left alone.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v24', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, hand the phone over once for the whole week, and build the food list as fast as you can tap.',
+var WHATS_NEW = {build:'lunchsorted-v24', seenAs:'lunchsorted-v23', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, and hand the phone over once to let them pick the whole week.',
   steps:[
     ['Write one in', 'Tap a compartment on Week and Write something in. Whatever you type goes into that one box on that one day \u2014 kept, so a shuffle leaves it alone; off the food list, so it is never drawn again; and off the shopping list, because it is already in your fridge.'],
     ['One line, not a form', 'A write-in asks for the name and nothing else \u2014 at six in the morning that is all there is time for. So the name is all we can check it against: if it trips a rule it goes in flagged, but nuts or dairy hiding inside \u201cleftover pasta\u201d are yours to catch. The compartment carries a pencil and the day says Written in, so you can see which ones are yours.'],
     ['The whole week in one sitting', 'With \u201cThey pick their box each day\u201d on, Week carries Let them pick the week. They choose the next box, then the one after, until there is nothing left to hold up against anything. Each tap saves as it happens, so stopping halfway keeps what they picked.'],
-    ['Still one box in the morning', 'Pack keeps the single-box version, where it has always been, for the day you would rather ask on the day. And a compartment you wrote in yourself never trades \u2014 Monday\u2019s leftovers would not keep till Thursday.'],
-    ['Build the list as fast as you can tap', 'The idea bank stays where you left it \u2014 tap a food and nothing moves but that row, so the next one you wanted is still under your thumb. Add all, on a heading, takes a whole compartment at once, and one Undo takes it back.'],
-    ['Take one off, and nothing disappears', 'Tap a ticked food to take it off; one that was already on the list asks for a second tap and says what it costs first. The boxes you have already planned keep it, marked off the list, so nothing you were going to pack goes blank on you \u2014 the next Shuffle all or Plan the week puts something else there. And a food you wrote yourself waits under Taken off at the foot of Foods, with Put back.']
+    ['Still one box in the morning', 'Pack keeps the single-box version, where it has always been, for the day you would rather ask on the day. And a compartment you wrote in yourself never trades \u2014 Monday\u2019s leftovers would not keep till Thursday.']
   ]};
 var SYNC_OWED = false;              /* choices made behind the kid's screen, not yet pushed */
 var SEEN_KEY = 'lunchsorted-seen';
@@ -1870,7 +1869,7 @@ function normFood(kid, f){
     buy:once ? null : normBuy(f.buy, n),
     once:once,
     recipeId:safeIdOrNull(f.recipeId),
-    img:(typeof f.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
+    img:(typeof f.img === 'string' && PHOTO_RE.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
     createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt), deletedAt: f.deletedAt ? safeStamp(f.deletedAt) : null};
 }
 /* what to buy for a food: its own list if it has one ([] means the food itself), else the bank's
@@ -2219,6 +2218,7 @@ var KIDWORD = {main:'lunch', side:'side', fruit:'fruit', sweet:'treat', snack:'s
    shrunk on the phone to a thumbnail a few kilobytes big, stored with the food so it
    travels with the household. Where there is no photo, the emoji stands in. */
 var PHOTO_PX = 160, PHOTO_MAX = 16000;
+var PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/;   /* the one shape a stored photo may have: normalisation and the photo Undo share it */
 function picHTML(food, cls){
   if(food && food.img) return '<img class="pic '+(cls||'')+'" src="'+food.img+'" alt="">';
   return '<span class="ic '+(cls||'')+'">'+iconFor(food)+'</span>';
@@ -4391,16 +4391,23 @@ function dropFoods(rows){
   });
   return r;
 }
+/* Ids, never the records: a sync landing inside the toast's six seconds hands S a
+   document normalizeAccount has rebuilt food by food, and anything caught in the
+   closure before that would be written into a copy the app has already let go of —
+   silently, under a toast that said it had worked. Returns what it really put back,
+   so no caller can say more than happened. */
 function restoreFoods(rows){
+  var n = 0;
   rows.forEach(function(row){
     var k = kidById(row.kidId); if(!k) return;
     var f = k.foods.filter(function(x){ return x.id === row.foodId; })[0];
-    if(!f) return;
+    if(!f || !f.deletedAt) return;
     /* something with that name went back on the list while the toast was up — on this
        phone or another one — and two of a name on one list is worse than a missed undo */
     if(foodsOf(k).some(function(x){ return normKey(x.n) === normKey(f.n); })) return;
-    f.deletedAt = null; touch(f); touch(k);
+    f.deletedAt = null; touch(f); touch(k); n++;
   });
+  return n;
 }
 /* Every live copy of a named food across the boxes being added to, named the same way
    the undo record names them, so the confirmed take-off and the undo of an add go out
@@ -5854,8 +5861,20 @@ document.addEventListener('click', function(ev){
   if(act==='food-photo-pick'){ closeSheet(); pickPhoto(el.getAttribute('data-id')); return; }
   if(act==='food-photo-clear'){
     var cf = foodById(kid, el.getAttribute('data-id')); if(!cf) return;
-    var prevImg = cf.img; cf.img = null; touch(cf); save(); closeSheet(); render();
-    toast('Photo removed', function(){ cf.img = prevImg; touch(cf); save(); render(); toast('Put back'); }); return;
+    var prevImg = cf.img, photoKid = kid.id, photoFood = cf.id;
+    cf.img = null; touch(cf); save(); closeSheet(); render();
+    /* Undo holds ids, never the records themselves: a sync landing inside the
+       toast's six seconds rebuilds every food from scratch, and anything caught
+       in this closure would be writing to a document S no longer holds. */
+    toast('Photo removed', function(){
+      var pk = kidById(photoKid); if(!pk){ render(); toast('That lunchbox is gone'); return; }
+      var pf = foodById(pk, photoFood); if(!pf){ render(); toast('That food is gone'); return; }
+      if(pf.img && pf.img !== prevImg){ render(); toast('That food has a new photo now'); return; }   /* the other phone's is the newer one */
+      /* the only write of .img that is neither straight off the canvas nor
+         freshly normalised: the merge may have grown the document under it */
+      if(prevImg && !(PHOTO_RE.test(prevImg) && prevImg.length <= PHOTO_MAX && docRoomFor(prevImg.length))){ render(); toast('No room for that photo now'); return; }
+      pf.img = prevImg; touch(pf); save(); render(); toast('Put back');
+    }); return;
   }
   if(act==='food-back'){
     var bf = (kid ? kid.foods : []).filter(function(x){ return x.id === el.getAttribute('data-id') && x.deletedAt; })[0];
@@ -5875,7 +5894,8 @@ document.addEventListener('click', function(ev){
     var rows8 = [{kidId:kid.id, foodId:f.id}], d8 = dropFoods(rows8);
     save(); render();
     toast(undoneLine(f.n, d8), function(){
-      restoreFoods(rows8); save(); render(); toast('Put back');
+      var n8 = restoreFoods(rows8); save(); render();
+      toast(n8 ? 'Put back' : 'That food has gone');   /* never "Put back" over a food it did not put back */
     });
     return;
   }
