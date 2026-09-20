@@ -3220,7 +3220,7 @@ function tinHTML(kid, day, mode){
       +  '<span class="lab">'+c.label+mark+'</span>'
       +  '<span class="nm">'+(f ? esc(f.n) : 'Nothing picked')+'</span>'
       +  '<span class="tr">'+(off ? '<i class="care off">off the list</i>' : '')+(sub ? '<i class="care">'+esc(sub)+'</i>' : '')
-      +  (off ? '' : tr.map(function(t){ return '<i class="t-'+t+'">'+t+'</i>'; }).join(''))+'</span></'+tag+'>';
+      +  tr.map(function(t){ return '<i class="t-'+t+'">'+t+'</i>'; }).join('')+'</span></'+tag+'>';
   });
   return h+'</div>';
 }
