@@ -472,6 +472,13 @@ to become a list and the guard has to check all of them.
 deliberately unfixed: each one changes what a screen looks like, and the review is running
 against the build as it stands. Take them together once it clears.
 
+One of the same class has since landed on `dev` and is *not* held: `--line-strong` in the two
+dark blocks went to `#5A8272`, so the empty box on a list clears 3:1, and the kid's-pick dots
+were taken off a .35 opacity in both themes. It is on `dev` rather than in this list because
+`dev` does not deploy — the build under review comes from `main`, which has not moved. It does
+mean the first chip below and the checkbox above it are now on opposite sides of the same
+3:1 line, so whatever ships them to `main` has to ship both.
+
 - **The resting chip has no visible edge.** `.tg` is `1.5px solid var(--line)` on
   `var(--surface)`: **1.40:1** in both themes, against a 3:1 minimum for a control's own
   boundary — and `--surface` on `--ground` is 1.14:1, so the chip barely separates from the

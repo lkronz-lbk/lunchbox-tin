@@ -521,6 +521,43 @@ try {
     }
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
+    /* the tick states: crossed off is ruled through, already-in-hand is not, and a
+       row that toggles says so out loud */
+    const shopRow = await page.$$eval('[data-act="have"]', a => a.slice(0, 1).map(b => ({
+      pressed: b.getAttribute('aria-pressed'), done: b.classList.contains('done') }))[0]);
+    check('a shopping row that is not ticked says so', shopRow && shopRow.pressed === 'false' && !shopRow.done, shopRow);
+    await page.click('[data-act="have"] >> nth=0'); await page.waitForTimeout(300);
+    const shopOn = await page.$$eval('[data-act="have"]', a => a.slice(0, 1).map(b => ({
+      pressed: b.getAttribute('aria-pressed'), done: b.classList.contains('done'),
+      line: getComputedStyle(b.querySelector('.nm')).textDecorationLine }))[0]);
+    check('ticking it flips aria-pressed and rules the name through', shopOn
+      && shopOn.pressed === 'true' && shopOn.done && shopOn.line.includes('line-through'), shopOn);
+    await page.click('[data-act="have"] >> nth=0'); await page.waitForTimeout(300);
+    check('and unticking it puts both back', await page.$eval('[data-act="have"]', b =>
+      b.getAttribute('aria-pressed') === 'false' && !b.classList.contains('done')));
+    check('the empty box is drawn with a border that clears 3:1 of the row it sits on, in both themes',
+      await page.evaluate(() => {
+        const lin = c => (c /= 255) <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
+        const L = s => { const [r,g,b] = s.match(/\d+/g).map(Number);
+          return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b); };
+        const box = document.querySelector('[data-act="have"] .box');
+        const root = document.documentElement, was = root.getAttribute('data-theme');
+        const ratio = () => {
+          /* .item paints nothing of its own, so walk up for the colour actually behind the box */
+          let bg = 'rgba(0, 0, 0, 0)';
+          for (let e = box; e; e = e.parentElement) {
+            const c = getComputedStyle(e).backgroundColor;
+            if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) { bg = c; break; }
+          }
+          const l1 = L(getComputedStyle(box).borderTopColor), l2 = L(bg);
+          const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
+          return (hi + 0.05) / (lo + 0.05);
+        };
+        const out = {};
+        for (const t of ['light', 'dark']) { root.setAttribute('data-theme', t); out[t] = ratio(); }
+        if (was === null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme', was);
+        return out.light >= 3 && out.dark >= 3;
+      }));
     await page.context().grantPermissions(['clipboard-read','clipboard-write']);
     await page.click('[data-act="copy-list"]'); await page.waitForTimeout(250);
     const txt = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
@@ -675,6 +712,14 @@ try {
   await page.waitForTimeout(350);
   const only = await page.$$eval('[data-act="add-to"]', a => a.map(b => b.getAttribute('aria-pressed')));
   check('a box can be taken out of the next add', only[0] === 'false' && only[1] === 'true', only);
+  /* an idea already on the list is in hand, not struck off: the tick without the rule
+     through it, and the state said out loud because the tick is the only other cue */
+  const onList = await page.$$eval('[data-act="add-idea"].ticked', a => a.slice(0, 1).map(b => ({
+    line: getComputedStyle(b.querySelector('.nm')).textDecorationLine,
+    said: (b.querySelector('.sr-only') || {}).textContent || '' }))[0]);
+  check('an idea already on the list keeps its tick and loses the line through it', onList
+    && !onList.line.includes('line-through') && /^Already on /.test(onList.said), onList);
+
   const idea2 = await page.$$eval('[data-act="add-idea"]:not(.ticked)',
     a => (a.find(b => !/gluten|nuts|dairy|egg|soy|fish|sesame/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
   const hadIt = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
@@ -1511,6 +1556,12 @@ try {
   /* a manual swap clears the "picked" mark */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
   await page.click('.daycard:not(.past) .tin .cmp[data-cat="main"] >> nth=0'); await page.waitForTimeout(350);
+  /* the food in the compartment is the one going in the box, so it is never ruled through */
+  const inBox = await page.$$eval('#sheetBody [data-act="pick"].ticked', a => a.map(b => ({
+    line: getComputedStyle(b.querySelector('.nm')).textDecorationLine,
+    said: (b.querySelector('.sr-only') || {}).textContent || '' })));
+  check('the swap sheet marks the food in the box without ruling it through', inBox.length === 1
+    && !inBox[0].line.includes('line-through') && inBox[0].said === 'In the box', inBox);
   await page.click('#sheetBody .item:not(.ticked) >> nth=0'); await page.waitForTimeout(300);
   const starGone = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0], t = new Date(); t.setHours(0,0,0,0);
