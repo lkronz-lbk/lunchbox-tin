@@ -1710,6 +1710,17 @@ function closePane(){
   var row = document.querySelector('#view .item[data-pane="'+was+'"]') || document.querySelector('#who [data-act="box-settings"]');
   if(row) row.focus({preventScroll:true});   /* focus() scrolls by default, which would fight the restore above */
 }
+/* Put focus back on the row that was just tapped. render() replaces the whole view, so
+   the button that was pressed is gone and focus falls to the body — on VoiceOver that is
+   a swipe back down the list after every single tick, and ticking is the thing a parent
+   does twenty times in a row. The row is matched on the attribute’s value rather than
+   by building a selector out of it: a food’s name is a parent’s own words and may
+   carry a quote. preventScroll for the same reason as closePane above. */
+function focusBack(root, sel, attr, val){
+  var rows = root ? root.querySelectorAll(sel) : [];
+  for(var i = 0; i < rows.length; i++)
+    if(rows[i].getAttribute(attr) === val){ rows[i].focus({preventScroll:true}); return; }
+}
 /* where a bug report says the parent was */
 function paneLabel(){ return UI.pane && PANES[UI.pane] ? (UI.pane === 'box' ? 'lunchbox settings' : PANES[UI.pane].toLowerCase()) : UI.tab; }
 function paneHead(sub, title, act){
@@ -3583,7 +3594,7 @@ function viewShop(){
     if(!groups[a]) return;
     h += '<div><div class="sect-head"><h3>'+AISLE_SHORT[a]+'</h3><span class="count">'+groups[a].length+'</span></div><div class="list">';
     groups[a].forEach(function(r){
-      h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
+      h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'" data-when="now">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
         +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
         +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
@@ -3601,7 +3612,7 @@ function viewShop(){
       if(!lg[a]) return;
       h += '<div><div class="sect-head"><h3>'+AISLE_SHORT[a]+'</h3><span class="count">'+lg[a].length+'</span></div><div class="list">';
       lg[a].forEach(function(r){
-        h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
+        h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'" data-when="next">'
           +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
           +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
           +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
@@ -5260,7 +5271,12 @@ document.addEventListener('click', function(ev){
     if(gated()){ upgradeSheet('pantry'); return; }
     var key = el.getAttribute('data-key');
     S.pantry[key] = {have:!(own(S.pantry, key) && S.pantry[key].have), at:now(), by:(deviceMember()||{}).id || null};
-    save(); render(); return;
+    /* one pantry row, so a food on both weeks’ lists ticks in both places: the tap goes
+       back to the week it came from, not to whichever row the list drew first */
+    var when = el.getAttribute('data-when');
+    save(); render();
+    focusBack(document.getElementById('view'), '[data-act="have"][data-when="'+(when === 'next' ? 'next' : 'now')+'"]', 'data-key', key);
+    return;
   }
   if(act==='copy-list' || act==='send-list'){
     var txt = listText();
@@ -5308,7 +5324,9 @@ document.addEventListener('click', function(ev){
     var r4 = addFoodTo(addTargets(), b);
     if(!r4.added.length){ toast(addFailLine(b.n, r4)); return; }
     var at4 = bodyEl.scrollTop;                    /* stay where they were reading */
-    save(); ideasSheet(); bodyEl.scrollTop = at4; render(); toast(addedLine(b.n, r4)); return;
+    save(); ideasSheet(); bodyEl.scrollTop = at4; render();
+    focusBack(bodyEl, '[data-act="add-idea"]', 'data-name', b.n);
+    toast(addedLine(b.n, r4)); return;
   }
   if(act==='seed'){
     var added = seedLibrary(kid, 'some');
