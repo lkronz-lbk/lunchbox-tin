@@ -1,0 +1,30 @@
+2. PURPOSE AND AUDIENCE
+Lunch Sorted plans a week of packed school lunches for the parent who makes them. It asks three questions, then plans five lunchboxes - a main, a side, a fruit and a sweet for each school day - matched so each box has contrast of texture and flavour, and rolls them into one shopping list by aisle.
+
+The audience is parents and caregivers of school-age children in the US. The parent is the user throughout. A child sees one screen, the kid's pick, which the parent opens and hands over; it asks the child for nothing and collects nothing. Not in the Kids Category, and does not target children.
+
+3. SETTING UP AND REACHING THE FEATURES
+Sign-in: use the account in App Review Information. Enter it, tap "Email me the link", then type the code into the "code from the email" field on the same screen. No email is sent to it and its code is fixed, but the tap is still required: it opens the window the code is checked against. It already has a planned week.
+
+There is no password and no separate registration step: answering the three onboarding questions creates the household on the phone, and entering an email attaches an account to it. The same screen signs you in afterwards.
+
+Layout. Week: the five boxes, with Shuffle all, Shuffle day, and an arrow on each compartment to swap one food. Shop: what to buy, by aisle, shareable to Notes or Reminders. Recipes: two included; scale the batch, switch US and metric, or cook a step at a time. Pack: the next day's box, one Packed check, and "Let ... pick". Account: sign-in, the plan, invites, and "Delete my account and data". School rules, allergens and the kid's-pick switch sit behind the sliders icon beside the lunchbox name.
+
+4. EXTERNAL SERVICES
+Netlify: hosting and serverless functions (US). Neon: PostgreSQL holding the household once a parent signs in (US). Resend: transactional email, sign-in links and reminders (US). Stripe: the Household plan subscription, taken on our website in Safari (US). Google Fonts: two web fonts. No other outbound calls.
+
+No in-app purchase. The Household plan is sold on lunchsorted.app; where the app mentions it, it opens Safari to our site. The app takes no payment and uses no StoreKit product.
+
+No AI services of any kind: no model provider, no inference API, no generated content. The only feature touching an outside page is recipe import: when a signed-in parent pastes a recipe address, our own server fetches it and reads its standard recipe markup. No third party, nothing generated.
+
+No analytics or advertising SDKs in the app; our marketing pages carry Google Analytics, the app does not.
+
+Nothing looks locked because every new household gets the whole plan free for three weeks, no card. After that the week, the shopping list, the pack list and the idea bank stay free for one lunchbox; the rest is the paid plan.
+
+5. REGIONAL DIFFERENCES
+None. The app is offered in the United States only, in English (U.S.), and behaves identically for every user. Nothing is gated by region and no content differs by region. Amounts show in US measures or metric, a per-parent toggle, not a regional one.
+
+6. REGULATED MATERIAL AND THIRD-PARTY CONTENT
+Not a regulated industry: a meal planner, not a medical device or health service, making no nutritional or medical claims. Allergen settings are a filter a parent sets for their own child, flagging foods in that parent's own list; the app never advises on allergies.
+
+The only third-party material is the two included recipes, both from Recipes for Healthy Kids, developed for the US Department of Agriculture and published by the federal government, which places them in the public domain. Both are credited in the app and linked to the source: https://www.fna.usda.gov/tn/recipes-healthy-kids-cookbook-homes . The method and amounts are theirs, the wording of the steps ours. The fonts are under the SIL Open Font License. There is no other third-party content: no stock imagery, no licensed data, no brand names.

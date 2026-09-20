@@ -458,6 +458,14 @@ to leave behind, and a stale one silently silences every later note for the phon
 build, so `npm run csp` refuses one that equals `APP_BUILD` or is empty. Drop the field the next
 time a note is actually written.
 
+`seenAs` holds one build, so it carries a note across **one** hop. Carrying the same note a
+second time — v23's note tagged v24, then tagged v25 with `seenAs` still naming v23 — shows it
+again to every phone that read it at v24, because only one of the two "already seen" builds can
+be named. So a second fix-only release in a row does not get a second tag: keep working on the
+unreleased build's tag until it ships, which is also why work on `dev` above the tag production
+is serving does not bump on every change. If a note ever genuinely needs two hops, `seenAs` has
+to become a list and the guard has to check all of them.
+
 ### Backlog (ideas to revisit, not scheduled)
 
 **Held until after the first App Store review.** Four findings from the v24 reviews are

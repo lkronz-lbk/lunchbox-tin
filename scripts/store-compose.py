@@ -17,9 +17,14 @@ SHOTS = [
     ('pack',    '02-pack',    'Mornings: one box,\none check.',            'Today’s box, an ice-pack flag when it needs one, and the rest of the week coming up.'),
     ('kidpick', '03-kidpick', 'Hand them the phone.\nThey pick.',       'Tomorrow’s box, chosen from the week you already shopped for. A lunch they chose comes home emptier.'),
     ('shop',    '04-shop',    'The shopping list\nwrites itself.',      'Everything planned, grouped by aisle. Check off whatever you already have at home.'),
-    ('setup',   '05-rules',   'Your school’s rules,\nrespected.',       'Nut-free, cold-only, no ice pack, a short eating window. Foods are flagged, never silently dropped.'),
-    ('foods',   '06-foods',   'Foods they’ll\nactually eat.',           'Start from what parents pack, add more from a long list of ideas, and tell it what came home. Next week’s draw learns.'),
+    ('recipes', '05-recipes', 'Recipes that make\nsix lunches.',       'Two kid-tested ones come free. Scale the batch, switch between US measures and metric, and tick off what you already have.'),
+    ('cook',    '06-cook',    'Cook it one step\nat a time.',          'One step on the screen, with the amounts for just that step underneath it and a box to tick against each one as it goes in.'),
+    ('setup',   '07-rules',   'Your school’s rules,\nrespected.',       'Nut-free, cold-only, no ice pack, a short eating window. Foods are flagged, never silently dropped.'),
+    ('foods',   '08-foods',   'Foods they’ll\nactually eat.',           'Start from what parents pack, add more from a long list of ideas, and tell it what came home. Next week’s draw learns.'),
 ]
+CROP_BOT = {'cook': 840}   # (name: raw pixels off the bottom) for a sheet that stops short of the screen
+                # and would otherwise trail empty ground. Keep the way on in the picture:
+                # the cook sheet's buttons follow the amounts, so this has to clear them.
 CROP_TOP = {'kidpick': 320}   # (name: raw pixels off the top) the kid's pick fills its screen exactly,
                               # so without this the second option's bottom edge bleeds off the canvas
 
@@ -44,6 +49,7 @@ for raw, name, head, sub in SHOTS:
     if not os.path.exists(src): print('missing', src); continue
     shot = Image.open(src).convert('RGB')
     if raw in CROP_TOP: shot = shot.crop((0, CROP_TOP[raw], shot.width, shot.height))
+    if raw in CROP_BOT: shot = shot.crop((0, 0, shot.width, shot.height - CROP_BOT[raw]))
     canvas = Image.new('RGB', (W, H), GROUND); d = ImageDraw.Draw(canvas)
     y = 150
     for line in wrap(d, head, HEAD, W - 200):

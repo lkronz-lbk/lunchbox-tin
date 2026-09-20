@@ -91,6 +91,19 @@ await page.click('[data-act="tab"][data-tab="foods"]'); await wait(400);
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('foods');
 
+/* 6 · the recipes, and cooking one a step at a time */
+await page.click('[data-act="tab"][data-tab="recipes"]'); await wait(500);
+await page.evaluate(() => window.scrollTo(0, 0));
+await page.click('[data-act="cook-recipe"]'); await wait(700);
+/* the recipe, not the two-row list: the batch size, the units and what it needs fill the screen */
+await shot('recipes');
+await page.click('.sheet [data-act="cook-step"]'); await wait(600);
+/* step one is a caution about when to make it; move on to a step that is a thing you do,
+   and far enough in that the boxes to tick read as a list rather than a single row */
+const next = page.locator('.sheet button', { hasText: 'Next step' });
+for (let i = 0; i < 4 && await next.count(); i++) { await next.first().click(); await wait(450); }
+await shot('cook');
+
 await browser.close(); server.close();
 if (!process.argv.includes('--no-compose')) execFileSync('python3', ['scripts/store-compose.py'], { stdio: 'inherit' });
 if (!process.argv.includes('--raw')) for (const f of fs.readdirSync(OUT)) if (f.startsWith('raw-')) fs.unlinkSync(path.join(OUT, f));
