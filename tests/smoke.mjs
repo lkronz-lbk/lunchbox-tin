@@ -280,17 +280,25 @@ const pinnedDay = (() => {
   d.setDate(d.getDate() - ((d.getDay() + 5) % 7));     /* back to Tuesday (0=Sun: Tue is 2; (day+5)%7 is days since Tuesday) */
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 })();
-const pinClock = async c => c.addInitScript(day => {
+/* One clock for the whole run. An init script runs again on every document, and an
+   offset taken fresh from Real.now() each time put the clock back to nine o'clock on
+   every reload: a record stamped before the reload then outranked every record stamped
+   after it until the clock caught up, and a merge in that window let the server's live
+   copy of a food beat the tombstone this phone had just written -- two runs in three.
+   Measured from one moment for every context, the pinned day's clock only ever moves
+   forward, across reloads and across phones alike. */
+const SUITE_START = Date.now();
+const pinClock = async c => c.addInitScript(pin => {
   const Real = Date;
-  const [y, m, dd] = day.split('-').map(Number);
-  let offset = new Real(y, m - 1, dd, 9, 0, 0).getTime() - Real.now();
+  const [y, m, dd] = pin.day.split('-').map(Number);
+  let offset = new Real(y, m - 1, dd, 9, 0, 0).getTime() - pin.startReal;
   window.__pinHour = h => { offset = new Real(y, m - 1, dd, h, 0, 0).getTime() - Real.now(); };   /* the suite moves within the pinned day */
   function Fake(...a){ return a.length ? new Real(...a) : new Real(Real.now() + offset); }
   Fake.prototype = Real.prototype;
   Fake.now = () => Real.now() + offset;
   Fake.parse = Real.parse; Fake.UTC = Real.UTC;
   window.Date = Fake;
-}, pinnedDay);
+}, { day: pinnedDay, startReal: SUITE_START });
 /* the lunchbox gear lives on a lunchbox tab, never on the household's Shop: step to Week first if needed */
 /* Account is five rows now; each opens a pane over the tab */
 const openPane = async (pg, name) => {
@@ -2265,6 +2273,14 @@ try {
     await page.click(`[data-act="del-food"][data-id="${slot.id}"]`); await page.waitForTimeout(150);
     check('deleting a food on a signed-in phone offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
     check('and their document merges in, rebuilt record by record, while that toast is still up', await merged('RaceOne'));
+    /* the merge is by record stamp, so the tombstone this phone just wrote has to be the
+       newer record or the server's live copy wins and there is nothing left to undo */
+    const stamps = await page.evaluate(async id => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0], f = k.foods.find(y => y.id === id);
+      const j = await fetch('/api/household').then(r => r.json()), rf = j.doc.kids.filter(x => !x.deletedAt)[0].foods.find(y => y.id === id);
+      return { now: new Date().toISOString(), local: f && { updatedAt: f.updatedAt, deletedAt: f.deletedAt }, server: rf && { updatedAt: rf.updatedAt, deletedAt: rf.deletedAt } };
+    }, slot.id);
+    check('and the food is still off the list after it: the tombstone was the newer record', !!(stamps.local && stamps.local.deletedAt), stamps);
     await tapUndo();
     const back = await page.evaluate(x => {
       const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(y => !y.deletedAt)[0];
