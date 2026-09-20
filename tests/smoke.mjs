@@ -134,6 +134,32 @@ function check(name, ok, detail){
   if(ok) console.log(`  ok   ${name}`);
   else { failures++; console.log(`  FAIL ${name}${detail !== undefined ? ' — got: '+JSON.stringify(detail) : ''}`); }
 }
+/* Playwright will not click what it cannot see, and it waits out its whole thirty-second
+   default before saying so. Two pieces of this app's furniture are away more often than
+   they are there: a sheet that is not open is visibility:hidden, and a toast that has
+   timed out is pointer-events:none. Done or Undo tapped at one that never arrived does
+   not fail the check it belongs to — it throws out of the suite and takes the four
+   minutes still to run with it, so a miss costs a whole rerun instead of one FAIL. Wait
+   for the thing; if it never came, step over it and let the checks around it say so. */
+const sheetIsOpen = (pg, ms = 5000) => until(pg, () => document.querySelector('#sheet').classList.contains('open'), null, ms);
+async function sheetDone(pg, ms = 5000){
+  const open = await sheetIsOpen(pg, ms);
+  if(open) await pg.click('#sheetClose');
+  return open;
+}
+async function backdropTap(pg, ms = 5000){
+  const open = await sheetIsOpen(pg, ms);
+  if(open) await pg.click('#backdrop', {position:{x:10, y:10}});
+  return open;
+}
+/* the toast hides after six seconds and goes pointer-events:none with it, so the count
+   that decides whether Undo can be tapped has to ask whether it is still showing */
+async function tapUndo(pg, name){
+  const up = (await pg.$$eval('#toast.show [data-act="undo"]', a => a.length)) === 1;
+  check(name, up);
+  if(up) await pg.click('#toast.show [data-act="undo"]');
+  return up;
+}
 
 const V1_SAVE = {
   settings:{kid:'Nora', days:[1,3,5], noHeat:true, avoidAllergens:['nuts','dairy'], avoidText:'kiwi'},
@@ -502,12 +528,12 @@ try {
       check('and "Show me" opens a walk-through, one step per thing that changed', (await page.$$eval('#sheetBody .switch', a => a.length)) === STEP_COUNT);
       /* the backdrop is the whole screen while the sheet slides in: a thumb that lands there
          has read nothing, so it puts the sheet away and leaves the note where it was */
-      await page.click('#backdrop', {position:{x:10, y:10}}); await page.waitForTimeout(350);   /* the strip above the sheet, where a hurried thumb lands */
+      await backdropTap(page); await page.waitForTimeout(350);   /* the strip above the sheet, where a hurried thumb lands */
       check('a tap beside the sheet closes it without spending the note',
         !(await page.$('.sheet.open')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1
         && await page.evaluate(() => localStorage.getItem('lunchsorted-seen') === 'lunchsorted-v0'));
       await page.click('[data-act="whats-new"]'); await page.waitForTimeout(350);
-      await page.click('#sheetClose'); await page.waitForTimeout(300);
+      await sheetDone(page); await page.waitForTimeout(300);
       check('Done at the top of the walk-through dismisses the note',
         !/New: /.test(await page.textContent('#view')) && await page.evaluate((b) => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
       await page.reload(); await page.waitForTimeout(600);
@@ -532,7 +558,7 @@ try {
     await page.evaluate(() => document.querySelector('#sheetBody details summary').click()); await page.waitForTimeout(150);
     check('and an answer opens on a tap', await page.$eval('#sheetBody details', d => d.open));
     check('the ? still fits beside a long name and two lunchboxes', await page.evaluate(() => { const b = document.querySelector('[data-act="help"]').getBoundingClientRect(); return b.right <= window.innerWidth - 8 && document.documentElement.scrollWidth <= window.innerWidth; }));
-    await page.click('#sheetClose'); await page.waitForTimeout(250);
+    await sheetDone(page); await page.waitForTimeout(250);
     check('the share button shows only where the phone has a share sheet', (await page.$$eval('[data-act="send-list"]', a => a.length)) === (await page.evaluate(() => navigator.share ? 1 : 0)));
   }
   const head = await page.textContent('.count');
@@ -603,7 +629,7 @@ try {
     check('Shuffle this one replaces a write-in, and says which words it took', gone !== 'Leftover spaghetti'
       && /Leftover spaghetti/.test(await page.textContent('#toast')), gone);
     check('and the sheet gets out of the way, so the Undo can actually be tapped', !(await page.$('.sheet.open')));
-    await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
+    await tapUndo(page, 'and the toast is still up to tap that Undo on'); await page.waitForTimeout(350);
     const back = await page.evaluate((d) => {
       const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
       const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
@@ -708,8 +734,7 @@ try {
     (await LIVE(idea1b)).join() === beforeAdd.join(), [idea1b, beforeAdd, await LIVE(idea1b)]);
   check('and it unticks without redrawing the sheet under them',
     (await PRESSED(idea1b)) === 'false' && (await AT()) === wasAt);
-  check('and taking it back off offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
-  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
+  await tapUndo(page, 'and taking it back off offers Undo'); await page.waitForTimeout(350);
   check('and Undo puts it back on exactly the lunchboxes it came off, ticked again',
     (await LIVE(idea1b)).join() === hadOn.join() && (await PRESSED(idea1b)) === 'true', [idea1b, hadOn]);
 
@@ -717,7 +742,7 @@ try {
      sheet opened was not put there by this sitting. It may be a food the parent wrote
      themselves — their photo, their amounts — that only shares a name with the bank, so
      it takes two taps, and the first one says what the second would cost. */
-  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  await sheetDone(page); await page.waitForTimeout(250);
   await page.click('[data-act="ideas"]'); await page.waitForTimeout(350);
   check('reopening the sheet shows that food ticked', (await PRESSED(idea1b)) === 'true');
   await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]');
@@ -738,8 +763,7 @@ try {
   await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]'); await page.waitForTimeout(350);
   check('two taps in a row do take it off every lunchbox that had it',
     (await LIVE(idea1b)).every(v => v === false) && (await PRESSED(idea1b)) === 'false', await LIVE(idea1b));
-  check('and that offers Undo too', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
-  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
+  await tapUndo(page, 'and that offers Undo too'); await page.waitForTimeout(350);
   check('which puts it back on every one of them',
     (await LIVE(idea1b)).join() === hadOn.join(), [idea1b, hadOn, await LIVE(idea1b)]);
 
@@ -759,8 +783,7 @@ try {
   check('and the button goes, because it has nothing left to add',
     !(await page.$('[data-act="add-cat"][data-c="' + CAT + '"]')));
   check('and leaves every other section exactly as it was', otherAfter === otherBefore, [otherBefore, otherAfter]);
-  check('and offers one Undo for the lot', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
-  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(600);
+  await tapUndo(page, 'and offers one Undo for the lot'); await page.waitForTimeout(600);
   check('which takes that whole section back off again, and nothing else',
     (await inCat()).off === catBefore.off && (await outsideOff()) === otherBefore,
     [catBefore, await inCat()]);
@@ -781,7 +804,7 @@ try {
     landed2[1] === true && landed2[0] === hadIt[0], [idea2, hadIt, landed2]);
   /* rules flag foods; they never refuse them: with Sam the only box, a food his
      rule keeps out still lands on his list, flagged, as Add your own always did */
-  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  await sheetDone(page); await page.waitForTimeout(250);
   await page.click('[data-act="add-own"]'); await page.waitForTimeout(350);
   check('the add button says where the food will land', /Add to Sam$/.test((await page.textContent('#nfSave')).trim()), await page.textContent('#nfSave'));
   await page.fill('#nfName', 'Sourdough toast');
@@ -797,7 +820,7 @@ try {
   await page.click('[data-act="ideas"]'); await page.waitForTimeout(350);
   await page.click('[data-act="add-to"]');                     /* put it back for the tests below */
   await page.waitForTimeout(350);
-  await page.click('#sheetClose');
+  await sheetDone(page);
   await page.waitForTimeout(300);
 
 
@@ -914,7 +937,7 @@ try {
     await page.waitForTimeout(400);
     await page.click('[data-act="sheet-shuffle"][data-cat="sweet"]');
     await page.waitForTimeout(400);
-    await page.click('#sheetClose');
+    await sheetDone(page);
     await page.waitForTimeout(250);
   }
   check('and a re-draw hands the permission back rather than leaving it for the next food',
@@ -1132,9 +1155,8 @@ try {
   check('a box left out of the shuffle keeps exactly what it had', weeksAfter[0] === weeksBefore[0]);
   await page.click('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0'); await page.waitForTimeout(300);
   check('a day\'s Shuffle starts with only the box on screen ticked', (await page.$$eval('#shKids .tg[aria-pressed="true"]', a => a.length)) === 1);
-  await page.click('#sheetClose'); await page.waitForTimeout(200);
-  check('and the shuffle offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
-  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(400);
+  await sheetDone(page); await page.waitForTimeout(200);
+  await tapUndo(page, 'and the shuffle offers Undo'); await page.waitForTimeout(400);
   const weeksUndone = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week.days.map(d => d.slots))));
   check('Undo puts the shuffled box back as it was', weeksUndone[1] === weeksBefore[1], {before: weeksBefore[1].slice(0,60), undone: weeksUndone[1].slice(0,60)});
 
@@ -1418,10 +1440,10 @@ try {
   /* Contact support is the same door as the "?" in the corner */
   await page.click('.topbar [data-act="help"], #who [data-act="help"]'); await page.waitForTimeout(300);
   const fromCorner = await page.textContent('#sheetBody');
-  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  await sheetDone(page); await page.waitForTimeout(250);
   await page.click('#view .item[data-act="help"]'); await page.waitForTimeout(300);
   check('Contact support opens the same help sheet as the "?" in the corner', (await page.textContent('#sheetBody')) === fromCorner && /Something is wrong/.test(fromCorner));
-  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  await sheetDone(page); await page.waitForTimeout(250);
   /* Lunchboxes is the settings, reached without leaving Account */
   await openPane(page, 'box');
   check('Account \u2192 Lunchboxes opens the lunchbox settings and leaves the bottom bar on Account', await page.evaluate(() =>
@@ -1452,7 +1474,7 @@ try {
     lock: document.body.style.overflow, keep: /don.t change this one/i.test(document.getElementById('sheet').textContent)}));
   check('opening a compartment sheet locks the page behind it and offers "Don\u2019t change this one"',
     sheetOpen.vis === 'visible' && sheetOpen.lock === 'hidden' && sheetOpen.keep, sheetOpen);
-  await page.click('#backdrop', {position:{x:10, y:10}}); await page.waitForTimeout(350);
+  await backdropTap(page); await page.waitForTimeout(350);
   const sheetShut = await page.evaluate(() => ({vis: getComputedStyle(document.getElementById('sheet')).visibility, lock: document.body.style.overflow}));
   check('closing it unlocks the page and hides the sheet from focus', sheetShut.vis === 'hidden' && sheetShut.lock === '', sheetShut);
   await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
@@ -1622,7 +1644,7 @@ try {
     const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
     return day.lock.side === false && !!day.slots.side; }));
   check('and says so', /no longer kept/i.test(await page.textContent('#toast')));
-  await page.click('#backdrop', {position:{x:10, y:10}}); await page.waitForTimeout(300);
+  await backdropTap(page); await page.waitForTimeout(300);
 
   /* an in-place re-draw leaves the days already gone exactly as they were */
   const pastKept = await page.evaluate(() => {
@@ -1767,8 +1789,7 @@ try {
   await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(200);
   const firstFood = await page.textContent('.list .item .nm');
   await page.click('[data-act="del-food"]'); await page.waitForTimeout(200);
-  check('deleting a food offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
-  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(250);
+  await tapUndo(page, 'deleting a food offers Undo'); await page.waitForTimeout(250);
   check('Undo puts the food back', (await page.textContent('#view')).includes(firstFood.trim()));
 
   /* A week already drawn is a plan the parent made and may be shopping for tonight.
@@ -1842,7 +1863,7 @@ try {
     afterDel.goneSlot === goneSetup.id && afterDel.goneLock === true, afterDel);
   check('while the food itself goes, and the days still ahead keep it until they are redrawn',
     afterDel.tombstoned && afterDel.aheadStillHolds, afterDel);
-  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(250);
+  await tapUndo(page, 'and that delete is still offering Undo'); await page.waitForTimeout(250);
 
   /* The same rule from the other side, with the better fixture: their block pushed the
      clock past three rather than injecting a past-dated day, which is the other half of
@@ -1884,7 +1905,7 @@ try {
     check('Contact support opens the help sheet, whose bug report carries the build, the phone and the household shape, and never a food name',
       /^mailto:hello@lunchsorted\.app\?subject=/.test(href) && /Build: lunchsorted-v\d+ \(web\)/.test(body) && /Phone: Mozilla/.test(body) && /Lunchboxes: \d+ · foods: \d+/.test(body) && /What happened:/.test(body) && !/grape|banana|cracker|yogurt/i.test(body.replace(/^Phone:.*$/m, '')), body.slice(0, 300));
   }
-  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  await sheetDone(page); await page.waitForTimeout(250);
   await openPane(page, 'account');
   await page.click('[data-act="clear-all"]'); await page.waitForTimeout(150);
   await page.click('[data-act="clear-all"]'); await page.waitForTimeout(300);
@@ -1930,8 +1951,7 @@ try {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
     return k.foods.some(f => f.id === 't_mine' && !f.deletedAt);
   }));
-  check('and that offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
-  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(300);
+  await tapUndo(page, 'and that offers Undo'); await page.waitForTimeout(300);
   check('which takes it off again', await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
     return k.foods.some(f => f.id === 't_mine' && !!f.deletedAt);
@@ -2110,21 +2130,13 @@ try {
       return fetch('/api/household', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc, version: j.version }) }).then(r => r.status);
     }, marker);
     const merged = async marker => until(page, m => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === m && !f.deletedAt)), marker, 4000);
-    /* the toast hides after 6s and goes pointer-events:none with it, so a slow
-       runner would throw on the click and take the whole suite down */
-    const tapUndo = async () => {
-      const up = (await page.$$eval('#toast.show [data-act="undo"]', a => a.length)) === 1;
-      check('the toast is still up to tap Undo on', up);
-      if (up) { await page.click('#toast.show [data-act="undo"]'); await page.waitForTimeout(500); }
-      return up;
-    };
 
     check('the other phone gets its change in first', await aheadOnServer('RaceOne') === 200);
     await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(300);
     await page.click(`[data-act="del-food"][data-id="${slot.id}"]`); await page.waitForTimeout(150);
     check('deleting a food on a signed-in phone offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
     check('and their document merges in, rebuilt record by record, while that toast is still up', await merged('RaceOne'));
-    await tapUndo();
+    await tapUndo(page, 'the toast is still up to tap Undo on'); await page.waitForTimeout(500);
     const back = await page.evaluate(x => {
       const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(y => !y.deletedAt)[0];
       const f = k.foods.find(y => y.id === x.id), d = (k.week ? k.week.days : []).find(y => y.d === x.day);
@@ -2155,7 +2167,7 @@ try {
     await page.click(`[data-act="food-photo"][data-id="${slot.id}"]`); await page.waitForTimeout(300);
     await page.click('[data-act="food-photo-clear"]'); await page.waitForTimeout(150);
     check('and their document merges in while the photo toast is up', await merged('RaceTwo'));
-    await tapUndo();
+    await tapUndo(page, 'the toast is still up to tap Undo on'); await page.waitForTimeout(500);
     const pic = await page.evaluate(id => {
       const f = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0].foods.find(y => y.id === id);
       return { img: !!(f && f.img), toast: document.getElementById('toast').textContent };
@@ -2378,7 +2390,7 @@ try {
   check('the premium pieces wear a tag while they are on', await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length) >= 1 && (await pb.$$eval('.chip.lock', a => a.length)) === 0);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('and a second lunchbox just works', (await pb.$$eval('#nkName', a => a.length)) === 1);
-  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  await sheetDone(pb); await pb.waitForTimeout(300);
   await pb.click('[data-act="kidpick-on"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="tab"][data-tab="pack"]'); await pb.waitForTimeout(250);
   check('kid\'s pick is on, with the tag beside it', (await pb.$$eval('[data-act="kid-start"]', a => a.length)) === 1 && (await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length)) >= 1);
@@ -2416,7 +2428,7 @@ try {
   check('kid\'s pick is now locked in place', (await pb.$$eval('[data-act="kid-start"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="kidpick"]', a => a.length)) === 1);
   await pb.click('[data-act="upgrade"][data-why="kidpick"]'); await pb.waitForTimeout(300);
   check('and tapping it explains, in the sheet', /Letting them pick/.test(await pb.textContent('#sheetBody')));
-  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  await sheetDone(pb); await pb.waitForTimeout(300);
   /* yesterday's box was packed, so this morning asks how it went: locked, with the question still visible */
   await pb.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);
     const iso = y.getFullYear()+'-'+String(y.getMonth()+1).padStart(2,'0')+'-'+String(y.getDate()).padStart(2,'0');
@@ -2429,7 +2441,7 @@ try {
   check('the shopping list is still free, the pantry tick is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
   await pb.click('[data-act="have"]'); await pb.waitForTimeout(300);
   check('a pantry tick opens the sheet instead', /pantry that remembers/.test(await pb.textContent('#sheetBody')) && await pb.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('lunchsorted')).pantry).length === 0));
-  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  await sheetDone(pb); await pb.waitForTimeout(300);
   const bcfg = await pb.evaluate(() => fetch('/api/billing').then(r => r.json()));
   check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 2900 && bcfg.prices.lifetime.amount === 7900 && bcfg.prices.year.interval === 'year', bcfg);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
@@ -2446,7 +2458,7 @@ try {
   check('and OK puts it away for good', !/Add to Home Screen/.test(await pb.textContent('#view')) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-home-seen'))) === '1');
   const resumed = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /second lunchbox/i.test(document.querySelector('#sheetBody').textContent));
   check('after signing in, the plan sheet comes back on its own for the lunchbox they were adding', resumed);
-  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  await sheetDone(pb); await pb.waitForTimeout(300);
   check('signed in and free, the Subscription row says Not on', /Subscription\s*Not on/.test(await pb.textContent('#view')));
   await openPane(pb, 'plan');
   check('and the Subscription page offers the plan with no billing to manage', /Your plan\s*Free/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) >= 1);
@@ -2471,17 +2483,17 @@ try {
   await pb.click('[data-act="upgrade"][data-why="recipe"]'); await pb.waitForTimeout(350);
   check('and the plan sheet says what is locked and what is not',
     /The two the app comes with stay free to cook from/.test(await pb.textContent('#sheetBody')), await pb.textContent('#sheetBody'));
-  await pb.click('#sheetClose'); await pb.waitForTimeout(250);
+  await sheetDone(pb); await pb.waitForTimeout(250);
   await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(350);
   await pb.click('[data-act="upgrade"][data-why="food"]'); await pb.waitForTimeout(350);
   check('tapping the lock opens the plan sheet, not the form',
     (await pb.$$eval('#nfName', a => a.length)) === 0 && /own words/i.test(await pb.textContent('#sheetBody')));
-  await pb.click('#sheetClose'); await pb.waitForTimeout(250);
+  await sheetDone(pb); await pb.waitForTimeout(250);
   /* the idea bank must still add, or "free for good" is not true */
   await pb.click('[data-act="ideas"]'); await pb.waitForTimeout(350);
   const freeIdea = await pb.$('#sheetBody [data-act="add-idea"]:not(.done)');
   if (freeIdea) { await freeIdea.click(); await pb.waitForTimeout(500); }
-  await pb.click('#sheetClose').catch(() => {}); await pb.waitForTimeout(250);
+  await sheetDone(pb); await pb.waitForTimeout(250);
   check('and the idea bank still adds a food on a lapsed household',
     (await pb.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.filter(f => !f.deletedAt).length)) > foodsBefore, foodsBefore);
   /* the sheet left open across the last night of the trial must refuse at save time */
@@ -2491,13 +2503,30 @@ try {
   await pb.waitForTimeout(500);   /* save() is debounced, so the read has to outlive it */
   check('and a save that slips through while gated adds nothing, and says why', (await countFoods()) === beforeSave
     && /own words/i.test(await pb.textContent('#sheetBody')), beforeSave);
-  await pb.click('#sheetClose').catch(() => {}); await pb.waitForTimeout(250);
+  await sheetDone(pb); await pb.waitForTimeout(250);
   await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
 
+  /* The navigation does not open this sheet. The app reads upgrade=1, takes it out of the
+     address bar straight away, and opens the plan only once the boot's own GET /api/household
+     has come back with a session — so the thing to wait for is the sheet, not the load event,
+     and load fires long before it. It arrives in about a quarter of a second against until()'s
+     fifteen, so a miss is not slowness: it is that reply never landing, and the app has already
+     spent the intent it would need to try again. Keep the reply, then, for the FAIL to name. */
+  const bootReplies = [];
+  const keepReply = r => { if(r.url().includes('/api/household')) bootReplies.push(r.request().method()+' '+r.status()); };
+  const keepFail  = r => { if(r.url().includes('/api/household')) bootReplies.push(r.request().method()+' never answered'); };
+  const fresh = f => { if(f === pb.mainFrame()) bootReplies.length = 0; };   /* the last page's tail is not this boot's */
+  pb.on('response', keepReply); pb.on('requestfailed', keepFail); pb.on('framenavigated', fresh);
   await pb.goto(BASE+'/app/?upgrade=1'); await pb.waitForLoadState('load');
   const viaMail = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetBody').textContent));
-  check('the link in a reminder email opens the plan sheet on arrival', viaMail && !pb.url().includes('upgrade='));
-  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  pb.off('response', keepReply); pb.off('requestfailed', keepFail); pb.off('framenavigated', fresh);
+  check('the link in a reminder email opens the plan sheet on arrival', viaMail && !pb.url().includes('upgrade='),
+    viaMail ? undefined : {household: bootReplies, url: pb.url(), screen: await pb.evaluate(() => ({
+      sheet: document.querySelector('#sheet').className,
+      title: document.querySelector('#sheetTitle').textContent,
+      view: document.querySelector('#view').textContent.replace(/\s+/g, ' ').slice(0, 160)
+    })).catch(e => String(e))});
+  await sheetDone(pb); await pb.waitForTimeout(300);
   check('a signed-in parent who is not in ADMIN_EMAILS gets not-found from the numbers page', (await pb.evaluate(() => fetch('/api/admin').then(r => r.status))) === 404);
   const noCustomer = await pb.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
@@ -2665,7 +2694,7 @@ try {
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('a paid household can add a second lunchbox', (await pb.$$eval('#nkName', a => a.length)) === 1);
-  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  await sheetDone(pb); await pb.waitForTimeout(300);
   const invitePaid = await pb.evaluate(() => fetch('/api/household/invite', {method:'POST', headers:{'content-type':'application/json'}, body:'{}'}).then(r => r.status));
   check('and invite the other parent', invitePaid === 200, invitePaid);
   const dupYear = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
@@ -2673,7 +2702,7 @@ try {
   await openPane(pb, 'plan');
   await pb.click('[data-act="upgrade"][data-why="forever"]'); await pb.waitForTimeout(300);
   check('Switch to forever offers only the forever price', (await pb.$$eval('[data-act="buy"][data-plan="year"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="buy"][data-plan="lifetime"]', a => a.length)) === 1 && /never renews/.test(await pb.textContent('#sheetBody')));
-  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  await sheetDone(pb); await pb.waitForTimeout(300);
   await pb.click('[data-act="portal"]'); await pb.waitForURL(/billing\.stripe\.com/);
   check('Manage billing opens Stripe\'s portal for this customer', stripeCalls.some(c => c.path === '/v1/billing_portal/sessions' && c.params.customer === 'cus_pat' && /\/app\/\?portal=1$/.test(c.params.return_url)));
 
@@ -2695,7 +2724,7 @@ try {
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && portalStill);
-  await pb.click('#sheetClose'); await pb.waitForTimeout(200);
+  await sheetDone(pb); await pb.waitForTimeout(200);
 
   /* forever */
   await hook({ id: 'evt_5', type: 'checkout.session.completed', created: t0 + 4, data: { object: { id: 'cs_test_2', mode: 'payment', payment_status: 'paid', customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { household_id: String(patState.household.id), plan: 'lifetime' } } } });
@@ -3093,7 +3122,7 @@ try {
     const addIdea = async (name) => {
       await pr2.click('[data-act="ideas"]'); await pr2.waitForTimeout(300);
       await pr2.click(`[data-act="add-idea"][data-name="${name}"]`); await pr2.waitForTimeout(300);
-      await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
+      await sheetDone(pr2); await pr2.waitForTimeout(250);
     };
 
     /* ---- the idea bank's own recipes, free like the rest of the bank */
@@ -3137,7 +3166,7 @@ try {
     check('asking for one more lunch scales every amount and says how many it is making now',
       /7 lunches/.test(await cooking()) && /195 g quinoa/.test(await cooking()));
     await pr2.click('[data-act="cook-makes"][data-v="-1"]'); await pr2.waitForTimeout(200);
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    await sheetDone(pr2); await pr2.waitForTimeout(200);
 
     /* ---- the walk through */
     await openRow('Mediterranean quinoa salad'); await pr2.click('[data-act="cook"]'); await pr2.waitForTimeout(300);
@@ -3219,7 +3248,7 @@ try {
       (await pr2.$$eval('ul.steping .item', a => a.length)) === 0
       && !/What you need/.test(await cooking()));
     await pr2.click('[data-act="cook-step"][data-i="-1"]'); await pr2.waitForTimeout(250);
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
+    await sheetDone(pr2); await pr2.waitForTimeout(250);
 
     /* the other one the app ships, which nothing else in the suite exercises: its own
        shopping line, its own allergen, and the warning that decides which evening */
@@ -3239,7 +3268,7 @@ try {
     check('and cut to one lunch it still asks for a measurable amount of everything, never none',
       /1 lunch\+/.test(await cooking()) && one.length === 11 && !one.some(t => /(^|\s)0(\.\d+)?(\s|$)/.test(t)),
       (await cooking()).slice(0, 60) + ' || ' + one.join(' / '));
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
+    await sheetDone(pr2); await pr2.waitForTimeout(250);
 
     check('none of the cooking is written into the household: a half-made recipe is not something the other phone needs',
       await pr2.evaluate(() => !/"ticked"|"step":/.test(localStorage.getItem('lunchsorted') || '')));
@@ -3259,7 +3288,7 @@ try {
     await pr2.click(`[data-act="slot"][data-day="${today0}"][data-cat="main"]`); await pr2.waitForTimeout(350);
     check('and once a dish that has to be cooked is in it, the recipe is one tap from the week',
       (await pr2.$$eval('[data-act="cook"]', a => a.map(b => b.getAttribute('data-id')))).includes(quinoaId));
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    await sheetDone(pr2); await pr2.waitForTimeout(200);
     await pr2.click('[data-act="tab"][data-tab="pack"]'); await pr2.waitForTimeout(350);
     check('and the pack list names what in this box gets made, so the recipe waits in the kitchen',
       /Making it\?/.test(await pr2.textContent('#view'))
@@ -3390,7 +3419,7 @@ try {
     await pr2.click('[data-act="cook-units"][data-v="us"]'); await pr2.waitForTimeout(250);
     check('while in cups it is left exactly as the recipe wrote it',
       !/190°C/.test(await pr2.textContent('#sheetBody')));
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(250);
+    await sheetDone(pr2); await pr2.waitForTimeout(250);
 
     /* ---- a recipe is data from outside, like everything else. The shape v17 wrote —
        a recipe on the food — is carried forward into the library rather than dropped,
@@ -3458,7 +3487,7 @@ try {
       /Stir it <img src=x onerror/.test(hostile)
       && (await pr2.$$eval('#sheetBody img, #sheetBody a[href^="javascript"]', a => a.length)) === 0
       && await pr2.evaluate(() => !window.__ls_bad) && !/-4|16666/.test(hostile), hostile.slice(0, 160));
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    await sheetDone(pr2); await pr2.waitForTimeout(200);
 
     /* ---- removing one from the library, and what that leaves behind */
     /* the bank's recipes are nobody's to remove, so the button is not on them */
@@ -3466,7 +3495,7 @@ try {
     await bankRow.asElement().click(); await pr2.waitForTimeout(350);
     check('and the idea bank\u2019s recipes carry no Remove, because they were never the household\u2019s to lose',
       (await pr2.$$eval('[data-act="recipe-delete"]', a => a.length)) === 0);
-    await pr2.click('#sheetClose'); await pr2.waitForTimeout(200);
+    await sheetDone(pr2); await pr2.waitForTimeout(200);
     const barsAgain = await pr2.evaluateHandle(() => [...document.querySelectorAll('[data-act="cook-recipe"]')].find(b => /Legacy bars/.test(b.textContent)));
     await barsAgain.asElement().click(); await pr2.waitForTimeout(400);
     check('a recipe of the household\u2019s own can be removed from where it is read, and the idea bank\u2019s cannot',
@@ -3545,7 +3574,7 @@ try {
     await own.asElement().click(); await pr3.waitForTimeout(400);
     check('and it is counted in servings, not in lunches, because that is what its own page said',
       /makes 4 servings/.test(await pr3.textContent('#sheetBody')), await pr3.textContent('#sheetBody'));
-    await pr3.click('#sheetClose'); await pr3.waitForTimeout(200);
+    await sheetDone(pr3); await pr3.waitForTimeout(200);
     await ctxR3.close();
   }
 
