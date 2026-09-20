@@ -4387,6 +4387,14 @@ function dropFoods(rows){
       if(dayGone(d)) return;                  /* a box already eaten keeps nothing going forward */
       ALL_CATS.forEach(function(c){ if(d.slots[c.k] === f.id) r.stillIn++; });
     }); });
+    /* Counted, never written: no day is touched here and no week is stamped, and that is
+       load-bearing rather than incidental. The loop this replaced cleared days that had
+       already gone, and stamping the week — which a put-back needs to survive a merge —
+       pushed this phone's rewrite of a packed day to the household. mergeWeek resolves a
+       gone day from `older` by createdAt with `<=`, which on a tie takes whichever copy
+       is the local argument, so two phones never converged and the compartment flipped on
+       the server for good. If a clearing loop ever comes back here in any form, it needs
+       the dayGone() guard that enforceRules and the redraw both carry. */
     touch(k); if(r.removed.indexOf(k) < 0) r.removed.push(k);
   });
   return r;
