@@ -1091,16 +1091,28 @@ try {
   check('the week after has no gone days, so every compartment is a button', (await page.$$eval('.daycard .cmp[data-act="slot"]', a => a.length)) > 0 && (await page.$$eval('.daycard.past', a => a.length)) === 0);
   await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   check('Shop adds a Next week section once it is planned', /Next week/.test(await page.textContent('#view')));
-  /* one pantry row behind two rows on screen: the tick must come back to the week it
-     was made in, not to whichever of the two the list drew first */
+  /* One pantry row behind two rows on screen: the tick must come back to the week it was
+     made in, not to whichever of the two the list drew first. The draw overlaps the two
+     weeks heavily on its own — 28 rows of 30 — but nothing seeds it, so the pair is put
+     there rather than hoped for: next week's first main goes into the last day of this
+     week, which is the day furthest from having gone. */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const k = d.kids.filter(x => !x.deletedAt)[0];
+    const twin = k.next.days[0].slots.main;
+    k.week.days[k.week.days.length - 1].slots.main = twin;
+    localStorage.setItem('lunchsorted', JSON.stringify(d));
+  });
+  await page.reload(); await page.waitForTimeout(600);
+  await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   const dupe = await page.evaluate(() => {
     const keys = w => [].slice.call(document.querySelectorAll('[data-act="have"][data-when="'+w+'"]')).map(b => b.getAttribute('data-key'));
     const now = keys('now');
     return keys('next').filter(k => now.indexOf(k) > -1)[0] || null;
   });
-  check('a food in both weeks\u2019 lists once under each week', !!dupe, dupe);
+  check('a food put in both weeks lists once under each week', !!dupe, dupe);
   if(!dupe) check('ticking the next-week row leaves focus on that row, not on this week\u2019s twin',
-    false, 'the draw put no food on both weeks, so the pair was never built');
+    false, 'the pair was never built, so nothing was tested');
   if(dupe){
     const dupeDone = k => page.evaluate(x => [].slice.call(document.querySelectorAll('[data-act="have"]'))
       .filter(b => b.getAttribute('data-key') === x).map(b => b.classList.contains('done')), k);
