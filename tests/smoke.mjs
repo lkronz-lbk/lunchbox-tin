@@ -540,48 +540,57 @@ try {
 
   /* Two testers, the same morning: adding a food sent them back to the top of the bank,
      so a week's shopping was one tap and a long scroll, one tap and a long scroll. The
-     sheet must not be redrawn under them, and a row tapped by mistake must come off. */
-  await page.evaluate(() => { document.getElementById('sheetBody').scrollTop = 1200; });
+     sheet must not be redrawn under them, and a food tapped by mistake must come back off
+     — but only a food this sitting put there. */
+  const LIVE = n => page.evaluate(x => JSON.parse(localStorage.getItem('lunchsorted'))
+    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === x)), n);
+  const PRESSED = n => page.getAttribute('[data-act="add-idea"][data-name="' + n + '"]', 'aria-pressed');
+  const AT = () => page.evaluate(() => document.getElementById('sheetBody').scrollTop);
+
+  /* a food no rule of either box keeps out, so it lands on both and the removal is
+     tested against both; scrolled to by hand, so the tap itself never moves the sheet */
+  const idea1b = await page.$$eval('[data-act="add-idea"]:not(.done)',
+    a => (a.find(b => !/gluten|nuts|dairy|egg|soy|fish|sesame/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
+  await page.evaluate(n => document.querySelector('[data-act="add-idea"][data-name="' + n + '"]')
+    .scrollIntoView({block: 'center'}), idea1b);
   await page.waitForTimeout(150);
-  const wasAt = await page.evaluate(() => document.getElementById('sheetBody').scrollTop);
+  const wasAt = await AT();
   check('the idea bank is long enough that losing your place costs a scroll', wasAt > 0, wasAt);
-  /* a row already under their thumb down here, so the tap itself never scrolls the sheet
-     and what is measured after it is the app's doing and nobody else's */
-  const idea1b = await page.$$eval('[data-act="add-idea"]:not(.done)', a => {
-    const box = document.getElementById('sheetBody').getBoundingClientRect();
-    const hit = a.find(b => {
-      const r = b.getBoundingClientRect();
-      return r.top > box.top + 10 && r.bottom < box.bottom - 10;
-    });
-    return hit ? hit.getAttribute('data-name') : null;
-  });
+
+  const beforeAdd = await LIVE(idea1b);
   await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]');
   await page.waitForTimeout(350);
-  check('adding from the idea bank leaves the list exactly where it was',
-    (await page.evaluate(() => document.getElementById('sheetBody').scrollTop)) === wasAt,
-    await page.evaluate(() => document.getElementById('sheetBody').scrollTop));
-  check('and the row it was tapped on is ticked where it stands',
-    (await page.getAttribute('[data-act="add-idea"][data-name="' + idea1b + '"]', 'aria-pressed')) === 'true');
+  const hadOn = await LIVE(idea1b);
+  check('adding from the idea bank leaves the list exactly where it was', (await AT()) === wasAt, await AT());
+  check('and the row it was tapped on is ticked where it stands, on every lunchbox',
+    (await PRESSED(idea1b)) === 'true' && hadOn.length === 2 && hadOn.every(Boolean), [idea1b, hadOn]);
 
-  const hadOn = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
-    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea1b);
   await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]');   /* tapped by mistake: tap it again */
   await page.waitForTimeout(350);
-  const tookOff = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
-    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea1b);
-  check('tapping a ticked idea takes the food off every lunchbox it went on',
-    tookOff.length === 2 && tookOff.every(v => v === false), [idea1b, tookOff]);
+  /* the second tap undoes the first tap — not the name. A lunchbox that already had the
+     food before the tap still has it after, because that add was somebody else's */
+  check('tapping it again takes back exactly what that tap added, and nothing that was there before',
+    (await LIVE(idea1b)).join() === beforeAdd.join(), [idea1b, beforeAdd, await LIVE(idea1b)]);
   check('and it unticks without redrawing the sheet under them',
-    (await page.getAttribute('[data-act="add-idea"][data-name="' + idea1b + '"]', 'aria-pressed')) === 'false'
-    && (await page.evaluate(() => document.getElementById('sheetBody').scrollTop)) === wasAt);
-  check('and taking it off offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
+    (await PRESSED(idea1b)) === 'false' && (await AT()) === wasAt);
+  check('and taking it back off offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
   await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
-  const backOn = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
-    .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea1b);
   check('and Undo puts it back on exactly the lunchboxes it came off, ticked again',
-    backOn.join() === hadOn.join()
-    && (await page.getAttribute('[data-act="add-idea"][data-name="' + idea1b + '"]', 'aria-pressed')) === 'true',
-    [idea1b, hadOn, backOn]);
+    (await LIVE(idea1b)).join() === hadOn.join() && (await PRESSED(idea1b)) === 'true', [idea1b, hadOn]);
+
+  /* The half that cost three reviewers a finding: a row that was already ticked when the
+     sheet opened was not put there by this sitting. It may be a food the parent wrote
+     themselves — their photo, their amounts — that only shares a name with the bank, so
+     the second tap is not licence to delete it. It stays the no-op it always was. */
+  await page.click('#sheetClose'); await page.waitForTimeout(250);
+  await page.click('[data-act="ideas"]'); await page.waitForTimeout(350);
+  check('reopening the sheet shows that food ticked', (await PRESSED(idea1b)) === 'true');
+  await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]');
+  await page.waitForTimeout(350);
+  check('but tapping a row that arrived ticked leaves the food alone, and says so',
+    (await LIVE(idea1b)).join() === hadOn.join()
+    && (await PRESSED(idea1b)) === 'true'
+    && /already on the list/i.test(await page.textContent('#toast')), [idea1b, await page.textContent('#toast')]);
 
   await page.click('[data-act="add-to"]');                     /* take the first box back out */
   await page.waitForTimeout(350);
@@ -1588,6 +1597,38 @@ try {
   check('deleting a food offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
   await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(250);
   check('Undo puts the food back', (await page.textContent('#view')).includes(firstFood.trim()));
+
+  /* "A day that has gone is never rewritten" — taking a food off the list is no exception.
+     Nothing covered this on either route out, which is how both of them came to clear a
+     Monday that had already been eaten. A day is pushed onto the week behind yesterday's
+     date, holding the same food a day still ahead holds. */
+  const goneSetup = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0];
+    const ahead = k.week.days.find(x => Object.keys(x.slots).some(c => x.slots[c]));
+    const cat = Object.keys(ahead.slots).find(c => ahead.slots[c]), id = ahead.slots[cat];
+    const t = new Date(); t.setDate(t.getDate() - 1);
+    const past = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+    const slots = {}; Object.keys(ahead.slots).forEach(c => slots[c] = null); slots[cat] = id;
+    const lock = {}; Object.keys(ahead.lock).forEach(c => lock[c] = false); lock[cat] = true;
+    k.week.days.unshift({d: past, dow: ((t.getDay()+6)%7)+1, slots, lock, kidPick:{}, over:{}});
+    localStorage.setItem('lunchsorted', JSON.stringify(d));
+    return {past, cat, id, name: k.foods.find(f => f.id === id).n};
+  });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(500);
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="del-food"][data-id="' + goneSetup.id + '"]'); await page.waitForTimeout(300);
+  const afterDel = await page.evaluate(g => {
+    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+    const gone = k.week.days.find(x => x.d === g.past);
+    return {goneSlot: gone && gone.slots[g.cat], goneLock: gone && gone.lock[g.cat],
+      aheadStillHolds: k.week.days.some(x => x.d > g.past && x.slots[g.cat] === g.id),
+      tombstoned: k.foods.some(f => f.id === g.id && !!f.deletedAt)};
+  }, goneSetup);
+  check('removing a food leaves a day that has gone exactly as it was packed',
+    afterDel.goneSlot === goneSetup.id && afterDel.goneLock === true, afterDel);
+  check('while the food itself goes, and the days still ahead give it up',
+    afterDel.tombstoned && !afterDel.aheadStillHolds, afterDel);
+  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(250);
 
   /* erase really erases, old names included */
   await page.evaluate(() => { localStorage.setItem('lunchbox-tin', localStorage.getItem('lunchsorted')); localStorage.setItem('lunchbox-tin-v1', '{"foods":[],"settings":{}}'); localStorage.setItem('fiveboxes-backup-1', '{"old":1}'); localStorage.setItem('lunchsorted-backup-2', '{"old":2}'); });

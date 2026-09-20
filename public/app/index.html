@@ -284,7 +284,11 @@ nav.tabs svg{width:21px;height:21px}
 .toast{position:fixed;left:50%;bottom:calc(78px + var(--sab));transform:translate(-50%,14px);
   background:var(--toast-bg);color:var(--toast-fg);padding:10px 16px;border-radius:16px;font-size:13.5px;z-index:40;max-width:min(92vw,420px);text-align:center;
   opacity:0;pointer-events:none;transition:all .2s}
-.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+/* The toast sits over the foot of the idea bank, and that list is now tapped row after
+   row: a thumb aimed at the food under it must reach the food, not the message about the
+   last one. Only Undo takes a tap. */
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.show button{pointer-events:auto}
 .toast button{min-height:44px;margin:-10px -8px -10px 8px;padding:0 8px;background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px}
 @media (min-width:520px){
   .cmp{min-height:112px}
@@ -1573,19 +1577,19 @@ var APP_BUILD = 'lunchsorted-v23';     /* the same tag as VERSION in sw.js; npm 
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
-   v20 shipped the recipe work as one launch and is live; v21's note is the delta
-   against it, the box against every amount on a step. v22 only straightens a row on
-   Pack, which is a screen that moved, so it has nothing of its own to say — and it
-   carries v21's sentence and walk-through forward rather than dropping them, because
-   v21 landed two days ago and a phone that never opened it would otherwise go from
-   v20 to v22 and never hear about recipes at all. The cost is one repeat for the few
-   who did open v21; the note is per-build and never catches up on a build skipped.
+   v23 is the idea bank: two testers wrote in the same morning about adding foods one
+   at a time, and both a longer sitting and a way back out of a mistap are things a
+   parent can act on, so it gets a note of its own. That drops v22's, which carried
+   v21's recipe sentence forward for the phones that had skipped it — v20 shipped the
+   recipe work itself and is long live, so what a v21-skipper now misses is the note,
+   not the feature. `seenAs` is only for a note carried forward, naming the older build
+   it was already shown as; this one is original to v23, so it carries none.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v23', seenAs:'lunchsorted-v23', text:'New: the idea bank keeps your place \u2014 add as many foods as you like in one go, and tap one again to take it back off.',
+var WHATS_NEW = {build:'lunchsorted-v23', text:'New: the idea bank keeps your place \u2014 add as many foods as you like in one go, and tap one again if you tapped it by mistake.',
   steps:[
-    ['Add them all in one go', 'The idea bank stays where you left it. Tap a food and the tick lands on that row and nothing else moves, so the next one you wanted is still under your thumb \u2014 no scrolling back down after every single one.'],
-    ['Tap again to take it off', 'Tapped the wrong row, or changed your mind? Tap it again and it comes off the food list there and then, out of any lunch it had been put in, with an Undo if that was the mistake.']
+    ['Add them all in one go', 'The idea bank stays where you left it. Tap a food and the tick lands on that row and nothing else moves, so the next thing you wanted is still under your thumb \u2014 tap as many as you like in one sitting.'],
+    ['Tapped the wrong one? Tap it again', 'A food you just added comes straight back off \u2014 off every lunchbox that tap put it on, with an Undo if that was the mistake. Foods that were already on the list before you opened Ideas stay put; those come off on the Foods tab, where each one has its own bin.']
   ]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
@@ -1602,7 +1606,7 @@ function whatsNew(){
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
    Account categories. It is view state and never reaches S, or the merge would
    read a tap as a change and push on every one. */
-var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', recipeFound:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, ideaAdded:null, ideasDirty:false, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', recipeFound:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'});
 /* the one test for whether a pane may be on screen. A pane is opened by a tap but
    also by a link from an email and by the return from Stripe, so the render asks
@@ -2888,7 +2892,16 @@ function openSheet(title, html, state){
   document.body.style.overflow = 'hidden';
 }
 function closeSheet(){ sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
-  UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = ''; }
+  UI.ideaAdded = null;                          /* "tap it again" means the tap you just made, and the sitting ends here */
+  UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = '';
+  if(UI.ideasDirty){ UI.ideasDirty = false; render(); } }
+/* A food added from the bank changes the Foods tab, and the sheet covers the Foods tab.
+   Twelve taps used to be twelve rebuilds of a screen nobody could see, each one throwing
+   away the eaten-history index behind it; the tab is redrawn once, as the sheet goes. */
+function ideasTouched(){
+  if(sheetEl.classList.contains('open')) UI.ideasDirty = true;
+  else { UI.ideasDirty = false; render(); }    /* Undo tapped after the sheet was put away */
+}
 /* The what’s new note is retired by the parent coming out of the walk-through the way
    it is left when it has been read: Got it at its foot, or Done at its head. A tap on the
    backdrop puts the sheet away and leaves the note alone — the backdrop is the whole
@@ -3952,7 +3965,7 @@ function addCats(){
 /* Add one food to several lunchboxes at once. A lunchbox whose rules keep the
    food out is skipped and named — nothing lands in a box it cannot go in. */
 function addFoodTo(targets, o){
-  var r = {added:[], skipped:[], already:[], flagged:[]};
+  var r = {added:[], skipped:[], already:[], flagged:[], foods:[]};
   var takers = targets.filter(function(k){ return !violation(k, o); });
   targets.forEach(function(k){
     /* already on the list first: a food a rule now flags is still on the list,
@@ -3962,7 +3975,8 @@ function addFoodTo(targets, o){
        out steps aside only when another box takes it; the only box, or every
        box refusing, gets it on the list flagged, where the Foods tab marks it */
     if(violation(k, o) && takers.length){ r.skipped.push(k); return; }
-    k.foods.push(newFood(k, o)); touch(k); r.added.push(k);
+    var made = newFood(k, o);
+    k.foods.push(made); touch(k); r.added.push(k); r.foods.push(made);   /* named, so the tap that made them can take exactly them back off */
     if(violation(k, o)) r.flagged.push(k);
   });
   return r;
@@ -3977,40 +3991,54 @@ function addedLine(name, r){
   return name+' added to '+listNames(r.added)
     + (r.skipped.length ? ' \u2014 not '+listNames(r.skipped)+', the rules keep it out' : flag);
 }
-/* The other half of a tap in the idea bank. A food put on by mistake comes off
-   every lunchbox it was added to at once, the same way it went on, and it leaves
-   by the one door a food ever leaves by: the tombstone the Foods tab's X uses,
-   with the compartments it was filling remembered so one Undo puts all of it back. */
-function removeFoodFrom(targets, o){
-  var key = normKey(o.n), r = {removed:[], foods:[], wasIn:[]};
-  targets.forEach(function(k){
-    var mine = foodsOf(k).filter(function(f){ return normKey(f.n) === key; });
-    if(!mine.length) return;
-    r.removed.push(k);
-    mine.forEach(function(f){
-      f.deletedAt = now(); touch(f); r.foods.push(f);
-      weeksOf(k).forEach(function(w){ w.days.forEach(function(d){
-        ALL_CATS.forEach(function(c){ if(d.slots[c.k] === f.id){
-          r.wasIn.push({f:f, d:d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k], over:isOverride(k, d, c.k)});
-          d.slots[c.k] = null; d.lock[c.k] = false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); } });
-      }); });
-    });
-    touch(k);
+/* The other half of a tap in the idea bank, and it undoes that tap and nothing else.
+   It takes back only the records that tap created, named by id: a row that was already
+   ticked when the sheet opened was not put there just now, and may be a food the parent
+   wrote themselves — their photo, their amounts, their recipe — that only shares a name
+   with the bank. Those are not this gesture's to delete.
+
+   Ids rather than the objects themselves, because a sync landing between the two taps
+   rebuilds the whole document through normalizeAccount: a food caught by reference
+   before that would be put back into a copy of the household nobody is looking at,
+   and the parent would be told it had worked. */
+function undoIdeaAdd(rows){
+  var r = {removed:[], wasIn:[]};
+  rows.forEach(function(row){
+    var k = kidById(row.kidId); if(!k) return;
+    var f = foodById(k, row.foodId); if(!f) return;
+    f.deletedAt = now(); touch(f);
+    var moved = false;
+    weeksOf(k).forEach(function(w){ w.days.forEach(function(d){
+      if(dayGone(d)) return;                  /* what was packed stays as it was packed */
+      ALL_CATS.forEach(function(c){ if(d.slots[c.k] === f.id){
+        r.wasIn.push({kidId:k.id, foodId:f.id, d:d.d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k], over:isOverride(k, d, c.k)});
+        d.slots[c.k] = null; d.lock[c.k] = false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); moved = true; } });
+    }); });
+    if(moved) weeksOf(k).forEach(touch);      /* the merge reads the week's own stamp, not the food's */
+    touch(k); r.removed.push(k);
   });
   return r;
 }
-function putFoodBack(r){
-  r.foods.forEach(function(f){ f.deletedAt = null; touch(f); });
-  r.wasIn.forEach(function(w){
-    w.d.slots[w.c] = w.f.id; w.d.lock[w.c] = w.lock;
-    if(w.pick){ w.d.kidPick = w.d.kidPick || {}; w.d.kidPick[w.c] = w.pick; }
-    if(w.over) setOverride(w.d, w.c, w.f.id);
+function redoIdeaAdd(rows, r){
+  rows.forEach(function(row){
+    var k = kidById(row.kidId); if(!k) return;
+    var f = k.foods.filter(function(x){ return x.id === row.foodId; })[0];
+    if(!f) return;
+    f.deletedAt = null; touch(f); touch(k);
   });
-  r.removed.forEach(function(k){ touch(k); });
+  r.wasIn.forEach(function(w){
+    var k = kidById(w.kidId); if(!k) return;
+    var d = findWeekDay(k, w.d); if(!d || dayGone(d)) return;   /* the day may have gone while the toast was up */
+    d.slots[w.c] = w.foodId; d.lock[w.c] = w.lock;
+    if(w.pick){ d.kidPick = d.kidPick || {}; d.kidPick[w.c] = w.pick; }
+    if(w.over) setOverride(d, w.c, w.foodId);
+    weeksOf(k).forEach(touch);
+  });
 }
-function removedLine(name, r){
-  if(kids().length < 2) return name+' taken off the list';
-  return name+' taken off '+listNames(r.removed);
+function undoneLine(name, r){
+  var days = r.wasIn.length ? ' \u2014 and out of '+r.wasIn.length+' day'+(r.wasIn.length > 1 ? 's' : '')+' of the plan' : '';
+  if(kids().length < 2) return name+' taken back off the list'+days;
+  return name+' taken back off '+listNames(r.removed)+(r.removed.length > 1 ? '\u2019 lists' : '\u2019s list')+days;
 }
 function addFailLine(name, r){
   if(!r.skipped.length) return 'Already on the list';
@@ -4060,7 +4088,7 @@ function ideasSheet(){
     done[key] = st.on; shut[key] = st.shut;
   });
   var cats = addCats(), on = cats.map(function(c){ return c.k; });
-  var h = targetRow('ideas') + '<p class="hint" style="margin:0">Tap to add as many as you like. Tap again to take one off.</p>';
+  var h = targetRow('ideas') + '<p class="hint" style="margin:0">Tap to add as many as you like. Tapped one by mistake? Tap it again.</p>';
   cats.forEach(function(c){
     var items = BANK.filter(function(b){ return b.c===c.k && !shut[normKey(b.n)]; });
     if(!items.length) return;
@@ -4537,7 +4565,7 @@ function helpSheet(){
   var qa = [
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle day redraws one day, or tap a compartment to change one thing.'],
     ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
-    ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
+    ['How do I add a food, or take one off?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 as many as you like, the list stays where you are, and one you just tapped comes back off with another tap. The bin on the Foods tab takes off any food at all. Both offer Undo. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
     ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with \u2014 a Mediterranean quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
     ['Can I bring a recipe in from somewhere else?', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read \u2014 copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox\u2019s food list is offered after. Keeping one of your own is part of the Household plan.'],
     ['Can it walk me through cooking one?', 'Open a recipe and tap Cook it step by step. One step fills the screen, and What you need under it lists only what that step needs, with a box to tick against each one as it goes in. The whole recipe is one tap away at the top. Nothing you tick is saved, so it never reaches the other parent\u2019s phone.'],
@@ -4988,25 +5016,31 @@ document.addEventListener('click', function(ev){
     }
     return;
   }
-  /* The idea bank is a list to work down, not a list to leave and come back to: a
-     tap adds, another tap on the same row takes it off again, and the sheet itself
-     never redraws, so a parent keeps their place however many they tap. */
+  /* The idea bank is a list to work down, not a list to leave and come back to: a tap
+     adds, the same row tapped again takes that add back, and the sheet never redraws,
+     so a parent keeps their place however many they tap. Only what this sitting added
+     can be taken back — a row that arrived ticked is still the no-op it always was. */
   if(act==='add-idea'){
-    var b = BANK.filter(function(x){ return x.n===el.getAttribute('data-name'); })[0];
+    var b = bankByName(el.getAttribute('data-name'));
     if(!b) return;
-    var ts4 = addTargets();
-    if(el.getAttribute('aria-pressed') === 'true'){
-      var d4 = removeFoodFrom(ts4, b);
-      if(!d4.foods.length){ markIdea(b.n, ideaState(b, ts4).on); return; }   /* the rules had it, not the list */
-      save(); markIdea(b.n, false); render();
-      toast(removedLine(b.n, d4), function(){
-        putFoodBack(d4); save(); render(); markIdea(b.n, ideaState(b).on); toast('Put back');
+    var ts4 = addTargets(), key4 = normKey(b.n);
+    UI.ideaAdded = UI.ideaAdded || nullMap();
+    var mine4 = UI.ideaAdded[key4];
+    if(mine4){
+      delete UI.ideaAdded[key4];
+      var u4 = undoIdeaAdd(mine4);
+      save(); markIdea(b.n, ideaState(b, ts4).on); ideasTouched();
+      toast(undoneLine(b.n, u4), function(){
+        redoIdeaAdd(mine4, u4);
+        if(UI.ideaAdded) UI.ideaAdded[key4] = mine4;          /* takeable again, if the sheet is still up */
+        save(); markIdea(b.n, ideaState(b).on); ideasTouched(); toast('Put back');
       });
       return;
     }
     var r4 = addFoodTo(ts4, b);
     if(!r4.added.length){ toast(addFailLine(b.n, r4)); markIdea(b.n, ideaState(b, ts4).on); return; }
-    save(); markIdea(b.n, ideaState(b, ts4).on); render(); toast(addedLine(b.n, r4)); return;
+    UI.ideaAdded[key4] = r4.foods.map(function(f){ return {kidId:f.kidId, foodId:f.id}; });
+    save(); markIdea(b.n, ideaState(b, ts4).on); ideasTouched(); toast(addedLine(b.n, r4)); return;
   }
   if(act==='seed'){
     var added = seedLibrary(kid, 'some');
@@ -5223,6 +5257,7 @@ document.addEventListener('click', function(ev){
     var wasIn = [];
     f.deletedAt = now(); touch(f);
     weeksOf(kid).forEach(function(w){ w.days.forEach(function(d){
+      if(dayGone(d)) return;                  /* a day that has gone is not ours to rewrite, here either */
       ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){
         wasIn.push({d:d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k], over:isOverride(kid, d, c.k)});
         d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); } });

@@ -40,7 +40,12 @@ food list from a 200-item library and produce a planned week immediately. From t
   "Plan the week" banner draws everything with no sheet. A food added from the
   idea bank or by hand goes into every lunchbox unless you say otherwise; a box whose rules keep
   it out is skipped and named when another box takes it, and gets it flagged when it is the only
-  box. The "Add it to" choice sticks for the rest of the session. A lunchbox filled with "Fill the
+  box. The "Add it to" choice sticks for the rest of the session. The idea bank is not redrawn by
+  a tap, so a parent keeps their place down a long list; tapping a row again takes back exactly
+  what that tap added, from exactly the boxes it added to, with Undo. A row already ticked when
+  the sheet opened is not that sitting's to take back — it may be a food written by hand that
+  only shares a name with the bank — and stays the no-op it was, so foods come off for good by
+  the bin on the Foods tab. Neither route rewrites a day that has gone. A lunchbox filled with "Fill the
   list for me" is planned on its own until the next Plan the week matches it in; the toast after
   Plan the week says how many compartments had to differ.
 - **Plan ahead** — one more week (`kid.next`), reached by the Next button beside the week's date, drawn and
