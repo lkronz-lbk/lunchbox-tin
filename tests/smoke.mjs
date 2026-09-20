@@ -609,16 +609,26 @@ try {
     (await LIVE(idea1b)).join() === hadOn.join(), [idea1b, hadOn, await LIVE(idea1b)]);
 
   /* a whole compartment at once, and one Undo for the lot */
-  const catBefore = await page.$$eval('[data-act="add-idea"]', a => a.filter(b => b.getAttribute('aria-pressed') === 'false').length);
-  await page.click('[data-act="add-cat"]'); await page.waitForTimeout(500);
+  /* one named section, so a handler that ignored data-c and added the whole bank would fail */
+  const CAT = 'fruit';
+  const inCat = () => page.$$eval('[data-act="add-cat"][data-c="' + CAT + '"]',
+    a => { const list = a[0].closest('div').nextElementSibling;
+      const rows = [...list.querySelectorAll('[data-act="add-idea"]')];
+      return {total:rows.length, off:rows.filter(b => b.getAttribute('aria-pressed') === 'false').length}; });
+  const outsideOff = () => page.$$eval('[data-act="add-idea"]',
+    (a, c) => a.filter(b => b.getAttribute('aria-pressed') === 'false' && !b.closest('.list').previousElementSibling.querySelector('[data-c="' + c + '"]')).length, CAT);
+  const catBefore = await inCat(), otherBefore = await outsideOff();
+  await page.click('[data-act="add-cat"][data-c="' + CAT + '"]'); await page.waitForTimeout(600);
   const catToast = await page.textContent('#toast');
-  const catAfter = await page.$$eval('[data-act="add-idea"]', a => a.filter(b => b.getAttribute('aria-pressed') === 'false').length);
-  check('Add all ticks every food in that section, and says how many', catAfter < catBefore && /^\d+ added/.test(catToast), [catBefore, catAfter, catToast]);
+  const catAfter = await inCat(), otherAfter = await outsideOff();
+  check('Add all ticks every food in that section, and says how many of what',
+    catBefore.off > 0 && catAfter.off === 0 && /^\d+ fruit added/.test(catToast), [catBefore, catAfter, catToast]);
+  check('and leaves every other section exactly as it was', otherAfter === otherBefore, [otherBefore, otherAfter]);
   check('and offers one Undo for the lot', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
-  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(500);
-  check('which takes the whole section back off again',
-    (await page.$$eval('[data-act="add-idea"]', a => a.filter(b => b.getAttribute('aria-pressed') === 'false').length)) === catBefore,
-    await page.$$eval('[data-act="add-idea"]', a => a.filter(b => b.getAttribute('aria-pressed') === 'false').length));
+  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(600);
+  check('which takes that whole section back off again, and nothing else',
+    (await inCat()).off === catBefore.off && (await outsideOff()) === otherBefore,
+    [catBefore, await inCat()]);
 
   await page.click('[data-act="add-to"]');                     /* take the first box back out */
   await page.waitForTimeout(350);
@@ -1626,6 +1636,44 @@ try {
   await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(250);
   check('Undo puts the food back', (await page.textContent('#view')).includes(firstFood.trim()));
 
+  /* A week already drawn is a plan the parent made and may be shopping for tonight.
+     Taking a food off the list is a decision about the weeks after it, so the boxes
+     that already hold the food keep it, marked, until they are redrawn — rather than
+     going blank on a parent who will not remember why they are looking at an empty box. */
+  const inBox = await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+    const day = k.week.days.find(x => Object.keys(x.slots).some(c => x.slots[c]));
+    const cat = Object.keys(day.slots).find(c => day.slots[c]);
+    const id = day.slots[cat];
+    return {day:day.d, cat, id, name:k.foods.find(f => f.id === id).n};
+  });
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="del-food"][data-id="' + inBox.id + '"]'); await page.waitForTimeout(350);
+  const afterOff = await page.evaluate(g => {
+    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+    const day = k.week.days.find(x => x.d === g.day);
+    return {slot:day.slots[g.cat], onList:k.foods.some(f => f.id === g.id && !f.deletedAt)};
+  }, inBox);
+  check('taking a food off the list leaves the boxes already drawn holding it',
+    afterOff.slot === inBox.id && afterOff.onList === false, [inBox.name, afterOff]);
+
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(350);
+  const weekText = await page.textContent('#view');
+  check('and that compartment still names the food, marked off the list, rather than going blank',
+    weekText.includes(inBox.name) && /off the list/.test(weekText), inBox.name);
+
+  /* and it is off the list for every draw from here on */
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+  check('while the food is gone from the food list itself',
+    !(await page.$('[data-act="del-food"][data-id="' + inBox.id + '"]')));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(350); await goShuffle(page);
+  check('and a redraw replaces it, which is when the box lets it go',
+    await page.evaluate(g => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+      return !k.week.days.some(day => Object.keys(day.slots).some(c => day.slots[c] === g.id));
+    }, inBox), inBox.name);
+
   /* "A day that has gone is never rewritten" — taking a food off the list is no exception.
      Nothing covered this on either route out, which is how both of them came to clear a
      Monday that had already been eaten. A day is pushed onto the week behind yesterday's
@@ -1654,8 +1702,8 @@ try {
   }, goneSetup);
   check('removing a food leaves a day that has gone exactly as it was packed',
     afterDel.goneSlot === goneSetup.id && afterDel.goneLock === true, afterDel);
-  check('while the food itself goes, and the days still ahead give it up',
-    afterDel.tombstoned && !afterDel.aheadStillHolds, afterDel);
+  check('while the food itself goes, and the days still ahead keep it until they are redrawn',
+    afterDel.tombstoned && afterDel.aheadStillHolds, afterDel);
   await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(250);
 
   /* erase really erases, old names included */
@@ -1682,15 +1730,36 @@ try {
     const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0];
     k.packed['2020-01-06'] = {main:{at:'2020-01-06T08:00:00Z', by:null}};
     k.eaten['2020-01-06'] = {main:{foodId:k.foods[0].id, r:'ate', at:'2020-01-06T15:00:00Z', by:null}};
-    k.foods.push({id:'t_old', kidId:k.id, n:'Old thing', c:'side', t:[], a:'other', al:[], createdAt:'2020-01-01T00:00:00Z', updatedAt:'2020-01-01T00:00:00Z', deletedAt:'2020-01-02T00:00:00Z'});
+    /* one of the bank's, and one the parent wrote: only the first is the app's to sweep */
+    k.foods.push({id:'t_old', kidId:k.id, n:'Turkey & cheese roll-ups', c:'main', t:[], a:'deli', al:[], createdAt:'2020-01-01T00:00:00Z', updatedAt:'2020-01-01T00:00:00Z', deletedAt:'2020-01-02T00:00:00Z'});
+    k.foods.push({id:'t_mine', kidId:k.id, n:'Grandma\u2019s zucchini muffins', c:'side', t:[], a:'other', al:[], createdAt:'2020-01-01T00:00:00Z', updatedAt:'2020-01-01T00:00:00Z', deletedAt:'2020-01-02T00:00:00Z'});
     localStorage.setItem('lunchsorted', JSON.stringify(d));
   });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(300);
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300); await goShuffle(page);
-  check('a re-plan prunes ancient ticks, outcomes and tombstones', await page.evaluate(() => {
+  check('a re-plan prunes ancient ticks, outcomes and the bank\u2019s tombstones', await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
     return !k.packed['2020-01-06'] && !k.eaten['2020-01-06'] && !k.foods.some(f => f.id === 't_old');
+  }));
+  /* a food in the parent's own words cannot be tapped back out of the bank, so it is
+     not the sweep's to take: it waits in Taken off until they put it back or replace it */
+  check('but a food the parent wrote themselves is kept, however old, to be put back',
+    await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].foods.some(f => f.id === 't_mine' && f.deletedAt)));
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+  check('and it is on the Foods tab under Taken off, with a way back',
+    /Taken off/.test(await page.textContent('#view'))
+    && (await page.$$eval('[data-act="food-back"]', a => a.length)) >= 1);
+  await page.click('[data-act="food-back"]'); await page.waitForTimeout(300);
+  check('Put back puts it back on the list', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+    return k.foods.some(f => f.id === 't_mine' && !f.deletedAt);
+  }));
+  check('and that offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
+  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(300);
+  check('which takes it off again', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
+    return k.foods.some(f => f.id === 't_mine' && !!f.deletedAt);
   }));
 
   /* the site is served under its real CSP (the server above enforces netlify.toml) */
