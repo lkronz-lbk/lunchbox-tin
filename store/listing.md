@@ -128,7 +128,10 @@ the enrolment, so settle it before launch.
 
 ### Screenshots (6.9-inch, in this order)
 
-- [x] Uploaded, regenerated after the last interface change
+- [ ] Uploaded, regenerated after the last interface change
+      01-week and 02-pack were captured before the Babybel rename and still show it.
+      Reshoot and re-upload at the next editable moment: a version In Review cannot have
+      its screenshots swapped without pulling the submission back.
 
 1. `01-week.png`: A week of lunches in about a minute.
 2. `02-pack.png`: Mornings: one box, one check.
@@ -224,7 +227,7 @@ the free tier with the plan's pieces locked, which is also fine.
 
 > Lunch Sorted is a planner for parents. The parent is the user; a child only ever sees the "kid's pick" screen, which the parent opens and hands over, and it asks the child for nothing.
 >
-> How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle the week or one day; tap a compartment (the swap arrow) to change it. Shop: the list is what to buy, by aisle; the share button sends it to Notes or Reminders. Pack: one Packed check per box; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the gear beside the lunchbox name). The gear beside the lunchbox name: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
+> How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle the week or one day; tap a compartment (the swap arrow) to change it. Shop: the list is what to buy, by aisle; the share button sends it to Notes or Reminders. Pack: one Packed check per box; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the sliders icon beside the lunchbox name, labelled Lunchbox settings). The sliders icon beside the lunchbox name, labelled Lunchbox settings: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
 >
 > Payments: the Household plan is sold on our website (lunchsorted.app) and not in the app. The app does not use in-app purchase. Where the app mentions the plan, it opens Safari to our site; the app itself takes no payment. The review account is inside its free three weeks, so everything is on. This is a US-only listing.
 >
@@ -279,8 +282,12 @@ The one worth a look:
 - [x] Seller name: **Elizabeth Kronzek**, the legal entity on the account. A sole
       proprietorship is not a separate legal person, so Lila Bloom Enterprises cannot be
       the seller; it appears in the Copyright line instead. Do **not** sign the Paid Apps
-      Agreement: it exists for in-app purchase, and signing it pulls in tax and banking
-      forms this app has no use for. The Free Apps Agreement renews each September.
+      Agreement: it is what lets you charge for a download or sell in-app purchase, and
+      signing it pulls in the tax and banking forms. This app is free and the plan is sold
+      on the web, so neither applies. The Free Apps Agreement has no renewal date: Apple
+      reissues the agreements from time to time and an unaccepted one takes your apps off
+      sale, so check Business whenever Apple emails about updated terms. What does renew
+      annually is the Developer Program membership, on its enrolment anniversary.
 - [x] `app.lunchsorted` registered under Identifiers with Associated Domains enabled
 - [x] `hello@lunchsorted.app` actually delivers. Apple mails it and reviewers use it.
 
@@ -300,7 +307,8 @@ The one worth a look:
 
 - [x] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated;
       signed in with them once and a week built, within a few days of submitting
-- [x] Screenshots regenerated since the last interface change
+- [ ] Screenshots regenerated since the last interface change — 01-week and 02-pack
+      predate the Babybel rename; see the note under Screenshots above
 - [x] Privacy policy URL loads and matches the App Privacy answers above
 - [x] Build attached to the version. Export compliance asks nothing: the build carries
       `ITSAppUsesNonExemptEncryption = NO`

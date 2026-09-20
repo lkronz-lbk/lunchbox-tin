@@ -28,7 +28,8 @@ if (noteBuild !== appBuild) throw new Error(`WHATS_NEW.build in public/app/index
    then forgotten, it goes on silencing the note for every phone that stopped at that
    build, release after release — and unlike a stale note, nothing on screen ever says so.
    So it must name a build that is not this one, and the note must actually be carried. */
-const seenAs = (html.match(/var WHATS_NEW = \{[^}]*?seenAs:'([^']*)'/) || [])[1];
+const noteObj = (html.match(/var WHATS_NEW = \{[\s\S]*?\n  \]\};/) || [''])[0];
+const seenAs = (noteObj.match(/seenAs\s*:\s*['"]([^'"]*)['"]/) || [])[1];
 if (seenAs !== undefined) {
   if (seenAs === appBuild) throw new Error(`WHATS_NEW.seenAs in public/app/index.html equals APP_BUILD (${appBuild}), which would hide this build's note from every phone: drop seenAs, or name the earlier build the note is carried from`);
   if (!seenAs) throw new Error("WHATS_NEW.seenAs in public/app/index.html is empty: name the build the note was shown as, or remove the field");
@@ -88,14 +89,24 @@ export const LANDING_CSP = SITE_CSP
 export function assertParseable(toml) {
   const lines = toml.split('\n');
   const marks = lines
-    .map((l, i) => (/^(<{7}|={7}|>{7})(\s|$)/.test(l) ? i + 1 : 0))
+    .map((l, i) => (/^(<{7}|={7}|>{7}|\|{7})(\s|$)/.test(l) ? i + 1 : 0))
     .filter(Boolean);
   if (marks.length) throw new Error('netlify.toml has unresolved merge conflict markers on line(s) ' + marks.join(', ') + ' — Netlify fails the whole file on a parse error, so no header, redirect or build command in it is applied. Resolve the conflict, then run `npm run csp`.');
+  const paths = [];
   for (const block of toml.split('[[headers]]').slice(1)) {
     const path = (block.match(/for = "([^"]+)"/) || [, '?'])[1];
-    const n = (block.match(/^\s*Content-Security-Policy = "/gm) || []).length;
+    const n = (block.match(/^\s*"?Content-Security-Policy"?\s*=/gm) || []).length;
     if (n > 1) throw new Error('netlify.toml declares Content-Security-Policy ' + n + ' times for "' + path + '"; TOML forbids a duplicate key, and only the first would ever be read here');
+    paths.push(path);
   }
+  /* Two blocks for one path are legal TOML and Netlify sends the header twice, which the
+     browser enforces as the intersection — so a stale twin silently blocks the app. The
+     readers here disagree about which one is real: readPolicies keys by path and lets the
+     LAST win, while put() anchors on the first `for` and rewrites the FIRST. So --check can
+     read a fresh block while the regenerator maintains a dead one, and the suite serves the
+     good policy while production gets both. Refuse the ambiguity instead of picking a side. */
+  const twice = paths.filter((p, i) => paths.indexOf(p) !== i);
+  if (twice.length) throw new Error('netlify.toml has more than one [[headers]] block for ' + [...new Set(twice)].map(p => '"' + p + '"').join(', ') + '; Netlify would send each header twice and the browser enforces the intersection. Merge them into one block.');
   return toml;
 }
 

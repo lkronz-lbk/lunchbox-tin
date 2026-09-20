@@ -771,7 +771,7 @@ var BANK = [
   /* mains */
   F('Turkey & cheese roll-ups','main',['protein','soft','hearty','savory','ice'],'deli',['dairy'],1,1,'Deli turkey|Cheese slices|Tortillas'),
   F('Ham & cheese sandwich','main',['protein','soft','hearty','savory','ice'],'deli',['dairy','gluten'],1,1,'Sliced ham|Cheese slices|Sandwich bread'),
-  F('Sunbutter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],1,1,'Sunflower butter|Jelly|Sandwich bread'),
+  F('Sunflower butter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],1,1,'Sunflower butter|Jelly|Sandwich bread'),
   F('Peanut butter & jelly sandwich','main',['protein','soft','hearty','sweet'],'pantry',['nuts','gluten'],0,1,'Peanut butter|Jelly|Sandwich bread'),
   F('Peanut butter & banana wrap','main',['protein','soft','hearty','sweet'],'pantry',['nuts','gluten'],0,0,'Peanut butter|Bananas|Tortillas'),
   F('Cream cheese & cucumber bagel','main',['soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,0,'Cream cheese|Cucumber|Bagels'),
@@ -813,7 +813,7 @@ var BANK = [
   F('Cottage cheese & fruit cup','main',['protein','soft','light','sweet','ice'],'dairy',['dairy'],0,0,'Cottage cheese|Berries'),
   F('Chicken salad crackers','main',['protein','crunchy','savory','ice'],'deli',['gluten','egg'],0,0,'Chicken salad|Crackers'),
   F('BLT wrap, hold the mayo','main',['protein','soft','crunchy','savory','ice'],'deli',['gluten'],0,0,'Bacon|Lettuce|Tomatoes|Tortillas'),
-  F('Sunbutter & honey roll-up','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],0,1,'Sunflower butter|Honey|Tortillas'),
+  F('Sunflower butter & honey roll-up','main',['protein','soft','hearty','sweet'],'pantry',['gluten'],0,1,'Sunflower butter|Honey|Tortillas'),
   F('Turkey & cheese sub roll','main',['protein','soft','hearty','savory','ice'],'bakery',['dairy','gluten'],0,1,'Deli turkey|Cheese slices|Sub rolls'),
   F('Pesto pasta cup','main',['chewy','hearty','savory','ice'],'pantry',['dairy','gluten','nuts'],0,0,'Pasta|Pesto')
   /* sides */,
@@ -851,7 +851,7 @@ var BANK = [
   F('Roasted chickpeas','side',['protein','crunchy','salty'],'snacks',[],0,0),
   F('Sunflower seeds','side',['protein','crunchy','salty'],'snacks',['seeds'],0,0),
   F('Pumpkin seeds','side',['protein','crunchy','salty'],'snacks',['seeds'],0,0),
-  F('Wax-wrapped cheese round','side',['protein','soft','savory','ice'],'dairy',['dairy'],1,1),
+  F('Mini cheese round','side',['protein','soft','savory','ice'],'dairy',['dairy'],1,1),
   F('Pepperoni slices','side',['protein','salty','savory','ice'],'deli',[],0,1),
   F('Turkey roll slices','side',['protein','soft','savory','ice'],'deli',[],0,1),
   F('Olives & feta cup','side',['salty','tangy','savory','ice'],'deli',['dairy'],0,0,'Olives|Feta cheese'),
@@ -923,7 +923,7 @@ var BANK = [
   F('Chocolate-covered pretzels','sweet',['crunchy','sweet','salty'],'snacks',['gluten','dairy'],0,1),
   F('Banana bread slice','sweet',['soft','sweet','hearty'],'bakery',['gluten','egg'],0,0),
   F('Dark chocolate square','sweet',['sweet','light'],'snacks',['dairy'],1,0),
-  F('Jello cup','sweet',['soft','sweet','light'],'pantry',[],0,1),
+  F('Fruit gelatin cup','sweet',['soft','sweet','light'],'pantry',[],0,1),
   F('Vanilla wafers','sweet',['crunchy','sweet','light'],'snacks',['gluten'],0,1),
   F('Shortbread cookie','sweet',['crunchy','sweet'],'bakery',['gluten','dairy'],0,0),
   F('Sugar cookie','sweet',['crunchy','sweet'],'bakery',['gluten','dairy','egg'],0,1),
@@ -2197,7 +2197,7 @@ var ICONS = [
   ['bowl','🍚'],['rice cake','🍘'],['rice pudding','🍮'],['crispy treat','🍚'],['licorice','🍬'],['rice','🍚'],
   /* sweets */
   ['animal cracker','🍪'],['animal cookie','🍪'],['cookie','🍪'],['brownie','🍫'],['muffin','🧁'],['cupcake','🧁'],['donut','🍩'],
-  ['pudding','🍮'],['jello','🍮'],['marshmallow','🍡'],['graham','🍪'],['wafer','🍪'],['leather','🍬'],['gummy','🍬'],['candy','🍬'],
+  ['pudding','🍮'],['gelatin','🍮'],['jello','🍮'],['marshmallow','🍡'],['graham','🍪'],['wafer','🍪'],['leather','🍬'],['gummy','🍬'],['candy','🍬'],
   ['fruit snack','🍬'],['macaroon','🥥'],['meringue','🍥'],['caramel corn','🍿'],['caramel','🍬'],['lemon bar','🍋'],['lemon','🍋'],
   ['blondie','🍰'],['cake','🍰'],['breadstick','🥖'],['bread','🍞'],['cereal bar','🥣'],['cereal','🥣'],['granola','🥣'],['trail mix','🥜'],['bar','🍫'],
   /* fruit: pineapple before apple, cranberries before cherries */
@@ -2209,7 +2209,7 @@ var ICONS = [
   ['carrot','🥕'],['cucumber','🥒'],['tomato','🍅'],['snap pea','🫛'],['edamame','🫛'],['chickpea','🫘'],['pea','🫛'],
   ['celery','🥬'],['pepperoni','🍕'],['pepper','🫑'],['broccoli','🥦'],['olive','🫒'],['popcorn','🍿'],['corn','🌽'],['seaweed','🌿'],
   ['avocado','🥑'],['guacamole','🥑'],['salsa','🍅'],['hummus','🫘'],['bean','🫘'],['seed','🌻'],['nut','🥜'],
-  ['pretzel','🥨'],['goldfish','🐟'],['cracker','🍘'],['chip','🍟'],['crisp','🍟'],['straw','🥕'],['yogurt','🥛'],['cottage','🥣'],
+  ['pretzel','🥨'],['fish cracker','🐟'],['goldfish','🐟'],['cracker','🍘'],['chip','🍟'],['crisp','🍟'],['straw','🥕'],['yogurt','🥛'],['cottage','🥣'],
   ['babybel','🧀'],['cheese','🧀'],['egg','🥚'],['chicken','🍗'],['turkey','🦃'],['ham','🍖'],['salami','🥓'],['bacon','🥓'],
   ['blt','🥓'],['dip','🥣'],['ranch','🥣'],['chocolate','🍫'],['coconut','🥥']
 ];
@@ -5004,7 +5004,7 @@ function helpSheet(){
     ['Can they pick the whole week at once?', 'Yes. Switch on \u201cThey pick their box each day\u201d in the lunchbox settings, and Week carries Let them pick the week. It hands the phone over once: they choose the next box, then the one after, until there is nothing left to choose between. Every choice saves as it is made, so you can stop early and keep what they picked. Pack still has the one-box version for the morning.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
-    ['I have a new phone \u2014 how do I get my lunches back?', 'Tap Already signed up? Sign in on the very first screen, before you answer the questions, and use the same email as before. Tap the link, or type the code into the box on that screen, and your lunchboxes, foods, rules and week come back.'],
+    ['I have a new phone \u2014 how do I get my lunches back?', 'Tap Already signed up? Sign in on the first screen, before you answer the questions, and use the same email as before. Already past that? Account \u2192 Email me a sign-in link does the same. Your lunchboxes, foods, rules and week come back \u2014 as long as you were signed in on the old phone. If you never were, nothing ever left it: copy them across while you still have it.'],
     ['How do I clear a phone?', 'Signed out, Erase everything on the Account tab. Signed in the lunches are the household\u2019s \u2014 Sign out leaves them behind, and Delete my account and data ends the account itself. Clear the plans keeps your foods.'],
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from and its two recipes to cook from. Foods in your own words, recipes of your own, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
     ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, or keeping a recipe of your own, is part of the Household plan. The idea bank, and the recipes that come with it, stay free.']
