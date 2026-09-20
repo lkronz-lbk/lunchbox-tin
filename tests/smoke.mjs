@@ -581,16 +581,44 @@ try {
   /* The half that cost three reviewers a finding: a row that was already ticked when the
      sheet opened was not put there by this sitting. It may be a food the parent wrote
      themselves — their photo, their amounts — that only shares a name with the bank, so
-     the second tap is not licence to delete it. It stays the no-op it always was. */
+     it takes two taps, and the first one says what the second would cost. */
   await page.click('#sheetClose'); await page.waitForTimeout(250);
   await page.click('[data-act="ideas"]'); await page.waitForTimeout(350);
   check('reopening the sheet shows that food ticked', (await PRESSED(idea1b)) === 'true');
   await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]');
-  await page.waitForTimeout(350);
-  check('but tapping a row that arrived ticked leaves the food alone, and says so',
-    (await LIVE(idea1b)).join() === hadOn.join()
-    && (await PRESSED(idea1b)) === 'true'
-    && /already on the list/i.test(await page.textContent('#toast')), [idea1b, await page.textContent('#toast')]);
+  await page.waitForTimeout(300);
+  check('one tap on a row that arrived ticked takes nothing off, and warns instead',
+    (await LIVE(idea1b)).join() === hadOn.join() && /^That takes /.test(await page.textContent('#toast')),
+    [idea1b, await page.textContent('#toast')]);
+  check('and the row itself asks for the second tap',
+    /tap again to take it off/i.test(await page.textContent('[data-act="add-idea"][data-name="' + idea1b + '"]')));
+
+  /* and the arming is per row: a tap anywhere else puts the safety back on */
+  const otherIdea = await page.$$eval('[data-act="add-idea"]',
+    (a, n) => (a.find(b => b.getAttribute('data-name') !== n) || {}).getAttribute('data-name'), idea1b);
+  await page.click('[data-act="add-idea"][data-name="' + otherIdea + '"]'); await page.waitForTimeout(300);
+  check('arming one row is disarmed by a tap on any other',
+    !/tap again to take it off/i.test(await page.textContent('[data-act="add-idea"][data-name="' + idea1b + '"]')));
+  await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]'); await page.waitForTimeout(300);
+  await page.click('[data-act="add-idea"][data-name="' + idea1b + '"]'); await page.waitForTimeout(350);
+  check('two taps in a row do take it off every lunchbox that had it',
+    (await LIVE(idea1b)).every(v => v === false) && (await PRESSED(idea1b)) === 'false', await LIVE(idea1b));
+  check('and that offers Undo too', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
+  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
+  check('which puts it back on every one of them',
+    (await LIVE(idea1b)).join() === hadOn.join(), [idea1b, hadOn, await LIVE(idea1b)]);
+
+  /* a whole compartment at once, and one Undo for the lot */
+  const catBefore = await page.$$eval('[data-act="add-idea"]', a => a.filter(b => b.getAttribute('aria-pressed') === 'false').length);
+  await page.click('[data-act="add-cat"]'); await page.waitForTimeout(500);
+  const catToast = await page.textContent('#toast');
+  const catAfter = await page.$$eval('[data-act="add-idea"]', a => a.filter(b => b.getAttribute('aria-pressed') === 'false').length);
+  check('Add all ticks every food in that section, and says how many', catAfter < catBefore && /^\d+ added/.test(catToast), [catBefore, catAfter, catToast]);
+  check('and offers one Undo for the lot', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
+  await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(500);
+  check('which takes the whole section back off again',
+    (await page.$$eval('[data-act="add-idea"]', a => a.filter(b => b.getAttribute('aria-pressed') === 'false').length)) === catBefore,
+    await page.$$eval('[data-act="add-idea"]', a => a.filter(b => b.getAttribute('aria-pressed') === 'false').length));
 
   await page.click('[data-act="add-to"]');                     /* take the first box back out */
   await page.waitForTimeout(350);

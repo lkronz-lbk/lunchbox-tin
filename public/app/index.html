@@ -175,6 +175,12 @@ a.btn{text-decoration:none}
 .count{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-3);letter-spacing:.05em}
 
 .sect-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px;padding-left:2px}
+.sect-head .count{margin-left:auto}
+.sect-head .btn{align-self:center}
+/* a row asking to be tapped a second time says so where its aisle was, in the colour
+   the app keeps for something about to be undone */
+.item.arm .meta{color:var(--hot);letter-spacing:.02em}
+.item.arm{background:var(--hot-soft)}
 .sect-head h3{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;margin:0}
 .list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
 .item{display:flex;align-items:center;gap:11px;padding:11px 13px;min-height:52px;border-top:1px solid var(--line);
@@ -2893,6 +2899,7 @@ function openSheet(title, html, state){
 }
 function closeSheet(){ sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
   UI.ideaAdded = null;                          /* "tap it again" means the tap you just made, and the sitting ends here */
+  if(String(UI.armed).indexOf('idea:') === 0) UI.armed = '';
   UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = '';
   if(UI.ideasDirty){ UI.ideasDirty = false; render(); } }
 /* A food added from the bank changes the Foods tab, and the sheet covers the Foods tab.
@@ -4001,7 +4008,7 @@ function addedLine(name, r){
    rebuilds the whole document through normalizeAccount: a food caught by reference
    before that would be put back into a copy of the household nobody is looking at,
    and the parent would be told it had worked. */
-function undoIdeaAdd(rows){
+function dropFoods(rows){
   var r = {removed:[], wasIn:[]};
   rows.forEach(function(row){
     var k = kidById(row.kidId); if(!k) return;
@@ -4019,7 +4026,7 @@ function undoIdeaAdd(rows){
   });
   return r;
 }
-function redoIdeaAdd(rows, r){
+function restoreFoods(rows, r){
   rows.forEach(function(row){
     var k = kidById(row.kidId); if(!k) return;
     var f = k.foods.filter(function(x){ return x.id === row.foodId; })[0];
@@ -4035,14 +4042,38 @@ function redoIdeaAdd(rows, r){
     weeksOf(k).forEach(touch);
   });
 }
+/* Every live copy of a named food across the boxes being added to, named the same way
+   the undo record names them, so the confirmed take-off and the undo of an add go out
+   through one door. */
+function foodRowsFor(targets, name){
+  var key = normKey(name), rows = [];
+  targets.forEach(function(k){
+    foodsOf(k).forEach(function(f){ if(normKey(f.n) === key) rows.push({kidId:k.id, foodId:f.id}); });
+  });
+  return rows;
+}
+/* The first of the two taps: what is about to go, in the words a parent would use for it */
+function takeOffWarning(name, rows){
+  var boxes = [], planned = 0;
+  rows.forEach(function(row){
+    var k = kidById(row.kidId); if(!k) return;
+    if(boxes.indexOf(k) < 0) boxes.push(k);
+    weeksOf(k).forEach(function(w){ w.days.forEach(function(d){
+      if(dayGone(d)) return;
+      ALL_CATS.forEach(function(c){ if(d.slots[c.k] === row.foodId) planned++; });
+    }); });
+  });
+  return 'That takes '+name+' off '+(kids().length < 2 ? 'the list' : listNames(boxes)+'\u2019s list'+(boxes.length > 1 ? 's' : ''))
+    + (planned ? ', and out of '+planned+' day'+(planned > 1 ? 's' : '')+' of the plan' : '');
+}
 function undoneLine(name, r){
   var days = r.wasIn.length ? ' \u2014 and out of '+r.wasIn.length+' day'+(r.wasIn.length > 1 ? 's' : '')+' of the plan' : '';
   if(kids().length < 2) return name+' taken back off the list'+days;
-  return name+' taken back off '+listNames(r.removed)+(r.removed.length > 1 ? '\u2019 lists' : '\u2019s list')+days;
+  return name+' taken back off '+listNames(r.removed)+'\u2019s list'+(r.removed.length > 1 ? 's' : '')+days;
 }
 function addFailLine(name, r){
   if(!r.skipped.length) return 'Already on the list';
-  var line = name+' is kept out of '+listNames(r.skipped)+(r.skipped.length > 1 ? '\u2019 boxes' : '\u2019s box')+' by the rules';
+  var line = name+' is kept out of '+listNames(r.skipped)+'\u2019s box'+(r.skipped.length > 1 ? 'es' : '')+' by the rules';
   return r.already.length ? line+'; the rest already had it' : line;
 }
 /* What every lunchbox being added to already has, gathered once so a walk of the
@@ -4073,12 +4104,23 @@ function ideaState(b, targets, have){
    parent adds a handful of foods in a sitting, so a tap must not redraw the sheet
    under them: rebuilding it puts them back at the top on a phone and they have to
    scroll down to where they were to tap the next thing. Nothing moves but the row. */
-function markIdea(name, on){
+function ideaMeta(b){ return b.a + (b.al.length ? ' · '+b.al.join(', ') : ''); }
+function markIdea(name, on, armed){
   var rows = bodyEl.querySelectorAll('[data-act="add-idea"]');
   for(var i = 0; i < rows.length; i++) if(rows[i].getAttribute('data-name') === name){
     if(on) rows[i].classList.add('done'); else rows[i].classList.remove('done');
-    rows[i].setAttribute('aria-pressed', on ? 'true' : 'false'); return;
+    if(armed) rows[i].classList.add('arm'); else rows[i].classList.remove('arm');
+    rows[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    var m = rows[i].querySelector('.meta'), b = bankByName(name);
+    if(m && b) m.textContent = armed ? 'Tap again to take it off' : ideaMeta(b);
+    return;
   }
+}
+/* A row armed on the way out of the sheet is not armed on the way back in */
+function disarmIdea(){
+  if(String(UI.armed).indexOf('idea:') !== 0) return;
+  var b = bankByName(UI.armed.slice(5)); UI.armed = '';
+  if(b) markIdea(b.n, ideaState(b).on, false);
 }
 function ideasSheet(){
   var targets = addTargets(), have = ideaHave(targets);
@@ -4088,17 +4130,19 @@ function ideasSheet(){
     done[key] = st.on; shut[key] = st.shut;
   });
   var cats = addCats(), on = cats.map(function(c){ return c.k; });
-  var h = targetRow('ideas') + '<p class="hint" style="margin:0">Tap to add as many as you like. Tapped one by mistake? Tap it again.</p>';
+  var h = targetRow('ideas') + '<p class="hint" style="margin:0">Tap to add. Tap a ticked one to take it off.</p>';
   cats.forEach(function(c){
     var items = BANK.filter(function(b){ return b.c===c.k && !shut[normKey(b.n)]; });
     if(!items.length) return;
     h += '<div><div class="sect-head"><h3 style="color:var(--c-'+c.k+')">'+esc(c.plural)+'</h3>'
-      +  '<span class="count">'+items.length+'</span></div><div class="list ideas">';
+      +  '<span class="count">'+items.length+'</span>'
+      +  '<button class="btn ghost sm" data-act="add-cat" data-c="'+c.k+'">Add all</button>'
+      +  '</div><div class="list ideas">';
     items.forEach(function(b){
       var tick = !!done[normKey(b.n)];
       h += '<button class="item'+(tick?' done':'')+'" data-act="add-idea" data-name="'+esc(b.n)+'" aria-pressed="'+tick+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(b.n)+'</span>'
-        +  '<span class="meta">'+esc(b.a)+(b.al.length?' · '+esc(b.al.join(', ')):'')+'</span></span></button>';
+        +  '<span class="meta">'+esc(ideaMeta(b))+'</span></span></button>';
     });
     h += '</div></div>';
   });
@@ -4729,7 +4773,7 @@ document.addEventListener('click', function(ev){
   var kid = activeKid();
   /* a caretaker sees the plan and checks the list off on this phone; changing the plan is for a parent */
   if(isHelper() && HELPER_OK.indexOf(act) < 0){ toast('Only a parent can change the plan'); return; }
-  if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='delete-account' && act!=='member-remove' && act!=='disarm' && UI.armed) UI.armed = '';
+  if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='delete-account' && act!=='member-remove' && act!=='disarm' && act!=='add-idea' && UI.armed) UI.armed = '';
   if(act!=='delete-account' && UI.deleteTyped) UI.deleteTyped = '';   /* typing is an input event, so it can never clear itself */
 
   /* did they eat it? */
@@ -5023,24 +5067,68 @@ document.addEventListener('click', function(ev){
   if(act==='add-idea'){
     var b = bankByName(el.getAttribute('data-name'));
     if(!b) return;
-    var ts4 = addTargets(), key4 = normKey(b.n);
+    var ts4 = addTargets(), key4 = normKey(b.n), armed4 = UI.armed === 'idea:'+key4;
+    if(!armed4) disarmIdea();                       /* a different row was waiting on a second tap; it is not any more */
     UI.ideaAdded = UI.ideaAdded || nullMap();
     var mine4 = UI.ideaAdded[key4];
-    if(mine4){
+    if(mine4){                                      /* this sitting put it there: one tap takes it straight back */
       delete UI.ideaAdded[key4];
-      var u4 = undoIdeaAdd(mine4);
-      save(); markIdea(b.n, ideaState(b, ts4).on); ideasTouched();
+      var u4 = dropFoods(mine4);
+      save(); markIdea(b.n, ideaState(b, ts4).on, false); ideasTouched();
       toast(undoneLine(b.n, u4), function(){
-        redoIdeaAdd(mine4, u4);
+        restoreFoods(mine4, u4);
         if(UI.ideaAdded) UI.ideaAdded[key4] = mine4;          /* takeable again, if the sheet is still up */
-        save(); markIdea(b.n, ideaState(b).on); ideasTouched(); toast('Put back');
+        save(); markIdea(b.n, ideaState(b).on, false); ideasTouched(); toast('Put back');
+      });
+      return;
+    }
+    /* Already on the list before this sitting began. It may be a food written by hand —
+       its photo, its amounts, its recipe — that only shares a name with the bank, so it
+       takes a second tap, and the first one says what the second would cost. */
+    if(ideaState(b, ts4).on){
+      var rows4 = foodRowsFor(ts4, b.n);
+      if(!rows4.length){ toast('Already on the list'); return; }   /* ticked by the rules, not by the list */
+      if(!armed4){
+        UI.armed = 'idea:'+key4; markIdea(b.n, true, true);
+        toast(takeOffWarning(b.n, rows4)); return;
+      }
+      UI.armed = '';
+      var d4 = dropFoods(rows4);
+      save(); markIdea(b.n, ideaState(b, ts4).on, false); ideasTouched();
+      toast(undoneLine(b.n, d4), function(){
+        restoreFoods(rows4, d4); save(); markIdea(b.n, ideaState(b).on, false); ideasTouched(); toast('Put back');
       });
       return;
     }
     var r4 = addFoodTo(ts4, b);
-    if(!r4.added.length){ toast(addFailLine(b.n, r4)); markIdea(b.n, ideaState(b, ts4).on); return; }
+    if(!r4.added.length){ toast(addFailLine(b.n, r4)); markIdea(b.n, ideaState(b, ts4).on, false); return; }
     UI.ideaAdded[key4] = r4.foods.map(function(f){ return {kidId:f.kidId, foodId:f.id}; });
-    save(); markIdea(b.n, ideaState(b, ts4).on); ideasTouched(); toast(addedLine(b.n, r4)); return;
+    save(); markIdea(b.n, ideaState(b, ts4).on, false); ideasTouched(); toast(addedLine(b.n, r4)); return;
+  }
+  /* A whole compartment at once, for a parent filling a list from nothing. Everything the
+     section is offering that is not on the list already, added as if each row were tapped —
+     so every one of them can be tapped again to come back off, and one Undo takes the lot. */
+  if(act==='add-cat'){
+    disarmIdea();
+    var ck5 = el.getAttribute('data-c'), ts5 = addTargets(), rows5 = [], names5 = [], flag5 = 0;
+    UI.ideaAdded = UI.ideaAdded || nullMap();
+    BANK.forEach(function(x){
+      if(x.c !== ck5) return;
+      var st5 = ideaState(x, ts5); if(st5.shut || st5.on) return;
+      var a5 = addFoodTo(ts5, x); if(!a5.added.length) return;
+      var k5 = normKey(x.n), made5 = a5.foods.map(function(f){ return {kidId:f.kidId, foodId:f.id}; });
+      UI.ideaAdded[k5] = made5; rows5 = rows5.concat(made5); names5.push(x.n);
+      if(a5.flagged.length) flag5++;
+      markIdea(x.n, true, false);
+    });
+    if(!names5.length){ toast('Every one of those is on the list already'); return; }
+    save(); ideasTouched();
+    toast(names5.length+' added'+(flag5 ? ' \u2014 '+flag5+' flagged by your rules' : ''), function(){
+      dropFoods(rows5);
+      names5.forEach(function(n){ if(UI.ideaAdded) delete UI.ideaAdded[normKey(n)]; markIdea(n, false, false); });
+      save(); ideasTouched(); toast(names5.length+' taken back off');
+    });
+    return;
   }
   if(act==='seed'){
     var added = seedLibrary(kid, 'some');
