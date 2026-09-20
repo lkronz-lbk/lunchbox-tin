@@ -93,7 +93,9 @@ throwing app script cannot leave it up forever. From there:
   because the bank's foods can be re-tapped and a parent's own words cannot — and because a
   shelf of photographed foods must never be what pushes a household past what the server takes.
   A food is the parent's own when the bank has no such name, or the bank has it but they have
-  put a photo, a recipe, another compartment, another aisle or their own shopping line on it. A lunchbox filled with "Fill the
+  put a photo, a recipe, another compartment, another aisle or their own shopping line on it.
+
+  A lunchbox filled with "Fill the
   list for me" is planned on its own until the next Plan the week matches it in; the toast after
   Plan the week says how many compartments had to differ.
 - **Plan ahead** — one more week (`kid.next`), reached by the Next button beside the week's date, drawn and
