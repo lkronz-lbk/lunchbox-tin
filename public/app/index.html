@@ -1713,13 +1713,16 @@ function closePane(){
 /* Put focus back on the row that was just tapped. render() replaces the whole view, so
    the button that was pressed is gone and focus falls to the body — on VoiceOver that is
    a swipe back down the list after every single tick, and ticking is the thing a parent
-   does twenty times in a row. The row is matched on the attribute’s value rather than
-   by building a selector out of it: a food’s name is a parent’s own words and may
-   carry a quote. preventScroll for the same reason as closePane above. */
-function focusBack(root, sel, attr, val){
-  var rows = root ? root.querySelectorAll(sel) : [];
-  for(var i = 0; i < rows.length; i++)
-    if(rows[i].getAttribute(attr) === val){ rows[i].focus({preventScroll:true}); return; }
+   does twenty times in a row. Every attribute that picks the row out is matched on its
+   value rather than built into the selector: a food’s name is a parent’s own words and
+   may carry a quote, and nothing here has to be sanitized on the way in.
+   preventScroll for the same reason as closePane above. */
+function focusBack(root, act, attrs){
+  var rows = root ? [].slice.call(root.querySelectorAll('[data-act="'+act+'"]')) : [];
+  var row = rows.filter(function(r){
+    return Object.keys(attrs).every(function(k){ return r.getAttribute(k) === attrs[k]; });
+  })[0];
+  if(row) row.focus({preventScroll:true});
 }
 /* where a bug report says the parent was */
 function paneLabel(){ return UI.pane && PANES[UI.pane] ? (UI.pane === 'box' ? 'lunchbox settings' : PANES[UI.pane].toLowerCase()) : UI.tab; }
@@ -5275,7 +5278,7 @@ document.addEventListener('click', function(ev){
        back to the week it came from, not to whichever row the list drew first */
     var when = el.getAttribute('data-when');
     save(); render();
-    focusBack(document.getElementById('view'), '[data-act="have"][data-when="'+(when === 'next' ? 'next' : 'now')+'"]', 'data-key', key);
+    focusBack(document.getElementById('view'), 'have', {'data-key':key, 'data-when':when});
     return;
   }
   if(act==='copy-list' || act==='send-list'){
@@ -5325,7 +5328,7 @@ document.addEventListener('click', function(ev){
     if(!r4.added.length){ toast(addFailLine(b.n, r4)); return; }
     var at4 = bodyEl.scrollTop;                    /* stay where they were reading */
     save(); ideasSheet(); bodyEl.scrollTop = at4; render();
-    focusBack(bodyEl, '[data-act="add-idea"]', 'data-name', b.n);
+    focusBack(bodyEl, 'add-idea', {'data-name':b.n});
     toast(addedLine(b.n, r4)); return;
   }
   if(act==='seed'){

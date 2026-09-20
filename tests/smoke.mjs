@@ -1098,7 +1098,9 @@ try {
     const now = keys('now');
     return keys('next').filter(k => now.indexOf(k) > -1)[0] || null;
   });
-  check('a food in both weeks lists once under each week', !!dupe, dupe);
+  check('a food in both weeks\u2019 lists once under each week', !!dupe, dupe);
+  if(!dupe) check('ticking the next-week row leaves focus on that row, not on this week\u2019s twin',
+    false, 'the draw put no food on both weeks, so the pair was never built');
   if(dupe){
     const dupeDone = k => page.evaluate(x => [].slice.call(document.querySelectorAll('[data-act="have"]'))
       .filter(b => b.getAttribute('data-key') === x).map(b => b.classList.contains('done')), k);
