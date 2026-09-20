@@ -1864,7 +1864,10 @@ function normRecipe(v){
 var RECIPES_MAX = 300;
 function normLibRecipe(v){
   v = plainObj(v);
-  var r = normRecipe(v); if(!r) return null;
+  /* a removed recipe travels as a tombstone with its text blanked, which is exactly the
+     shape normRecipe has no use for: without this, every pull dropped the tombstone and
+     the other phone's live copy brought the recipe back */
+  var r = normRecipe(v) || (v.deletedAt ? {m:0, y:0, ing:[], steps:[], src:'', url:null} : null); if(!r) return null;
   var n = safeStr(v.n, 80, '').replace(/\s+/g, ' ').trim(); if(!n) return null;
   r.id = safeId(v.id, 'rec'); r.n = n;
   r.createdAt = safeStamp(v.createdAt); r.updatedAt = safeStamp(v.updatedAt);
@@ -2261,6 +2264,47 @@ function putWriteInBack(f){ if(f){ f.deletedAt = null; touch(f); } }
    strands a parent with a change they were allowed to make and cannot take back. */
 function dayStillOurs(kid, day){ return !!day && !dayGone(day); }
 function writeIns(kid, day){ return catsFor(kid).filter(function(c){ return isWriteIn(kid, day, c.k); }); }
+/* a row by id, tombstoned or not: what an Undo needs and foodById will not give it */
+function foodRow(kid, id){
+  if(!kid || !id) return null;
+  for(var i = 0; i < kid.foods.length; i++) if(kid.foods[i].id === id) return kid.foods[i];
+  return null;
+}
+function libRow(id){                                  /* recipeRow is the Recipes tab's row: not that */
+  var rows = (S && Array.isArray(S.recipes)) ? S.recipes : [];
+  for(var i = 0; i < rows.length; i++) if(rows[i] && rows[i].id === id) return rows[i];
+  return null;
+}
+function catWord(k){ return (catByKey(k) || {label:'compartment'}).label.toLowerCase(); }
+/* The Undo behind one compartment changing: what was there comes back, typed words
+   included. It holds ids and a day string, never the records -- a sync landing inside
+   the toast's six seconds hands S a document rebuilt food by food and day by day, and
+   a closure holding the old records would write into one the app has already let go
+   of. Everything is found again on the way back, and whatever has since gone is let go
+   of rather than restored into thin air. `was` is what the compartment held before;
+   `wi` is the write-in the change tombstoned, if any; `then(kid)` is the caller's own
+   last word once the compartment is back. */
+function slotUndo(kid, day, cat, was, wi, then){
+  var kidId = kid.id, dayStr = day.d, left = day.slots[cat], wiId = wi ? wi.id : null;
+  var wiName = wi ? wi.n : '', prevName = (was.slot && was.slot !== wiId) ? (foodById(kid, was.slot) || {}).n || '' : '';   /* names are strings: safe to hold, and the reply needs them */
+  return function(){
+    var uk = kidById(kidId); if(!uk){ render(); toast('That lunchbox is gone'); return; }
+    var ud = findWeekDay(uk, dayStr); if(!ud){ render(); toast('That day is no longer planned'); return; }
+    if(!dayStillOurs(uk, ud)){ toast('That day has gone'); return; }
+    /* changed under the toast: whoever changed it, theirs is the newer choice -- and
+       this phone may have been the one, so the sentence never says whose doing it was */
+    if(ud.slots[cat] !== left){ render(); toast((kids().length > 1 ? uk.name+'\u2019s ' : '')+dayLabel(dayStr).full+'\u2019s '+catWord(cat)+' has changed since'); return; }
+    var uw = wiId ? foodRow(uk, wiId) : null;
+    if(wiId && !uw){ render(); toast(wiName+' is gone \u2014 it cannot be put back'); return; }
+    if(was.slot && was.slot !== wiId && !foodById(uk, was.slot)){ render(); toast((prevName || 'What was there before')+' is gone \u2014 nothing to put back'); return; }
+    putWriteInBack(uw);
+    ud.slots[cat] = was.slot; ud.lock[cat] = was.lock;
+    if(was.pick){ ud.kidPick = ud.kidPick || {}; ud.kidPick[cat] = was.pick; }
+    setOverride(ud, cat, was.over);
+    if(then) then(uk);
+    touch(weekOf(uk, dayStr) || uk.week); touch(uk); save(); render(); toast('Put back');
+  };
+}
 
 /* ------------------------------------------------ pairing (deterministic) */
 function pairScore(main, item, cat){
@@ -4750,10 +4794,11 @@ function helpSheet(){
     ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Shuffle all draws them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top \u2014 in the settings too.'],
     ['Can I plan the week after?', 'Yes. On Week, tap Next beside the date; Plan it draws the week. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
-    ['Tonight\u2019s leftovers are going in tomorrow \u2014 can I just write that in?', 'Yes. On Week, tap the compartment and Write something in. It goes in that one box on that one day, kept so a shuffle leaves it alone, off the food list so it is never drawn into another week, and off the shopping list because it is already in your fridge. We have only the name to go on. If the name trips a rule it goes in flagged, like any food you used anyway \u2014 but a name that says nothing about what is in it tells us nothing, so check that one yourself. For the same reason the day stops claiming anything about protein or an ice pack. A compartment you wrote in is never traded away by the kid\u2019s pick: on Each part it is skipped, and on Whole box that whole day is, because the box trades as one. Writing your own foods in is part of the Household plan.'],
+    ['Tonight\u2019s leftovers are going in tomorrow \u2014 can I just write that in?', 'Yes. On Week, tap the compartment and Write something in. It goes in that one box on that one day, kept so Shuffle day and Shuffle all leave it alone, off the food list so it is never drawn into another week, and off the shopping list because it is already in your fridge. We have only the name to go on. If the name trips a rule it goes in flagged, like any food you used anyway \u2014 but a name that says nothing about what is in it tells us nothing, so check that one yourself. For the same reason the day stops claiming anything about protein or an ice pack. A compartment you wrote in is never traded away by the kid\u2019s pick: on Each part it is skipped, and on Whole box that whole day is, because the box trades as one. Writing your own foods in is part of the Household plan.'],
     ['Where do they pick their box?', 'On Pack, on the next box with nothing in the bag \u2014 today\u2019s, or the next day under Coming up. Switch it on with \u201cThey pick their box each day\u201d in the lunchbox settings. Tapping the day itself goes to Week.'],
     ['Can they pick the whole week at once?', 'Yes. Switch on \u201cThey pick their box each day\u201d in the lunchbox settings, and Week carries Let them pick the week. It hands the phone over once: they choose the next box, then the one after, until there is nothing left to choose between. Every choice saves as it is made, so you can stop early and keep what they picked. Pack still has the one-box version for the morning.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
+    ['We both changed the same thing \u2014 whose wins?', 'The later change, thing by thing: a food, a compartment on a day, a tick. A day that has gone is never rewritten. Tap Undo after the other phone has changed that compartment and it leaves theirs alone and says so.'],
     ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
     ['I have a new phone \u2014 how do I get my lunches back?', 'Tap Already signed up? Sign in on the first screen, before you answer the questions, and use the same email as before. Already past that? Account \u2192 Email me a sign-in link does the same. Your lunchboxes, foods, rules and week come back \u2014 as long as you were signed in on the old phone. If you never were, nothing ever left it: copy them across while you still have it.'],
     ['How do I clear a phone?', 'Signed out, Erase everything on the Account tab. Signed in the lunches are the household\u2019s \u2014 Sign out leaves them behind, and Delete my account and data ends the account itself. Clear the plans keeps your foods.'],
@@ -5116,14 +5161,7 @@ document.addEventListener('click', function(ev){
          reopened sheet cannot be tapped: the sheet closes so the Undo stands on its own */
       if(wi4) closeSheet(); else slotSheet(k4.id, day4.d, cat);
       render();
-      if(wi4) toast(wi4.n+' was written in \u2014 shuffled away', function(){
-        if(!dayStillOurs(k4, day4)){ toast('That day has gone'); return; }
-        putWriteInBack(wi4);
-        day4.slots[cat] = was4.slot; day4.lock[cat] = was4.lock;
-        if(was4.pick){ day4.kidPick = day4.kidPick || {}; day4.kidPick[cat] = was4.pick; }
-        setOverride(day4, cat, was4.over);
-        touch(weekOf(k4, day4.d) || k4.week); touch(k4); save(); render(); toast('Put back');
-      });
+      if(wi4) toast(wi4.n+' was written in \u2014 shuffled away', slotUndo(k4, day4, cat, was4, wi4));
       else if(wasKept) toast('Shuffled \u2014 it is no longer kept');
     }
     else { putWriteInBack(wi4); toast('Nothing else in that category'); }
@@ -5157,14 +5195,7 @@ document.addEventListener('click', function(ev){
     var v6 = violation(k6, f6);
     setOverride(day6, cat6, v6 ? id6 : null);
     touch(weekOf(k6, day6.d) || k6.week); touch(k6); save(); closeSheet(); render();
-    var undo6 = function(){
-      if(!dayStillOurs(k6, day6)){ toast('That day has gone'); return; }
-      putWriteInBack(wi6);
-      day6.slots[cat6] = was6.slot; day6.lock[cat6] = was6.lock;
-      if(was6.pick){ day6.kidPick = day6.kidPick || {}; day6.kidPick[cat6] = was6.pick; }
-      setOverride(day6, cat6, was6.over);
-      touch(weekOf(k6, day6.d) || k6.week); touch(k6); save(); render(); toast('Put back');
-    };
+    var undo6 = slotUndo(k6, day6, cat6, was6, wi6);
     if(v6) toast(f6.n+' is in the box \u2014 '+v6+', so it stays flagged', undo6);
     else if(wi6) toast(wi6.n+' was written in \u2014 '+f6.n+' took its place', undo6);
     return;
@@ -5194,15 +5225,12 @@ document.addEventListener('click', function(ev){
     var vw = violation(kw, fw);         /* only the name to go on, but the name is worth checking */
     setOverride(dayw, catw, vw ? fw.id : null);
     touch(weekOf(kw, dayw.d) || kw.week); touch(kw); save(); closeSheet(); render();
-    toast((kids().length > 1 ? kw.name+'\u2019s ' : '')+dayLabel(dayw.d).full+'\u2019s box: '+nmw+(vw ? ' \u2014 '+vw+', so it stays flagged' : ''), function(){
-      if(!dayStillOurs(kw, dayw)){ toast('That day has gone'); return; }
-      dayw.slots[catw] = wasw.slot; dayw.lock[catw] = wasw.lock;
-      if(wasw.pick){ dayw.kidPick = dayw.kidPick || {}; dayw.kidPick[catw] = wasw.pick; }
-      setOverride(dayw, catw, wasw.over);
-      if(wasw.name){ fw.n = wasw.name; touch(fw); }               /* it was a rename: the old words come back */
-      else { fw.deletedAt = now(); touch(fw); }
-      touch(weekOf(kw, dayw.d) || kw.week); touch(kw); save(); render(); toast('Put back');
-    });
+    var fwId = fw.id;   /* the id, never the record: the toast may outlive this document */
+    toast((kids().length > 1 ? kw.name+'\u2019s ' : '')+dayLabel(dayw.d).full+'\u2019s box: '+nmw+(vw ? ' \u2014 '+vw+', so it stays flagged' : ''), slotUndo(kw, dayw, catw, wasw, null, function(uk){
+      var uf = foodRow(uk, fwId); if(!uf) return;
+      if(wasw.name){ uf.n = wasw.name; touch(uf); }               /* it was a rename: the old words come back */
+      else { uf.deletedAt = now(); touch(uf); }                  /* typed for one compartment that no longer holds it */
+    }));
     return;
   }
   if(act==='write-clear'){
@@ -5213,21 +5241,14 @@ document.addEventListener('click', function(ev){
     if(dayGone(dayc)){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     var catc = el.getAttribute('data-cat'), fc = foodById(kc, dayc.slots[catc]);
     if(!fc || !fc.once){ closeSheet(); render(); toast('Nothing written in there'); return; }
-    var wasPickC = dayc.kidPick && dayc.kidPick[catc];
+    var wasc = {slot:fc.id, lock:dayc.lock[catc], pick:dayc.kidPick && dayc.kidPick[catc], over:(dayc.over || {})[catc] || null};
     dayc.slots[catc] = null; dayc.lock[catc] = false;
     if(dayc.kidPick) delete dayc.kidPick[catc];
     setOverride(dayc, catc, null);
     fc.deletedAt = now(); touch(fc);
     var drew = reshuffleSlot(kc, dayc, catc);      /* the compartment goes back to what a draw would give it */
     touch(weekOf(kc, dayc.d) || kc.week); touch(kc); save(); closeSheet(); render();
-    toast(fc.n+' cleared'+(drew ? ' \u2014 drawn again' : ''), function(){
-      if(!dayStillOurs(kc, dayc)){ toast('That day has gone'); return; }
-      fc.deletedAt = null; touch(fc);
-      dayc.slots[catc] = fc.id; dayc.lock[catc] = true;
-      if(wasPickC){ dayc.kidPick = dayc.kidPick || {}; dayc.kidPick[catc] = wasPickC; }
-      setOverride(dayc, catc, violation(kc, fc) ? fc.id : null);
-      touch(weekOf(kc, dayc.d) || kc.week); touch(kc); save(); render(); toast('Put back');
-    });
+    toast(fc.n+' cleared'+(drew ? ' \u2014 drawn again' : ''), slotUndo(kc, dayc, catc, wasc, fc));
     return;
   }
 
@@ -5246,10 +5267,20 @@ document.addEventListener('click', function(ev){
     touch(k7); save(); render();
     var pb = document.querySelector('[data-act="pack-all"][data-kid="'+k7.id+'"]'); if(pb) pb.focus();
     if(was){
-      var prev = JSON.parse(JSON.stringify(row)), kid7 = k7;
+      var prev = JSON.parse(JSON.stringify(row)), kid7Id = k7.id;
+      /* ids and a day string, never the records: a sync inside the toast rebuilds them all */
       toast((kids().length > 1 ? k7.name+'\u2019s box' : 'Box')+' unpacked', function(){
-        Object.keys(prev).forEach(function(c){ if(prev[c].off && !foodById(kid7, day7.slots[c])) return; prev[c] = {at:now(), by:by}; });
-        kid7.packed[dt] = prev; touch(kid7); save(); render();
+        var uk = kidById(kid7Id); if(!uk){ render(); toast('That lunchbox is gone'); return; }
+        var ud = findWeekDay(uk, dt); if(!ud){ render(); toast('That day is no longer planned'); return; }
+        /* into the row as it now stands, and only where it still holds this phone's own
+           un-tick: a compartment the other phone touched since keeps theirs, tick or un-tick */
+        var cur = uk.packed[dt] = uk.packed[dt] || {}, back = 0;
+        Object.keys(prev).forEach(function(c){
+          if(!cur[c] || cur[c].at !== prev[c].at || !foodById(uk, ud.slots[c])) return;
+          cur[c] = {at:now(), by:by}; back++;
+        });
+        if(!back){ render(); toast('That box has changed since'); return; }
+        touch(uk); save(); render();
       });
     }
     return;
@@ -5384,10 +5415,10 @@ document.addEventListener('click', function(ev){
     var nameEl = document.getElementById('rsName');
     var rname = (nameEl ? nameEl.value : (draft.title || '')).trim().slice(0, 80);
     if(!rname){ if(nameEl) nameEl.focus(); toast('Give the recipe a name first'); return; }
-    /* normalisation keeps the first RECIPES_MAX rows, tombstones among them, so the
-       save-time check counts rows too: counting only the live ones would let a save
-       through that the next reload silently dropped */
-    if((Array.isArray(S.recipes) ? S.recipes.length : 0) >= RECIPES_MAX){ toast('That is as many recipes as a household can hold \u2014 remove one first'); return; }
+    /* normalisation keeps live rows first and lets tombstones fill what is left, so the
+       cap is on live recipes: a removed one now stays a tombstone until it is swept, and
+       counting it would leave "remove one first" advice nobody could follow */
+    if(libRecipes().length >= RECIPES_MAX){ toast('That is as many recipes as a household can hold \u2014 remove one first'); return; }
     var made = normLibRecipe(newLibRecipe(rname, draft));
     if(!made){ closeSheet(); toast('There was no recipe in that'); return; }
     if(!docRoomFor(docBytes(made) + 200)){ closeSheet(); toast('No room for another recipe \u2014 remove one first'); return; }
@@ -5412,9 +5443,11 @@ document.addEventListener('click', function(ev){
     render();
     if(thenFood && !linked){ recipeToFood(made); return; }
     if(linked){
+      var madeId = made.id;   /* the id, never the record: a sync inside the toast rebuilds the library */
       toast('Saved to your recipes, and onto ' + onto + (linked > 1 ? ' in every lunchbox that has it' : ''), function(){
-        kids().forEach(function(k3){ foodsOf(k3).forEach(function(f3){ if(f3.recipeId === made.id){ f3.recipeId = null; touch(f3); touch(k3); } }); });
-        made.deletedAt = now(); made.ing = []; made.steps = []; touch(made); libDirty(); save(); render();
+        var um = libRow(madeId); if(!um){ render(); toast('That recipe is gone'); return; }
+        kids().forEach(function(k3){ foodsOf(k3).forEach(function(f3){ if(f3.recipeId === madeId){ f3.recipeId = null; touch(f3); touch(k3); } }); });
+        um.deletedAt = now(); um.ing = []; um.steps = []; um.src = ''; um.url = null; touch(um); libDirty(); save(); render(); toast('Not saved');
       });
       return;
     }
@@ -5431,7 +5464,7 @@ document.addEventListener('click', function(ev){
   if(act==='recipe-delete'){
     if(isHelper()) return;
     var dr = libById(el.getAttribute('data-id')); if(!dr) return;
-    var wasIng = dr.ing, wasSteps = dr.steps, wasSrc = dr.src, wasUrl = dr.url;
+    var drId = dr.id, wasText = {ing:dr.ing, steps:dr.steps, src:dr.src, url:dr.url};   /* the id and the words, never the record */
     dr.deletedAt = now(); touch(dr);
     /* a tombstone keeps only enough to travel: the text of a removed recipe is up to
        twenty-odd kilobytes, and it would ride every sync for ninety days otherwise */
@@ -5442,12 +5475,16 @@ document.addEventListener('click', function(ev){
     kids().forEach(function(k2){ foodsOf(k2).forEach(function(f2){ if(f2.recipeId === dr.id){ wasOn.push([k2.id, f2.id]); f2.recipeId = null; touch(f2); touch(k2); } }); });
     save(); closeSheet(); render();
     toast('Recipe removed', function(){
-      dr.deletedAt = null; dr.ing = wasIng; dr.steps = wasSteps; dr.src = wasSrc; dr.url = wasUrl; touch(dr); libDirty();
+      var ur = libRow(drId); if(!ur){ render(); toast('That recipe is gone'); return; }
+      /* the one write of recipe text that is neither pasted nor freshly normalised: the
+         merge may have grown the document under it */
+      if(!docRoomFor(docBytes(wasText))){ render(); toast('No room for that recipe now'); return; }
+      ur.deletedAt = null; ur.ing = wasText.ing; ur.steps = wasText.steps; ur.src = wasText.src; ur.url = wasText.url; touch(ur); libDirty();
       wasOn.forEach(function(pair){
         var k3 = kidById(pair[0]), f3 = k3 && foodById(k3, pair[1]);
-        if(f3){ f3.recipeId = dr.id; touch(f3); touch(k3); }
+        if(f3 && !f3.recipeId){ f3.recipeId = drId; touch(f3); touch(k3); }   /* pointed somewhere else since: theirs is the newer choice */
       });
-      save(); render();
+      save(); render(); toast('Put back');
     });
     return;
   }
