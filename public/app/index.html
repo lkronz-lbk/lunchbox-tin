@@ -47,7 +47,7 @@ img{max-width:100%}
   :root:not([data-theme="light"]){
     --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
     --ink:#E6EEE7; --ink-2:#A6BAAE; --ink-3:#7A8E84;
-    --line:#2B3E36; --line-strong:#4E7263;
+    --line:#2B3E36; --line-strong:#5A8272;
     --c-main:#79C8A2; --c-side:#E0A253; --c-fruit:#EA8299; --c-sweet:#A793DC; --c-snack:#C3CF6E; --c-drink:#7FC3DE;
     --scrim:rgba(0,0,0,.62); --shadow-1:0 0 0 1px rgba(255,255,255,.14); --shadow-lift:0 4px 0 rgba(255,255,255,.08);
     --accent:#79C8A2; --accent-fg:#0E1815; --accent-soft:#1F332A;
@@ -58,7 +58,7 @@ img{max-width:100%}
 :root[data-theme="dark"]{
   --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
   --ink:#E6EEE7; --ink-2:#A6BAAE; --ink-3:#7A8E84;
-  --line:#2B3E36; --line-strong:#4E7263;
+  --line:#2B3E36; --line-strong:#5A8272;
   --c-main:#79C8A2; --c-side:#E0A253; --c-fruit:#EA8299; --c-sweet:#A793DC; --c-snack:#C3CF6E; --c-drink:#7FC3DE;
   --scrim:rgba(0,0,0,.62); --shadow-1:0 0 0 1px rgba(255,255,255,.14); --shadow-lift:0 4px 0 rgba(255,255,255,.08);
   --accent:#79C8A2; --accent-fg:#0E1815; --accent-soft:#1F332A;
@@ -198,10 +198,17 @@ a.btn{text-decoration:none}
 .item.pickday{flex-wrap:wrap;row-gap:8px}
 .item.pickday .grow{flex:1 1 11rem}
 .item.pickday .pickctl{flex:1 1 auto;justify-content:flex-end}
+/* Two states wear the same tick, and only one of them is crossed off. .done is
+   behind you — bought, or a cooking step done — and reads with the line through it.
+   .ticked is "this one is already in hand": the food in the compartment on the swap
+   sheet, an idea already on the list. A line through either of those would read as
+   struck off, which is the opposite of what they mean — the food on the swap sheet
+   is the one going in the box. */
 .item.done .nm{text-decoration:line-through;color:var(--ink-2)}
+.item.ticked .nm{color:var(--ink-2)}
 .box{width:22px;height:22px;flex:none;border:1.5px solid var(--line-strong);border-radius:6px;
   display:flex;align-items:center;justify-content:center;color:transparent}
-.item.done .box{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.item.done .box,.item.ticked .box{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .box svg{width:12px;height:12px}
 .x{flex:none;width:44px;height:44px;margin-right:-8px;border-radius:var(--r-sm);border:0;background:none;color:var(--ink-3);
   display:flex;align-items:center;justify-content:center}
@@ -392,8 +399,11 @@ body.first-run #view{flex:1;display:flex;flex-direction:column;min-height:0}
   line-height:1.08;margin:0;text-wrap:balance}
 .kidmode .hint{font-size:16px;color:var(--ink-2);margin:0}
 .dots{display:flex;gap:7px}
-.dots i{width:9px;height:9px;border-radius:50%;background:var(--line-strong);opacity:.35;display:block}
-.dots i.on{background:var(--accent);opacity:1} .dots i.did{background:var(--accent);opacity:.45}
+/* the same two states as .daypips below, and read by the same child: ink for the
+   picks still to come, accent for the ones behind, both clear of 3:1 on the ground
+   in either theme. At .35 of a line colour the first of those was 1.6:1. */
+.dots i{width:9px;height:9px;border-radius:50%;background:var(--ink-3);opacity:1;display:block}
+.dots i.on{background:var(--accent);opacity:1} .dots i.did{background:var(--accent);opacity:.7}
 .daypips{display:flex;gap:5px}
 /* the boxes still to come are ink, the ones behind are accent: two states a child
    can tell apart, and both clear of 3:1 on the ground in either theme */
@@ -1652,9 +1662,12 @@ var APP_BUILD = 'lunchsorted-v24';     /* the same tag as VERSION in sw.js; npm 
    and handing the phone over once for the whole week instead of every morning. The
    walkthrough is those two and nothing else; the recipe steps have been seen.
    v24 is the first screen a parent ever sees getting the header the rest of the app already
-   had, the questions fitting on one screen, and a mark that fills in while the app wakes:
+   had, the questions fitting on one screen, a mark that fills in while the app wakes, and
+   the dark theme's borders brought over 3:1 — the empty box on a list, the seams of the tin,
+   the picks a child has left — with a ticked row and a crossed-off one no longer drawn alike:
    nothing a parent gained or lost, so v23's note rides on under seenAs and the phones that
-   already read it are left alone.
+   already read it are left alone. A third fix-only build on the same tag is the point of
+   keeping it: the tag moves when it ships, not when it changes.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
 var WHATS_NEW = {build:'lunchsorted-v24', seenAs:'lunchsorted-v23', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, and hand the phone over once to let them pick the whole week.',
@@ -3320,7 +3333,7 @@ function viewKid(){
   var h = '<div class="kidmode"><div class="top">'
     + '<span style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap">' + pips
     + (!st.done && st.mode === 'parts'
-        ? '<span class="dots">'+st.cats.map(function(c, i){ return '<i class="'+(i < st.step ? 'did' : i === st.step ? 'on' : '')+'"></i>'; }).join('')+'</span>'
+        ? '<span class="dots" aria-hidden="true">'+st.cats.map(function(c, i){ return '<i class="'+(i < st.step ? 'did' : i === st.step ? 'on' : '')+'"></i>'; }).join('')+'</span>'
         : '<span class="catlab" style="color:var(--accent)">'+esc((st.done && st.week) ? 'All week' : (l.rel || l.full))+'</span>')
     + '</span>'
     + (!st.done ? '<button class="btn ghost sm exit" data-act="kid-exit">Give the phone back</button>' : '')+'</div>';
@@ -3582,7 +3595,7 @@ function viewShop(){
     if(!groups[a]) return;
     h += '<div><div class="sect-head"><h3>'+AISLE_SHORT[a]+'</h3><span class="count">'+groups[a].length+'</span></div><div class="list">';
     groups[a].forEach(function(r){
-      h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
+      h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'" aria-pressed="'+(!!r.have)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
         +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
         +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
@@ -3600,7 +3613,7 @@ function viewShop(){
       if(!lg[a]) return;
       h += '<div><div class="sect-head"><h3>'+AISLE_SHORT[a]+'</h3><span class="count">'+lg[a].length+'</span></div><div class="list">';
       lg[a].forEach(function(r){
-        h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
+        h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'" aria-pressed="'+(!!r.have)+'">'
           +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
           +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
           +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
@@ -4157,7 +4170,7 @@ function slotSheet(kidId, dayStr, cat){
       var sc = cat==='main' ? null : pairScore(main, f, cat).s;
       var meta = v ? (day.slots[cat]===f.id ? (isOverride(kid, day, cat) ? v+' — in the box anyway' : 'skipped — '+v) : v+' — tap to use it anyway')
         : (eatLabel(kid, f.id) || (sc!==null && sc>=3 ? 'goes well with '+(main?main.n:'the main') : ''));
-      h += '<button class="item'+(day.slots[cat]===f.id?' done':'')+'" data-act="pick" data-kid="'+esc(kid.id)
+      h += '<button class="item'+(day.slots[cat]===f.id?' ticked':'')+'" data-act="pick" data-kid="'+esc(kid.id)
         +  '" data-day="'+esc(dayStr)+'" data-cat="'+cat+'" data-id="'+esc(f.id)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(f.n)+'</span>'
         +  '<span class="meta"'+(v?' style="color:var(--warn)"':(sc!==null&&sc>=3?' style="color:var(--accent)"':''))
@@ -4271,8 +4284,9 @@ function ideasSheet(){
     h += '<div><div class="sect-head"><h3 style="color:var(--c-'+c.k+')">'+esc(c.plural)+'</h3>'
       +  '<span class="count">'+items.length+'</span></div><div class="list">';
     items.forEach(function(b){
-      h += '<button class="item'+(done[normKey(b.n)]?' done':'')+'" data-act="add-idea" data-name="'+esc(b.n)+'">'
+      h += '<button class="item'+(done[normKey(b.n)]?' ticked':'')+'" data-act="add-idea" data-name="'+esc(b.n)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(b.n)+'</span>'
+        +  (done[normKey(b.n)] ? '<span class="sr-only">Already on the list</span>' : '')
         +  '<span class="meta">'+esc(b.a)+(b.al.length?' · '+esc(b.al.join(', ')):'')+'</span></span></button>';
     });
     h += '</div></div>';
@@ -4740,7 +4754,7 @@ function helpSheet(){
   var qa = [
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle day redraws one day, or tap a compartment to change one thing.'],
     ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
-    ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
+    ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. A green tick and a grey name mean it is already on the list. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
     ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with \u2014 a Mediterranean quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
     ['Can I bring a recipe in from somewhere else?', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read \u2014 copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox\u2019s food list is offered after. Keeping one of your own is part of the Household plan.'],
     ['Can it walk me through cooking one?', 'Open a recipe and tap Cook it step by step. One step fills the screen, and What you need under it lists only what that step needs, with a box to tick against each one as it goes in. The whole recipe is one tap away at the top. Nothing you tick is saved, so it never reaches the other parent\u2019s phone.'],

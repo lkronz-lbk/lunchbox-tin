@@ -663,7 +663,7 @@ try {
   const targets = await page.$$eval('[data-act="add-to"]', a => a.map(b => b.getAttribute('aria-pressed')));
   check('the idea bank asks which lunchboxes, with all of them on', targets.length === 2 && targets.every(v => v === 'true'), targets);
 
-  const idea = await page.$$eval('[data-act="add-idea"]:not(.done)',
+  const idea = await page.$$eval('[data-act="add-idea"]:not(.ticked)',
     a => (a.find(b => !/gluten|nuts|dairy|egg|soy|fish|sesame/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
   await page.click('[data-act="add-idea"][data-name="' + idea + '"]');
   await page.waitForTimeout(350);
@@ -675,7 +675,7 @@ try {
   await page.waitForTimeout(350);
   const only = await page.$$eval('[data-act="add-to"]', a => a.map(b => b.getAttribute('aria-pressed')));
   check('a box can be taken out of the next add', only[0] === 'false' && only[1] === 'true', only);
-  const idea2 = await page.$$eval('[data-act="add-idea"]:not(.done)',
+  const idea2 = await page.$$eval('[data-act="add-idea"]:not(.ticked)',
     a => (a.find(b => !/gluten|nuts|dairy|egg|soy|fish|sesame/i.test(b.textContent)) || {getAttribute: () => null}).getAttribute('data-name'));
   const hadIt = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
     .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea2);
@@ -1511,7 +1511,7 @@ try {
   /* a manual swap clears the "picked" mark */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
   await page.click('.daycard:not(.past) .tin .cmp[data-cat="main"] >> nth=0'); await page.waitForTimeout(350);
-  await page.click('#sheetBody .item:not(.done) >> nth=0'); await page.waitForTimeout(300);
+  await page.click('#sheetBody .item:not(.ticked) >> nth=0'); await page.waitForTimeout(300);
   const starGone = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0], t = new Date(); t.setHours(0,0,0,0);
     const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
@@ -2161,7 +2161,7 @@ try {
   await pb.click('#sheetClose'); await pb.waitForTimeout(250);
   /* the idea bank must still add, or "free for good" is not true */
   await pb.click('[data-act="ideas"]'); await pb.waitForTimeout(350);
-  const freeIdea = await pb.$('#sheetBody [data-act="add-idea"]:not(.done)');
+  const freeIdea = await pb.$('#sheetBody [data-act="add-idea"]:not(.ticked)');
   if (freeIdea) { await freeIdea.click(); await pb.waitForTimeout(500); }
   await pb.click('#sheetClose').catch(() => {}); await pb.waitForTimeout(250);
   check('and the idea bank still adds a food on a lapsed household',
