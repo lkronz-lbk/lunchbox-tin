@@ -179,6 +179,17 @@ a.btn{text-decoration:none}
 .count{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-3);letter-spacing:.05em}
 
 .sect-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px;padding-left:2px}
+.sect-head .count{margin-left:auto}
+.sect-head .btn{align-self:center}
+/* a row asking to be tapped a second time says so where its aisle was, in the colour
+   the app keeps for something about to be undone */
+/* a compartment holding a food that has since come off the list: it keeps what it was
+   given, so the parent packing tomorrow still knows what they planned, and says plainly
+   that it will not be picked again */
+.cmp.offlist .nm{opacity:.72}
+.cmp .tr i.care.off{color:var(--warn);font-style:normal;text-transform:none;letter-spacing:.02em;font-weight:600}
+.item.arm .meta{color:var(--hot);letter-spacing:.02em}
+.item.arm{background:var(--hot-soft);box-shadow:inset 3px 0 0 var(--hot)}
 .sect-head h3{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;margin:0}
 .list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
 .item{display:flex;align-items:center;gap:11px;padding:11px 13px;min-height:52px;border-top:1px solid var(--line);
@@ -200,14 +211,15 @@ a.btn{text-decoration:none}
 .item.pickday .pickctl{flex:1 1 auto;justify-content:flex-end}
 /* Two states wear the same tick, and only one of them is crossed off. .done is
    behind you — a thing bought, a cooking step done, an amount already in the bowl —
-   and reads with the line through it. .ticked is "this one is already in hand": the
-   food in the compartment on the swap sheet, an idea already on the list. A line
-   through either of those would read as struck off, which is the opposite of what
-   they mean — the food on the swap sheet is the one going in the box. Both dim the
-   name to --ink-2, which is right for both: on the swap sheet the parent is choosing
-   among the others, so the one already in the box is what recedes. */
+   and reads with the line through it, dimmed. .ticked is "this one is in hand, and
+   still yours to change": the food in the compartment on the swap sheet, an idea on
+   the food list. Neither is finished with — another tap takes the idea off again,
+   and the compartment is on the sheet to be swapped — so the name stays fully
+   readable and the tick alone carries the state. A line through either would read
+   as struck off, which is the opposite of what they mean: the food on the swap
+   sheet is the one going in the box. */
 .item.done .nm{text-decoration:line-through;color:var(--ink-2)}
-.item.ticked .nm{color:var(--ink-2)}
+.item.ticked .nm{color:var(--ink)}
 .box{width:22px;height:22px;flex:none;border:1.5px solid var(--line-strong);border-radius:6px;
   display:flex;align-items:center;justify-content:center;color:transparent}
 .item.done .box,.item.ticked .box{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
@@ -293,7 +305,11 @@ nav.tabs svg{width:21px;height:21px}
 .toast{position:fixed;left:50%;bottom:calc(78px + var(--sab));transform:translate(-50%,14px);
   background:var(--toast-bg);color:var(--toast-fg);padding:10px 16px;border-radius:16px;font-size:13.5px;z-index:40;max-width:min(92vw,420px);text-align:center;
   opacity:0;pointer-events:none;transition:all .2s}
-.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+/* The toast sits over the foot of the idea bank, and that list is now tapped row after
+   row: a thumb aimed at the food under it must reach the food, not the message about the
+   last one. Only Undo takes a tap. */
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.show button{pointer-events:auto}
 .toast button{min-height:44px;margin:-10px -8px -10px 8px;padding:0 8px;background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px}
 @media (min-width:520px){
   .cmp{min-height:112px}
@@ -1553,6 +1569,26 @@ function applyState(st){
    refuses 413 on every save, forever, so this counts what the server counts and
    stops short of it. */
 var DOC_MAX = 1900000;
+var FOODS_MAX = 500;                            /* per lunchbox, tombstones included */
+var ARCHIVE_MAX = 60;                           /* of a parent's own foods, kept to be put back */
+var ARCHIVE_BYTES = 120000;                     /* and no more of the document than this, photos included */
+/* A list over the cap gives up its oldest tombstones first and its live foods last.
+   Cutting from the top took the newest — a parent's own work, the moment they went
+   one food over — and said nothing about it. */
+function liveCount(k){
+  var n = 0, rows = (k && k.foods) || [];
+  for(var i = 0; i < rows.length; i++) if(!rows[i].deletedAt) n++;
+  return n;
+}
+function capFoods(rows){
+  if(rows.length <= FOODS_MAX) return rows;
+  var live = [], dead = [];
+  /* a document claiming more rows than the app could ever have written is not worth
+     walking to the end of; normFood then runs at most FOODS_MAX times either way */
+  rows.slice(0, FOODS_MAX * 8).forEach(function(f){ ((f && f.deletedAt) ? dead : live).push(f); });
+  dead.sort(function(a, b){ return String(b.deletedAt).localeCompare(String(a.deletedAt)); });
+  return live.slice(0, FOODS_MAX).concat(dead.slice(0, Math.max(0, FOODS_MAX - live.length)));
+}
 function docBytes(v){ try{ return new TextEncoder().encode(JSON.stringify(v)).length; }catch(e){ return JSON.stringify(v).length * 2; } }
 function docTooBig(){ return docBytes(S) > DOC_MAX; }
 /* is there room for one more thing of about this size? */
@@ -1696,7 +1732,7 @@ function whatsNew(){
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
    Account categories. It is view state and never reaches S, or the merge would
    read a tap as a change and push on every one. */
-var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', recipeFound:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, ideaAdded:null, ideasDirty:false, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', recipeFound:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'});
 /* the one test for whether a pane may be on screen. A pane is opened by a tap but
    also by a link from an email and by the return from Stripe, so the render asks
@@ -1846,7 +1882,7 @@ function normFood(kid, f){
     buy:once ? null : normBuy(f.buy, n),
     once:once,
     recipeId:safeIdOrNull(f.recipeId),
-    img:(typeof f.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
+    img:(typeof f.img === 'string' && PHOTO_RE.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
     createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt), deletedAt: f.deletedAt ? safeStamp(f.deletedAt) : null};
 }
 /* what to buy for a food: its own list if it has one ([] means the food itself), else the bank's
@@ -1962,11 +1998,7 @@ function normKid(k, i){
   kid.settings.kidPickMode = st.kidPickMode === 'boxes' ? 'boxes' : 'parts';
   kid.settings.kidReminderAt = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(st.kidReminderAt || '')) ? st.kidReminderAt : '18:00';
   kid.settings.updatedAt = safeStamp(st.updatedAt);
-  /* live rows first, the way normRecipeList already does it: slicing before the
-     tombstones are counted would drop the newest real foods to keep dead ones */
-  var frows = (Array.isArray(k.foods) ? k.foods : []).slice(0, 1000).map(function(f){ return normFood(kid, f); }).filter(Boolean);
-  var flive = frows.filter(function(f){ return !f.deletedAt; }).slice(0, 500);
-  kid.foods = flive.concat(frows.filter(function(f){ return f.deletedAt; }).slice(0, Math.max(0, 500 - flive.length)));
+  kid.foods = capFoods(Array.isArray(k.foods) ? k.foods : []).map(function(f){ return normFood(kid, f); }).filter(Boolean);
   var normWeekObj = function(v){
     var w = plainObj(v), seen = nullMap();
     var wdays = (Array.isArray(w.days) ? w.days : []).slice(0, 14).map(normDay).filter(function(d){ if(!d || seen[d.d]) return false; seen[d.d] = 1; return true; }).slice(0, 7);   /* a week has seven days, once each */
@@ -2030,7 +2062,7 @@ function liftFoodRecipes(doc, acct){
     var kid = acct.kids[i]; if(!kid) return;
     k = plainObj(k);
     var wasById = nullMap();
-    (Array.isArray(k.foods) ? k.foods : []).slice(0, 500).forEach(function(was){
+    capFoods(Array.isArray(k.foods) ? k.foods : []).forEach(function(was){
       was = plainObj(was);
       if(typeof was.id === 'string' && was.recipe) wasById[was.id] = was.recipe;
     });
@@ -2114,6 +2146,40 @@ function foodById(k, id){
   for(var i=0;i<k.foods.length;i++) if(k.foods[i].id===id && !k.foods[i].deletedAt) return k.foods[i];
   return null;
 }
+/* What a compartment holds, which is not the same question as what is on the list.
+   A week already drawn is a plan the parent made: taking a food off the list is a
+   decision about next week, and it must not quietly empty a box they are packing
+   tomorrow. So a box keeps showing the food it was given, marked as off the list,
+   until that day is redrawn. Draws, pairing and the rules sweep all keep asking
+   foodById, so nothing off the list is ever picked again. */
+function boxFood(k, id){
+  if(!k || !id) return null;
+  var dead = null;
+  for(var i=0;i<k.foods.length;i++) if(k.foods[i].id===id){
+    if(!k.foods[i].deletedAt) return k.foods[i];      /* a live row wins, so the box and the draw agree */
+    if(!dead) dead = k.foods[i];
+  }
+  return dead;
+}
+function offList(f){ return !!(f && f.deletedAt); }
+/* Foods a parent wrote themselves and has since taken off. The bank can always be
+   tapped again; their own words, their photo and their amounts cannot, so those are
+   kept where they can be put back rather than quietly swept. Newest first. */
+function archivedFoods(k){
+  var rows = (k ? k.foods : []).filter(function(f){ return f.deletedAt && !f.once && ownFood(f); })
+    .sort(function(a, b){ return String(b.deletedAt).localeCompare(String(a.deletedAt)); })
+    .slice(0, ARCHIVE_MAX);
+  /* newest first until the budget runs out: a shelf of photographed foods must never be
+     the reason a household stops syncing, and the oldest are the ones a parent has
+     stopped looking for */
+  var used = 0, out = [];
+  for(var i = 0; i < rows.length; i++){
+    used += (rows[i].img ? rows[i].img.length : 0) + 360;
+    if(used > ARCHIVE_BYTES) break;
+    out.push(rows[i]);
+  }
+  return out;
+}
 function members(){ return S.members.filter(function(m){ return !m.deletedAt; }); }
 function memberById(id){ return members().filter(function(m){ return m.id===id; })[0] || null; }
 function deviceMember(){ return memberById(DEVICE.memberId) || members()[0] || null; }
@@ -2165,6 +2231,7 @@ var KIDWORD = {main:'lunch', side:'side', fruit:'fruit', sweet:'treat', snack:'s
    shrunk on the phone to a thumbnail a few kilobytes big, stored with the food so it
    travels with the household. Where there is no photo, the emoji stands in. */
 var PHOTO_PX = 160, PHOTO_MAX = 16000;
+var PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/;   /* the one shape a stored photo may have: normalisation and the photo Undo share it */
 function picHTML(food, cls){
   if(food && food.img) return '<img class="pic '+(cls||'')+'" src="'+food.img+'" alt="">';
   return '<span class="ic '+(cls||'')+'">'+iconFor(food)+'</span>';
@@ -2206,13 +2273,14 @@ function today(){ var d = new Date(); d.setHours(0,0,0,0); return d; }
 function addDays(d,n){ var x = new Date(d.getTime()); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ return addDays(d, -((d.getDay()+6)%7)); }
 function has(item,tag){ return !!(item && item.t && item.t.indexOf(tag)>-1); }
+function toastMs(msg, undo){ return undo ? Math.max(6000, String(msg).length * 55) : Math.max(2000, String(msg).length * 55); }
 function toast(msg, undo){
   var t = document.getElementById('toast');
   t.textContent = msg;
   UI.undo = undo || null;
   if(undo){ var b = document.createElement('button'); b.type='button'; b.setAttribute('data-act','undo'); b.textContent = 'Undo'; t.appendChild(b); }
   t.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('show'); UI.undo = null; }, undo ? Math.max(6000, String(msg).length * 55) : Math.max(2000, String(msg).length * 55));
+  clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('show'); UI.undo = null; }, toastMs(msg, undo));
 }
 
 /* --------------------------------------------------------- school rules */
@@ -2246,7 +2314,7 @@ function eligible(kid, cat){
    long as that food is in that compartment: a re-draw or another choice ends
    it, and it never spreads to any other draw. */
 function isOverride(kid, day, cat){
-  var f = foodById(kid, day.slots[cat]);
+  var f = boxFood(kid, day.slots[cat]);
   return !!(f && day.over && day.over[cat] && day.over[cat] === day.slots[cat] && violation(kid, f));   /* the record stays; the flag needs a rule to break */
 }
 function setOverride(day, cat, foodId){
@@ -2304,7 +2372,7 @@ function pairScore(main, item, cat){
   return {s:s, why:why};
 }
 function dayFlags(kid, day){
-  var items = catsFor(kid).map(function(c){ return foodById(kid, day.slots[c.k]); }).filter(Boolean);
+  var items = catsFor(kid).map(function(c){ return boxFood(kid, day.slots[c.k]); }).filter(Boolean);
   var f = [];
   if(items.some(function(i){ return has(i,'ice'); })) f.push({t:'Ice pack', cls:''});
   if(items.some(function(i){ return has(i,'messy'); })) f.push({t:'Sealed container', cls:''});
@@ -2408,7 +2476,7 @@ function reviewComplete(kid, d){
   var row = (kid.eaten || {})[d.d];
   if(!row) return false;
   if(row.skipped) return true;
-  return ALL_CATS.every(function(c){ return !foodById(kid, d.slots[c.k]) || !!row[c.k]; });
+  return ALL_CATS.every(function(c){ return !boxFood(kid, d.slots[c.k]) || !!row[c.k]; });
 }
 /* A day is worth asking about if something was ticked into the bag, or if the
    plan existed on that day. Onboarding on a Friday must not produce an
@@ -2443,7 +2511,7 @@ function reviewOwed(){
 function reviewDay(kid){
   var floor = iso(addDays(today(), -7));
   var cands = (kid.past || []).concat(kid.week ? kid.week.days : []).filter(function(d){
-    return dayGone(d) && d.d >= floor && packedEvidence(kid, d) && ALL_CATS.some(function(c){ return foodById(kid, d.slots[c.k]); });
+    return dayGone(d) && d.d >= floor && packedEvidence(kid, d) && ALL_CATS.some(function(c){ return boxFood(kid, d.slots[c.k]); });
   });
   if(!cands.length) return null;
   cands.sort(function(a,b){ return b.d.localeCompare(a.d); });
@@ -2462,7 +2530,7 @@ function reviewSummary(kid, dStr){
   else {
     var answered = 0, out = [];
     ALL_CATS.forEach(function(c){
-      var e = row[c.k], f = e && foodById(kid, e.foodId); if(!e || !f) return;
+      var e = row[c.k], f = e && boxFood(kid, e.foodId); if(!e || !f) return;
       answered++;
       if(e.r === 'some') out.push('some of the '+f.n.toLowerCase());
       else if(e.r === 'left') out.push(f.n+' came home');
@@ -2536,7 +2604,7 @@ function enforceRules(kid){
   weeksOf(kid).forEach(function(w){ w.days.forEach(function(d){
     if(dayGone(d)) return;                  /* a day that has gone is not ours to rewrite */
     catsFor(kid).forEach(function(c){
-      var f = foodById(kid, d.slots[c.k]);
+      var f = boxFood(kid, d.slots[c.k]);        /* off the list is not out of the box: a new rule reaches it too */
       if(f && violation(kid, f) && !isOverride(kid, d, c.k)){
         d.slots[c.k] = null; d.lock[c.k] = false; if(d.kidPick) delete d.kidPick[c.k];
         setOverride(d, c.k, null);
@@ -2568,7 +2636,7 @@ function fillCategory(kid, week, c){
   if(c.k === 'main'){
     open.forEach(function(d,i){ d.slots.main = picks[i] ? picks[i].id : null; });
   } else {
-    var mains = open.map(function(d){ return foodById(kid, d.slots.main); });
+    var mains = open.map(function(d){ return boxFood(kid, d.slots.main); });
     var arranged = bestAssignment(mains, picks, c.k);
     open.forEach(function(d,i){ d.slots[c.k] = arranged[i] ? arranged[i].id : null; });
   }
@@ -2634,7 +2702,13 @@ function prune(kid, ws){
   Object.keys(kid.packed || {}).forEach(function(d){ if(d < floorPacked) delete kid.packed[d]; });
   Object.keys(kid.eaten || {}).forEach(function(d){ if(d < floorEaten) delete kid.eaten[d]; });
   pruneWriteIns(kid);
-  kid.foods = kid.foods.filter(function(f){ return !f.deletedAt || new Date(f.deletedAt).getTime() > floorTomb; });
+  /* the bank's tombstones go at ninety days; a parent's own are what the archive is
+     made of, and are kept to its own limit so they can still be put back */
+  var keepOwn = nullMap();
+  archivedFoods(kid).forEach(function(f){ keepOwn[f.id] = 1; });
+  kid.foods = kid.foods.filter(function(f){
+    return !f.deletedAt || keepOwn[f.id] || new Date(f.deletedAt).getTime() > floorTomb;
+  });
 }
 /* A write-in belongs to one compartment on one day. Once no week, no archived day
    and no answered question points at it, there is no screen that could ever show
@@ -2799,7 +2873,7 @@ function awake(kid, pool){
 }
 function reshuffleSlot(kid, day, cat){
   var pool = eligible(kid, cat);
-  var main = foodById(kid, day.slots.main);
+  var main = boxFood(kid, day.slots.main);   /* pair against what the box holds, not only what the list has */
   var elsewhere = (weekOf(kid, day.d) || kid.week).days.filter(function(x){ return x.d!==day.d; }).map(function(x){ return x.slots[cat]; });
   var fresh = pool.filter(function(f){ return f.id!==day.slots[cat] && elsewhere.indexOf(f.id)<0; });
   var choices = awake(kid, fresh.length ? fresh : pool.filter(function(f){ return f.id!==day.slots[cat]; }));
@@ -2997,7 +3071,7 @@ function reviewReminders(){
     var day = new Date(t0.getTime() + i * 86400000), ds = iso(day);
     var owed = kids().filter(function(k){
       var d = k.week && k.week.days.filter(function(x){ return x.d === ds; })[0];
-      return !!(d && ALL_CATS.some(function(c){ return foodById(k, d.slots[c.k]); }) && !reviewComplete(k, d));
+      return !!(d && ALL_CATS.some(function(c){ return boxFood(k, d.slots[c.k]); }) && !reviewComplete(k, d));
     });
     if(!owed.length) continue;
     var at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), REVIEW_HOUR, 0, 0);
@@ -3038,15 +3112,16 @@ function shoppingList(ahead){
     w.days.forEach(function(d){
       if(dayGone(d)) return;                            /* already eaten, or packed; nothing left to buy for it */
       catsFor(k).forEach(function(c){
-        var f = foodById(k, d.slots[c.k]); if(!f || f.once) return;   /* a write-in is already in the house */
+        var f = boxFood(k, d.slots[c.k]); if(!f || f.once) return;   /* a write-in is already in the house */
         var parts = (f.buy && f.buy.length)
           ? f.buy.map(function(nm){ return {name:nm, aisle:ING_AISLE[normKey(nm)] || f.a || 'other', dish:f.n}; })
           : [{name:f.n, aisle:f.a||'other', dish:null}];
         if(parts.length === 1 && parts[0].dish && normKey(parts[0].dish).indexOf(normKey(parts[0].name).replace(/s$/,'')) > -1) parts[0].dish = null;
         parts.forEach(function(pt){
           var key = normKey(pt.name);
-          var r = rows[key] || (rows[key] = {key:key, name:pt.name, aisle:pt.aisle, qty:0, forKids:[], dishes:[]});
+          var r = rows[key] || (rows[key] = {key:key, name:pt.name, aisle:pt.aisle, qty:0, forKids:[], dishes:[], off:false});
           r.qty++;
+          if(offList(f)) r.off = true;   /* bought for a box that holds a food no longer on the list */
           if(r.forKids.indexOf(k.name)<0) r.forKids.push(k.name);
           if(pt.dish && r.dishes.indexOf(pt.dish)<0) r.dishes.push(pt.dish);   /* the dishes it is for; a dish that is just this one thing says nothing new */
         });
@@ -3095,7 +3170,17 @@ function openSheet(title, html, state){
   document.body.style.overflow = 'hidden';
 }
 function closeSheet(){ sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
-  UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = ''; }
+  UI.ideaAdded = null;                          /* "tap it again" means the tap you just made, and the sitting ends here */
+  if(String(UI.armed).indexOf('idea:') === 0) UI.armed = '';
+  UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = '';
+  if(UI.ideasDirty){ UI.ideasDirty = false; render(); } }
+/* A food added from the bank changes the Foods tab, and the sheet covers the Foods tab.
+   Twelve taps used to be twelve rebuilds of a screen nobody could see, each one throwing
+   away the eaten-history index behind it; the tab is redrawn once, as the sheet goes. */
+function ideasTouched(){
+  if(sheetEl.classList.contains('open')) UI.ideasDirty = true;
+  else { UI.ideasDirty = false; render(); }    /* Undo tapped after the sheet was put away */
+}
 /* The what’s new note is retired by the parent coming out of the walk-through the way
    it is left when it has been read: Got it at its foot, or Done at its head. A tap on the
    backdrop puts the sheet away and leaves the note alone — the backdrop is the whole
@@ -3110,6 +3195,15 @@ function newsRead(){
 backEl.addEventListener('click', closeSheet);
 document.getElementById('sheetClose').addEventListener('click', function(){ var read = newsRead(); closeSheet(); if(read) render(); });
 
+/* Scrolling away from the bank is moving on: whatever was waiting on a second tap stops
+   waiting. Away, not a twitch — a tap can land a scroll event of its own a frame later,
+   and disarming on that would undo the arming the same tap just did. */
+bodyEl.addEventListener('scroll', function(){
+  if(String(UI.armed).indexOf('idea:') !== 0) return;
+  if(Math.abs(bodyEl.scrollTop - (disarmIdea.at || 0)) < 48) return;
+  clearTimeout(disarmIdea.t); disarmIdea();
+}, {passive:true});
+
 /* ---------------------------------------------------------- fragments */
 /* what a food brings to the box, in the words the pairing uses; two at most, the ones that matter to a pairing first */
 var TRAITS = ['crunchy','soft','protein','tangy','sweet','salty','juicy','hearty','light'];
@@ -3117,15 +3211,16 @@ function traitsOf(f){ return TRAITS.filter(function(t){ return has(f, t); }).sli
 /* a box is packed when everything with a food in it is ticked; one tick on the Pack screen sets them all */
 function boxPacked(kid, day){
   var row = kid.packed[day.d] || {}, any = false;
-  return catsFor(kid).every(function(c){ if(!foodById(kid, day.slots[c.k])) return true; any = true; return ticked(row, c.k); }) && any;
+  return catsFor(kid).every(function(c){ if(!boxFood(kid, day.slots[c.k])) return true; any = true; return ticked(row, c.k); }) && any;
 }
 function tinHTML(kid, day, mode){
   var h = '<div class="tin'+(mode==='pack' && boxPacked(kid, day) ? ' packed' : '')+'">';
   catsFor(kid).forEach(function(c){
-    var f = foodById(kid, day.slots[c.k]);
+    var f = boxFood(kid, day.slots[c.k]);
     var sub = f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '');
     var tr = f ? traitsOf(f) : [];
     var over = isOverride(kid, day, c.k);
+    var off = offList(f);                   /* taken off the list since this box was drawn */
     var mark = over ? '<span class="over" title="'+esc(violation(kid, f) || 'against a rule')+'">!</span>' : '';
     if(f && f.once) mark += '<span class="wrote" title="Written in">'+svg('pencil',11)+'</span>';
     if(mode!=='pack') mark += day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>'
@@ -3133,16 +3228,17 @@ function tinHTML(kid, day, mode){
     if(mark) mark = '<span class="marks">'+mark+'</span>';
     var gone = dayGone(day);
     var tag = (mode==='pack' || gone) ? 'div' : 'button';       /* on Pack, and on a day that has gone, a compartment is not a button */
-    h += '<'+tag+' class="cmp c-'+c.k+(f?'':' empty')+(c.minor?' minor':'')+'"'
+    h += '<'+tag+' class="cmp c-'+c.k+(f?'':' empty')+(off?' offlist':'')+(c.minor?' minor':'')+'"'
       +  ((mode==='pack' || gone) ? '' : ' data-act="slot" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'"')+'>'
       +  '<span class="lab">'+c.label+mark+'</span>'
       +  '<span class="nm">'+(f ? esc(f.n) : 'Nothing picked')+'</span>'
-      +  '<span class="tr">'+(sub ? '<i class="care">'+esc(sub)+'</i>' : '')+tr.map(function(t){ return '<i class="t-'+t+'">'+t+'</i>'; }).join('')+'</span></'+tag+'>';
+      +  '<span class="tr">'+(off ? '<i class="care off">off the list</i>' : '')+(sub ? '<i class="care">'+esc(sub)+'</i>' : '')
+      +  tr.map(function(t){ return '<i class="t-'+t+'">'+t+'</i>'; }).join('')+'</span></'+tag+'>';
   });
   return h+'</div>';
 }
 function packButton(kid, day){
-  if(!catsFor(kid).some(function(c){ return foodById(kid, day.slots[c.k]); })) return '';   /* nothing in the box: nothing to pack */
+  if(!catsFor(kid).some(function(c){ return boxFood(kid, day.slots[c.k]); })) return '';   /* nothing in the box: nothing to pack */
   var on = boxPacked(kid, day);
   return '<button class="btn sm packbox" data-act="pack-all" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" aria-pressed="'+on+'"'
     + (kids().length > 1 ? ' aria-label="Packed \u2014 '+esc(kid.name)+'"' : '')+'>'
@@ -3296,7 +3392,7 @@ function reviewCard(kid, d){
   var h = '<div class="card review">'+head
     + '<button class="btn ghost sm" data-act="eat-skip" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">Skip</button></div>';
   ALL_CATS.forEach(function(c){
-    var f = foodById(kid, d.slots[c.k]); if(!f) return;
+    var f = boxFood(kid, d.slots[c.k]); if(!f) return;
     var cur = row[c.k] ? row[c.k].r : '';
     h += '<div class="rrow"><span class="ric" aria-hidden="true">'+iconFor(f)+'</span><span class="rnm">'+esc(f.n)+'</span>'
       +  '<div class="seg" role="group" aria-label="'+esc(f.n)+'">'
@@ -3329,7 +3425,7 @@ function viewKid(){
     : '';
   var miniTin = function(day){
     return '<span class="mini">'+cats.map(function(c){
-      var f = foodById(kid, day.slots[c.k]);
+      var f = boxFood(kid, day.slots[c.k]);
       return '<span class="cmp c-'+c.k+'">'+(f ? picHTML(f) : '<span class="ic"></span>')+'<span class="nm">'+(f ? esc(f.n) : '')+'</span></span>';
     }).join('')+'</span>';
   };
@@ -3346,7 +3442,7 @@ function viewKid(){
       +  '<h1>'+(kidLabel(kid) ? esc(kidLabel(kid))+', pick your '+esc(KIDWORD[cat]) : 'Pick your '+esc(KIDWORD[cat]))+'.</h1>'
       +  '<p class="hint">Tap the one you want.</p></div>'
       +  '<div class="picks">'+opts.map(function(o){
-           var f = foodById(kid, o.id);
+           var f = boxFood(kid, o.id);
            return '<button class="pick" data-act="kid-pick" data-d="'+esc(o.d)+'" data-id="'+esc(o.id)+'">'+picHTML(f)+'<span class="nm">'+esc(f ? f.n : '')+'</span></button>';
          }).join('')+'</div></div>';
   } else if(!st.done){
@@ -3356,7 +3452,7 @@ function viewKid(){
       +  '<div class="boxes'+(cats.length > 4 ? ' tall' : '')+'">'
       +  st.choices.map(function(dstr){
            var day = days.filter(function(d){ return d.d===dstr; })[0];
-           return '<button class="pickbox" data-act="kid-pick" data-d="'+esc(dstr)+'" aria-label="'+esc(cats.map(function(c){ var f = foodById(kid, day.slots[c.k]); return f ? f.n : ''; }).filter(Boolean).join(', '))+'">'+miniTin(day)+'</button>';
+           return '<button class="pickbox" data-act="kid-pick" data-d="'+esc(dstr)+'" aria-label="'+esc(cats.map(function(c){ var f = boxFood(kid, day.slots[c.k]); return f ? f.n : ''; }).filter(Boolean).join(', '))+'">'+miniTin(day)+'</button>';
          }).join('')
       +  '</div></div>';
   } else {
@@ -3369,7 +3465,7 @@ function viewKid(){
             ? (kidLabel(kid) ? esc(kidLabel(kid))+', your week is picked!' : 'Your week is picked!')
             : (kidLabel(kid) ? 'That’s the one, '+esc(kidLabel(kid))+'!' : 'That’s the one!'))+'</h1>'
       +  '<div class="tin">'+cats.map(function(c){
-           var f = foodById(kid, show.slots[c.k]);
+           var f = boxFood(kid, show.slots[c.k]);
            return '<div class="cmp c-'+c.k+(c.minor?' minor':'')+'"><span class="lab">'+KIDWORD[c.k]+'</span>'
              + picHTML(f)+'<span class="nm">'+(f?esc(f.n):'')+'</span></div>';
          }).join('')+'</div>'
@@ -3504,7 +3600,7 @@ function viewPack(){
 
   /* what in this box gets made rather than bought: the recipe waits where the box
      is being packed, because that is the evening a parent is standing in the kitchen */
-  var making = catsFor(kid).map(function(c){ return foodById(kid, day.slots[c.k]); })
+  var making = catsFor(kid).map(function(c){ return boxFood(kid, day.slots[c.k]); })
     .filter(function(f){
       /* only what is worth standing at the counter for: a parent about to walk out of
          the door does not need to be told there is a recipe for a ham sandwich */
@@ -3535,7 +3631,7 @@ function viewPack(){
     h += '<div><div class="sect-head"><h3>Coming up</h3></div><div class="list">';
     rest.forEach(function(x){
       var l = dayLabel(x.d);
-      var what = catsFor(kid).map(function(c){ var f = foodById(kid, x.slots[c.k]); return f?f.n:null; }).filter(Boolean).join(' · ');
+      var what = catsFor(kid).map(function(c){ var f = boxFood(kid, x.slots[c.k]); return f?f.n:null; }).filter(Boolean).join(' · ');
       var pick = pickButton(kid, x);
       var pickedBy = (x.kidPick && Object.keys(x.kidPick).length) ? (kidLabel(kid) ? kidLabel(kid)+' picked' : 'Picked') : '';
       /* the day the kid's pick would change carries the button, so the pick lands where it is seen */
@@ -3579,6 +3675,15 @@ function viewWeek(){
   return h + '</div>';
 }
 
+/* One line under a shopping row: whose it is, what dish it is for, and — when the box
+   still holds a food the parent has taken off the list — why it is here at all. */
+function shopMeta(r, multi){
+  var bits = [];
+  if(multi) bits.push('for '+r.forKids.join(', '));
+  var dish = dishWords(r.dishes); if(dish) bits.push(dish);
+  if(r.off) bits.push('off the list, still in the box');
+  return bits.length ? '<span class="meta">'+esc(bits.join(' · '))+'</span>' : '';
+}
 function viewShop(){
   var rows = shoppingList(), multi = kids().length>1;
   var h = '<div class="stack"><div><p class="view-sub">Shopping list'
@@ -3600,7 +3705,7 @@ function viewShop(){
     groups[a].forEach(function(r){
       h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'" aria-pressed="'+(!!r.have)+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
-        +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
+        +  shopMeta(r, multi)
         +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
     });
     h += '</div></div>';
@@ -3618,7 +3723,7 @@ function viewShop(){
       lg[a].forEach(function(r){
         h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'" aria-pressed="'+(!!r.have)+'">'
           +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
-          +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
+          +  shopMeta(r, multi)
           +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
       });
       h += '</div></div>';
@@ -3662,6 +3767,18 @@ function viewFoods(){
     });
     h += '</div></div>';
   });
+  var back = archivedFoods(kid), backHTML = '';
+  if(back.length){
+    backHTML = '<div><div class="sect-head"><h3 style="color:var(--ink-3)">Taken off</h3><span class="count">'+back.length+'</span></div>'
+      +  '<div class="list">'
+      +  back.map(function(f){
+           return '<div class="item"><span class="thumb" style="border-color:var(--line)">'+picHTML(f)+'</span>'
+             +  '<span class="grow"><span class="nm">'+esc(f.n)+'</span>'
+             +  '<span class="meta">'+esc(catByKey(f.c) ? catByKey(f.c).label : 'Food')+' \u00b7 taken off '+esc(dayLabel(iso(new Date(f.deletedAt))).date)+'</span></span>'
+             +  '<button class="btn sm" data-act="food-back" data-id="'+esc(f.id)+'">Put back</button></div>';
+         }).join('')
+      +  '</div></div>';
+  }
   EXTRA_CATS.forEach(function(c){
     if((kid.settings.slots||{})[c.k]) return;
     var n = foodsOf(kid).filter(function(f){ return f.c===c.k; }).length;
@@ -3678,7 +3795,7 @@ function viewFoods(){
     : isHelper() ? ''
     : '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button>'
       + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words.</span>'+premiumTag()+'</p>' : '');
-  return h + '</div>';
+  return h + backHTML + '</div>';     /* last on the tab: a shelf to go back to, not a wall to scroll past */
 }
 
 /* ======================================================== the Recipes tab
@@ -4138,7 +4255,7 @@ function slotSheet(kidId, dayStr, cat){
   var day = findWeekDay(kid, dayStr); if(!day) return;
   var c = ALL_CATS.filter(function(x){ return x.k===cat; })[0];
   var pool = foodsOf(kid).filter(function(f){ return f.c===cat; });
-  var main = foodById(kid, day.slots.main);
+  var main = boxFood(kid, day.slots.main);   /* the "goes well with" line names what is in the box */
   var h = '<div class="row" style="gap:8px;flex-wrap:wrap">'
     + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'">'
     + svg('dice',15)+'Shuffle this one</button>'
@@ -4146,7 +4263,9 @@ function slotSheet(kidId, dayStr, cat){
     + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Don&#8217;t change this one</button></div>';
   /* whatever is in the compartment, if it is something you make rather than buy. On its
      own line: the two buttons above change the plan, this one only reads. */
-  var inSlot = foodById(kid, day.slots[cat]);
+  var inSlot = boxFood(kid, day.slots[cat]);
+  if(offList(inSlot))
+    h += '<p class="hint" style="margin:0"><b>'+esc(inSlot.n)+'</b> is in this box and off the food list \u2014 it stays here until you pick something else.</p>';
   if(recipeFor(inSlot))
     h += '<button class="btn ghost wide" data-act="cook" data-kid="'+esc(kid.id)+'" data-id="'+esc(inSlot.id)+'">'
       +  svg('book',15)+'Recipe for '+esc(inSlot.n)+'</button>';
@@ -4231,17 +4350,18 @@ function addCats(){
 /* Add one food to several lunchboxes at once. A lunchbox whose rules keep the
    food out is skipped and named — nothing lands in a box it cannot go in. */
 function addFoodTo(targets, o){
-  var r = {added:[], skipped:[], already:[], flagged:[]};
+  var r = {added:[], skipped:[], already:[], flagged:[], foods:[]}, key = normKey(o.n);
   var takers = targets.filter(function(k){ return !violation(k, o); });
   targets.forEach(function(k){
     /* already on the list first: a food a rule now flags is still on the list,
        and saying the rules keep it out of a box that holds it is a lie */
-    if(foodsOf(k).some(function(f){ return normKey(f.n) === normKey(o.n); })){ r.already.push(k); return; }
+    if(foodsOf(k).some(function(f){ return normKey(f.n) === key; })){ r.already.push(k); return; }
     /* rules flag foods; they never refuse them. A box whose rules keep the food
        out steps aside only when another box takes it; the only box, or every
        box refusing, gets it on the list flagged, where the Foods tab marks it */
     if(violation(k, o) && takers.length){ r.skipped.push(k); return; }
-    k.foods.push(newFood(k, o)); touch(k); r.added.push(k);
+    var made = newFood(k, o);
+    k.foods.push(made); touch(k); r.added.push(k); r.foods.push(made);   /* named, so the tap that made them can take exactly them back off */
     if(violation(k, o)) r.flagged.push(k);
   });
   return r;
@@ -4256,48 +4376,181 @@ function addedLine(name, r){
   return name+' added to '+listNames(r.added)
     + (r.skipped.length ? ' \u2014 not '+listNames(r.skipped)+', the rules keep it out' : flag);
 }
+/* The other half of a tap in the idea bank, and it undoes that tap and nothing else.
+   It takes back only the records that tap created, named by id: a row that was already
+   ticked when the sheet opened was not put there just now, and may be a food the parent
+   wrote themselves — their photo, their amounts, their recipe — that only shares a name
+   with the bank. Those are not this gesture's to delete.
+
+   Ids rather than the objects themselves, because a sync landing between the two taps
+   rebuilds the whole document through normalizeAccount: a food caught by reference
+   before that would be put back into a copy of the household nobody is looking at,
+   and the parent would be told it had worked. */
+function dropFoods(rows){
+  var r = {removed:[], stillIn:0};
+  rows.forEach(function(row){
+    var k = kidById(row.kidId); if(!k) return;
+    var f = foodById(k, row.foodId); if(!f) return;
+    f.deletedAt = now(); touch(f);
+    /* The boxes it was already drawn into keep it. A week on screen is a plan the
+       parent made and may be shopping for tonight; taking a food off the list is a
+       decision about the weeks after, and it is not allowed to blank a compartment
+       they were counting on. Those boxes mark it as off the list until they are
+       redrawn, and nothing off the list is ever drawn again. */
+    weeksOf(k).forEach(function(w){ w.days.forEach(function(d){
+      if(dayGone(d)) return;                  /* a box already eaten keeps nothing going forward */
+      ALL_CATS.forEach(function(c){ if(d.slots[c.k] === f.id) r.stillIn++; });
+    }); });
+    /* Counted, never written: no day is touched here and no week is stamped, and that is
+       load-bearing rather than incidental. The loop this replaced cleared days that had
+       already gone, and stamping the week — which a put-back needs to survive a merge —
+       pushed this phone's rewrite of a packed day to the household. mergeWeek resolves a
+       gone day from `older` by createdAt with `<=`, which on a tie takes whichever copy
+       is the local argument, so two phones never converged and the compartment flipped on
+       the server for good. If a clearing loop ever comes back here in any form, it needs
+       the dayGone() guard that enforceRules and the redraw both carry. */
+    touch(k); if(r.removed.indexOf(k) < 0) r.removed.push(k);
+  });
+  return r;
+}
+/* Ids, never the records: a sync landing inside the toast's six seconds hands S a
+   document normalizeAccount has rebuilt food by food, and anything caught in the
+   closure before that would be written into a copy the app has already let go of —
+   silently, under a toast that said it had worked. Returns what it really put back,
+   so no caller can say more than happened. */
+function restoreFoods(rows){
+  var n = 0;
+  rows.forEach(function(row){
+    var k = kidById(row.kidId); if(!k) return;
+    var f = k.foods.filter(function(x){ return x.id === row.foodId; })[0];
+    if(!f || !f.deletedAt) return;
+    /* something with that name went back on the list while the toast was up — on this
+       phone or another one — and two of a name on one list is worse than a missed undo */
+    if(foodsOf(k).some(function(x){ return normKey(x.n) === normKey(f.n); })) return;
+    f.deletedAt = null; touch(f); touch(k); n++;
+  });
+  return n;
+}
+/* Every live copy of a named food across the boxes being added to, named the same way
+   the undo record names them, so the confirmed take-off and the undo of an add go out
+   through one door. */
+function foodRowsFor(targets, name){
+  var key = normKey(name), rows = [];
+  targets.forEach(function(k){
+    foodsOf(k).forEach(function(f){ if(normKey(f.n) === key) rows.push({kidId:k.id, foodId:f.id}); });
+  });
+  return rows;
+}
+/* Whether a food is the parent's own work rather than the bank's: written in their
+   words, or the bank's food with their photo, their recipe or their filing on it. */
+function ownFood(f){
+  if(!f) return false;
+  var b = bankByName(f.n);
+  if(!b) return true;                                  /* nothing in the bank by that name: their own words */
+  if(f.img || f.recipeId || f.c !== b.c || f.a !== b.a) return true;
+  var mine = (f.buy || []).map(normKey).join('|'), theirs = (b.buy || []).map(normKey).join('|');
+  return mine !== theirs;                              /* their amounts, which the shopping list goes by */
+}
+/* The first of the two taps: what is about to go, in the words a parent would use for
+   it — and, when the food is one of theirs, that it is theirs that goes. */
+function takeOffWarning(name, rows){
+  var boxes = [], planned = 0, mine = false;
+  rows.forEach(function(row){
+    var k = kidById(row.kidId); if(!k) return;
+    if(boxes.indexOf(k) < 0) boxes.push(k);
+    var f = foodById(k, row.foodId);
+    if(ownFood(f)) mine = true;
+    weeksOf(k).forEach(function(w){ w.days.forEach(function(d){
+      if(dayGone(d)) return;
+      ALL_CATS.forEach(function(c){ if(d.slots[c.k] === row.foodId) planned++; });
+    }); });
+  });
+  return 'That takes '+name+' off '+(kids().length < 2 ? 'the list' : listNames(boxes)+'\u2019s list'+(boxes.length > 1 ? 's' : ''))
+    + (mine ? ', and it is one of your own \u2014 it waits under Taken off' : '')
+    + (planned ? (planned > 1 ? '. The '+planned+' boxes already drawn keep it' : '. The box already drawn keeps it') : '');
+}
+function undoneLine(name, r){
+  var kept = r.stillIn ? (r.stillIn > 1 ? ' \u2014 the '+r.stillIn+' boxes already drawn keep it' : ' \u2014 the box already drawn keeps it') : '';
+  if(kids().length < 2) return name+' taken off the list'+kept;
+  return name+' taken off '+listNames(r.removed)+'\u2019s list'+(r.removed.length > 1 ? 's' : '')+kept;
+}
 function addFailLine(name, r){
   if(!r.skipped.length) return 'Already on the list';
-  var line = name+' is kept out of '+listNames(r.skipped)+(r.skipped.length > 1 ? '\u2019 boxes' : '\u2019s box')+' by the rules';
+  var line = name+' is kept out of '+listNames(r.skipped)+'\u2019s box'+(r.skipped.length > 1 ? 'es' : '')+' by the rules';
   return r.already.length ? line+'; the rest already had it' : line;
 }
-function ideasSheet(){
-  var targets = addTargets();
-  var have = targets.map(function(k){
+/* What every lunchbox being added to already has, gathered once so a walk of the
+   whole bank does not go back to each food list a hundred and sixty-nine times. */
+function ideaHave(targets){
+  return targets.map(function(k){
     var set = nullMap();
     foodsOf(k).forEach(function(f){ set[normKey(f.n)] = 1; });
     return set;
   });
-  /* one walk: whether every target is already settled (has it, or its rules
-     keep it out), whether no target could take it at all, and — kept apart from
-     settled — whether it is genuinely on every one of their lists. A food on Anna's
-     list that Sam's rules flag is settled but not on Sam's, and the tick may not
-     say it is: the rules flag foods, they do not put them on a list. */
-  var done = nullMap(), shut = nullMap(), everywhere = nullMap();
-  BANK.forEach(function(b){
-    var key = normKey(b.n), all = true, none = true, mine = true;
-    targets.forEach(function(k, i){
-      var v = !!violation(k, b);
-      if(!v) none = false;
-      if(!v && !have[i][key]) all = false;
-      if(!have[i][key]) mine = false;
-    });
-    done[key] = all; shut[key] = none; everywhere[key] = mine;
+}
+/* Where one idea stands against those lunchboxes: `on` when every box that could
+   take it already has it — the tick in the bank — and `shut` when no box could take
+   it at all. One definition, so the row as it is drawn and the row as it is re-marked
+   after a tap can never fall out of step with each other. */
+function ideaState(b, targets, have){
+  targets = targets || addTargets();
+  have = have || ideaHave(targets);
+  var key = normKey(b.n), on = true, shut = true;
+  targets.forEach(function(k, i){
+    var v = !!violation(k, b);
+    if(!v) shut = false;
+    if(!v && !have[i][key]) on = false;
   });
+  return {on:on, shut:shut};
+}
+/* Re-tick one row where it stands. The bank is thousands of pixels of scroll and a
+   parent adds a handful of foods in a sitting, so a tap must not redraw the sheet
+   under them: rebuilding it puts them back at the top on a phone and they have to
+   scroll down to where they were to tap the next thing. Nothing moves but the row. */
+function ideaMeta(b){ return b.a + (b.al.length ? ' · '+b.al.join(', ') : ''); }
+function markIdea(name, on, armed){
+  var rows = bodyEl.querySelectorAll('[data-act="add-idea"]');
+  for(var i = 0; i < rows.length; i++) if(rows[i].getAttribute('data-name') === name){
+    if(on) rows[i].classList.add('ticked'); else rows[i].classList.remove('ticked');
+    if(armed) rows[i].classList.add('arm'); else rows[i].classList.remove('arm');
+    rows[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    var m = rows[i].querySelector('.meta'), b = bankByName(name);
+    if(m && b) m.textContent = armed ? ('Tap again to take it off' + (b.al.length ? ' \u00b7 ' + b.al.join(', ') : '')) : ideaMeta(b);
+    return;
+  }
+}
+/* A row armed on the way out of the sheet is not armed on the way back in.
+   It reads the armed row off the sheet rather than off UI.armed, because the
+   dispatcher blanks UI.armed for most taps before the handler ever runs — and a
+   row still painted "Tap again to take it off" after the arming has gone is a row
+   lying about what the next tap does. */
+function disarmIdea(){
+  UI.armed = '';
+  var row = bodyEl.querySelector('.list.ideas .item.arm');
+  var b = row && bankByName(row.getAttribute('data-name'));
+  if(b) markIdea(b.n, ideaState(b).on, false);
+}
+function ideasSheet(){
+  var targets = addTargets(), have = ideaHave(targets);
+  var done = nullMap(), shut = nullMap();
+  BANK.forEach(function(b){
+    var st = ideaState(b, targets, have), key = normKey(b.n);
+    done[key] = st.on; shut[key] = st.shut;  });
   var cats = addCats(), on = cats.map(function(c){ return c.k; });
-  var h = targetRow('ideas') + '<p class="hint" style="margin:0">Tap to add.</p>';
+  var h = targetRow('ideas') + '<p class="hint" style="margin:0">Tap to add. Tap a ticked one to take it off.</p>';
   cats.forEach(function(c){
     var items = BANK.filter(function(b){ return b.c===c.k && !shut[normKey(b.n)]; });
     if(!items.length) return;
+    var left = items.filter(function(b){ return !done[normKey(b.n)]; }).length;   /* what Add all would actually add */
     h += '<div><div class="sect-head"><h3 style="color:var(--c-'+c.k+')">'+esc(c.plural)+'</h3>'
-      +  '<span class="count">'+items.length+'</span></div><div class="list">';
+      +  '<span class="count">'+items.length+'</span>'
+      +  (left ? '<button class="btn ghost sm" data-act="add-cat" data-c="'+c.k+'">Add all '+left+'</button>' : '')
+      +  '</div><div class="list ideas" data-c="'+c.k+'">';
     items.forEach(function(b){
-      h += '<button class="item'+(done[normKey(b.n)]?' ticked':'')+'" data-act="add-idea" data-name="'+esc(b.n)+'">'
+      var tick = !!done[normKey(b.n)];
+      h += '<button class="item'+(tick?' ticked':'')+'" data-act="add-idea" data-name="'+esc(b.n)+'" aria-pressed="'+tick+'">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(b.n)+'</span>'
-        +  (done[normKey(b.n)] ? '<span class="sr-only">'+(everywhere[normKey(b.n)]
-              ? 'Already on the list' : 'Already on every list the rules allow')+'</span>' : '')
-        +  '<span class="meta">'+esc(b.a)+(b.al.length?' · '+esc(b.al.join(', ')):'')+'</span></span></button>';
-    });
+        +  '<span class="meta">'+esc(ideaMeta(b))+'</span></span></button>';    });
     h += '</div></div>';
   });
   var hidden = BANK.filter(function(b){ return on.indexOf(b.c) > -1 && shut[normKey(b.n)]; }).length;
@@ -4763,8 +5016,8 @@ function helpSheet(){
   var qa = [
     ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle day redraws one day, or tap a compartment to change one thing.'],
     ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
-    ['How do I add a food?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 the idea bank is free for good. A green tick and a grey name mean there is nothing left to add. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
-    ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with \u2014 a Mediterranean quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
+    ['How do I add a food, or take one off?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 as many as you like, the list stays where you are. Add all on a heading takes a whole compartment. Tap a ticked one to take it off: one you just added goes on one tap, one that was already there asks for a second. With more than one lunchbox the tick also means every list the rules allow \u2014 tap one and it says which box the rules kept it out of. The bin on the Foods tab works too. Everything offers Undo. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
+    ['I took a food off \u2014 what about this week?', 'The boxes already drawn keep it, marked off the list, so nothing you were going to pack goes blank on you \u2014 and it stays on the shopping list, because you still have that box to pack. It is never drawn again, and the next Shuffle all or Plan the week puts something else there; a compartment you kept, you change yourself. Foods you wrote yourself wait under Taken off at the foot of the Foods tab, with Put back.'],    ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with \u2014 a Mediterranean quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
     ['Can I bring a recipe in from somewhere else?', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read \u2014 copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox\u2019s food list is offered after. Keeping one of your own is part of the Household plan.'],
     ['Can it walk me through cooking one?', 'Open a recipe and tap Cook it step by step. One step fills the screen, and What you need under it lists only what that step needs, with a box to tick against each one as it goes in. The whole recipe is one tap away at the top. Nothing you tick is saved, so it never reaches the other parent\u2019s phone.'],
     ['Can I see it in grams, or in cups?', 'Open a recipe and tap Metric \u2014 or US, for one that came in written in grams; it converts both ways. A cup of flour is weighed in grams, broth is poured in millilitres, the oven carries its Celsius, and a spoonful of salt is left as a spoonful. The + and \u2212 make more or less and scale every amount.'],
@@ -4950,7 +5203,7 @@ document.addEventListener('click', function(ev){
   var kid = activeKid();
   /* a caretaker sees the plan and checks the list off on this phone; changing the plan is for a parent */
   if(isHelper() && HELPER_OK.indexOf(act) < 0){ toast('Only a parent can change the plan'); return; }
-  if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='delete-account' && act!=='member-remove' && act!=='disarm' && UI.armed) UI.armed = '';
+  if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='delete-account' && act!=='member-remove' && act!=='disarm' && !(act==='add-idea' && String(UI.armed).indexOf('idea:') === 0) && UI.armed) UI.armed = '';
   if(act!=='delete-account' && UI.deleteTyped) UI.deleteTyped = '';   /* typing is an input event, so it can never clear itself */
 
   /* did they eat it? */
@@ -4963,7 +5216,7 @@ document.addEventListener('click', function(ev){
     var me = (deviceMember() || {}).id || null;
     if(act==='eat-skip'){ ek.eaten[ed.d] = {skipped:true, at:now(), by:me}; }
     else if(act==='eat-all'){
-      ALL_CATS.forEach(function(c){ if(foodById(ek, ed.slots[c.k])) row[c.k] = {foodId:ed.slots[c.k], r:'ate', at:now(), by:me}; });
+      ALL_CATS.forEach(function(c){ if(boxFood(ek, ed.slots[c.k])) row[c.k] = {foodId:ed.slots[c.k], r:'ate', at:now(), by:me}; });
     } else {
       var ec = el.getAttribute('data-cat');
       row[ec] = {foodId:ed.slots[ec], r:el.getAttribute('data-r'), at:now(), by:me};
@@ -5261,7 +5514,7 @@ document.addEventListener('click', function(ev){
     var was = boxPacked(k7, day7), by = (deviceMember()||{}).id || null, at = now();
     var row = k7.packed[dt] = k7.packed[dt] || {};
     catsFor(k7).forEach(function(c){
-      if(!foodById(k7, day7.slots[c.k])) return;
+      if(!boxFood(k7, day7.slots[c.k])) return;
       if(was) row[c.k] = {at:at, by:by, off:true};                       /* an un-tick is a row too, so the other phone sees it */
       else if(!ticked(row, c.k)) row[c.k] = {at:at, by:by};              /* a compartment already ticked keeps who and when */
     });
@@ -5270,7 +5523,7 @@ document.addEventListener('click', function(ev){
     if(was){
       var prev = JSON.parse(JSON.stringify(row)), kid7 = k7;
       toast((kids().length > 1 ? k7.name+'\u2019s box' : 'Box')+' unpacked', function(){
-        Object.keys(prev).forEach(function(c){ if(prev[c].off && !foodById(kid7, day7.slots[c])) return; prev[c] = {at:now(), by:by}; });
+        Object.keys(prev).forEach(function(c){ if(prev[c].off && !boxFood(kid7, day7.slots[c])) return; prev[c] = {at:now(), by:by}; });
         kid7.packed[dt] = prev; touch(kid7); save(); render();
       });
     }
@@ -5324,13 +5577,101 @@ document.addEventListener('click', function(ev){
     }
     return;
   }
+  /* The idea bank is a list to work down, not a list to leave and come back to: a tap
+     adds, the same row tapped again takes that add back, and the sheet never redraws,
+     so a parent keeps their place however many they tap. Only what this sitting added
+     can be taken back — a row that arrived ticked is still the no-op it always was. */
   if(act==='add-idea'){
-    var b = BANK.filter(function(x){ return x.n===el.getAttribute('data-name'); })[0];
+    var b = bankByName(el.getAttribute('data-name'));
     if(!b) return;
-    var r4 = addFoodTo(addTargets(), b);
-    if(!r4.added.length){ toast(addFailLine(b.n, r4)); return; }
-    var at4 = bodyEl.scrollTop;                    /* stay where they were reading */
-    save(); ideasSheet(); bodyEl.scrollTop = at4; render(); toast(addedLine(b.n, r4)); return;
+    var ts4 = addTargets(), key4 = normKey(b.n), armed4 = UI.armed === 'idea:'+key4;
+    if(!armed4) disarmIdea();                       /* a different row was waiting on a second tap; it is not any more */
+    UI.ideaAdded = UI.ideaAdded || nullMap();
+    var mine4 = UI.ideaAdded[key4];
+    if(mine4){                                      /* this sitting put it there: one tap takes it straight back */
+      delete UI.ideaAdded[key4];
+      var u4 = dropFoods(mine4);
+      save(); markIdea(b.n, ideaState(b, ts4).on, false); ideasTouched();
+      toast(undoneLine(b.n, u4), function(){
+        restoreFoods(mine4);
+        if(UI.ideaAdded) UI.ideaAdded[key4] = mine4;          /* takeable again, if the sheet is still up */
+        save(); markIdea(b.n, ideaState(b).on, false); ideasTouched(); toast('Put back');
+      });
+      return;
+    }
+    /* Already on the list before this sitting began. It may be a food written by hand —
+       its photo, its amounts, its recipe — that only shares a name with the bank, so it
+       takes a second tap, and the first one says what the second would cost. */
+    if(ideaState(b, ts4).on){
+      var rows4 = foodRowsFor(ts4, b.n);
+      if(!rows4.length){ toast('Already on the list'); return; }   /* ticked by the rules, not by the list */
+      if(!armed4){
+        UI.armed = 'idea:'+key4; markIdea(b.n, true, true);
+        /* the warning is the only place the cost is written down, so the arming does not
+           outlive it — a phone put down armed and picked up later is one tap from a delete */
+        var warn4 = takeOffWarning(b.n, rows4);
+        clearTimeout(disarmIdea.t);
+        disarmIdea.at = bodyEl.scrollTop;
+        /* exactly as long as the sentence explaining it is on screen, and no longer */
+        disarmIdea.t = setTimeout(function(){ if(UI.armed === 'idea:'+key4) disarmIdea(); }, toastMs(warn4));
+        toast(warn4); return;
+      }
+      UI.armed = '';
+      var d4 = dropFoods(rows4);
+      save(); markIdea(b.n, ideaState(b, ts4).on, false); ideasTouched();
+      toast(undoneLine(b.n, d4), function(){
+        restoreFoods(rows4); save(); markIdea(b.n, ideaState(b).on, false); ideasTouched(); toast('Put back');
+      });
+      return;
+    }
+    var r4 = addFoodTo(ts4, b);
+    if(!r4.added.length){ toast(addFailLine(b.n, r4)); markIdea(b.n, ideaState(b, ts4).on, false); return; }
+    UI.ideaAdded[key4] = r4.foods.map(function(f){ return {kidId:f.kidId, foodId:f.id}; });
+    save(); markIdea(b.n, ideaState(b, ts4).on, false); ideasTouched(); toast(addedLine(b.n, r4)); return;
+  }
+  /* A whole compartment at once, for a parent filling a list from nothing. Everything the
+     section is offering that is not on the list already, added as if each row were tapped —
+     so every one of them can be tapped again to come back off, and one Undo takes the lot. */
+  if(act==='add-cat'){
+    disarmIdea();
+    var ck5 = el.getAttribute('data-c'), ts5 = addTargets(), rows5 = [], names5 = [], flag5 = 0, full5 = false, skip5 = [], skipN5 = 0;
+    /* gathered once and kept up to date as the section goes on, rather than rebuilt
+       against a list one food longer every time round */
+    var have5 = ideaHave(ts5);
+    var room5 = DOC_MAX - docBytes(S);            /* measured once: stringifying the household per food is the tap */
+    UI.ideaAdded = UI.ideaAdded || nullMap();
+    BANK.forEach(function(x){
+      if(x.c !== ck5 || full5) return;
+      var st5 = ideaState(x, ts5, have5); if(st5.shut || st5.on) return;
+      /* a lunchbox at its cap loses whatever a merge trims next, so it stops here and says so */
+      var cost5 = 1200 * ts5.length;
+      if(ts5.some(function(k){ return liveCount(k) >= FOODS_MAX; }) || room5 < cost5){ full5 = true; return; }
+      room5 -= cost5;
+      var a5 = addFoodTo(ts5, x); if(!a5.added.length) return;
+      var k5 = normKey(x.n), made5 = a5.foods.map(function(f){ return {kidId:f.kidId, foodId:f.id}; });
+      UI.ideaAdded[k5] = made5;
+      rows5.push.apply(rows5, made5);
+      names5.push(x.n);
+      ts5.forEach(function(k, i){ have5[i][k5] = 1; });
+      if(a5.flagged.length) flag5++;
+      if(a5.skipped.length){ skipN5++; a5.skipped.forEach(function(k){ if(skip5.indexOf(k) < 0) skip5.push(k); }); }
+      markIdea(x.n, true, false);
+    });
+    var where5 = kids().length < 2 ? '' : ' to '+listNames(ts5)+'\u2019s list'+(ts5.length > 1 ? 's' : '');
+    if(!names5.length){ toast(full5 ? (kids().length < 2 ? 'The list' : listNames(ts5)+'\u2019s list')+' is as full as it goes \u2014 take a few foods off first' : 'Every one of those is on the list already'); return; }
+    var what5 = catByKey(ck5) ? catByKey(ck5).plural.toLowerCase() : 'foods';
+    var head5 = el.parentNode && el.parentNode.querySelector('[data-act="add-cat"]');
+    if(head5) head5.remove();                      /* it has just added them all: a second tap had nothing to do */
+    save(); ideasTouched();
+    toast(names5.length+' '+what5+' added'+where5
+      + (skipN5 ? ' \u2014 the rules keep '+skipN5+' of them out of '+listNames(skip5)+'\u2019s box'+(skip5.length > 1 ? 'es' : '') : '')
+      + (flag5 ? (skipN5 ? ', and ' : ' \u2014 ')+flag5+' flagged by your rules' : '')
+      + (full5 ? ', and '+(kids().length < 2 ? 'the list is' : listNames(ts5)+'\u2019s list is')+' full now' : ''), function(){
+      dropFoods(rows5);
+      names5.forEach(function(n){ if(UI.ideaAdded) delete UI.ideaAdded[normKey(n)]; markIdea(n, false, false); });
+      save(); ideasTouched(); toast(names5.length+' taken back off');
+    });
+    return;
   }
   if(act==='seed'){
     var added = seedLibrary(kid, 'some');
@@ -5539,28 +5880,41 @@ document.addEventListener('click', function(ev){
   if(act==='food-photo-pick'){ closeSheet(); pickPhoto(el.getAttribute('data-id')); return; }
   if(act==='food-photo-clear'){
     var cf = foodById(kid, el.getAttribute('data-id')); if(!cf) return;
-    var prevImg = cf.img; cf.img = null; touch(cf); save(); closeSheet(); render();
-    toast('Photo removed', function(){ cf.img = prevImg; touch(cf); save(); render(); toast('Put back'); }); return;
+    var prevImg = cf.img, photoKid = kid.id, photoFood = cf.id;
+    cf.img = null; touch(cf); save(); closeSheet(); render();
+    /* Undo holds ids, never the records themselves: a sync landing inside the
+       toast's six seconds rebuilds every food from scratch, and anything caught
+       in this closure would be writing to a document S no longer holds. */
+    toast('Photo removed', function(){
+      var pk = kidById(photoKid); if(!pk){ render(); toast('That lunchbox is gone'); return; }
+      var pf = foodById(pk, photoFood); if(!pf){ render(); toast('That food is gone'); return; }
+      if(pf.img && pf.img !== prevImg){ render(); toast('That food has a new photo now'); return; }   /* the other phone's is the newer one */
+      /* the only write of .img that is neither straight off the canvas nor
+         freshly normalised: the merge may have grown the document under it */
+      if(prevImg && !(PHOTO_RE.test(prevImg) && prevImg.length <= PHOTO_MAX && docRoomFor(prevImg.length))){ render(); toast('No room for that photo now'); return; }
+      pf.img = prevImg; touch(pf); save(); render(); toast('Put back');
+    }); return;
   }
+  if(act==='food-back'){
+    var bf = (kid ? kid.foods : []).filter(function(x){ return x.id === el.getAttribute('data-id') && x.deletedAt; })[0];
+    if(!bf){ toast('That one has gone'); return; }
+    if(foodsOf(kid).some(function(x){ return normKey(x.n) === normKey(bf.n); })){ toast('Already back on the list'); return; }
+    bf.deletedAt = null; touch(bf); touch(kid); save(); render();
+    toast(bf.n+' back on the list', function(){
+      bf.deletedAt = now(); touch(bf); touch(kid); save(); render(); toast('Taken off again');
+    });
+    return;
+  }
+  /* The bin and the second tap in the idea bank are the same act and go out the same
+     door: the food comes off the list, and every box already drawn keeps it, marked,
+     until that day is redrawn. */
   if(act==='del-food'){
     var f = foodById(kid, el.getAttribute('data-id')); if(!f) return;
-    var wasIn = [];
-    f.deletedAt = now(); touch(f);
-    weeksOf(kid).forEach(function(w){ w.days.forEach(function(d){
-      ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){
-        wasIn.push({d:d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k], over:isOverride(kid, d, c.k)});
-        d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); } });
-    }); });
-    touch(kid); save(); render();
-    var undoKid = kid;
-    toast(f.n+' removed', function(){
-      f.deletedAt = null; touch(f);
-      wasIn.forEach(function(w){
-        w.d.slots[w.c] = f.id; w.d.lock[w.c] = w.lock;
-        if(w.pick){ w.d.kidPick = w.d.kidPick || {}; w.d.kidPick[w.c] = w.pick; }
-        if(w.over) setOverride(w.d, w.c, f.id);
-      });
-      touch(undoKid); save(); render(); toast('Put back');
+    var rows8 = [{kidId:kid.id, foodId:f.id}], d8 = dropFoods(rows8);
+    save(); render();
+    toast(undoneLine(f.n, d8), function(){
+      var n8 = restoreFoods(rows8); save(); render();
+      toast(n8 ? 'Put back' : 'That food has gone');   /* never "Put back" over a food it did not put back */
     });
     return;
   }

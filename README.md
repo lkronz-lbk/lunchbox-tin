@@ -68,7 +68,34 @@ throwing app script cannot leave it up forever. From there:
   "Plan the week" banner draws everything with no sheet. A food added from the
   idea bank or by hand goes into every lunchbox unless you say otherwise; a box whose rules keep
   it out is skipped and named when another box takes it, and gets it flagged when it is the only
-  box. The "Add it to" choice sticks for the rest of the session. A lunchbox filled with "Fill the
+  box. The "Add it to" choice sticks for the rest of the session. The idea bank is not redrawn by
+  a tap, so a parent keeps their place down a long list; tapping a row again takes back exactly
+  what that tap added, from exactly the boxes it added to, with Undo. A row already ticked when
+  the sheet opened may be a food written by hand that only shares a name with the bank, so it
+  takes two taps: the first arms that row alone ("Tap again to take it off", where its aisle
+  was), names the lists, and says so when the food is one of the parent's own; the second takes
+  it off every target box, with Undo. The arming dies with the warning that explains it — six
+  seconds, a scroll away from the row, or any other tap. **Add all**, on each compartment
+  heading, adds everything that section offers and the list does not already have, counts what
+  that is, and takes one Undo for the batch; it stops short of the per-lunchbox food cap rather
+  than letting a later merge trim the newest away.
+
+  Taking a food off the list never changes a week already drawn. The boxes that hold it keep it,
+  marked "off the list", so a lunch the parent was about to pack does not become an empty
+  compartment they cannot account for; it is off every draw from that moment, and the next
+  shuffle or plan replaces it. Only the views that show what a box holds read `boxFood`; every
+  draw, pairing and rules sweep reads `foodById` and never sees it. Both ways out — the bin on
+  Foods and the second tap in the bank — go through `dropFoods`, which writes to no day at all,
+  so a day that has gone is untouched by construction. A food in the parent's own words is kept
+  after it comes off, under **Taken off** on the Foods tab with its photo and shopping line, and
+  **Put back** revives that same record; the ninety-day tombstone sweep leaves alone the most
+  recent of those that fit `ARCHIVE_MAX` (60) and `ARCHIVE_BYTES` (120KB, photos counted),
+  because the bank's foods can be re-tapped and a parent's own words cannot — and because a
+  shelf of photographed foods must never be what pushes a household past what the server takes.
+  A food is the parent's own when the bank has no such name, or the bank has it but they have
+  put a photo, a recipe, another compartment, another aisle or their own shopping line on it.
+
+  A lunchbox filled with "Fill the
   list for me" is planned on its own until the next Plan the week matches it in; the toast after
   Plan the week says how many compartments had to differ.
 - **Plan ahead** — one more week (`kid.next`), reached by the Next button beside the week's date, drawn and
@@ -406,7 +433,7 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
 
-- **Help** — the ? at the top of every tab opens a sheet: twenty one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: twenty-one one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 

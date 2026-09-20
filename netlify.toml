@@ -72,7 +72,7 @@
 [[headers]]
   for = "/app/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-enY0jE0acPYLcZ2SGQ0NcEPK/kCDxBiLnbMeSJJt3yo=' 'sha256-bjyuAASvKNjPvH/AJB5npqJC1J5KuJTQTjhbSaCy2jg=' 'sha256-DRTBrkgqeAI1Q0i9BiiRT/646fSqD8mD3iANVE5lJSk='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-enY0jE0acPYLcZ2SGQ0NcEPK/kCDxBiLnbMeSJJt3yo=' 'sha256-enlptUi/Ejt9/mnwaQyG1B3FSCDpY6jHeMf+D2fOba4=' 'sha256-DRTBrkgqeAI1Q0i9BiiRT/646fSqD8mD3iANVE5lJSk='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 [[headers]]
   for = "/"
