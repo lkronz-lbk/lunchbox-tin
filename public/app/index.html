@@ -1288,7 +1288,7 @@ var Store = {
    Signed out, nothing here runs and the app is exactly the phone-only app it
    always was. */
 var Account = {user:null, me:null, members:[], entitlement:null, version:0, status:'idle', syncedAt:null, timer:null, retry:null, tries:0,
-  busy:false, pushing:false, linkSent:'', devLink:'', devCode:'', invite:'', inviteRole:'', join:null, first:false, sending:false, billing:null, buying:false, settling:false, elsewhere:false};
+  busy:false, pushing:false, linkSent:'', devLink:'', devCode:'', invite:'', inviteRole:'', join:null, first:false, sending:false, billing:null, buying:false, settling:false, elsewhere:false, leftForCheckout:false};
 var PUSH_WAIT = 2500, RETRY_WAITS = [15000, 60000, 180000];
 function api(method, path, body, extra){
   var opts = {method:method, credentials:'same-origin', headers:{}};
@@ -1565,7 +1565,7 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v22';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v23';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
@@ -1578,15 +1578,7 @@ var APP_BUILD = 'lunchsorted-v22';     /* the same tag as VERSION in sw.js; npm 
    who did open v21; the note is per-build and never catches up on a build skipped.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v22', seenAs:'lunchsorted-v21', text:'New: cooking a recipe step by step now puts a box against every amount that step needs, to tick as it goes in.',
-  steps:[
-    ['A tab of their own', 'Recipes is on the bottom bar now. Foods belong to each lunchbox; recipes belong to the household, so they are one list however many kids you pack for.'],
-    ['Two we can stand behind', 'A Mediterranean quinoa salad and a bean and avocado wrap come with the app, free to cook from. Both were written and taste-tested by school teams of cooks, chefs, parents and students for the USDA. We do not write our own \u2014 a recipe nobody has cooked is not something to hand you at six in the morning.'],
-    ['Bring in the ones you use', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it; for a reel or a pin, copy the words under it and paste those instead. It is kept and named on the tab, and putting it on a lunchbox\u2019s food list is offered after rather than done for you.'],
-    ['Tick it where you are standing', 'Cook it step by step puts one step on the screen, with What you need under it cut down to just that step and a box against each one \u2014 so the olive oil is ticked off at the counter rather than back on the full list. The whole recipe is still one tap away at the top.'],
-    ['US or metric', 'Switch the measures over and a cup of flour is weighed in grams, broth is poured in millilitres, an oven carries its Celsius, and a spoonful of salt is left as a spoonful. Ask for more lunches and every amount scales.'],
-    ['Where you need it', 'A Recipe tag on the Foods list, the recipe on the compartment when you tap it on Week, and named under the box on Pack, which is where you are standing the night before.']
-  ]};
+var WHATS_NEW = {build:'lunchsorted-v23', text:'', steps:[]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
 function whatsNew(){
@@ -5299,13 +5291,19 @@ document.addEventListener('click', function(ev){
     var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') || 'year', client: client}) : api('POST', '/api/billing/portal', {client: client});
     call.then(function(r){
       if(r.status !== 200 || !r.url){ undoBtn(); toast(r.error || (act==='buy' ? 'Could not open the checkout' : 'Could not open billing')); return; }
-      var browser = nativePlugin('Browser');
-      if(browser){                                           /* the iPhone app: Stripe opens in Safari, and back.html hands the parent back to the app */
-        undoBtn(); closeSheet();
-        browser.open({url: r.url}).catch(function(){ location.href = r.url; });
+      /* the iPhone app: Stripe must open in the default browser, not in a browser view inside the
+         app — a purchase that never leaves the app is the one thing guideline 3.1.1 forbids.
+         back.html carries the result back over the lunchsorted:// scheme. There is deliberately
+         no in-app fallback here: failing to open is better than opening it in the wrong place. */
+      var launcher = nativePlugin('AppLauncher');
+      if(launcher && launcher.openUrl){
+        undoBtn(); closeSheet(); Account.leftForCheckout = true;
+        launcher.openUrl({url: r.url}).then(function(res){
+          if(res && res.completed === false){ Account.leftForCheckout = false; toast('Could not open the browser'); }
+        }).catch(function(){ Account.leftForCheckout = false; toast('Could not open the browser'); });
         return;
       }
-      location.href = r.url;                                 /* Stripe's page; it sends you back to /app/ */
+      location.href = r.url;                                 /* the web: Stripe's page; it sends you back to /app/ */
     }).catch(function(){ undoBtn(); offline(); });
     return;
   }
@@ -5562,7 +5560,7 @@ Store.load().then(function(r){
   if(app && app.addListener){
     app.addListener('appUrlOpen', function(ev){
       var u = String(ev && ev.url || '');
-      var browser = nativePlugin('Browser'); if(browser) browser.close().catch(function(){});
+      Account.leftForCheckout = false;
       var m = /^lunchsorted:\/\/back\/?(?:\?(.*))?$/.exec(u);
       if(m){
         var q = new URLSearchParams(m[1] || '');
@@ -5575,10 +5573,13 @@ Store.load().then(function(r){
       if(/^https:\/\/([a-z0-9-]+\.)?lunchsorted\.app\//.test(u)) location.href = u;   /* a universal link, such as the sign-in link in the email */
     });
   }
-  /* Safari closed on the Done button instead of the hand-off: look once anyway, so a payment made that way still shows */
-  var nb = nativePlugin('Browser');
-  if(nb && nb.addListener){
-    nb.addListener('browserFinished', function(){
+  /* came back from the browser by swiping rather than through back.html: look once anyway, so a
+     payment made that way still shows. Only after a checkout we started, so an ordinary
+     foreground costs nothing. */
+  if(app && app.addListener){
+    app.addListener('appStateChange', function(st){
+      if(!st || !st.isActive || !Account.leftForCheckout) return;
+      Account.leftForCheckout = false;
       if(!signedIn() || settle.on) return;
       var wasPaid = paid();
       Sync.pull().then(function(){ if(!wasPaid && paid()){ render(); toast('Welcome to the Household plan'); resumeAfter(); } else render(); }).catch(function(){});
