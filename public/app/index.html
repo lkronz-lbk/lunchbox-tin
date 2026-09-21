@@ -1756,7 +1756,7 @@ function normFood(kid, f){
     al:(Array.isArray(f.al) ? f.al : []).filter(function(x){ return ALLERGENS.some(function(y){ return y.k === x; }); }),
     buy:normBuy(f.buy, n),
     recipeId:safeIdOrNull(f.recipeId),
-    img:(typeof f.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
+    img:(typeof f.img === 'string' && PHOTO_RE.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
     createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt), deletedAt: f.deletedAt ? safeStamp(f.deletedAt) : null};
 }
 /* what to buy for a food: its own list if it has one ([] means the food itself), else the bank's
@@ -2061,6 +2061,7 @@ var KIDWORD = {main:'lunch', side:'side', fruit:'fruit', sweet:'treat', snack:'s
    shrunk on the phone to a thumbnail a few kilobytes big, stored with the food so it
    travels with the household. Where there is no photo, the emoji stands in. */
 var PHOTO_PX = 160, PHOTO_MAX = 16000;
+var PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/;   /* the one shape a stored photo may have: normalisation and the photo Undo share it */
 function picHTML(food, cls){
   if(food && food.img) return '<img class="pic '+(cls||'')+'" src="'+food.img+'" alt="">';
   return '<span class="ic '+(cls||'')+'">'+iconFor(food)+'</span>';
@@ -5150,28 +5151,67 @@ document.addEventListener('click', function(ev){
   if(act==='food-photo-pick'){ closeSheet(); pickPhoto(el.getAttribute('data-id')); return; }
   if(act==='food-photo-clear'){
     var cf = foodById(kid, el.getAttribute('data-id')); if(!cf) return;
-    var prevImg = cf.img; cf.img = null; touch(cf); save(); closeSheet(); render();
-    toast('Photo removed', function(){ cf.img = prevImg; touch(cf); save(); render(); toast('Put back'); }); return;
+    var prevImg = cf.img, photoKid = kid.id, photoFood = cf.id;
+    cf.img = null; touch(cf); save(); closeSheet(); render();
+    /* Undo holds ids, never the records themselves: a sync landing inside the
+       toast's six seconds rebuilds every food from scratch, and anything caught
+       in this closure would be writing to a document S no longer holds. */
+    toast('Photo removed', function(){
+      var pk = kidById(photoKid); if(!pk){ render(); toast('That lunchbox is gone'); return; }
+      var pf = foodById(pk, photoFood); if(!pf){ render(); toast('That food is gone'); return; }
+      if(pf.img && pf.img !== prevImg){ render(); toast('That food has a new photo now'); return; }   /* the other phone's is the newer one */
+      /* the only write of .img that is neither straight off the canvas nor
+         freshly normalised: the merge may have grown the document under it */
+      if(prevImg && !(PHOTO_RE.test(prevImg) && prevImg.length <= PHOTO_MAX && docRoomFor(prevImg.length))){ render(); toast('No room for that photo now'); return; }
+      pf.img = prevImg; touch(pf); save(); render(); toast('Put back');
+    }); return;
   }
   if(act==='del-food'){
     var f = foodById(kid, el.getAttribute('data-id')); if(!f) return;
     var wasIn = [];
     f.deletedAt = now(); touch(f);
-    weeksOf(kid).forEach(function(w){ w.days.forEach(function(d){
-      ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){
-        wasIn.push({d:d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k], over:isOverride(kid, d, c.k)});
-        d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); } });
-    }); });
-    touch(kid); save(); render();
-    var undoKid = kid;
-    toast(f.n+' removed', function(){
-      f.deletedAt = null; touch(f);
-      wasIn.forEach(function(w){
-        w.d.slots[w.c] = f.id; w.d.lock[w.c] = w.lock;
-        if(w.pick){ w.d.kidPick = w.d.kidPick || {}; w.d.kidPick[w.c] = w.pick; }
-        if(w.over) setOverride(w.d, w.c, f.id);
+    weeksOf(kid).forEach(function(w){
+      var moved = false;
+      w.days.forEach(function(d){
+        if(dayGone(d)) return;       /* what was packed stays as it was, here as everywhere else */
+        ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){
+          wasIn.push({d:d.d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k],
+                      over:!!(d.over && d.over[c.k] === f.id)});   /* read the record, not isOverride: f is already tombstoned, so foodById cannot see it */
+          d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); moved = true; } });
       });
-      touch(undoKid); save(); render(); toast('Put back');
+      if(moved) touch(w);            /* the merge picks a week by the week's own clock, never the kid's */
+    });
+    touch(kid); save(); render();
+    var undoKid = kid.id, undoFood = f.id;
+    /* Undo holds ids and day strings, never the records themselves: a sync
+       landing inside the toast's six seconds replaces S with a document
+       rebuilt food by food and day by day, so every reference caught here
+       would put the food back into a week nobody is looking at. Find each one
+       again on the way back, and let go of whatever has since gone. */
+    toast(f.n+' removed', function(){
+      var uk = kidById(undoKid); if(!uk){ render(); toast('That lunchbox is gone'); return; }
+      var uf = null;
+      for(var ui = 0; ui < uk.foods.length; ui++) if(uk.foods[ui].id === undoFood){ uf = uk.foods[ui]; break; }   /* deleted, so not foodById's to find */
+      if(!uf){ render(); toast('That food is gone'); return; }
+      uf.deletedAt = null; touch(uf);
+      var taken = [];
+      wasIn.forEach(function(w){
+        var uw = weekOf(uk, w.d);
+        var ud = uw && uw.days.filter(function(x){ return x.d === w.d; })[0];
+        if(!ud){ taken.push(w); return; }                                        /* the rollover carried the day off while the toast was up */
+        if(ud.slots[w.c] && ud.slots[w.c] !== uf.id){ taken.push(w); return; }   /* filled since: whoever filled it, theirs is the newer choice */
+        ud.slots[w.c] = uf.id; ud.lock[w.c] = w.lock;
+        if(w.pick){ ud.kidPick = ud.kidPick || {}; ud.kidPick[w.c] = w.pick; }
+        if(w.over) setOverride(ud, w.c, uf.id);
+        touch(uw);                     /* the week the day was found in, not a second walk to find it again */
+      });
+      touch(uk); save(); render();
+      /* a compartment that changed under the toast keeps what it has now, so a
+         flat "Put back" would be a lie -- and this phone may have been the one
+         that changed it, so the sentence never says whose doing it was */
+      if(!taken.length){ toast('Put back'); return; }
+      if(taken.length === 1) toast(uf.n+' is back on the list \u2014 '+dayLabel(taken[0].d).full+'\u2019s '+(catByKey(taken[0].c) || {label:'compartment'}).label.toLowerCase()+' had changed since');
+      else toast(uf.n+' is back on the list \u2014 '+taken.length+' compartments had changed since');
     });
     return;
   }
