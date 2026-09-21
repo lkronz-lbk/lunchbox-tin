@@ -1549,7 +1549,7 @@ function upgradeSheet(why){
       +  (forever ? '' : '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>')
       +  (forever || !pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
       +  '<button class="btn '+(forever ? 'primary ' : '')+'wide" data-act="buy" data-plan="lifetime" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.lifetime ? money(pr.lifetime)+', once, forever' : 'Once, forever')+'</button></div>'
-      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+(native() ? 'Payment opens in your browser, on Stripe’s page, and brings you back here when you are done; tax is added where it applies.' : 'Payment is on Stripe’s page; tax is added where it applies.')+' Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
+      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+(native() ? 'Payment opens in your browser, on Stripe’s page, and offers to bring you back here when you are done; tax is added where it applies.' : 'Payment is on Stripe’s page; tax is added where it applies.')+' Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
   }
   openSheet('The Household plan', h);
 }
@@ -6411,7 +6411,7 @@ Store.load().then(function(r){
       var m = /^lunchsorted:\/\/back\/?(?:\?(.*))?$/.exec(u);
       if(m){
         var q = new URLSearchParams(m[1] || '');
-        UI.tab = 'setup'; UI.pane = 'plan'; Account.first = true;   /* back from Stripe in Safari: land on the plan, not on a row list */
+        UI.tab = 'setup'; UI.pane = 'plan'; Account.first = true;   /* back from Stripe in the phone's browser: land on the plan, not on a row list */
         if(q.get('paid') === '1'){ Account.settling = true; render(); toast('Thank you \u2014 switching on the Household plan\u2026'); settle(); }
         else if(q.get('paid') === '0'){ rememberAfter(''); render(); toast('No charge was made'); }
         else { render(); Sync.pull(); }
