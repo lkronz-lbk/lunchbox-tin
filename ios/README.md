@@ -11,11 +11,16 @@ What the shell adds, and where:
 
 - **Sign-in.** A tapped email link opens Safari, not the app, so inside the app the
   email step leads with the code. Universal links fix that later (below).
-- **Stripe.** Checkout and the billing portal open in Safari (`Browser` plugin).
-  The server sends the parent back to `/back.html`, which hands off to the app
-  through the `lunchsorted://` URL scheme (`Info.plist`, `CFBundleURLTypes`); the
-  app's `appUrlOpen` listener closes Safari and polls for the paid row. Payments
-  never touch StoreKit.
+- **Stripe.** Checkout and the billing portal open the phone's own default
+  browser (`AppLauncher.openUrl`, i.e. `UIApplication.open`) — never an in-app
+  browser view. `@capacitor/browser` is an SFSafariViewController: the parent
+  never leaves the app, so the purchase happens inside it, and that is what
+  guideline 3.1.1 rejected 1.0 (4) for. Do not simplify it back to
+  `Browser.open()`. The server sends the parent to `/back.html`, which hands off
+  through the `lunchsorted://` URL scheme (`Info.plist`, `CFBundleURLTypes`);
+  `appUrlOpen` settles the paid row, and `appStateChange` catches a parent who
+  swipes back instead of tapping through. The `Browser` plugin stays, for the
+  help and recipe pages only. Payments never touch StoreKit.
 - **Icon and launch screen.** `App/App/Assets.xcassets`: the 1024 icon from
   `public/icons`, and a light and a dark launch image on the app's ground colours.
 - **The room the clock needs.** `contentInset: never` keeps the web view full height, which
@@ -48,8 +53,8 @@ npm run ios:open      # opens App/App.xcodeproj
 
 Xcode → the App target → Signing & Capabilities → tick "Automatically manage
 signing" and pick the team. Run on a simulator or a plugged-in phone. Swift
-packages resolve on first open (Capacitor and the two plugins, from
-`node_modules`, so `npm ci` first).
+packages resolve on first open (Capacitor and the five plugins — App, App Launcher, Browser, Local
+Notifications and Share — from `node_modules`, so `npm ci` first).
 
 `ios/App/App/public` and `capacitor.config.json` inside the app are generated
 by `cap sync` and not committed.

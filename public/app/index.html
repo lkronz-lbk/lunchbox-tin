@@ -1394,6 +1394,18 @@ var Store = {
    always was. */
 var Account = {user:null, me:null, members:[], entitlement:null, version:0, status:'idle', syncedAt:null, timer:null, retry:null, tries:0,
   busy:false, pushing:false, linkSent:'', devLink:'', devCode:'', invite:'', inviteRole:'', join:null, first:false, sending:false, billing:null, buying:false, settling:false, elsewhere:false};
+/* a checkout stays outstanding until the parent comes back paid, or half an hour goes by. It has
+   to outlive an unrelated foreground \u2014 a text arrives on Stripe's page, they answer it, then go
+   back and pay \u2014 and it has to outlive iOS killing the app behind the browser, which is why it
+   lives on the phone rather than only in memory. */
+var CHECKOUT_KEY = 'lunchsorted-checkout', CHECKOUT_FOR = 1800000;
+function leftForCheckout(on){ try{ if(on) localStorage.setItem(CHECKOUT_KEY, String(Date.now() + CHECKOUT_FOR)); else localStorage.removeItem(CHECKOUT_KEY); }catch(e){} }
+function checkoutPending(){
+  try{ var t = Number(localStorage.getItem(CHECKOUT_KEY) || 0);
+       if(t && Date.now() < t) return true;
+       if(t) localStorage.removeItem(CHECKOUT_KEY); }catch(e){}
+  return false;
+}
 var PUSH_WAIT = 2500, RETRY_WAITS = [15000, 60000, 180000];
 function api(method, path, body, extra){
   var opts = {method:method, credentials:'same-origin', headers:{}};
@@ -1404,7 +1416,8 @@ function api(method, path, body, extra){
   });
 }
 function signedIn(){ return !!Account.user; }
-/* inside the iPhone app (a Capacitor shell that loads this page): links and Stripe open in Safari, so the app leads with codes and hands off */
+/* inside the iPhone app (a Capacitor shell that loads this page): links open a browser view, and
+   Stripe is handed to the phone's own default browser, so the app leads with codes and hands off */
 function native(){ return /LunchSortedApp/.test(navigator.userAgent) || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
 function nativePlugin(name){ try{ return native() && window.Capacitor.Plugins && window.Capacitor.Plugins[name] || null; }catch(e){ return null; } }
 /* ---- billing: the plan is a row on the household that only Stripe's webhook writes.
@@ -1536,7 +1549,7 @@ function upgradeSheet(why){
       +  (forever ? '' : '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>')
       +  (forever || !pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
       +  '<button class="btn '+(forever ? 'primary ' : '')+'wide" data-act="buy" data-plan="lifetime" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.lifetime ? money(pr.lifetime)+', once, forever' : 'Once, forever')+'</button></div>'
-      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+'Payment is on Stripe’s page; tax is added where it applies. Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
+      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+(native() ? 'Payment opens in your browser, on Stripe’s page, and offers to bring you back here when you are done; tax is added where it applies.' : 'Payment is on Stripe’s page; tax is added where it applies.')+' Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
   }
   openSheet('The Household plan', h);
 }
@@ -1696,20 +1709,19 @@ var APP_BUILD = 'lunchsorted-v24';     /* the same tag as VERSION in sw.js; npm 
 /* The banner is for something a parent gained or lost, not for a screen that moved.
    v20 shipped the recipe work and v21 the per-step amount boxes. v22 went to production as a
    row on Pack that had squeezed itself, carrying v21's note for the phones that never opened
-   v21 — a screen that moved has no note of its own — so v23's note is the
-   delta against all three: two things a parent gained — writing one food into one box by hand,
-   and handing the phone over once for the whole week instead of every morning. The
-   walkthrough is those two and nothing else; the recipe steps have been seen.
-   v24 is the first screen a parent ever sees getting the header the rest of the app already
-   had, the questions fitting on one screen, a mark that fills in while the app wakes, and
-   the dark theme's borders brought over 3:1 — the empty box on a list, the seams of the tin,
-   the picks a child has left — with a ticked row and a crossed-off one no longer drawn alike:
-   nothing a parent gained or lost, so v23's note rides on under seenAs and the phones that
-   already read it are left alone. A third fix-only build on the same tag is the point of
-   keeping it: the tag moves when it ships, not when it changes.
+   v21 — a screen that moved has no note of its own. v23 went to production saying nothing,
+   by Liz's call: it was the App Review fix and four bug fixes, nothing a parent would
+   recognise as new, and v22's Recipes note had already had its run. Not a carry-forward —
+   that is for a release that skips a note, not one with none — so no phone has read what
+   follows, and there is no seenAs: v24's note is the delta against v20 to v23. Two things a
+   parent gained — writing one food into one box by hand, and handing the phone over once for
+   the whole week instead of every morning. The walkthrough is those two and nothing else; the
+   recipe steps have been seen. The first screen getting the header the rest of the app had,
+   the questions fitting on one screen, the mark that fills in while the app wakes and the dark
+   theme's borders brought over 3:1 ship in the same build without a line: nothing gained or lost.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v24', seenAs:'lunchsorted-v23', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, and hand the phone over once to let them pick the whole week.',
+var WHATS_NEW = {build:'lunchsorted-v24', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, and hand the phone over once to let them pick the whole week.',
   steps:[
     ['Write one in', 'Tap a compartment on Week and Write something in. Whatever you type goes into that one box on that one day \u2014 kept, so a shuffle leaves it alone; off the food list, so it is never drawn again; and off the shopping list, because it is already in your fridge.'],
     ['One line, not a form', 'A write-in asks for the name and nothing else \u2014 at six in the morning that is all there is time for. So the name is all we can check it against: if it trips a rule it goes in flagged, but nuts or dairy hiding inside \u201cleftover pasta\u201d are yours to catch. The compartment carries a pencil and the day says Written in, so you can see which ones are yours.'],
@@ -5094,7 +5106,7 @@ function helpSheet(){
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from and its two recipes to cook from. Foods in your own words, recipes of your own, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
     ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, or keeping a recipe of your own, is part of the Household plan. The idea bank, and the recipes that come with it, stay free.']
   ];
-  if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.']);
+  if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.' + (native() ? ' Buying and Manage billing both open your browser, because the plan is sold on the web \u2014 that page hands you back when you are done.' : '')]);
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
     return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
   }).join('') + '</div>'
@@ -6104,20 +6116,39 @@ document.addEventListener('click', function(ev){
   if(act==='go-signin'){ rememberAfter(el.getAttribute('data-why')); UI.tab = 'setup'; UI.pane = ''; render(); setTimeout(function(){ var el = document.getElementById('signinEmail'); if(el) el.focus(); }, 120); return; }
   if(act==='buy' || act==='portal'){
     if(Account.buying) return;
-    Account.buying = true; var was = el.textContent; el.disabled = true; el.textContent = 'Opening Stripe\u2026';
-    var undoBtn = function(){ Account.buying = false; el.disabled = false; el.textContent = was; };
+    Account.buying = true; var was = el.textContent; el.disabled = true;
+    el.textContent = native() ? 'Taking you to Stripe\u2026' : 'Opening Stripe\u2026';
+    /* the other prices stay on screen while one is working; live buttons that do nothing read as broken */
+    var sibs = act==='buy' && el.parentNode ? Array.prototype.slice.call(el.parentNode.querySelectorAll('[data-act="buy"]')) : [];
+    sibs.forEach(function(b){ b.disabled = true; });
+    var undoBtn = function(){ Account.buying = false; el.disabled = false; el.textContent = was; sibs.forEach(function(b){ b.disabled = false; }); };
     if(act==='buy') rememberAfter(el.getAttribute('data-why'));
     var client = native() ? 'ios' : undefined;
     var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') || 'year', client: client}) : api('POST', '/api/billing/portal', {client: client});
     call.then(function(r){
-      if(r.status !== 200 || !r.url){ undoBtn(); toast(r.error || (act==='buy' ? 'Could not open the checkout' : 'Could not open billing')); return; }
-      var browser = nativePlugin('Browser');
-      if(browser){                                           /* the iPhone app: Stripe opens in Safari, and back.html hands the parent back to the app */
-        undoBtn(); closeSheet();
-        browser.open({url: r.url}).catch(function(){ location.href = r.url; });
+      if(r.status !== 200 || !r.url){ undoBtn(); toast(r.error || (act==='buy' ? 'Could not open the payment page' : 'Could not open your billing page')); return; }
+      /* the iPhone app: Stripe must open in the default browser, not in a browser view inside the
+         app \u2014 a purchase that never leaves the app is the one thing guideline 3.1.1 forbids.
+         back.html carries the result home over the lunchsorted:// scheme. The branch is on
+         native(), not on the plugin: a shell built before AppLauncher existed still loads this
+         page from the live site, and has to fail here rather than fall through to a navigation
+         that would put Stripe back inside the app. The sheet stays open until the hand-off
+         actually takes, so a failure leaves the prices where the parent can reach them. */
+      if(native()){
+        var launcher = nativePlugin('AppLauncher');
+        var page = act==='buy' ? 'the payment page' : 'your billing page';
+        if(!launcher || !launcher.openUrl){ undoBtn(); toast('Could not open your browser \u2014 update the app, or sign in at lunchsorted.app'); return; }   /* a shell from before this branch: trying again never works, and help.html promises this sentence */
+        /* Browser.open allowlisted http/https down in Swift; UIApplication.open allowlists nothing
+           and would fire tel:, shortcuts: or any app's scheme. Our own checkout is always Stripe. */
+        if(!/^https:\/\/[a-z0-9-]+\.stripe\.com\//i.test(r.url)){ undoBtn(); toast('Could not open '+page+' \u2014 try again'); return; }
+        leftForCheckout(true);
+        launcher.openUrl({url: r.url}).then(function(res){
+          if(res && res.completed === false){ leftForCheckout(false); undoBtn(); toast('Could not open '+page+' \u2014 try again'); return; }
+          closeSheet(); undoBtn();
+        }).catch(function(){ leftForCheckout(false); undoBtn(); toast('Could not open '+page+' \u2014 try again'); });
         return;
       }
-      location.href = r.url;                                 /* Stripe's page; it sends you back to /app/ */
+      location.href = r.url;                                 /* the web: Stripe's page; it sends you back to /app/ */
     }).catch(function(){ undoBtn(); offline(); });
     return;
   }
@@ -6375,11 +6406,12 @@ Store.load().then(function(r){
   if(app && app.addListener){
     app.addListener('appUrlOpen', function(ev){
       var u = String(ev && ev.url || '');
-      var browser = nativePlugin('Browser'); if(browser) browser.close().catch(function(){});
+      var browser = nativePlugin('Browser'); if(browser) browser.close().catch(function(){});   /* help and recipe pages still open one */
+      leftForCheckout(false);
       var m = /^lunchsorted:\/\/back\/?(?:\?(.*))?$/.exec(u);
       if(m){
         var q = new URLSearchParams(m[1] || '');
-        UI.tab = 'setup'; UI.pane = 'plan'; Account.first = true;   /* back from Stripe in Safari: land on the plan, not on a row list */
+        UI.tab = 'setup'; UI.pane = 'plan'; Account.first = true;   /* back from Stripe in the phone's browser: land on the plan, not on a row list */
         if(q.get('paid') === '1'){ Account.settling = true; render(); toast('Thank you \u2014 switching on the Household plan\u2026'); settle(); }
         else if(q.get('paid') === '0'){ rememberAfter(''); render(); toast('No charge was made'); }
         else { render(); Sync.pull(); }
@@ -6388,13 +6420,24 @@ Store.load().then(function(r){
       if(/^https:\/\/([a-z0-9-]+\.)?lunchsorted\.app\//.test(u)) location.href = u;   /* a universal link, such as the sign-in link in the email */
     });
   }
-  /* Safari closed on the Done button instead of the hand-off: look once anyway, so a payment made that way still shows */
-  var nb = nativePlugin('Browser');
-  if(nb && nb.addListener){
-    nb.addListener('browserFinished', function(){
-      if(!signedIn() || settle.on) return;
-      var wasPaid = paid();
-      Sync.pull().then(function(){ if(!wasPaid && paid()){ render(); toast('Welcome to the Household plan'); resumeAfter(); } else render(); }).catch(function(){});
+  /* came back from the browser by swiping rather than through back.html: look once anyway, so a
+     payment made that way still shows. Only after a checkout we started, so an ordinary
+     foreground costs nothing. back.html's hand-back arrives on its own listener a moment later;
+     waiting lets it win, so the thank-you never lands after the welcome. */
+  var renderIdle = function(){ if(!UI.kid && !sheetState && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName || '')) render(); };
+  if(app && app.addListener){
+    app.addListener('appStateChange', function(st){
+      if(!st || !st.isActive || !checkoutPending()) return;
+      setTimeout(function(){
+        if(!checkoutPending()) return;                       /* appUrlOpen got here first and owns the result */
+        if(Date.now() - (Account.syncedAt||0) < 2000) return;   /* visibilitychange already pulled for this foreground */
+        if(!signedIn() || settle.on) return;
+        var wasPaid = paid();
+        Sync.pull().then(function(){
+          if(!wasPaid && paid()){ leftForCheckout(false); Account.settling = false; renderIdle(); toast('Welcome to the Household plan'); resumeAfter(); }
+          else renderIdle();                                 /* not back from paying yet; the window stays open */
+        }).catch(function(){});
+      }, 700);
     });
   }
   window.addEventListener('online', function(){ if(signedIn()) Sync.resume(); else render(); });
