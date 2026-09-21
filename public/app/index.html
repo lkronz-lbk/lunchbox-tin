@@ -1801,7 +1801,10 @@ function normRecipe(v){
 var RECIPES_MAX = 300;
 function normLibRecipe(v){
   v = plainObj(v);
-  var r = normRecipe(v); if(!r) return null;
+  /* a removed recipe travels as a tombstone with its text blanked, which is exactly the
+     shape normRecipe has no use for: without this, every pull dropped the tombstone and
+     the other phone's live copy brought the recipe back */
+  var r = normRecipe(v) || (v.deletedAt ? {m:0, y:0, ing:[], steps:[], src:'', url:null} : null); if(!r) return null;
   var n = safeStr(v.n, 80, '').replace(/\s+/g, ' ').trim(); if(!n) return null;
   r.id = safeId(v.id, 'rec'); r.n = n;
   r.createdAt = safeStamp(v.createdAt); r.updatedAt = safeStamp(v.updatedAt);
