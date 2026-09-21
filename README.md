@@ -360,7 +360,7 @@ the visual identity.
 3. **Built, behind the same switch** — Stripe Checkout on the web (below). Needs the four
    `STRIPE_*` variables per context and a webhook endpoint registered in Stripe.
 4. **Built** — the Capacitor iOS shell (`ios/`, `ios/README.md`) for the US storefront: it
-   loads the web app, opens Stripe in Safari and takes the parent back through `/back.html`,
+   loads the web app, opens Stripe in the phone's own browser, outside the app and takes the parent back through `/back.html`,
    builds on CI without a Mac, with the night-before kid's-pick reminder (6pm by default), and
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget; payments stay on the web.
@@ -525,7 +525,7 @@ the idea bank stays free so a free list is never stuck with what it has.
 - **Checkout** (`POST /api/billing/checkout {plan, client?}`) opens Stripe's hosted page for the
   signed-in household (owner or adult; a caretaker cannot buy). The session carries the
   household id, comes back to `/app/?paid=1` or `/app/?paid=0` (to `/back.html?paid=…` when
-  `client` is `ios`: the iPhone app opens Stripe in Safari, and that page hands the parent
+  `client` is `ios`: the iPhone app opens Stripe in the phone's own browser, outside the app, and that page hands the parent
   back to the app through the `lunchsorted://` scheme), allows promotion codes,
   and asks Stripe Tax to add tax where it applies (if Tax is not finished in the
   dashboard the session is retried without it and the error logged). A household that
