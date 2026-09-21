@@ -5671,6 +5671,7 @@ Store.load().then(function(r){
       if(!st || !st.isActive || !checkoutPending()) return;
       setTimeout(function(){
         if(!checkoutPending()) return;                       /* appUrlOpen got here first and owns the result */
+        if(Date.now() - (Account.syncedAt||0) < 2000) return;   /* visibilitychange already pulled for this foreground */
         if(!signedIn() || settle.on) return;
         var wasPaid = paid();
         Sync.pull().then(function(){
