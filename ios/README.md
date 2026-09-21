@@ -53,8 +53,8 @@ npm run ios:open      # opens App/App.xcodeproj
 
 Xcode → the App target → Signing & Capabilities → tick "Automatically manage
 signing" and pick the team. Run on a simulator or a plugged-in phone. Swift
-packages resolve on first open (Capacitor and the two plugins, from
-`node_modules`, so `npm ci` first).
+packages resolve on first open (Capacitor and the five plugins — App, App Launcher, Browser, Local
+Notifications and Share — from `node_modules`, so `npm ci` first).
 
 `ios/App/App/public` and `capacitor.config.json` inside the app are generated
 by `cap sync` and not committed.

@@ -164,8 +164,8 @@ Answer **Yes, we collect data from this app**, then:
 
 Notes that back the answers: there are no analytics or advertising SDKs in the app and no
 third-party cookies; the site's analytics are on the marketing pages only and never inside
-`/app/`; the only network calls are to lunchsorted.app; Stripe runs on its own page in
-Safari. Diagnostics stays **No**: there is no crash or performance reporting of any kind,
+`/app/`; the only network calls are to lunchsorted.app; Stripe runs on its own page in the
+phone's browser, outside the app. Diagnostics stays **No**: there is no crash or performance reporting of any kind,
 and Apple's own crash logs are collected by Apple, not by the app, so they need no
 declaring. Usage Data stays **No** on the same footing: the servers keep the day a person
 last used the app and a count of the days they have used it, both of which run the service
