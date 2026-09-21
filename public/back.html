@@ -20,7 +20,8 @@ a{display:inline-block;min-height:44px;line-height:44px;padding:0 22px;border-ra
 <a id="back" href="lunchsorted://back">Open Lunch Sorted</a>
 </div>
 <script>
-/* Stripe sends the iPhone app's parent here in Safari; this hands the result to the app */
+/* Stripe sends the iPhone app's parent here in the phone's own default browser; this hands the
+   result back to the app over the lunchsorted:// scheme */
 (function(){
   var q = new URLSearchParams(location.search), h = document.getElementById('h'), p = document.getElementById('p');
   if(q.get('paid') === '1'){ h.textContent = 'Paid — thank you.'; p.textContent = 'Back to the app to finish switching it on.'; }

@@ -475,6 +475,14 @@ try {
   await page.click('.list .item');
   await page.waitForTimeout(200);
   check('a pantry tick moves an item out of the buy count', head !== await page.textContent('.count'));
+  /* the tap a parent makes twenty times in a row: render() throws the button away, so
+     focus goes back on the row rather than to the top of the list */
+  const tickRow = '.list .item[data-act="have"]:not(.done) >> nth=0';
+  const tickedKey = await page.getAttribute(tickRow, 'data-key');
+  await page.click(tickRow); await page.waitForTimeout(250);
+  check('and focus lands back on the row that was ticked, not at the top of the list',
+    await page.evaluate(k => { const a = document.activeElement;
+      return !!a && a.getAttribute('data-act') === 'have' && a.getAttribute('data-key') === k; }, tickedKey), tickedKey);
 
   /* -------------------------------------------------- a photo on a food */
   {
@@ -537,6 +545,9 @@ try {
   const landed = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
     .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea);
   check('one tap adds the food to every lunchbox', landed.length === 2 && landed.every(Boolean), [idea, landed]);
+  check('and the idea that was tapped keeps focus, with the sheet rebuilt around it',
+    await page.evaluate(n => { const a = document.activeElement;
+      return !!a && a.getAttribute('data-act') === 'add-idea' && a.getAttribute('data-name') === n; }, idea), idea);
 
   await page.click('[data-act="add-to"]');                     /* take the first box back out */
   await page.waitForTimeout(350);
@@ -945,6 +956,28 @@ try {
   check('the week after has no gone days, so every compartment is a button', (await page.$$eval('.daycard .cmp[data-act="slot"]', a => a.length)) > 0 && (await page.$$eval('.daycard.past', a => a.length)) === 0);
   await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   check('Shop adds a Next week section once it is planned', /Next week/.test(await page.textContent('#view')));
+  /* one pantry row behind two rows on screen: the tick must come back to the week it
+     was made in, not to whichever of the two the list drew first */
+  const dupe = await page.evaluate(() => {
+    const keys = w => [].slice.call(document.querySelectorAll('[data-act="have"][data-when="'+w+'"]')).map(b => b.getAttribute('data-key'));
+    const now = keys('now');
+    return keys('next').filter(k => now.indexOf(k) > -1)[0] || null;
+  });
+  check('a food in both weeks lists once under each week', !!dupe, dupe);
+  if(dupe){
+    const dupeDone = k => page.evaluate(x => [].slice.call(document.querySelectorAll('[data-act="have"]'))
+      .filter(b => b.getAttribute('data-key') === x).map(b => b.classList.contains('done')), k);
+    const was = await dupeDone(dupe);
+    const at = await page.evaluate(k => [].slice.call(document.querySelectorAll('[data-act="have"][data-when="next"]'))
+      .map(b => b.getAttribute('data-key')).indexOf(k), dupe);
+    await page.click('[data-act="have"][data-when="next"] >> nth=' + at); await page.waitForTimeout(250);
+    check('ticking the next-week row leaves focus on that row, not on this week\u2019s twin',
+      await page.evaluate(k => { const a = document.activeElement;
+        return !!a && a.getAttribute('data-key') === k && a.getAttribute('data-when') === 'next'; }, dupe), dupe);
+    const nowDone = await dupeDone(dupe);
+    check('and one tick turns both rows, because both are the one pantry row',
+      was.length === 2 && nowDone.length === 2 && nowDone.every(v => v === !was[0]), {dupe, was, nowDone});
+  }
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
   check('and coming back to Week lands on this week', /^Next \u203a$/.test((await page.textContent('[data-act="week-ahead"]')).trim()));
   /* when this week has gone, the week after becomes this week */
@@ -1544,6 +1577,36 @@ try {
   await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(250);
   check('Undo puts the food back', (await page.textContent('#view')).includes(firstFood.trim()));
 
+  /* the product rule the delete has to keep: a day that has gone was packed and
+     eaten, so taking the food off the list never empties it. The pinned week
+     starts today, so there is no day behind it -- push the clock past three
+     instead, which is the other half of what dayGone() means. Signed out here
+     on purpose: moving the clock makes these records newer than everything
+     stamped after them, which would tilt any merge that followed. */
+  {
+    const todaySlot = await page.evaluate(t => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0];
+      const d = (k.week ? k.week.days : []).find(y => y.d === t);
+      if (!d) return null;
+      const c = Object.keys(d.slots).find(x => d.slots[x]);
+      return c ? { id: d.slots[c], day: d.d, cat: c } : null;
+    }, pinnedDay);
+    check('today is in the planned week, with a compartment filled', !!todaySlot, { pinnedDay, todaySlot });
+    if (todaySlot) {
+      await page.evaluate(() => window.__pinHour(16));          /* the box is home */
+      await page.click(`[data-act="del-food"][data-id="${todaySlot.id}"]`); await page.waitForTimeout(400);
+      const kept = await page.evaluate(g => {
+        const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0];
+        const d = (k.week ? k.week.days : []).find(y => y.d === g.day);
+        return { slot: !!(d && d.slots[g.cat] === g.id), off: !k.foods.some(f => f.id === g.id && !f.deletedAt) };
+      }, todaySlot);
+      check('removing a food leaves a day that has gone exactly as it was packed', kept.slot, { ...todaySlot, ...kept });
+      check('and still takes the food off the list', kept.off, kept);
+      if ((await page.$$eval('#toast.show [data-act="undo"]', a => a.length)) === 1) { await page.click('#toast.show [data-act="undo"]'); await page.waitForTimeout(400); }
+      await page.evaluate(() => window.__pinHour(9));
+    }
+  }
+
   /* erase really erases, old names included */
   await page.evaluate(() => { localStorage.setItem('lunchbox-tin', localStorage.getItem('lunchsorted')); localStorage.setItem('lunchbox-tin-v1', '{"foods":[],"settings":{}}'); localStorage.setItem('fiveboxes-backup-1', '{"old":1}'); localStorage.setItem('lunchsorted-backup-2', '{"old":2}'); });
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(200);
@@ -1713,6 +1776,94 @@ try {
     line: (document.getElementById('syncLine') || {}).textContent || document.querySelector('#view').textContent.slice(0, 120),
     device: localStorage.getItem('lunchsorted-device'), errors: window.__errs || null }), pantryKey);
   check('an un-tick on the other phone holds here instead of coming back', held, holdDetail ? {pantryKey, first, ...holdDetail, pageErrors: errors.slice(-3)} : {pantryKey, first});
+
+  /* Undo, with a sync landing inside the toast's six seconds. Every pull and
+     every 409 merge hands S a document normalizeAccount has rebuilt food by
+     food and day by day, so an Undo holding the records themselves writes into
+     a document the app has already let go of: the food stayed deleted, every
+     compartment it filled stayed empty, and the toast still said "Put back".
+     Driven the way it happens on a real pair of phones -- the other one gets
+     to the server first, so this one's push comes back 409 and merges. */
+  {
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
+    if (await page.$('[data-act="plan-kid"]')) { await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300); await goShuffle(page); }
+    /* a day still ahead: a day that has gone is not the delete's to clear, and
+       the check below pins that the other way round */
+    const liveSlot = () => page.evaluate(t => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0];
+      for (const d of (k.week ? k.week.days : [])) {
+        if (d.d <= t) continue;
+        const c = Object.keys(d.slots).find(x => d.slots[x]);
+        if (c) return { id: d.slots[c], day: d.d, cat: c };
+      }
+      return null;
+    }, pinnedDay);
+    let slot = await liveSlot();
+    check('the signed-in phone has a planned week to delete a food out of', !!slot, slot);
+    if (!slot) throw new Error('no planned slot to run the Undo race against');
+    check('the week it planned reached the server', await until(page, id => fetch('/api/household').then(r => r.json()).then(j => JSON.stringify(j.doc).includes(id)), slot.id), slot);
+
+    /* the other phone's push, sent straight to the server so this one's cached
+       version is left behind without the app being told: its next push is a
+       certain 409, and the marker food can only reach this phone by the merge */
+    const aheadOnServer = async marker => page.evaluate(async m => {
+      const j = await fetch('/api/household').then(r => r.json());
+      const doc = JSON.parse(JSON.stringify(j.doc)), ts = new Date().toISOString();
+      const k = doc.kids.filter(x => !x.deletedAt)[0];
+      k.foods.push({ id: 't_' + m, kidId: k.id, n: m, c: 'side', t: [], a: 'snacks', al: [], buy: [], createdAt: ts, updatedAt: ts, deletedAt: null });
+      k.updatedAt = ts; doc.updatedAt = ts;
+      return fetch('/api/household', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc, version: j.version }) }).then(r => r.status);
+    }, marker);
+    const merged = async marker => until(page, m => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === m && !f.deletedAt)), marker, 4000);
+    /* the toast hides after 6s and goes pointer-events:none with it, so a slow
+       runner would throw on the click and take the whole suite down */
+    const tapUndo = async () => {
+      const up = (await page.$$eval('#toast.show [data-act="undo"]', a => a.length)) === 1;
+      check('the toast is still up to tap Undo on', up);
+      if (up) { await page.click('#toast.show [data-act="undo"]'); await page.waitForTimeout(500); }
+      return up;
+    };
+
+    check('the other phone gets its change in first', await aheadOnServer('RaceOne') === 200);
+    await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(300);
+    await page.click(`[data-act="del-food"][data-id="${slot.id}"]`); await page.waitForTimeout(150);
+    check('deleting a food on a signed-in phone offers Undo', (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1);
+    check('and their document merges in, rebuilt record by record, while that toast is still up', await merged('RaceOne'));
+    await tapUndo();
+    const back = await page.evaluate(x => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(y => !y.deletedAt)[0];
+      const f = k.foods.find(y => y.id === x.id), d = (k.week ? k.week.days : []).find(y => y.d === x.day);
+      return { alive: !!(f && !f.deletedAt), inSlot: !!(d && d.slots[x.cat] === x.id), toast: document.getElementById('toast').textContent };
+    }, slot);
+    check('Undo after that merge puts the food back, compartment and all', back.alive && back.inSlot && /Put back/.test(back.toast), back);
+    check('and Undo never says "Put back" over a food it did not restore', back.alive || !/Put back/.test(back.toast), back);
+
+    /* the photo Undo runs the same race */
+    await page.evaluate(id => {
+      const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const f = d.kids.filter(x => !x.deletedAt)[0].foods.find(x => x.id === id);
+      f.img = 'data:image/jpeg;base64,' + 'A'.repeat(600);
+      f.updatedAt = new Date(Date.now() + 1000).toISOString();   /* the boot pull merges by record stamp: this copy has to be the newer one */
+      localStorage.setItem('lunchsorted', JSON.stringify(d));
+    }, slot.id);
+    await page.goto(BASE+'/app/'); await page.waitForLoadState('load');
+    const seeded = await until(page, id => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0]; const f = k.foods.find(y => y.id === id); return !!(f && f.img); }, slot.id);
+    check('the food carries a photo to remove', seeded, slot.id);
+    if (!seeded) throw new Error('photo seed did not take; the rest of the block would click a sheet that never opens');
+    check('the other phone gets in first again', await aheadOnServer('RaceTwo') === 200);
+    await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(300);
+    await page.click(`[data-act="food-photo"][data-id="${slot.id}"]`); await page.waitForTimeout(300);
+    await page.click('[data-act="food-photo-clear"]'); await page.waitForTimeout(150);
+    check('and their document merges in while the photo toast is up', await merged('RaceTwo'));
+    await tapUndo();
+    const pic = await page.evaluate(id => {
+      const f = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0].foods.find(y => y.id === id);
+      return { img: !!(f && f.img), toast: document.getElementById('toast').textContent };
+    }, slot.id);
+    check('Undo after that merge puts the photo back', pic.img && /Put back/.test(pic.toast), pic);
+    check('and never says "Put back" over a photo it did not restore', pic.img || !/Put back/.test(pic.toast), pic);
+
+  }
 
   /* a helper sees the pack list and cannot change the plan */
   await openPane(page, 'household');

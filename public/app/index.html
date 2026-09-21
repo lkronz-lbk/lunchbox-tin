@@ -1289,6 +1289,18 @@ var Store = {
    always was. */
 var Account = {user:null, me:null, members:[], entitlement:null, version:0, status:'idle', syncedAt:null, timer:null, retry:null, tries:0,
   busy:false, pushing:false, linkSent:'', devLink:'', devCode:'', invite:'', inviteRole:'', join:null, first:false, sending:false, billing:null, buying:false, settling:false, elsewhere:false};
+/* a checkout stays outstanding until the parent comes back paid, or half an hour goes by. It has
+   to outlive an unrelated foreground \u2014 a text arrives on Stripe's page, they answer it, then go
+   back and pay \u2014 and it has to outlive iOS killing the app behind the browser, which is why it
+   lives on the phone rather than only in memory. */
+var CHECKOUT_KEY = 'lunchsorted-checkout', CHECKOUT_FOR = 1800000;
+function leftForCheckout(on){ try{ if(on) localStorage.setItem(CHECKOUT_KEY, String(Date.now() + CHECKOUT_FOR)); else localStorage.removeItem(CHECKOUT_KEY); }catch(e){} }
+function checkoutPending(){
+  try{ var t = Number(localStorage.getItem(CHECKOUT_KEY) || 0);
+       if(t && Date.now() < t) return true;
+       if(t) localStorage.removeItem(CHECKOUT_KEY); }catch(e){}
+  return false;
+}
 var PUSH_WAIT = 2500, RETRY_WAITS = [15000, 60000, 180000];
 function api(method, path, body, extra){
   var opts = {method:method, credentials:'same-origin', headers:{}};
@@ -1299,7 +1311,8 @@ function api(method, path, body, extra){
   });
 }
 function signedIn(){ return !!Account.user; }
-/* inside the iPhone app (a Capacitor shell that loads this page): links and Stripe open in Safari, so the app leads with codes and hands off */
+/* inside the iPhone app (a Capacitor shell that loads this page): links open a browser view, and
+   Stripe is handed to the phone's own default browser, so the app leads with codes and hands off */
 function native(){ return /LunchSortedApp/.test(navigator.userAgent) || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
 function nativePlugin(name){ try{ return native() && window.Capacitor.Plugins && window.Capacitor.Plugins[name] || null; }catch(e){ return null; } }
 /* ---- billing: the plan is a row on the household that only Stripe's webhook writes.
@@ -1431,7 +1444,7 @@ function upgradeSheet(why){
       +  (forever ? '' : '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>')
       +  (forever || !pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
       +  '<button class="btn '+(forever ? 'primary ' : '')+'wide" data-act="buy" data-plan="lifetime" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.lifetime ? money(pr.lifetime)+', once, forever' : 'Once, forever')+'</button></div>'
-      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+'Payment is on Stripe’s page; tax is added where it applies. Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
+      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+(native() ? 'Payment opens in your browser, on Stripe’s page, and brings you back here when you are done; tax is added where it applies.' : 'Payment is on Stripe’s page; tax is added where it applies.')+' Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
   }
   openSheet('The Household plan', h);
 }
@@ -1565,7 +1578,7 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v22';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v23';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
@@ -1578,15 +1591,10 @@ var APP_BUILD = 'lunchsorted-v22';     /* the same tag as VERSION in sw.js; npm 
    who did open v21; the note is per-build and never catches up on a build skipped.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v22', seenAs:'lunchsorted-v21', text:'New: cooking a recipe step by step now puts a box against every amount that step needs, to tick as it goes in.',
-  steps:[
-    ['A tab of their own', 'Recipes is on the bottom bar now. Foods belong to each lunchbox; recipes belong to the household, so they are one list however many kids you pack for.'],
-    ['Two we can stand behind', 'A Mediterranean quinoa salad and a bean and avocado wrap come with the app, free to cook from. Both were written and taste-tested by school teams of cooks, chefs, parents and students for the USDA. We do not write our own \u2014 a recipe nobody has cooked is not something to hand you at six in the morning.'],
-    ['Bring in the ones you use', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it; for a reel or a pin, copy the words under it and paste those instead. It is kept and named on the tab, and putting it on a lunchbox\u2019s food list is offered after rather than done for you.'],
-    ['Tick it where you are standing', 'Cook it step by step puts one step on the screen, with What you need under it cut down to just that step and a box against each one \u2014 so the olive oil is ticked off at the counter rather than back on the full list. The whole recipe is still one tap away at the top.'],
-    ['US or metric', 'Switch the measures over and a cup of flour is weighed in grams, broth is poured in millilitres, an oven carries its Celsius, and a spoonful of salt is left as a spoonful. Ask for more lunches and every amount scales.'],
-    ['Where you need it', 'A Recipe tag on the Foods list, the recipe on the compartment when you tap it on Week, and named under the box on Pack, which is where you are standing the night before.']
-  ]};
+/* v23 says nothing, by Liz's call: it is the App Review fix and four bug fixes, nothing a parent
+   would recognise as new, and v22's Recipes note had already had its run. Not the carry-forward
+   the paragraph above describes — that is for a release that skips a note, not one with none. */
+var WHATS_NEW = {build:'lunchsorted-v23', text:'', steps:[]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
 function whatsNew(){
@@ -1631,6 +1639,17 @@ function closePane(){
   UI.pane = ''; render(); window.scrollTo(0, y);
   var row = document.querySelector('#view .item[data-pane="'+was+'"]') || document.querySelector('#who [data-act="box-settings"]');
   if(row) row.focus({preventScroll:true});   /* focus() scrolls by default, which would fight the restore above */
+}
+/* Put focus back on the row that was just tapped. render() replaces the whole view, so
+   the button that was pressed is gone and focus falls to the body — on VoiceOver that is
+   a swipe back down the list after every single tick, and ticking is the thing a parent
+   does twenty times in a row. The row is matched on the attribute’s value rather than
+   by building a selector out of it: a food’s name is a parent’s own words and may
+   carry a quote. preventScroll for the same reason as closePane above. */
+function focusBack(root, sel, attr, val){
+  var rows = root ? root.querySelectorAll(sel) : [];
+  for(var i = 0; i < rows.length; i++)
+    if(rows[i].getAttribute(attr) === val){ rows[i].focus({preventScroll:true}); return; }
 }
 /* where a bug report says the parent was */
 function paneLabel(){ return UI.pane && PANES[UI.pane] ? (UI.pane === 'box' ? 'lunchbox settings' : PANES[UI.pane].toLowerCase()) : UI.tab; }
@@ -1750,7 +1769,7 @@ function normFood(kid, f){
     al:(Array.isArray(f.al) ? f.al : []).filter(function(x){ return ALLERGENS.some(function(y){ return y.k === x; }); }),
     buy:normBuy(f.buy, n),
     recipeId:safeIdOrNull(f.recipeId),
-    img:(typeof f.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
+    img:(typeof f.img === 'string' && PHOTO_RE.test(f.img) && f.img.length <= PHOTO_MAX) ? f.img : null,
     createdAt:safeStamp(f.createdAt), updatedAt:safeStamp(f.updatedAt), deletedAt: f.deletedAt ? safeStamp(f.deletedAt) : null};
 }
 /* what to buy for a food: its own list if it has one ([] means the food itself), else the bank's
@@ -1784,7 +1803,10 @@ function normRecipe(v){
 var RECIPES_MAX = 300;
 function normLibRecipe(v){
   v = plainObj(v);
-  var r = normRecipe(v); if(!r) return null;
+  /* a removed recipe travels as a tombstone with its text blanked, which is exactly the
+     shape normRecipe has no use for: without this, every pull dropped the tombstone and
+     the other phone's live copy brought the recipe back */
+  var r = normRecipe(v) || (v.deletedAt ? {m:0, y:0, ing:[], steps:[], src:'', url:null} : null); if(!r) return null;
   var n = safeStr(v.n, 80, '').replace(/\s+/g, ' ').trim(); if(!n) return null;
   r.id = safeId(v.id, 'rec'); r.n = n;
   r.createdAt = safeStamp(v.createdAt); r.updatedAt = safeStamp(v.updatedAt);
@@ -2055,6 +2077,7 @@ var KIDWORD = {main:'lunch', side:'side', fruit:'fruit', sweet:'treat', snack:'s
    shrunk on the phone to a thumbnail a few kilobytes big, stored with the food so it
    travels with the household. Where there is no photo, the emoji stands in. */
 var PHOTO_PX = 160, PHOTO_MAX = 16000;
+var PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/;   /* the one shape a stored photo may have: normalisation and the photo Undo share it */
 function picHTML(food, cls){
   if(food && food.img) return '<img class="pic '+(cls||'')+'" src="'+food.img+'" alt="">';
   return '<span class="ic '+(cls||'')+'">'+iconFor(food)+'</span>';
@@ -3352,7 +3375,7 @@ function viewShop(){
     if(!groups[a]) return;
     h += '<div><div class="sect-head"><h3>'+AISLE_SHORT[a]+'</h3><span class="count">'+groups[a].length+'</span></div><div class="list">';
     groups[a].forEach(function(r){
-      h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
+      h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'" data-when="now">'
         +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
         +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
         +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
@@ -3370,7 +3393,7 @@ function viewShop(){
       if(!lg[a]) return;
       h += '<div><div class="sect-head"><h3>'+AISLE_SHORT[a]+'</h3><span class="count">'+lg[a].length+'</span></div><div class="list">';
       lg[a].forEach(function(r){
-        h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'">'
+        h += '<button class="item'+(r.have?' done':'')+'" data-act="have" data-key="'+esc(r.key)+'" data-when="next">'
           +  '<span class="box">'+svg('check',12)+'</span><span class="grow"><span class="nm">'+esc(r.name)+'</span>'
           +  (multi || r.dishes.length ? '<span class="meta">'+esc((multi ? 'for '+r.forKids.join(', ')+(r.dishes.length ? ' · ' : '') : '')+dishWords(r.dishes))+'</span>' : '')
           +  '</span><span class="qty">'+(r.qty>1 ? '&times;'+r.qty : '')+'</span></button>';
@@ -4494,7 +4517,7 @@ function helpSheet(){
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from and its two recipes to cook from. Foods in your own words, recipes of your own, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
     ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, or keeping a recipe of your own, is part of the Household plan. The idea bank, and the recipes that come with it, stay free.']
   ];
-  if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.']);
+  if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.' + (native() ? ' Buying and Manage billing both open your browser, because the plan is sold on the web \u2014 that page hands you back when you are done.' : '')]);
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
     return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
   }).join('') + '</div>'
@@ -4887,7 +4910,12 @@ document.addEventListener('click', function(ev){
     if(gated()){ upgradeSheet('pantry'); return; }
     var key = el.getAttribute('data-key');
     S.pantry[key] = {have:!(own(S.pantry, key) && S.pantry[key].have), at:now(), by:(deviceMember()||{}).id || null};
-    save(); render(); return;
+    /* one pantry row, so a food on both weeks’ lists ticks in both places: the tap goes
+       back to the week it came from, not to whichever row the list drew first */
+    var when = el.getAttribute('data-when');
+    save(); render();
+    focusBack(document.getElementById('view'), '[data-act="have"][data-when="'+(when === 'next' ? 'next' : 'now')+'"]', 'data-key', key);
+    return;
   }
   if(act==='copy-list' || act==='send-list'){
     var txt = listText();
@@ -4935,7 +4963,9 @@ document.addEventListener('click', function(ev){
     var r4 = addFoodTo(addTargets(), b);
     if(!r4.added.length){ toast(addFailLine(b.n, r4)); return; }
     var at4 = bodyEl.scrollTop;                    /* stay where they were reading */
-    save(); ideasSheet(); bodyEl.scrollTop = at4; render(); toast(addedLine(b.n, r4)); return;
+    save(); ideasSheet(); bodyEl.scrollTop = at4; render();
+    focusBack(bodyEl, '[data-act="add-idea"]', 'data-name', b.n);
+    toast(addedLine(b.n, r4)); return;
   }
   if(act==='seed'){
     var added = seedLibrary(kid, 'some');
@@ -5144,28 +5174,67 @@ document.addEventListener('click', function(ev){
   if(act==='food-photo-pick'){ closeSheet(); pickPhoto(el.getAttribute('data-id')); return; }
   if(act==='food-photo-clear'){
     var cf = foodById(kid, el.getAttribute('data-id')); if(!cf) return;
-    var prevImg = cf.img; cf.img = null; touch(cf); save(); closeSheet(); render();
-    toast('Photo removed', function(){ cf.img = prevImg; touch(cf); save(); render(); toast('Put back'); }); return;
+    var prevImg = cf.img, photoKid = kid.id, photoFood = cf.id;
+    cf.img = null; touch(cf); save(); closeSheet(); render();
+    /* Undo holds ids, never the records themselves: a sync landing inside the
+       toast's six seconds rebuilds every food from scratch, and anything caught
+       in this closure would be writing to a document S no longer holds. */
+    toast('Photo removed', function(){
+      var pk = kidById(photoKid); if(!pk){ render(); toast('That lunchbox is gone'); return; }
+      var pf = foodById(pk, photoFood); if(!pf){ render(); toast('That food is gone'); return; }
+      if(pf.img && pf.img !== prevImg){ render(); toast('That food has a new photo now'); return; }   /* the other phone's is the newer one */
+      /* the only write of .img that is neither straight off the canvas nor
+         freshly normalised: the merge may have grown the document under it */
+      if(prevImg && !(PHOTO_RE.test(prevImg) && prevImg.length <= PHOTO_MAX && docRoomFor(prevImg.length))){ render(); toast('No room for that photo now'); return; }
+      pf.img = prevImg; touch(pf); save(); render(); toast('Put back');
+    }); return;
   }
   if(act==='del-food'){
     var f = foodById(kid, el.getAttribute('data-id')); if(!f) return;
     var wasIn = [];
     f.deletedAt = now(); touch(f);
-    weeksOf(kid).forEach(function(w){ w.days.forEach(function(d){
-      ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){
-        wasIn.push({d:d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k], over:isOverride(kid, d, c.k)});
-        d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); } });
-    }); });
-    touch(kid); save(); render();
-    var undoKid = kid;
-    toast(f.n+' removed', function(){
-      f.deletedAt = null; touch(f);
-      wasIn.forEach(function(w){
-        w.d.slots[w.c] = f.id; w.d.lock[w.c] = w.lock;
-        if(w.pick){ w.d.kidPick = w.d.kidPick || {}; w.d.kidPick[w.c] = w.pick; }
-        if(w.over) setOverride(w.d, w.c, f.id);
+    weeksOf(kid).forEach(function(w){
+      var moved = false;
+      w.days.forEach(function(d){
+        if(dayGone(d)) return;       /* what was packed stays as it was, here as everywhere else */
+        ALL_CATS.forEach(function(c){ if(d.slots[c.k]===f.id){
+          wasIn.push({d:d.d, c:c.k, lock:d.lock[c.k], pick:d.kidPick && d.kidPick[c.k],
+                      over:!!(d.over && d.over[c.k] === f.id)});   /* read the record, not isOverride: f is already tombstoned, so foodById cannot see it */
+          d.slots[c.k]=null; d.lock[c.k]=false; if(d.kidPick) delete d.kidPick[c.k]; setOverride(d, c.k, null); moved = true; } });
       });
-      touch(undoKid); save(); render(); toast('Put back');
+      if(moved) touch(w);            /* the merge picks a week by the week's own clock, never the kid's */
+    });
+    touch(kid); save(); render();
+    var undoKid = kid.id, undoFood = f.id;
+    /* Undo holds ids and day strings, never the records themselves: a sync
+       landing inside the toast's six seconds replaces S with a document
+       rebuilt food by food and day by day, so every reference caught here
+       would put the food back into a week nobody is looking at. Find each one
+       again on the way back, and let go of whatever has since gone. */
+    toast(f.n+' removed', function(){
+      var uk = kidById(undoKid); if(!uk){ render(); toast('That lunchbox is gone'); return; }
+      var uf = null;
+      for(var ui = 0; ui < uk.foods.length; ui++) if(uk.foods[ui].id === undoFood){ uf = uk.foods[ui]; break; }   /* deleted, so not foodById's to find */
+      if(!uf){ render(); toast('That food is gone'); return; }
+      uf.deletedAt = null; touch(uf);
+      var taken = [];
+      wasIn.forEach(function(w){
+        var uw = weekOf(uk, w.d);
+        var ud = uw && uw.days.filter(function(x){ return x.d === w.d; })[0];
+        if(!ud){ taken.push(w); return; }                                        /* the rollover carried the day off while the toast was up */
+        if(ud.slots[w.c] && ud.slots[w.c] !== uf.id){ taken.push(w); return; }   /* filled since: whoever filled it, theirs is the newer choice */
+        ud.slots[w.c] = uf.id; ud.lock[w.c] = w.lock;
+        if(w.pick){ ud.kidPick = ud.kidPick || {}; ud.kidPick[w.c] = w.pick; }
+        if(w.over) setOverride(ud, w.c, uf.id);
+        touch(uw);                     /* the week the day was found in, not a second walk to find it again */
+      });
+      touch(uk); save(); render();
+      /* a compartment that changed under the toast keeps what it has now, so a
+         flat "Put back" would be a lie -- and this phone may have been the one
+         that changed it, so the sentence never says whose doing it was */
+      if(!taken.length){ toast('Put back'); return; }
+      if(taken.length === 1) toast('Put back \u2014 '+dayLabel(taken[0].d).full+'\u2019s '+(catByKey(taken[0].c) || {label:'compartment'}).label.toLowerCase()+' had changed since');
+      else toast('Put back \u2014 '+taken.length+' compartments had changed since');
     });
     return;
   }
@@ -5292,20 +5361,39 @@ document.addEventListener('click', function(ev){
   if(act==='go-signin'){ rememberAfter(el.getAttribute('data-why')); UI.tab = 'setup'; UI.pane = ''; render(); setTimeout(function(){ var el = document.getElementById('signinEmail'); if(el) el.focus(); }, 120); return; }
   if(act==='buy' || act==='portal'){
     if(Account.buying) return;
-    Account.buying = true; var was = el.textContent; el.disabled = true; el.textContent = 'Opening Stripe\u2026';
-    var undoBtn = function(){ Account.buying = false; el.disabled = false; el.textContent = was; };
+    Account.buying = true; var was = el.textContent; el.disabled = true;
+    el.textContent = native() ? 'Taking you to Stripe\u2026' : 'Opening Stripe\u2026';
+    /* the other prices stay on screen while one is working; live buttons that do nothing read as broken */
+    var sibs = act==='buy' && el.parentNode ? Array.prototype.slice.call(el.parentNode.querySelectorAll('[data-act="buy"]')) : [];
+    sibs.forEach(function(b){ b.disabled = true; });
+    var undoBtn = function(){ Account.buying = false; el.disabled = false; el.textContent = was; sibs.forEach(function(b){ b.disabled = false; }); };
     if(act==='buy') rememberAfter(el.getAttribute('data-why'));
     var client = native() ? 'ios' : undefined;
     var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') || 'year', client: client}) : api('POST', '/api/billing/portal', {client: client});
     call.then(function(r){
-      if(r.status !== 200 || !r.url){ undoBtn(); toast(r.error || (act==='buy' ? 'Could not open the checkout' : 'Could not open billing')); return; }
-      var browser = nativePlugin('Browser');
-      if(browser){                                           /* the iPhone app: Stripe opens in Safari, and back.html hands the parent back to the app */
-        undoBtn(); closeSheet();
-        browser.open({url: r.url}).catch(function(){ location.href = r.url; });
+      if(r.status !== 200 || !r.url){ undoBtn(); toast(r.error || (act==='buy' ? 'Could not open the payment page' : 'Could not open your billing page')); return; }
+      /* the iPhone app: Stripe must open in the default browser, not in a browser view inside the
+         app \u2014 a purchase that never leaves the app is the one thing guideline 3.1.1 forbids.
+         back.html carries the result home over the lunchsorted:// scheme. The branch is on
+         native(), not on the plugin: a shell built before AppLauncher existed still loads this
+         page from the live site, and has to fail here rather than fall through to a navigation
+         that would put Stripe back inside the app. The sheet stays open until the hand-off
+         actually takes, so a failure leaves the prices where the parent can reach them. */
+      if(native()){
+        var launcher = nativePlugin('AppLauncher');
+        var page = act==='buy' ? 'the payment page' : 'your billing page';
+        if(!launcher || !launcher.openUrl){ undoBtn(); toast('Could not open your browser \u2014 update the app, or sign in at lunchsorted.app'); return; }   /* a shell from before this branch: trying again never works, and help.html promises this sentence */
+        /* Browser.open allowlisted http/https down in Swift; UIApplication.open allowlists nothing
+           and would fire tel:, shortcuts: or any app's scheme. Our own checkout is always Stripe. */
+        if(!/^https:\/\/[a-z0-9-]+\.stripe\.com\//i.test(r.url)){ undoBtn(); toast('Could not open '+page+' \u2014 try again'); return; }
+        leftForCheckout(true);
+        launcher.openUrl({url: r.url}).then(function(res){
+          if(res && res.completed === false){ leftForCheckout(false); undoBtn(); toast('Could not open '+page+' \u2014 try again'); return; }
+          closeSheet(); undoBtn();
+        }).catch(function(){ leftForCheckout(false); undoBtn(); toast('Could not open '+page+' \u2014 try again'); });
         return;
       }
-      location.href = r.url;                                 /* Stripe's page; it sends you back to /app/ */
+      location.href = r.url;                                 /* the web: Stripe's page; it sends you back to /app/ */
     }).catch(function(){ undoBtn(); offline(); });
     return;
   }
@@ -5562,7 +5650,8 @@ Store.load().then(function(r){
   if(app && app.addListener){
     app.addListener('appUrlOpen', function(ev){
       var u = String(ev && ev.url || '');
-      var browser = nativePlugin('Browser'); if(browser) browser.close().catch(function(){});
+      var browser = nativePlugin('Browser'); if(browser) browser.close().catch(function(){});   /* help and recipe pages still open one */
+      leftForCheckout(false);
       var m = /^lunchsorted:\/\/back\/?(?:\?(.*))?$/.exec(u);
       if(m){
         var q = new URLSearchParams(m[1] || '');
@@ -5575,13 +5664,24 @@ Store.load().then(function(r){
       if(/^https:\/\/([a-z0-9-]+\.)?lunchsorted\.app\//.test(u)) location.href = u;   /* a universal link, such as the sign-in link in the email */
     });
   }
-  /* Safari closed on the Done button instead of the hand-off: look once anyway, so a payment made that way still shows */
-  var nb = nativePlugin('Browser');
-  if(nb && nb.addListener){
-    nb.addListener('browserFinished', function(){
-      if(!signedIn() || settle.on) return;
-      var wasPaid = paid();
-      Sync.pull().then(function(){ if(!wasPaid && paid()){ render(); toast('Welcome to the Household plan'); resumeAfter(); } else render(); }).catch(function(){});
+  /* came back from the browser by swiping rather than through back.html: look once anyway, so a
+     payment made that way still shows. Only after a checkout we started, so an ordinary
+     foreground costs nothing. back.html's hand-back arrives on its own listener a moment later;
+     waiting lets it win, so the thank-you never lands after the welcome. */
+  var renderIdle = function(){ if(!UI.kid && !sheetState && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName || '')) render(); };
+  if(app && app.addListener){
+    app.addListener('appStateChange', function(st){
+      if(!st || !st.isActive || !checkoutPending()) return;
+      setTimeout(function(){
+        if(!checkoutPending()) return;                       /* appUrlOpen got here first and owns the result */
+        if(Date.now() - (Account.syncedAt||0) < 2000) return;   /* visibilitychange already pulled for this foreground */
+        if(!signedIn() || settle.on) return;
+        var wasPaid = paid();
+        Sync.pull().then(function(){
+          if(!wasPaid && paid()){ leftForCheckout(false); Account.settling = false; renderIdle(); toast('Welcome to the Household plan'); resumeAfter(); }
+          else renderIdle();                                 /* not back from paying yet; the window stays open */
+        }).catch(function(){});
+      }, 700);
     });
   }
   window.addEventListener('online', function(){ if(signedIn()) Sync.resume(); else render(); });
