@@ -1444,8 +1444,7 @@ function upgradeSheet(why){
       +  (forever ? '' : '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>')
       +  (forever || !pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
       +  '<button class="btn '+(forever ? 'primary ' : '')+'wide" data-act="buy" data-plan="lifetime" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.lifetime ? money(pr.lifetime)+', once, forever' : 'Once, forever')+'</button></div>'
-      +  (native() ? '<p class="hint" style="margin:0">Paying happens in your browser, outside the app — the last page hands you back.</p>' : '')
-      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+'Payment is on Stripe’s page; tax is added where it applies. Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
+      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+(native() ? 'Payment opens in your browser, on Stripe’s page, and brings you back here when you are done; tax is added where it applies.' : 'Payment is on Stripe’s page; tax is added where it applies.')+' Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
   }
   openSheet('The Household plan', h);
 }
@@ -5231,8 +5230,8 @@ document.addEventListener('click', function(ev){
          flat "Put back" would be a lie -- and this phone may have been the one
          that changed it, so the sentence never says whose doing it was */
       if(!taken.length){ toast('Put back'); return; }
-      if(taken.length === 1) toast(uf.n+' is back on the list \u2014 '+dayLabel(taken[0].d).full+'\u2019s '+(catByKey(taken[0].c) || {label:'compartment'}).label.toLowerCase()+' had changed since');
-      else toast(uf.n+' is back on the list \u2014 '+taken.length+' compartments had changed since');
+      if(taken.length === 1) toast('Put back \u2014 '+dayLabel(taken[0].d).full+'\u2019s '+(catByKey(taken[0].c) || {label:'compartment'}).label.toLowerCase()+' had changed since');
+      else toast('Put back \u2014 '+taken.length+' compartments had changed since');
     });
     return;
   }
@@ -5379,15 +5378,16 @@ document.addEventListener('click', function(ev){
          actually takes, so a failure leaves the prices where the parent can reach them. */
       if(native()){
         var launcher = nativePlugin('AppLauncher');
-        if(!launcher || !launcher.openUrl){ undoBtn(); toast('Could not open the payment page \u2014 try again'); return; }
+        var page = act==='buy' ? 'the payment page' : 'your billing page';
+        if(!launcher || !launcher.openUrl){ undoBtn(); toast('Could not open your browser \u2014 update the app, or sign in at lunchsorted.app'); return; }   /* a shell from before this branch: trying again never works, and help.html promises this sentence */
         /* Browser.open allowlisted http/https down in Swift; UIApplication.open allowlists nothing
            and would fire tel:, shortcuts: or any app's scheme. Our own checkout is always Stripe. */
-        if(!/^https:\/\/[a-z0-9-]+\.stripe\.com\//i.test(r.url)){ undoBtn(); toast('Could not open the payment page \u2014 try again'); return; }
+        if(!/^https:\/\/[a-z0-9-]+\.stripe\.com\//i.test(r.url)){ undoBtn(); toast('Could not open '+page+' \u2014 try again'); return; }
         leftForCheckout(true);
         launcher.openUrl({url: r.url}).then(function(res){
-          if(res && res.completed === false){ leftForCheckout(false); undoBtn(); toast('Could not open the payment page \u2014 try again'); return; }
+          if(res && res.completed === false){ leftForCheckout(false); undoBtn(); toast('Could not open '+page+' \u2014 try again'); return; }
           closeSheet(); undoBtn();
-        }).catch(function(){ leftForCheckout(false); undoBtn(); toast('Could not open the payment page \u2014 try again'); });
+        }).catch(function(){ leftForCheckout(false); undoBtn(); toast('Could not open '+page+' \u2014 try again'); });
         return;
       }
       location.href = r.url;                                 /* the web: Stripe's page; it sends you back to /app/ */
