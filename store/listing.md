@@ -170,8 +170,8 @@ Answer **Yes, we collect data from this app**, then:
 
 Notes that back the answers: there are no analytics or advertising SDKs in the app and no
 third-party cookies; the site's analytics are on the marketing pages only and never inside
-`/app/`; the only network calls are to lunchsorted.app; Stripe runs on its own page in
-Safari. Diagnostics stays **No**: there is no crash or performance reporting of any kind,
+`/app/`; the only network calls are to lunchsorted.app; Stripe runs on its own page in the
+phone's browser, outside the app. Diagnostics stays **No**: there is no crash or performance reporting of any kind,
 and Apple's own crash logs are collected by Apple, not by the app, so they need no
 declaring. Usage Data stays **No** on the same footing: the servers keep the day a person
 last used the app and a count of the days they have used it, both of which run the service
@@ -229,13 +229,13 @@ the free tier with the plan's pieces locked, which is also fine.
 >
 > How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle the week or one day; tap a compartment (the swap arrow) to change it. Shop: the list is what to buy, by aisle; the share button sends it to Notes or Reminders. Pack: one Packed check per box; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the sliders icon beside the lunchbox name, labelled Lunchbox settings). The sliders icon beside the lunchbox name, labelled Lunchbox settings: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
 >
-> Payments: the Household plan is sold on our website (lunchsorted.app) and not in the app. The app does not use in-app purchase. Where the app mentions the plan, it opens Safari to our site; the app itself takes no payment. The review account is inside its free three weeks, so everything is on. This is a US-only listing.
+> Payments: the Household plan is sold on our website (lunchsorted.app) and not in the app. The app does not use in-app purchase. Where the app mentions the plan, it leaves the app and opens the phone's own default browser at Stripe's checkout page for our website, lunchsorted.app; nothing is bought inside the app, and it uses no StoreKit product. When Stripe is done it sends the parent to a page on our site that hands them back to the app. The review account is inside its free three weeks, so everything is on. This is a US-only listing.
 >
 > Recipes: two recipes are built in, from the USDA's Recipes for Healthy Kids cookbook (Food and Nutrition Administration, fna.usda.gov). They are US government works in the public domain; each is shown with a source line and a link to the original. Everything else on the Recipes tab is imported by the parent from a page or text they chose, stored on their own household and not published by us. Recipes tab → Import a recipe, if you want to see that path.
 >
 > Offline: the app works without a network once opened once; airplane mode shows the same week.
 >
-> The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, Safari hand-off and URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
+> The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, browser hand-off and URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
 
 ## Everything else in that sidebar: leave it alone
 
