@@ -1591,6 +1591,9 @@ var APP_BUILD = 'lunchsorted-v23';     /* the same tag as VERSION in sw.js; npm 
    who did open v21; the note is per-build and never catches up on a build skipped.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
+/* v23 says nothing, by Liz's call: it is the App Review fix and four bug fixes, nothing a parent
+   would recognise as new, and v22's Recipes note had already had its run. Not the carry-forward
+   the paragraph above describes — that is for a release that skips a note, not one with none. */
 var WHATS_NEW = {build:'lunchsorted-v23', text:'', steps:[]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
