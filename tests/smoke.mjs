@@ -614,6 +614,14 @@ try {
   await page.click('.list .item');
   await page.waitForTimeout(200);
   check('a pantry tick moves an item out of the buy count', head !== await page.textContent('.count'));
+  /* the tap a parent makes twenty times in a row: render() throws the button away, so
+     focus goes back on the row rather than to the top of the list */
+  const tickRow = '.list .item[data-act="have"]:not(.done) >> nth=0';
+  const tickedKey = await page.getAttribute(tickRow, 'data-key');
+  await page.click(tickRow); await page.waitForTimeout(250);
+  check('and focus lands back on the row that was ticked, not at the top of the list',
+    await page.evaluate(k => { const a = document.activeElement;
+      return !!a && a.getAttribute('data-act') === 'have' && a.getAttribute('data-key') === k; }, tickedKey), tickedKey);
 
   /* ------------------------------------------------------- writing one in
      One compartment, one day, a name the parent typed: on no list, never drawn,
@@ -747,6 +755,9 @@ try {
   const landed = await page.evaluate(n => JSON.parse(localStorage.getItem('lunchsorted'))
     .kids.filter(k => !k.deletedAt).map(k => k.foods.some(f => !f.deletedAt && f.n === n)), idea);
   check('one tap adds the food to every lunchbox', landed.length === 2 && landed.every(Boolean), [idea, landed]);
+  check('and the cursor stays on it too, which the kept scroll position does not prove',
+    await page.evaluate(n => { const a = document.activeElement;
+      return !!a && a.getAttribute('data-act') === 'add-idea' && a.getAttribute('data-name') === n; }, idea), idea);
 
   /* Two testers, the same morning: adding a food sent them back to the top of the bank,
      so a week's shopping was one tap and a long scroll, one tap and a long scroll. The
@@ -1260,6 +1271,42 @@ try {
   check('the week after has no gone days, so every compartment is a button', (await page.$$eval('.daycard .cmp[data-act="slot"]', a => a.length)) > 0 && (await page.$$eval('.daycard.past', a => a.length)) === 0);
   await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   check('Shop adds a Next week section once it is planned', /Next week/.test(await page.textContent('#view')));
+  /* One pantry row behind two rows on screen: the tick must come back to the week it was
+     made in, not to whichever of the two the list drew first. The draw overlaps the two
+     weeks heavily on its own — 28 rows of 30 — but nothing seeds it, so the pair is put
+     there rather than hoped for: next week's first main goes into the last day of this
+     week, which is the day furthest from having gone. */
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted'));
+    const k = d.kids.filter(x => !x.deletedAt)[0];
+    const twin = k.next.days[0].slots.main;
+    k.week.days[k.week.days.length - 1].slots.main = twin;
+    localStorage.setItem('lunchsorted', JSON.stringify(d));
+  });
+  await page.reload(); await page.waitForTimeout(600);
+  await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
+  const dupe = await page.evaluate(() => {
+    const keys = w => [].slice.call(document.querySelectorAll('[data-act="have"][data-when="'+w+'"]')).map(b => b.getAttribute('data-key'));
+    const now = keys('now');
+    return keys('next').filter(k => now.indexOf(k) > -1)[0] || null;
+  });
+  check('a food put in both weeks lists once under each week', !!dupe, dupe);
+  if(!dupe) check('ticking the next-week row leaves focus on that row, not on this week\u2019s twin',
+    false, 'the pair was never built, so nothing was tested');
+  if(dupe){
+    const dupeDone = k => page.evaluate(x => [].slice.call(document.querySelectorAll('[data-act="have"]'))
+      .filter(b => b.getAttribute('data-key') === x).map(b => b.classList.contains('done')), k);
+    const was = await dupeDone(dupe);
+    const at = await page.evaluate(k => [].slice.call(document.querySelectorAll('[data-act="have"][data-when="next"]'))
+      .map(b => b.getAttribute('data-key')).indexOf(k), dupe);
+    await page.click('[data-act="have"][data-when="next"] >> nth=' + at); await page.waitForTimeout(250);
+    check('ticking the next-week row leaves focus on that row, not on this week\u2019s twin',
+      await page.evaluate(k => { const a = document.activeElement;
+        return !!a && a.getAttribute('data-key') === k && a.getAttribute('data-when') === 'next'; }, dupe), dupe);
+    const nowDone = await dupeDone(dupe);
+    check('and one tick turns both rows, because both are the one pantry row',
+      was.length === 2 && nowDone.length === 2 && nowDone.every(v => v === !was[0]), {dupe, was, nowDone});
+  }
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
   check('and coming back to Week lands on this week', /^Next \u203a$/.test((await page.textContent('[data-act="week-ahead"]')).trim()));
   /* when this week has gone, the week after becomes this week */

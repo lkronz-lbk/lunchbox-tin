@@ -109,7 +109,11 @@ throwing app script cannot leave it up forever. From there:
   a food seeded before lists existed takes the bank's, and "Add your own" asks for one.
   **Copy** puts the list on the clipboard grouped by aisle; the share button opens the phone’s share
   sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
-  Share plugin in the iPhone app.
+  Share plugin in the iPhone app. A tick is a pantry row, not a row on a list, and the pantry
+  is keyed by the food's name: a food on this week's list and next week's is one tick, so
+  ticking it under *Next week* crosses it off above as well, and takes it off both blocks of
+  the copied list. That is the intent — a jar of peanut butter bought once is bought once —
+  and it is what lets a tick survive the week it was made in.
 - **Recipes** — the sixth tab, and the household's, not a lunchbox's: one list however
   many kids are packed for, so it carries no lunchbox tabs. What the household has kept
   sits above the two the app ships with, each row opening straight into cooking. The search
