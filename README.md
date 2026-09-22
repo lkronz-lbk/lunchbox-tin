@@ -336,9 +336,9 @@ forward).
 - [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
       `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
       function responses instead, every app open becomes a function call (remove that rule).
-- [x] Check the Netlify **Forms** tab receives a test submission from the waitlist form (the
-      feedback form's notifications reach forms@lunchsorted.app, seen 2026-09-19 to 21; the
-      waitlist form is wired the same way).
+- [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form. The
+      feedback form's notifications reach forms@lunchsorted.app (seen 2026-09-19 to 21); the
+      waitlist form posts through the same Netlify Forms but has not been sent a test of its own.
 - [x] The four marketing screenshots and the new Recipes one are reshot against v20:
       six tabs in the Pack/Week/Foods/Shop/Recipes/Account order, the "Making it?" row,
       and `public/img/screen-recipes.png|webp` as a fifth figure on the site (`.shots` is
@@ -617,7 +617,9 @@ mean the first chip below and the checkbox above it are now on opposite sides of
 
 ## Accounts and sync
 
-Signed out, the app is exactly the phone-only app it always was. Signed in, the household
+Signed out, the app is the phone-only app it always was, but for one thing: since v24 an error
+report leaves the phone when the planner's own code breaks, and it carries nothing of the
+household (**Broken screens**, below). Signed in, the household
 document also lives on the server, versioned, and every phone in the household reads and
 writes the same one.
 
@@ -763,23 +765,31 @@ the idea bank stays free so a free list is never stuck with what it has.
   which opens the plan sheet on arrival. The suite captures every email through
   `globalThis.__LS_MAIL`; nothing reaches Resend from a test.
 - **Milestones**: one row a household a moment, written once each by the functions
-  (migration 0006, `milestone()` in `netlify/lib/db.js`) and read back with the household so a
-  request with nothing new to say costs nothing: `signed_up` when the household row is made,
-  `first_plan` on the first push whose document holds a planned week, `week_two` when the
-  household reaches the server between seven and fourteen days old (the README's own measure),
-  `second_phone` when someone joins on an invite, `checkout` when a Stripe checkout page is
-  opened, `paid` when Stripe first reports it paid. A household's rows go with it, and the
-  privacy page names all six. The funnel (of the households that signed up in a month, how many
-  planned, came back, opened a checkout, paid) is one query on that table, and nothing else the
-  app does is recorded.
+  (migration 0006, `milestone()` in `netlify/lib/db.js`): `signed_up` when the household row is
+  made, `first_plan` on the first push whose document holds a planned week, `week_two` when a
+  parent's phone (never a caretaker's) reaches the server between seven and fourteen days after
+  the row was made (the measure this file asks for; the window runs from sign-in, not from the
+  document's own birthday that the trial uses), `second_phone` when someone joins on an invite,
+  `checkout` when a checkout session is created for it, the moment before the browser opens
+  Stripe's page, `paid` when the entitlement row is first written paid by Stripe (a tester on a
+  100%-off code keeps `source = 'code'` and is never `paid`). The kinds a household already has
+  come back with the membership query, so `first_plan` and `week_two` are checked in memory and
+  written once; the other three are one idempotent insert at moments that are rare anyway. A
+  household's rows go with it, so a cohort shrinks when a household is deleted or folded into
+  another by a join. The privacy page names all six; `/admin` shows them as **The funnel**, the
+  last thirty days' sign-ups beside all time; and nothing else the app does is recorded.
 - **Broken screens**: when the planner's own code throws, or a promise is refused with nobody
-  catching it, the app posts what the error said, where in the file, the build and the kind to
-  `/api/errors` (`netlify/functions/api-errors.js`): one report per distinct error, five a load,
-  signed in or not, never anything from the household, and never for a network that is simply
-  down. The server adds the browser type and the time, blanks anything shaped like an email
-  address, takes at most twenty an hour from one address and a thousand an hour in all, and the
-  sweep drops rows after thirty days. `/admin` lists the week's under **Broken screens**; the
-  stacks are in the `app_errors` table.
+  catching it, the app posts what the error said, where in the file, the stack, the build and
+  the kind to `/api/errors` (`netlify/functions/api-errors.js`): one report per distinct error,
+  five a load, signed in or not, never anything from the household, and never for a network
+  that is simply down. Every link in the stack loses its query before it leaves the phone,
+  because a page opened from an invite or the beta link carries its code in the address the
+  browser stamps on each frame, and the server cuts it again. The server refuses a post from
+  another site, adds the browser's user-agent string and the time, blanks anything shaped like
+  an email address, and writes the row in one statement that also enforces twenty an hour from
+  one address (a /64 counts as one on IPv6) and a thousand an hour in all, keeping the stack only
+  on the first copy of a distinct error each hour. The sweep drops rows past thirty days. `/admin`
+  lists the week's thirty commonest under **Broken screens**; the stacks are in `app_errors`.
 - **The numbers**, at `/admin`, for the emails in `ADMIN_EMAILS` (comma-separated) and nobody
   else: households, on trial, lapsed, paying by plan, sign-ins, reminder emails sent, invites.
   Counts from the database; a stranger is asked to sign in, a signed-in parent who is not

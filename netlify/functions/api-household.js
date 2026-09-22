@@ -53,6 +53,7 @@ async function note(h, kind) {
   h.milestones = (h.milestones || []).concat(kind);
 }
 async function weekTwo(h) {
+  if (h.role === 'helper') return;                 /* a caretaker checking the pack list is not the household coming back */
   const age = Date.now() - new Date(h.created_at).getTime();
   if (age >= 7 * DAY && age < 14 * DAY) await note(h, 'week_two');
 }

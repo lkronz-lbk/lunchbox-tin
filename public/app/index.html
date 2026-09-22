@@ -670,10 +670,14 @@ window.LSMerge = (function(){
 (function(){
 "use strict";
 
+var APP_BUILD = 'lunchsorted-v24';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+
 /* ---- when the planner's own code breaks, it tells our server and nothing else: what the
    error said, where in this file, which build, and which browser; never a lunch, a food or a
    name (privacy.html says so). One report per distinct error, five a load, then quiet. A
-   network that is down is not a broken screen, and could not carry the report anyway. */
+   network that is down is not a broken screen, and could not carry the report anyway. Every
+   link in the stack loses its query, because a page opened from an invite or the beta link
+   carries its code in the address the browser stamps on each frame; the server cuts it again. */
 var errSeen = {}, ERR_MAX = 5, ERR_NET = /Failed to fetch|Load failed|NetworkError|network connection was lost/i;
 function reportBreak(kind, message, place, stack){
   try{
@@ -682,7 +686,7 @@ function reportBreak(kind, message, place, stack){
     if(errSeen[key] || Object.keys(errSeen).length >= ERR_MAX) return;
     errSeen[key] = 1;
     var body = JSON.stringify({kind:kind, message:message.slice(0, 300), place:String(place || '').slice(0, 200),
-      stack:String(stack || '').slice(0, 2000), build:(typeof APP_BUILD === 'string') ? APP_BUILD : ''});
+      stack:String(stack || '').replace(/(https?:\/\/[^\s)?#]*)[?#][^\s):]*/g, '$1').slice(0, 2000), build:APP_BUILD});
     fetch('/api/errors', {method:'POST', credentials:'omit', keepalive:true, headers:{'content-type':'application/json'}, body:body}).catch(function(){});
   }catch(e){}
 }
@@ -1729,7 +1733,7 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v24';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+/* APP_BUILD is set at the top of this block, above the error reporter, so a break while the app wakes still names its build */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.

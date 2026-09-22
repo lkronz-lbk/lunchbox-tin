@@ -58,10 +58,11 @@ async function write(hid, at, v) {
       stripe_subscription_id = EXCLUDED.stripe_subscription_id, stripe_price_id = EXCLUDED.stripe_price_id,
       paid_by = COALESCE(EXCLUDED.paid_by, entitlements.paid_by), event_at = EXCLUDED.event_at, updated_at = now()
     WHERE entitlements.event_at IS NULL OR entitlements.event_at <= EXCLUDED.event_at
-    RETURNING household_id`;
+    RETURNING household_id, source, status`;
   const ok = rows.length > 0;
-  /* the first time Stripe says a household is paid is a milestone; a code, a renewal or a cancellation is not */
-  if (ok && v.source === 'stripe' && (v.status === 'active' || v.status === 'past_due')) await milestone(hid, 'paid');
+  /* the first time Stripe says a household is paid is a milestone; a tester on a 100%-off code keeps
+     source = 'code' through the same events, so the row as written is what decides, not the event */
+  if (ok && rows[0].source === 'stripe' && (rows[0].status === 'active' || rows[0].status === 'past_due')) await milestone(hid, 'paid');
   return ok;
 }
 

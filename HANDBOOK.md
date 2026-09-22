@@ -18,7 +18,7 @@ is built and TestFlight is next; payments happen on the web, never through the A
 - **Free**: one lunchbox on one phone, planned and shopped for, with everything on for the first
   three weeks.
 - **Household plan**: every lunchbox, the other parent's phone, a caretaker's pack list, foods in
-  the parent's own words, recipes, the kid's pick, the morning review, the pantry.
+  the parent's own words, recipes, the kid's pick, the after-school review, the pantry.
   $3.99 a month, $29 a year, or $79 once, forever. Refunds within 14 days, no questions.
 - **Beta**: the first 25 households through `/beta` get the Household plan forever, free, and
   three short emails in their first week asking what to try and what broke.
@@ -43,19 +43,29 @@ metric.
 Liz's, and a parent's. Read the welcome and the three tester emails in `netlify/lib/mail.js`,
 the App Store description in `store/listing.md` and `public/help.html` before writing a word.
 
-- First person, plain words, short sentences. "I built this" and "reply and I read it" are true,
-  so say them.
+- "We" for the product and its pages: help, privacy, the sign-in link, the welcome and the
+  reminder emails, all unsigned. "I" when Liz herself is writing: the tester emails, the beta
+  welcome, replies. Both are true; never both in one message. Plain words, short sentences.
+  "I built this" and "reply and I read it" are true, so say them where Liz is speaking.
 - Specific over adjectival: "a main, a side, a fruit and a sweet for every school day", never
   "delicious, nutritious lunches".
 - Warm, dry, never breathless. No exclamation marks in product copy, one at most in a post. No
-  emoji in the product; sparingly in social captions.
+  emoji in the product; sparingly in social captions. (The beta welcome in `mail.js` ends on
+  three in a row; it is the one departure, and Liz's to keep or cut.)
 - American spelling. The name is **Lunch Sorted**, two words; **the planner** for the app itself;
-  the tabs are Pack, Week, Foods, Shop, Recipes and Account; **the kid's pick**; **the Household
-  plan**; **forever** for the one-time purchase; **school rules** for the flags.
+  the tabs are Pack, Week, Foods, Shop, Recipes and Account; **the kid's pick**; **the
+  after-school review** for what came home (the emails and the README still say "morning
+  review": a fix waiting, not a second name); **the Household plan**; **forever** for the
+  one-time purchase; **school rules** for the flags. The app's own verbs are settled and are
+  not corrected: **tick**, **the bin**, **came home**, **Plan the week**, **Shuffle**. Two British
+  spellings on the help page, "millilitres" and "cancelling", are fixes waiting.
 - Never jargon, never an identifier, never "users". They are parents, households, kids, phones.
-- Every claim is one the app makes good on. Nothing is "healthy" or "balanced" in a nutritional
-  sense: the app pairs textures and protein; it does not count calories and it is not medical.
-- Sign emails "Liz". The footer line is "Made by a parent, in Maryland; replies come from one."
+- Every claim is one the app makes good on. Nothing is "healthy", and "balanced" only ever
+  means the pairing (a crunchy side against a soft main, protein when the main is light), never
+  nutrition: the app does not count calories and it is not medical.
+- Sign the tester emails "Liz". Every email ends "— Lunch Sorted, from Lila Bloom Enterprises.
+  Reply to this email and a person reads it." (the reminders add the stop link). The help page
+  signs off "Made by a parent, in Maryland; replies come from one."
 
 ## Rules that bind every job
 
@@ -80,6 +90,9 @@ The product rules in `CLAUDE.md` bind every spec, fix and proposal. On top of th
 7. **Partners and affiliates are disclosed.** Any post or page that earns from a link says so.
 8. **One voice, one handbook.** Anything written for a parent reads as if Liz wrote it. When
    this file and a job's own instructions disagree, this file wins.
+9. **The repo is public.** Nothing in it links to a private document, names a tester, or holds
+   a key. The intake sheet and the org chart are reached from Liz's Drive and Claude docs, never
+   from here.
 
 ## Where feedback arrives
 
@@ -101,7 +114,7 @@ it is, and who owns it next.
 Nothing goes to Liz's inbox. Every job's output goes to one of four places:
 
 - **The intake queue and the backlog**: the Google Sheet "Lunch Sorted intake queue" in Liz's
-  Drive (docs.google.com/spreadsheets/d/1PuteCvaNWvgje9i-BdVupQjm4xv7h3Xzq4Nh0NfH4IM), two tabs and a how-to. The queue is one row per thing a person said; the backlog is one
+  Drive, two tabs and a how-to. The queue is one row per thing a person said; the backlog is one
   row per piece of work, ranked, with the evidence counted. Nothing is built until "Decided by
   Liz" says Yes.
 - **A pull request**: for anything that changes the repo, from a branch that contains
