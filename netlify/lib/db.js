@@ -69,6 +69,14 @@ export async function sweep() {
   await q`DELETE FROM magic_links WHERE expires_at < now() - interval '1 day'`;
   await q`DELETE FROM sessions WHERE expires_at < now()`;
   await q`DELETE FROM invites WHERE expires_at < now() - interval '30 days' OR used_at < now() - interval '30 days'`;
+  await q`DELETE FROM app_errors WHERE at < now() - interval '30 days'`;
+}
+
+/* one row a household a moment, the first time only: the funnel the numbers page reads.
+   A count is never worth a failed request, so a refused write is logged and swallowed. */
+export async function milestone(householdId, kind) {
+  try { await sql()`INSERT INTO milestones (household_id, kind) VALUES (${householdId}, ${kind}) ON CONFLICT DO NOTHING`; }
+  catch (e) { console.error('milestone', kind, e.message); }
 }
 
 /* sliding-window throttle backed by the database */

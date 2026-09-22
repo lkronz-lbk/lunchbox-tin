@@ -293,6 +293,9 @@ export async function stats(now = Date.now()) {
   });
   /* the page renders at most this many rows a roster: the cap is on bytes, not on truth,
      so the household columns above are worked out from everyone before it is applied */
+  /* what the planner reported of its own breakages this week, one row a distinct message */
+  const errors = await q`SELECT message, build, place, count(*)::int AS n, max(at) AS last FROM app_errors
+    WHERE at > now() - interval '7 days' GROUP BY message, build, place ORDER BY max(at) DESC LIMIT 30`;
   const SHOWN = 2000;
   const standard = everyone.filter(x => !x.tester), testers = everyone.filter(x => x.tester);
   return {
@@ -301,7 +304,7 @@ export async function stats(now = Date.now()) {
     plans: { paid: paid.length, year: byPlan.year, month: byPlan.month, lifetime: byPlan.lifetime, pastDue, ending },
     trials: { trialing, endingSoon, lapsed, capped },
     emails: Object.fromEntries(notices.map(n => [n.kind, { total: n.n, week: n.week }])),
-    invites: inv, stripeEventsWeek: ev.week,
+    invites: inv, stripeEventsWeek: ev.week, errors,
     roster: {
       standard: standard.slice(0, SHOWN), testers: testers.slice(0, SHOWN),
       left: Math.max(0, standard.length - SHOWN) + Math.max(0, testers.length - SHOWN), shown: SHOWN
@@ -327,6 +330,9 @@ ${row('Trial-ended emails, all time / this week', `${(t.emails.trial_ended || {}
 ${row('Invites used / open', `${t.invites.used} / ${t.invites.open}`)}
 ${row('Stripe events this week', t.stripeEventsWeek)}
 </table>
+<h2>Broken screens, 7 days</h2>
+${t.errors.length ? `<div class="scroll" tabindex="0" role="region" aria-label="Broken screens"><table class="rows"><caption class="sr">Broken screens</caption><thead><tr><th>What the app said</th><th>Where</th><th>Build</th><th class="n">Times</th><th class="n">Last</th></tr></thead><tbody>${t.errors.map(e => `<tr><td>${esc(e.message)}</td><td>${esc(e.place || '—')}</td><td>${esc(e.build)}</td><td class="n">${e.n}</td><td class="n">${esc(day(e.last))}</td></tr>`).join('')}</tbody></table></div>` : '<p class="note">None reported this week.</p>'}
+<p class="note">When the planner's own code breaks it sends the message, the line and the build, nothing about the household, and the row goes after thirty days. The stacks are in the app_errors table.</p>
 <h2>Standard users</h2>
 ${roster('Standard users', ['email', 'hh', 'role', 'plan', 'status', 'joined', 'lastSeen', 'days', 'household', 'others'], t.roster.standard, 'Nobody yet. Everyone who signs in and did not come in on a 100%-off code lands here.')}
 <p class="note">Days seen counts the New York days a signed-in phone reached the server, one to a day. Signed-out use never reaches it, and the days before the counter existed are read back from the session rows, so an early number is a floor. Plan and Status belong to the household, so they repeat on every row of it.</p>

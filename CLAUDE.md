@@ -11,6 +11,8 @@ still named after.
 
 This is its own product with its own repo. It shares nothing with Royalty Ink except the
 author and the Netlify + Neon stack. Read `README.md` first; it is the product spec.
+`HANDBOOK.md` is the business handbook: the voice, the audience, the never-do list, where feedback
+arrives and where every piece of work lands. Any task that is not code reads it first.
 
 ## Product rules (never violate)
 

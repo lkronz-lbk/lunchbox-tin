@@ -1,4 +1,4 @@
-import { sql, json, fail, siteUrl, throttled } from '../lib/db.js';
+import { sql, json, fail, siteUrl, throttled, milestone } from '../lib/db.js';
 import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
@@ -59,7 +59,10 @@ async function write(hid, at, v) {
       paid_by = COALESCE(EXCLUDED.paid_by, entitlements.paid_by), event_at = EXCLUDED.event_at, updated_at = now()
     WHERE entitlements.event_at IS NULL OR entitlements.event_at <= EXCLUDED.event_at
     RETURNING household_id`;
-  return rows.length > 0;
+  const ok = rows.length > 0;
+  /* the first time Stripe says a household is paid is a milestone; a code, a renewal or a cancellation is not */
+  if (ok && v.source === 'stripe' && (v.status === 'active' || v.status === 'past_due')) await milestone(hid, 'paid');
+  return ok;
 }
 
 async function applyEvent(ev) {
@@ -219,6 +222,7 @@ export default async function handler(req, context) {
         session = await stripe('POST', '/checkout/sessions', params);
       }
       console.log(`billing: checkout household=${h.id} plan=${plan} tax=${params.automatic_tax.enabled} client=${body.client === 'ios' ? 'ios' : 'web'}`);
+      await milestone(h.id, 'checkout');
       return json({ url: session.url });
     }
 

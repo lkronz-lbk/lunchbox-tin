@@ -336,7 +336,9 @@ forward).
 - [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
       `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
       function responses instead, every app open becomes a function call (remove that rule).
-- [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form.
+- [x] Check the Netlify **Forms** tab receives a test submission from the waitlist form (the
+      feedback form's notifications reach forms@lunchsorted.app, seen 2026-09-19 to 21; the
+      waitlist form is wired the same way).
 - [x] The four marketing screenshots and the new Recipes one are reshot against v20:
       six tabs in the Pack/Week/Foods/Shop/Recipes/Account order, the "Making it?" row,
       and `public/img/screen-recipes.png|webp` as a fifth figure on the site (`.shots` is
@@ -760,6 +762,24 @@ the idea bank stays free so a free list is never stuck with what it has.
   reply-to hello@lunchsorted.app. The reminder's button opens the app at `/app/?upgrade=1`,
   which opens the plan sheet on arrival. The suite captures every email through
   `globalThis.__LS_MAIL`; nothing reaches Resend from a test.
+- **Milestones**: one row a household a moment, written once each by the functions
+  (migration 0006, `milestone()` in `netlify/lib/db.js`) and read back with the household so a
+  request with nothing new to say costs nothing: `signed_up` when the household row is made,
+  `first_plan` on the first push whose document holds a planned week, `week_two` when the
+  household reaches the server between seven and fourteen days old (the README's own measure),
+  `second_phone` when someone joins on an invite, `checkout` when a Stripe checkout page is
+  opened, `paid` when Stripe first reports it paid. A household's rows go with it, and the
+  privacy page names all six. The funnel (of the households that signed up in a month, how many
+  planned, came back, opened a checkout, paid) is one query on that table, and nothing else the
+  app does is recorded.
+- **Broken screens**: when the planner's own code throws, or a promise is refused with nobody
+  catching it, the app posts what the error said, where in the file, the build and the kind to
+  `/api/errors` (`netlify/functions/api-errors.js`): one report per distinct error, five a load,
+  signed in or not, never anything from the household, and never for a network that is simply
+  down. The server adds the browser type and the time, blanks anything shaped like an email
+  address, takes at most twenty an hour from one address and a thousand an hour in all, and the
+  sweep drops rows after thirty days. `/admin` lists the week's under **Broken screens**; the
+  stacks are in the `app_errors` table.
 - **The numbers**, at `/admin`, for the emails in `ADMIN_EMAILS` (comma-separated) and nobody
   else: households, on trial, lapsed, paying by plan, sign-ins, reminder emails sent, invites.
   Counts from the database; a stranger is asked to sign in, a signed-in parent who is not

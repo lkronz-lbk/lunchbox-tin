@@ -670,6 +670,32 @@ window.LSMerge = (function(){
 (function(){
 "use strict";
 
+/* ---- when the planner's own code breaks, it tells our server and nothing else: what the
+   error said, where in this file, which build, and which browser; never a lunch, a food or a
+   name (privacy.html says so). One report per distinct error, five a load, then quiet. A
+   network that is down is not a broken screen, and could not carry the report anyway. */
+var errSeen = {}, ERR_MAX = 5, ERR_NET = /Failed to fetch|Load failed|NetworkError|network connection was lost/i;
+function reportBreak(kind, message, place, stack){
+  try{
+    message = String(message || ''); if(!message || ERR_NET.test(message)) return;
+    var key = kind + '|' + message + '|' + place;
+    if(errSeen[key] || Object.keys(errSeen).length >= ERR_MAX) return;
+    errSeen[key] = 1;
+    var body = JSON.stringify({kind:kind, message:message.slice(0, 300), place:String(place || '').slice(0, 200),
+      stack:String(stack || '').slice(0, 2000), build:(typeof APP_BUILD === 'string') ? APP_BUILD : ''});
+    fetch('/api/errors', {method:'POST', credentials:'omit', keepalive:true, headers:{'content-type':'application/json'}, body:body}).catch(function(){});
+  }catch(e){}
+}
+window.addEventListener('error', function(e){
+  if(!e || (e.target && e.target !== window) || !e.message) return;   /* a picture that would not load is not a broken screen */
+  var file = String(e.filename || ''); try{ file = new URL(file, location.href).pathname; }catch(x){}
+  reportBreak('error', e.message, file + ':' + (e.lineno || 0) + ':' + (e.colno || 0), e.error && e.error.stack);
+});
+window.addEventListener('unhandledrejection', function(e){
+  var r = e && e.reason;
+  reportBreak('rejection', r && (r.message || String(r)) || 'a promise was refused with no reason given', '', r && r.stack);
+});
+
 /* =================================================================
    DATA MODEL — account > members > lunchboxes (profiles) > foods
    -----------------------------------------------------------------
