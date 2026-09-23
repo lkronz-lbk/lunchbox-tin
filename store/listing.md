@@ -315,7 +315,12 @@ The one worth a look:
       signed in with them once and a week built, within a few days of submitting
 - [ ] Screenshots regenerated since the last interface change — 01-week and 02-pack
       predate the Babybel rename; see the note under Screenshots above
-- [x] Privacy policy URL loads and matches the App Privacy answers above
+- [x] Privacy policy URL loads and matches the App Privacy answers above — with one
+      caveat: the Crash Data and Usage Data rows describe the day-one work that is on `dev`
+      since 2026-09-22. While `main` serves v23 the questionnaire stays at No for both, because
+      the live app collects neither; the moment `main` carries that work, enter them in the
+      same sitting as the deploy. The checklist is in README.md, "When the day-one work moves
+      to main"
 - [x] Build attached to the version. Export compliance asks nothing: the build carries
       `ITSAppUsesNonExemptEncryption = NO`
 - [x] Version **1.0** in App Store Connect, matching `MARKETING_VERSION` in the Xcode
@@ -324,6 +329,9 @@ The one worth a look:
       unique within a version.
 - [x] No risky deploy planned during review. The reviewer sees whatever is live on
       lunchsorted.app at the moment they look
+- [ ] If the day-one work has reached `main` since the last submission: the two App Privacy
+      rows above are entered and the description sentence is the new one (README.md, "When the
+      day-one work moves to main")
 
 ## After approval
 

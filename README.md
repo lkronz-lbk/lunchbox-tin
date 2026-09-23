@@ -506,6 +506,39 @@ first rule as licence to skip the second. Nothing enforces either: `npm run csp`
 `APP_BUILD`, `VERSION` and `WHATS_NEW.build` to each other, and cannot tell that the app changed
 and the tag did not.
 
+### When the day-one work moves to main
+
+Pull request #16 (the six milestones, the error reports, **The funnel** and **Broken screens**
+on `/admin`, `HANDBOOK.md`) landed on `dev` on 2026-09-22 with no build bump, because `dev`'s
+v24 had not shipped. It changes what the app collects, so the deploy to `main` and App Store
+Connect have to move in the same sitting:
+
+- [ ] **Not during an App Review.** The iOS shell loads the live site, so the reviewer sees
+      whatever `main` serves. Land it between submissions, or enter the label below first and
+      deploy straight after.
+- [ ] **App Privacy in App Store Connect.** Diagnostics → Crash Data: Yes, not linked, not
+      tracking, App Functionality. Usage Data → Product Interaction: Yes, linked, not tracking,
+      Analytics. The answers and the notes behind them are in `store/listing.md` under App
+      Privacy; the label then reads "Data Linked to You: Contact Info, User Content,
+      Identifiers, Purchases, Usage Data" and "Data Not Linked to You: Diagnostics". Until
+      `main` carries this work the questionnaire stays at its v23 answers (no Crash Data, no
+      Usage Data), because the live app collects neither.
+- [ ] **The description**, at the next version that can be edited: "nothing leaves your phone
+      until you choose to sign in" becomes "your lunches never leave your phone until you
+      choose to sign in" (`store/listing.md`, Description). The privacy page already says it.
+- [ ] **The build.** If `main` still serves v23, v24 goes as it is. If `main` has taken v24 by
+      then, this becomes v25 and carries v24's `WHATS_NEW` forward with `seenAs` (above).
+- [ ] **Migration 0006** applies itself on the `main` deploy (the build command runs
+      `scripts/migrate.mjs`): it backfills `signed_up` exactly and `paid` approximately, and
+      is already applied and frozen on the staging branch.
+- [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' https://lunchsorted.app/api/errors`
+      answers 404 to a GET, `/admin` shows The funnel and Broken screens, and the privacy page
+      reads "Last updated 22 September 2026". The Ops routine checks the site and the error
+      table from the next weekday morning.
+
+Two calls Liz made on 2026-09-22, so nobody reopens them: error reports go out signed out too
+(CLAUDE.md names the exception), and the six milestones are declared Usage Data, Analytics.
+
 ### Backlog (ideas to revisit, not scheduled)
 
 **Held until after the first App Store review.** These findings from the v24 reviews are
