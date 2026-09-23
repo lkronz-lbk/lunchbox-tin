@@ -11,6 +11,8 @@ still named after.
 
 This is its own product with its own repo. It shares nothing with Royalty Ink except the
 author and the Netlify + Neon stack. Read `README.md` first; it is the product spec.
+`HANDBOOK.md` is the business handbook: the voice, the audience, the never-do list, where feedback
+arrives and where every piece of work lands. Any task that is not code reads it first.
 
 ## Product rules (never violate)
 
@@ -29,7 +31,9 @@ author and the Netlify + Neon stack. Read `README.md` first; it is the product s
 - Two "came home" in a row rests a food for three weeks, everywhere a food can be drawn —
   including the aligned draw. The rule's own exception: a list too short to fill the week may
   draw a resting food rather than leave a compartment empty.
-- Signed out, everything stays on the phone. Signed in, the household document is the unit
+- Signed out, everything of the household stays on the phone; the one thing that ever leaves is
+  an error report when the planner's own code breaks, and it carries nothing of the household.
+  Signed in, the household document is the unit
   of sync; merge by record timestamp (`LSMerge`), the local copy wins ties.
 - Payments happen on the web, never through the App Store. The entitlement is a row on the
   household; Stripe (and one day StoreKit) only ever flip that row.

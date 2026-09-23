@@ -104,7 +104,7 @@ the enrolment, so settle it before launch.
 > EVERYONE WHO PACKS
 > Sign in with your email. No password to remember. Add your partner, a grandparent, a nanny, or anyone else who gets lunches out the door on a busy morning.
 >
-> It works online and off, and nothing leaves your phone until you choose to sign in.
+> It works online and off, and your lunches never leave your phone until you choose to sign in.
 >
 > FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, with two kid-tested recipes to cook from, take out the ones they refuse, and set your school's rules.
 >
@@ -166,21 +166,27 @@ Answer **Yes, we collect data from this app**, then:
 | User Content → Other User Content | Yes (the household: lunchbox names, foods, rules, plans) | Yes | No | App Functionality |
 | Identifiers → User ID | Yes (the account id) | Yes | No | App Functionality |
 | Purchases → Purchase History | Yes (which plan the household has; Stripe holds the card) | Yes | No | App Functionality |
-| Everything else (location, contacts, health, browsing, diagnostics, usage data, advertising data) | No | | | |
+| Usage Data → Product Interaction | Yes (six dated moments per household: made, first week planned, back in week two, second phone joined, checkout opened, first paid) | Yes | No | Analytics |
+| Diagnostics → Crash Data | Yes (what the planner's own code reports when it breaks: the message, the trail of code it passed through, the build, the browser's user-agent string) | No | No | App Functionality |
+| Everything else (location, contacts, health, browsing, performance data, advertising data) | No | | | |
 
 Notes that back the answers: there are no analytics or advertising SDKs in the app and no
 third-party cookies; the site's analytics are on the marketing pages only and never inside
 `/app/`; the only network calls are to lunchsorted.app; Stripe runs on its own page in the
-phone's browser, outside the app. Diagnostics stays **No**: there is no crash or performance reporting of any kind,
-and Apple's own crash logs are collected by Apple, not by the app, so they need no
-declaring. Usage Data stays **No** on the same footing: the servers keep the day a person
-last used the app and a count of the days they have used it, both of which run the service
-(the three-week trial, the reminder emails, and knowing whether an account is live) rather
-than measuring behaviour, and nothing about what anyone does inside the app is recorded.
-Revisit this answer if a count of anything narrower than a day is ever kept. Data is collected only after the parent signs in; until then nothing leaves the
-phone, and App Store Connect has no way to say "optional", so answer as if signed in. The
-label on the store will read "Data Linked to You: Contact Info, User Content, Identifiers,
-Purchases". Deletion: "Delete my account and data" under Account → Account, confirmed by typing DELETE, offered to every signed-in person and not only the owner, documented on the privacy page.
+phone's browser, outside the app. Diagnostics is **Yes, Crash Data, not linked, not tracking, App Functionality**: when the planner's
+own code breaks it posts the message, the stack, the build and the browser's user-agent string to our own server
+(`/api/errors`), with no session, no household and no identifier, kept thirty days; there is no
+performance reporting, and Apple's own crash logs are collected by Apple, not by the app. Usage
+Data is **Yes, Product Interaction, linked, not tracking, Analytics**: beside the day a person last
+used the app and a count of the days they have used it (both run the service: the three-week
+trial, the reminder emails, knowing whether an account is live), the servers keep six dates a
+household (made, first week planned, back in week two, second phone joined, checkout opened,
+first paid; migration 0006), which measure whether the app is working for people and so are
+declared as analytics. Nothing narrower than those six moments is recorded; revisit this answer
+if anything else is ever kept. Everything linked to a person is collected only after the parent signs in; until then the one
+thing that leaves the phone is a crash report, which names nobody. App Store Connect has no way to
+say "optional", so answer as if signed in. The label on the store will read "Data Linked to You: Contact Info, User Content, Identifiers,
+Purchases, Usage Data" and "Data Not Linked to You: Diagnostics". Deletion: "Delete my account and data" under Account → Account, confirmed by typing DELETE, offered to every signed-in person and not only the owner, documented on the privacy page.
 
 ## Age rating questionnaire
 
@@ -309,7 +315,12 @@ The one worth a look:
       signed in with them once and a week built, within a few days of submitting
 - [ ] Screenshots regenerated since the last interface change — 01-week and 02-pack
       predate the Babybel rename; see the note under Screenshots above
-- [x] Privacy policy URL loads and matches the App Privacy answers above
+- [x] Privacy policy URL loads and matches the App Privacy answers above — with one
+      caveat: the Crash Data and Usage Data rows describe the day-one work that is on `dev`
+      since 2026-09-22. While `main` serves v23 the questionnaire stays at No for both, because
+      the live app collects neither; the moment `main` carries that work, enter them in the
+      same sitting as the deploy. The checklist is in README.md, "When the day-one work moves
+      to main"
 - [x] Build attached to the version. Export compliance asks nothing: the build carries
       `ITSAppUsesNonExemptEncryption = NO`
 - [x] Version **1.0** in App Store Connect, matching `MARKETING_VERSION` in the Xcode
@@ -318,6 +329,9 @@ The one worth a look:
       unique within a version.
 - [x] No risky deploy planned during review. The reviewer sees whatever is live on
       lunchsorted.app at the moment they look
+- [ ] If the day-one work has reached `main` since the last submission: the two App Privacy
+      rows above are entered and the description sentence is the new one (README.md, "When the
+      day-one work moves to main")
 
 ## After approval
 

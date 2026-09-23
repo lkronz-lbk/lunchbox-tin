@@ -1,4 +1,4 @@
-import { sql, json, fail, siteUrl, throttled } from '../lib/db.js';
+import { sql, json, fail, siteUrl, throttled, milestone } from '../lib/db.js';
 import { currentUser, createInvite, consumeInvite, peekInvite } from '../lib/auth.js';
 import { billingEnabled, cancelSubscription } from '../lib/stripe.js';
 import { trialing } from '../lib/trial.js';
@@ -19,10 +19,12 @@ const now = () => new Date().toISOString();
 /* the document is only fetched when the caller will use it; a push tests emptiness alone */
 async function membership(userId, withDoc) {
   const rows = withDoc
-    ? await sql()`SELECT h.id, h.name, h.owner_user_id, h.doc, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id, h.created_at
+    ? await sql()`SELECT h.id, h.name, h.owner_user_id, h.doc, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id, h.created_at,
+                         (SELECT array_agg(kind) FROM milestones ms WHERE ms.household_id = h.id) AS milestones
                   FROM household_members m JOIN households h ON h.id = m.household_id WHERE m.user_id = ${userId}`
     : await sql()`SELECT h.id, h.name, h.owner_user_id, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id,
-                         e.plan, e.status, e.stripe_subscription_id, h.created_at, h.doc->>'createdAt' AS doc_created
+                         e.plan, e.status, e.stripe_subscription_id, h.created_at, h.doc->>'createdAt' AS doc_created,
+                         (SELECT array_agg(kind) FROM milestones ms WHERE ms.household_id = h.id) AS milestones
                   FROM household_members m JOIN households h ON h.id = m.household_id LEFT JOIN entitlements e ON e.household_id = h.id
                   WHERE m.user_id = ${userId}`;
   return rows[0] || null;
@@ -36,7 +38,29 @@ async function ensureHousehold(user, withDoc) {
   const memberId = 'mem_' + Math.random().toString(36).slice(2, 10);
   await q`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${h.id}, ${user.id}, 'owner', ${memberId})`;
   await q`INSERT INTO entitlements (household_id) VALUES (${h.id})`;
-  return { ...h, doc_empty: true, role: 'owner', member_id: memberId };
+  await milestone(h.id, 'signed_up');
+  return { ...h, doc_empty: true, role: 'owner', member_id: memberId, milestones: ['signed_up'] };
+}
+
+/* The moments the numbers count (migration 0006), each written once and read back with the
+   household so a request that has nothing new to say costs nothing. Week two is the README's
+   own measure: did the household come back between seven and fourteen days old. */
+const DAY = 86400000;
+const reached = (h, kind) => Array.isArray(h.milestones) && h.milestones.includes(kind);
+async function note(h, kind) {
+  if (reached(h, kind)) return;
+  await milestone(h.id, kind);
+  h.milestones = (h.milestones || []).concat(kind);
+}
+async function weekTwo(h) {
+  if (h.role === 'helper') return;                 /* a caretaker checking the pack list is not the household coming back */
+  const age = Date.now() - new Date(h.created_at).getTime();
+  if (age >= 7 * DAY && age < 14 * DAY) await note(h, 'week_two');
+}
+/* a planned week: some live lunchbox has a week with a day that has a food in a compartment */
+function hasPlan(doc) {
+  return doc.kids.some(k => k && !k.deletedAt && k.week && Array.isArray(k.week.days)
+    && k.week.days.some(d => d && d.slots && typeof d.slots === 'object' && Object.keys(d.slots).some(c => d.slots[c])));
 }
 
 /* a helper sees the pack list and nothing else: the lunchboxes' names, this week's
@@ -67,6 +91,7 @@ function helperView(doc) {
 
 async function state(user) {
   const h = await ensureHousehold(user, true);
+  await weekTwo(h);
   const helper = h.role === 'helper';
   const members = await sql()`
     SELECT m.user_id AS "userId", m.role, m.member_id AS "memberId", u.email, u.name
@@ -129,7 +154,11 @@ export default async function handler(req) {
         UPDATE households SET doc = ${JSON.stringify(body.doc)}::jsonb, version = version + 1, updated_at = now()
         WHERE id = ${h.id} AND version = ${Number.isFinite(base) ? base : -1}
         RETURNING version`;
-      if (rows[0]) return json({ version: rows[0].version, at: now() });
+      if (rows[0]) {
+        if (!reached(h, 'first_plan') && hasPlan(body.doc)) await note(h, 'first_plan');
+        await weekTwo(h);
+        return json({ version: rows[0].version, at: now() });
+      }
       const [cur] = await q`SELECT doc, version FROM households WHERE id = ${h.id}`;
       return json({ conflict: true, doc: cur.doc, version: cur.version }, 409);
     }
@@ -171,6 +200,7 @@ export default async function handler(req) {
       /* the phone says which member it is, so the name typed there and its ticks stay its own */
       const memberId = (typeof body.memberId === 'string' && MEMBER_ID.test(body.memberId)) ? body.memberId : 'mem_' + Math.random().toString(36).slice(2, 10);
       await q`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${used.household_id}, ${user.id}, ${used.role}, ${memberId})`;
+      await milestone(used.household_id, 'second_phone');
       return json(await state(user));
     }
 

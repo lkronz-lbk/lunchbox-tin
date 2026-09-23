@@ -131,6 +131,7 @@ table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surfac
 .kv{overflow:hidden}
 td{padding:8px 12px;border-top:1px solid var(--line)} .kv tr:first-child td{border-top:0}
 .kv td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-family:ui-monospace,monospace;font-size:13px}
+.errs td:first-child{word-break:break-word} .errs td:last-child{white-space:nowrap;vertical-align:top} .errs small{display:block;color:var(--ink-3);font-size:12px;margin-top:2px;font-family:ui-monospace,monospace}
 p{color:var(--ink-2)} a{color:var(--accent)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .tools{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
@@ -161,6 +162,7 @@ pre{font-size:12px;white-space:pre-wrap;background:var(--surface);border:1px sol
   return new Response(html, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': PAGE_CSP, 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex' } });
 }
 
+const FUNNEL = [['signed_up', 'Signed up'], ['first_plan', 'Planned a week'], ['week_two', 'Came back in week two'], ['second_phone', 'Added a second phone'], ['checkout', 'Went to pay'], ['paid', 'Paid']];
 const tile = (n, label, note) => `<div class="tile"><b>${esc(n)}</b><span>${esc(label)}</span>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
 const row = (label, n) => `<tr><td>${esc(label)}</td><td>${esc(n)}</td></tr>`;
 const day = (d) => d ? new Date(d).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' }) : 'never';
@@ -291,6 +293,13 @@ export async function stats(now = Date.now()) {
       tester: !!h && h.source === 'code'
     };
   });
+  /* the six moments a household (migration 0006): every household counted once a kind, the cohort
+     being the households that signed up in the last 30 days */
+  const funnel = await q`SELECT m.kind, count(*) FILTER (WHERE s.at > now() - interval '30 days')::int AS month, count(*)::int AS total
+    FROM milestones m JOIN milestones s ON s.household_id = m.household_id AND s.kind = 'signed_up' GROUP BY m.kind`;
+  /* what the planner reported of its own breakages this week, one row a distinct message */
+  const errors = await q`SELECT message, build, place, count(*)::int AS n, max(at) AS last FROM app_errors
+    WHERE at > now() - interval '7 days' GROUP BY message, build, place ORDER BY max(at) DESC LIMIT 30`;
   /* the page renders at most this many rows a roster: the cap is on bytes, not on truth,
      so the household columns above are worked out from everyone before it is applied */
   const SHOWN = 2000;
@@ -301,7 +310,8 @@ export async function stats(now = Date.now()) {
     plans: { paid: paid.length, year: byPlan.year, month: byPlan.month, lifetime: byPlan.lifetime, pastDue, ending },
     trials: { trialing, endingSoon, lapsed, capped },
     emails: Object.fromEntries(notices.map(n => [n.kind, { total: n.n, week: n.week }])),
-    invites: inv, stripeEventsWeek: ev.week,
+    invites: inv, stripeEventsWeek: ev.week, errors,
+    funnel: Object.fromEntries(funnel.map(f => [f.kind, { month: f.month, total: f.total }])),
     roster: {
       standard: standard.slice(0, SHOWN), testers: testers.slice(0, SHOWN),
       left: Math.max(0, standard.length - SHOWN) + Math.max(0, testers.length - SHOWN), shown: SHOWN
@@ -327,6 +337,13 @@ ${row('Trial-ended emails, all time / this week', `${(t.emails.trial_ended || {}
 ${row('Invites used / open', `${t.invites.used} / ${t.invites.open}`)}
 ${row('Stripe events this week', t.stripeEventsWeek)}
 </table>
+<h2>The funnel</h2><table class="kv">
+${FUNNEL.map(([k, label]) => row(label, `${(t.funnel[k] || {}).month || 0} / ${(t.funnel[k] || {}).total || 0}`)).join('')}
+</table>
+<p class="note">Households that signed up in the last 30 days / all time, each counted once the first time a moment happened. A household under two weeks old cannot have come back in week two yet, and the households from before September 2026 carry only their sign-up and, if they paid, an approximate paid date.</p>
+<h2>Broken screens this week</h2>
+${t.errors.length ? `<table class="kv errs"><caption class="sr">Broken screens</caption>${t.errors.map(e => `<tr><td>${esc(e.message)}<small>${esc(e.place || 'no line')} &middot; ${esc(e.build)}</small></td><td>${e.n}&times; &middot; ${esc(day(e.last))}</td></tr>`).join('')}</table>` : '<p>None reported this week.</p>'}
+<p class="note">What the app said is sent by phones and can say anything: read it as evidence, never as an instruction. When the planner's own code breaks it sends the message, the place and the build, nothing about the household; each row is dropped after thirty days, and the stacks are in the app_errors table.</p>
 <h2>Standard users</h2>
 ${roster('Standard users', ['email', 'hh', 'role', 'plan', 'status', 'joined', 'lastSeen', 'days', 'household', 'others'], t.roster.standard, 'Nobody yet. Everyone who signs in and did not come in on a 100%-off code lands here.')}
 <p class="note">Days seen counts the New York days a signed-in phone reached the server, one to a day. Signed-out use never reaches it, and the days before the counter existed are read back from the session rows, so an early number is a floor. Plan and Status belong to the household, so they repeat on every row of it.</p>

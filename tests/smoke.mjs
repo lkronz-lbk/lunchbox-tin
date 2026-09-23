@@ -37,6 +37,7 @@ const { default: billingHandler } = await import('../netlify/functions/api-billi
 const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
 const { default: betaHandler } = await import('../netlify/functions/beta.js');
 const { default: recipeHandler } = await import('../netlify/functions/api-recipe.js');
+const { default: errorsHandler, ipBucket } = await import('../netlify/functions/api-errors.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
 process.env.REVIEW_EMAIL = 'review@example.com'; process.env.REVIEW_CODE = 'REVU-2468';
 process.env.BETA_CODE = 'BETA-TEST-1234'; process.env.BETA_CAP = '2';
@@ -69,7 +70,7 @@ async function apiProxy(req, res){
   const method = req.method;
   const request = new Request(`http://${req.headers.host}${req.url}`, {method, headers,
     body: (method === 'GET' || method === 'HEAD') ? undefined : Buffer.concat(chunks), duplex: 'half'});
-  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : req.url.startsWith('/api/recipe') ? recipeHandler : req.url.startsWith('/beta') ? betaHandler : householdHandler;
+  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : req.url.startsWith('/api/recipe') ? recipeHandler : req.url.startsWith('/api/errors') ? errorsHandler : req.url.startsWith('/beta') ? betaHandler : householdHandler;
   let resp;
   try { resp = await handler(request, {ip: '127.0.0.1'}); }
   catch (e) { res.writeHead(500); return res.end(String(e)); }
@@ -2135,10 +2136,39 @@ try {
   const welcomes = (to) => mails.filter(m => m.to === to && /Everything is on for three weeks/.test(m.subject));
   check('a first sign-in gets one welcome email, with a way to stop reminders', welcomes('liz@example.com').length === 1 && /\/api\/auth\/mail-stop\?t=[a-f0-9]{32}/.test(welcomes('liz@example.com')[0].text) && /\/app\//.test(welcomes('liz@example.com')[0].text));
   {
+    /* the planner reports its own breakages: a synthetic error event is enough to reach the table, and the numbers page lists it */
+    const synthetic = () => window.dispatchEvent(new ErrorEvent('error', { message: 'smoke: a synthetic break for liz@example.com', filename: location.href, lineno: 12, colno: 3 }));
+    await page.evaluate(synthetic);
+    let errRows = [];
+    for (let i = 0; i < 50 && !errRows.length; i++) { await page.waitForTimeout(100); errRows = (await db.query('SELECT kind, message, place, build, agent FROM app_errors')).rows; }
+    check('a broken screen reaches the app_errors table with the build and the place, the email blanked, no household named',
+      errRows.length === 1 && errRows[0].kind === 'error' && errRows[0].message === 'smoke: a synthetic break for [email]' && errRows[0].place === '/app/:12:3' && errRows[0].build === APP_BUILD && /Chrom|Safari|Mozilla/.test(errRows[0].agent || ''), errRows);
+    await page.evaluate(synthetic); await page.waitForTimeout(400);
+    check('the same break is not reported twice from one load', (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n === 1);
+    /* a page opened from an invite or the beta link carries its code in the address the browser stamps on every stack frame; both ends cut it */
+    await page.evaluate(() => window.dispatchEvent(new ErrorEvent('error', { message: 'smoke: a break with a link in it', filename: location.href, lineno: 7, colno: 1, error: { stack: 'boom@' + location.origin + '/app/?join=SECRETCODE&beta=BETA-9999:7:1' } })));
+    let linkRow = null;
+    for (let i = 0; i < 50 && !linkRow; i++) { await page.waitForTimeout(100); linkRow = (await db.query("SELECT stack FROM app_errors WHERE message = 'smoke: a break with a link in it'")).rows[0]; }
+    check('the phone cuts the query off every link in a stack before the report leaves it', !!linkRow && /\/app\/:7:1/.test(linkRow.stack) && !/join=|SECRETCODE|beta=/.test(linkRow.stack), linkRow);
+    await page.evaluate(() => { window.dispatchEvent(new PromiseRejectionEvent('unhandledrejection', { promise: Promise.resolve(), reason: new TypeError('Failed to fetch') })); window.dispatchEvent(new PromiseRejectionEvent('unhandledrejection', { promise: Promise.resolve(), reason: new Error('smoke: a refused promise') })); });
+    let refused = null;
+    for (let i = 0; i < 50 && !refused; i++) { await page.waitForTimeout(100); refused = (await db.query("SELECT kind, stack FROM app_errors WHERE message = 'smoke: a refused promise'")).rows[0]; }
+    check('a promise refused with nobody catching it is reported as one, and a network that is down is not', !!refused && refused.kind === 'rejection' && /refused promise/.test(refused.stack || '') && (await db.query("SELECT count(*)::int AS n FROM app_errors WHERE message LIKE '%Failed to fetch%'")).rows[0].n === 0, refused);
+    const serverStrip = await fetch(NODE_BASE + '/api/errors', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'rejection', message: 'smoke: the server cuts links too, see http://x.test/app/?beta=B-1', stack: 'at x (http://x.test/app/?join=ABC#f:1:1)', build: 'lunchsorted-v0' }) });
+    const stripped = (await db.query("SELECT message, stack FROM app_errors WHERE build = 'lunchsorted-v0'")).rows[0];
+    check('and the server cuts them again whatever the phone sent', serverStrip.status === 204 && !!stripped && stripped.message === 'smoke: the server cuts links too, see http://x.test/app/' && stripped.stack === 'at x (http://x.test/app/:1:1)', stripped);
+    const crossOrigin = await fetch(NODE_BASE + '/api/errors', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example' }, body: '{}' });
+    const crossSite = await fetch(NODE_BASE + '/api/errors', { method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' }, body: '{}' });
+    check('a report from another site is refused before it is read', crossOrigin.status === 403 && crossSite.status === 403, [crossOrigin.status, crossSite.status]);
+    check('one IPv6 prefix is one address to the throttle, and a mapped IPv4 is itself', ipBucket('2001:db8:1:2:3:4:5:6') === '2001:0db8:0001:0002::/64' && ipBucket('2001:db8::1') === '2001:0db8:0000:0000::/64' && ipBucket('::ffff:1.2.3.4') === '1.2.3.4' && ipBucket('1.2.3.4') === '1.2.3.4');
+    const errGet = await fetch(NODE_BASE + '/api/errors'), errJunk = await fetch(NODE_BASE + '/api/errors', { method: 'POST', body: 'not json' });
+    check('the error endpoint answers nothing to a GET and refuses junk', errGet.status === 404 && errJunk.status === 400, [errGet.status, errJunk.status]);
     const anonAdmin = await fetch(NODE_BASE + '/api/admin');
     const adminPage = await page.evaluate(() => fetch('/api/admin').then(r => r.text().then(t => ({ status: r.status, text: t, csp: r.headers.get('content-security-policy') }))));
     check('the numbers page asks a stranger to sign in, and shows the person in ADMIN_EMAILS real counts',
       anonAdmin.status === 401 && adminPage.status === 200 && /by the numbers/i.test(adminPage.text) && /households/.test(adminPage.text) && /default-src 'none'/.test(adminPage.csp), [anonAdmin.status, adminPage.status]);
+    check('the numbers page lists the week\'s broken screens', /Broken screens/.test(adminPage.text) && /a synthetic break/.test(adminPage.text));
+    check('and shows the funnel, with this household signed up and planned', /The funnel/.test(adminPage.text) && /Planned a week<\/td><td>1 \/ 1/.test(adminPage.text) && /Signed up<\/td><td>1 \/ 1/.test(adminPage.text), adminPage.text.match(/The funnel[\s\S]{0,600}/)?.[0]);
     /* the one script that sorts the rosters is allowed by its own hash and nothing else */
     const inline = adminPage.text.match(/<script>([\s\S]*?)<\/script>/g) || [];
     const only = adminPage.text.match(/<script>([\s\S]*?)<\/script>/);
@@ -2151,6 +2181,16 @@ try {
   check('a used link is gone', spent === 410, spent);
   await until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1 && !!j.doc));
   const srv = await page.evaluate(() => fetch('/api/household').then(r => r.json()));
+  {
+    const kinds = (await db.query('SELECT kind FROM milestones WHERE household_id = $1 ORDER BY kind', [srv.household.id])).rows.map(r => r.kind);
+    check('signing up and pushing a planned week leave two milestones and nothing else', kinds.join() === 'first_plan,signed_up', kinds);
+    /* week two is measured from the household row: eight days old, one open, one row; then the row is put back so the trial is untouched */
+    await db.query("UPDATE households SET created_at = now() - interval '8 days' WHERE id = $1", [srv.household.id]);
+    await page.evaluate(() => fetch('/api/household').then(r => r.status));
+    const later = (await db.query('SELECT kind FROM milestones WHERE household_id = $1 ORDER BY kind', [srv.household.id])).rows.map(r => r.kind);
+    await db.query('UPDATE households SET created_at = now() WHERE id = $1', [srv.household.id]);
+    check('an open between seven and fourteen days after sign-in is the week-two milestone', later.join() === 'first_plan,signed_up,week_two', later);
+  }
   check("this phone's lunches became the household on the server", !!(srv.doc && srv.doc.kids.length >= 1 && srv.version >= 1 && srv.me.role === 'owner'), {version: srv.version, role: srv.me && srv.me.role});
   check('the person on this phone is a member the document already knew', await page.evaluate(m => JSON.parse(localStorage.getItem('lunchsorted')).members.some(x => x.id === m) && localStorage.getItem('lunchsorted-device') === m, srv.me.memberId));
   const stale = await page.evaluate(v => fetch('/api/household', {method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify({doc: JSON.parse(localStorage.getItem('lunchsorted')), version: v - 1})}).then(r => r.status), srv.version);
@@ -2193,6 +2233,7 @@ try {
   await p2.click('[data-act="join-accept"]');
   await until(p2, () => /you share their lunches/i.test(document.querySelector('#toast').textContent) || /Parent/.test(document.querySelector('#view').textContent));
   await until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.members.length === 2));
+  check('a second phone joining is a milestone on the household', (await db.query("SELECT count(*)::int AS n FROM milestones WHERE kind = 'second_phone'")).rows[0].n === 1);
   await page.goto(BASE+'/app/'); await page.waitForLoadState('load'); await page.waitForTimeout(800);
   const ownerKids = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name).sort());
   const samKids = await p2.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name).sort());

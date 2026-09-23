@@ -1,4 +1,4 @@
-import { sql, json, fail, siteUrl, throttled } from '../lib/db.js';
+import { sql, json, fail, siteUrl, throttled, milestone } from '../lib/db.js';
 import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
@@ -58,8 +58,12 @@ async function write(hid, at, v) {
       stripe_subscription_id = EXCLUDED.stripe_subscription_id, stripe_price_id = EXCLUDED.stripe_price_id,
       paid_by = COALESCE(EXCLUDED.paid_by, entitlements.paid_by), event_at = EXCLUDED.event_at, updated_at = now()
     WHERE entitlements.event_at IS NULL OR entitlements.event_at <= EXCLUDED.event_at
-    RETURNING household_id`;
-  return rows.length > 0;
+    RETURNING household_id, source, status`;
+  const ok = rows.length > 0;
+  /* the first time Stripe says a household is paid is a milestone; a tester on a 100%-off code keeps
+     source = 'code' through the same events, so the row as written is what decides, not the event */
+  if (ok && rows[0].source === 'stripe' && (rows[0].status === 'active' || rows[0].status === 'past_due')) await milestone(hid, 'paid');
+  return ok;
 }
 
 async function applyEvent(ev) {
@@ -219,6 +223,7 @@ export default async function handler(req, context) {
         session = await stripe('POST', '/checkout/sessions', params);
       }
       console.log(`billing: checkout household=${h.id} plan=${plan} tax=${params.automatic_tax.enabled} client=${body.client === 'ios' ? 'ios' : 'web'}`);
+      await milestone(h.id, 'checkout');
       return json({ url: session.url });
     }
 

@@ -336,7 +336,9 @@ forward).
 - [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
       `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
       function responses instead, every app open becomes a function call (remove that rule).
-- [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form.
+- [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form. The
+      feedback form's notifications reach forms@lunchsorted.app (seen 2026-09-19 to 21); the
+      waitlist form posts through the same Netlify Forms but has not been sent a test of its own.
 - [x] The four marketing screenshots and the new Recipes one are reshot against v20:
       six tabs in the Pack/Week/Foods/Shop/Recipes/Account order, the "Making it?" row,
       and `public/img/screen-recipes.png|webp` as a fifth figure on the site (`.shots` is
@@ -504,6 +506,39 @@ first rule as licence to skip the second. Nothing enforces either: `npm run csp`
 `APP_BUILD`, `VERSION` and `WHATS_NEW.build` to each other, and cannot tell that the app changed
 and the tag did not.
 
+### When the day-one work moves to main
+
+Pull request #16 (the six milestones, the error reports, **The funnel** and **Broken screens**
+on `/admin`, `HANDBOOK.md`) landed on `dev` on 2026-09-22 with no build bump, because `dev`'s
+v24 had not shipped. It changes what the app collects, so the deploy to `main` and App Store
+Connect have to move in the same sitting:
+
+- [ ] **Not during an App Review.** The iOS shell loads the live site, so the reviewer sees
+      whatever `main` serves. Land it between submissions, or enter the label below first and
+      deploy straight after.
+- [ ] **App Privacy in App Store Connect.** Diagnostics → Crash Data: Yes, not linked, not
+      tracking, App Functionality. Usage Data → Product Interaction: Yes, linked, not tracking,
+      Analytics. The answers and the notes behind them are in `store/listing.md` under App
+      Privacy; the label then reads "Data Linked to You: Contact Info, User Content,
+      Identifiers, Purchases, Usage Data" and "Data Not Linked to You: Diagnostics". Until
+      `main` carries this work the questionnaire stays at its v23 answers (no Crash Data, no
+      Usage Data), because the live app collects neither.
+- [ ] **The description**, at the next version that can be edited: "nothing leaves your phone
+      until you choose to sign in" becomes "your lunches never leave your phone until you
+      choose to sign in" (`store/listing.md`, Description). The privacy page already says it.
+- [ ] **The build.** If `main` still serves v23, v24 goes as it is. If `main` has taken v24 by
+      then, this becomes v25 and carries v24's `WHATS_NEW` forward with `seenAs` (above).
+- [ ] **Migration 0006** applies itself on the `main` deploy (the build command runs
+      `scripts/migrate.mjs`): it backfills `signed_up` exactly and `paid` approximately, and
+      is already applied and frozen on the staging branch.
+- [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' https://lunchsorted.app/api/errors`
+      answers 404 to a GET, `/admin` shows The funnel and Broken screens, and the privacy page
+      reads "Last updated 22 September 2026". The Ops routine checks the site and the error
+      table from the next weekday morning.
+
+Two calls Liz made on 2026-09-22, so nobody reopens them: error reports go out signed out too
+(CLAUDE.md names the exception), and the six milestones are declared Usage Data, Analytics.
+
 ### Backlog (ideas to revisit, not scheduled)
 
 **Held until after the first App Store review.** These findings from the v24 reviews are
@@ -615,7 +650,9 @@ mean the first chip below and the checkbox above it are now on opposite sides of
 
 ## Accounts and sync
 
-Signed out, the app is exactly the phone-only app it always was. Signed in, the household
+Signed out, the app is the phone-only app it always was, but for one thing: since v24 an error
+report leaves the phone when the planner's own code breaks, and it carries nothing of the
+household (**Broken screens**, below). Signed in, the household
 document also lives on the server, versioned, and every phone in the household reads and
 writes the same one.
 
@@ -760,6 +797,32 @@ the idea bank stays free so a free list is never stuck with what it has.
   reply-to hello@lunchsorted.app. The reminder's button opens the app at `/app/?upgrade=1`,
   which opens the plan sheet on arrival. The suite captures every email through
   `globalThis.__LS_MAIL`; nothing reaches Resend from a test.
+- **Milestones**: one row a household a moment, written once each by the functions
+  (migration 0006, `milestone()` in `netlify/lib/db.js`): `signed_up` when the household row is
+  made, `first_plan` on the first push whose document holds a planned week, `week_two` when a
+  parent's phone (never a caretaker's) reaches the server between seven and fourteen days after
+  the row was made (the measure this file asks for; the window runs from sign-in, not from the
+  document's own birthday that the trial uses), `second_phone` when someone joins on an invite,
+  `checkout` when a checkout session is created for it, the moment before the browser opens
+  Stripe's page, `paid` when the entitlement row is first written paid by Stripe (a tester on a
+  100%-off code keeps `source = 'code'` and is never `paid`). The kinds a household already has
+  come back with the membership query, so `first_plan` and `week_two` are checked in memory and
+  written once; the other three are one idempotent insert at moments that are rare anyway. A
+  household's rows go with it, so a cohort shrinks when a household is deleted or folded into
+  another by a join. The privacy page names all six; `/admin` shows them as **The funnel**, the
+  last thirty days' sign-ups beside all time; and nothing else the app does is recorded.
+- **Broken screens**: when the planner's own code throws, or a promise is refused with nobody
+  catching it, the app posts what the error said, where in the file, the stack, the build and
+  the kind to `/api/errors` (`netlify/functions/api-errors.js`): one report per distinct error,
+  five a load, signed in or not, never anything from the household, and never for a network
+  that is simply down. Every link in the stack loses its query before it leaves the phone,
+  because a page opened from an invite or the beta link carries its code in the address the
+  browser stamps on each frame, and the server cuts it again. The server refuses a post from
+  another site, adds the browser's user-agent string and the time, blanks anything shaped like
+  an email address, and writes the row in one statement that also enforces twenty an hour from
+  one address (a /64 counts as one on IPv6) and a thousand an hour in all, keeping the stack only
+  on the first copy of a distinct error each hour. The sweep drops rows past thirty days. `/admin`
+  lists the week's thirty commonest under **Broken screens**; the stacks are in `app_errors`.
 - **The numbers**, at `/admin`, for the emails in `ADMIN_EMAILS` (comma-separated) and nobody
   else: households, on trial, lapsed, paying by plan, sign-ins, reminder emails sent, invites.
   Counts from the database; a stranger is asked to sign in, a signed-in parent who is not
