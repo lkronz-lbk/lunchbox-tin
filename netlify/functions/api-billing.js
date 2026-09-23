@@ -2,6 +2,7 @@ import { sql, json, fail, siteUrl, throttled } from '../lib/db.js';
 import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
+import { write } from '../lib/entitlement.js';
 
 /* Payment happens on Stripe's own page; this side only opens the door and
    listens for the answer. Nothing the browser sends can grant a plan: the
@@ -44,24 +45,7 @@ async function householdFor(obj) {
   return byCust[0] ? byCust[0].household_id : null;
 }
 
-/* Every write is one upsert that only applies when the event is not older than the last one
-   applied to the row, so two deliveries racing each other are ordered by Postgres, not by us. */
-async function write(hid, at, v) {
-  const rows = await sql()`
-    INSERT INTO entitlements (household_id, plan, source, status, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, stripe_price_id, paid_by, event_at, updated_at)
-    VALUES (${hid}, ${v.plan}, ${v.source}, ${v.status}, ${v.periodEnd || null}, ${!!v.cancelAtPeriodEnd}, ${v.customer || null}, ${v.subscription || null}, ${v.price || null}, ${v.paidBy || null}, ${at}, now())
-    ON CONFLICT (household_id) DO UPDATE SET plan = EXCLUDED.plan,
-      source = CASE WHEN ${!!v.keepCode} AND entitlements.source = 'code' AND EXCLUDED.plan <> 'free' THEN 'code' ELSE EXCLUDED.source END,   /* a tester stays a tester through renewals; a real purchase later is a sale */
-      status = EXCLUDED.status,
-      current_period_end = EXCLUDED.current_period_end, cancel_at_period_end = EXCLUDED.cancel_at_period_end,
-      stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, entitlements.stripe_customer_id),
-      stripe_subscription_id = EXCLUDED.stripe_subscription_id, stripe_price_id = EXCLUDED.stripe_price_id,
-      paid_by = COALESCE(EXCLUDED.paid_by, entitlements.paid_by), event_at = EXCLUDED.event_at, updated_at = now()
-    WHERE entitlements.event_at IS NULL OR entitlements.event_at <= EXCLUDED.event_at
-    RETURNING household_id`;
-  return rows.length > 0;
-}
-
+/* the row itself is written by lib/entitlement.js, which every way of paying shares */
 async function applyEvent(ev) {
   const q = sql();
   const at = new Date(ev.created * 1000).toISOString();

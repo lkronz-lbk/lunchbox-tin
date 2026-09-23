@@ -2410,6 +2410,24 @@ try {
   check('a partial refund changes nothing', (await ent()).plan === 'lifetime');
   await hook({ id: 'evt_refund', type: 'charge.refunded', created: t0 + 9, data: { object: { id: 'ch_1', object: 'charge', customer: 'cus_pat', refunded: true } } });
   check('a forever purchase refunded in full is undone', (await ent()).plan === 'free' && (await ent()).status === 'canceled');
+  /* one household, two ways to pay: Stripe's clock and Apple's cannot be compared, so a Stripe
+     delivery late enough to pass the ordering check must still not undo a plan paid to Apple */
+  await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.year' WHERE household_id=${patState.household.id}`);
+  const lateStripe = await hook(subEv('evt_apple_1', 'customer.subscription.deleted', t0 + 9.2, { status: 'canceled' }));
+  check('a late Stripe delivery cannot undo a plan the household pays Apple for', lateStripe.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'apple' && (await ent()).status === 'active', await ent());
+  await db.query(`UPDATE entitlements SET status='canceled' WHERE household_id=${patState.household.id}`);
+  await hook({ id: 'evt_apple_2', type: 'checkout.session.completed', created: t0 + 9.3, data: { object: { id: 'cs_test_a', mode: 'payment', payment_status: 'paid', customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
+  check('and once the Apple plan has ended, a Stripe purchase applies again', (await ent()).plan === 'lifetime' && (await ent()).source === 'stripe', await ent());
+  await db.query(`UPDATE entitlements SET plan='free', source='none', status='canceled', apple_original_transaction_id=NULL, apple_product_id=NULL, event_at='${new Date((t0 + 9) * 1000).toISOString()}' WHERE household_id=${patState.household.id}`);
+  {
+    /* one App Store subscription unlocks one household: a second claim on it is refused */
+    const [other] = (await db.query(`SELECT household_id FROM entitlements WHERE household_id <> ${patState.household.id} LIMIT 1`)).rows;
+    let refused = false;
+    await db.query(`UPDATE entitlements SET apple_original_transaction_id='2000000000000009' WHERE household_id=${patState.household.id}`);
+    if (other) { try { await db.query(`UPDATE entitlements SET apple_original_transaction_id='2000000000000009' WHERE household_id=${other.household_id}`); } catch (e) { refused = /unique|duplicate/i.test(e.message); } }
+    check('one App Store subscription can belong to one household only', !!other && refused, { other, refused });
+    await db.query(`UPDATE entitlements SET apple_original_transaction_id=NULL WHERE household_id=${patState.household.id}`);
+  }
   /* a beta tester: forever, on a 100%-off code, nothing charged; the admin page lists them by email */
   await hook({ id: 'evt_tester', type: 'checkout.session.completed', created: t0 + 9.5, data: { object: { id: 'cs_test_t', mode: 'payment', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
   check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
