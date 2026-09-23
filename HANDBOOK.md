@@ -40,32 +40,124 @@ metric.
 
 ## The voice
 
-Liz's, and a parent's. Read the welcome and the three tester emails in `netlify/lib/mail.js`,
-the App Store description in `store/listing.md` and `public/help.html` before writing a word.
+Liz's. A parent in Maryland who built this because her own family's lunches kept coming home,
+not a company. That is the whole register: real mornings, real failures, the specific thing that
+finally worked. Read the tester emails in `netlify/lib/mail.js` and `public/help.html` before
+writing a word, and then read the "sounds like a machine" list below and cut anything on it.
 
-- "We" for the product and its pages: help, privacy, the sign-in link, the welcome and the
-  reminder emails, all unsigned. "I" when Liz herself is writing: the tester emails, the beta
-  welcome, replies. Both are true; never both in one message. Plain words, short sentences.
-  "I built this" and "reply and I read it" are true, so say them where Liz is speaking.
-- Specific over adjectival: "a main, a side, a fruit and a sweet for every school day", never
-  "delicious, nutritious lunches".
-- Warm, dry, never breathless. No exclamation marks in product copy, one at most in a post. No
-  emoji in the product; sparingly in social captions. (The beta welcome in `mail.js` ends on
-  three in a row; it is the one departure, and Liz's to keep or cut.)
-- American spelling. The name is **Lunch Sorted**, two words; **the planner** for the app itself;
-  the tabs are Pack, Week, Foods, Shop, Recipes and Account; **the kid's pick**; **the
-  after-school review** for what came home (the emails and the README still say "morning
-  review": a fix waiting, not a second name); **the Household plan**; **forever** for the
-  one-time purchase; **school rules** for the flags. The app's own verbs are settled and are
-  not corrected: **tick**, **the bin**, **came home**, **Plan the week**, **Shuffle**. Two British
-  spellings on the help page, "millilitres" and "cancelling", are fixes waiting.
+### Three registers, by channel
+
+- **TikTok, Instagram and Facebook: Liz talking.** First person, present tense, one real moment
+  a parent recognizes: the untouched sandwich, the 6:50am freezer stare, the school's new
+  no-nuts letter, the kid who ate the same thing for eleven days. Say what went wrong in this
+  house before saying what the app does about it. Short lines, the way a text to a friend reads.
+  A post can end without a call to action; when there is one, it is one line, and it is the
+  waitlist until the handbook says otherwise. No pitch, no "we", no feature lists. One
+  exclamation mark at most. Emoji sparingly, as punctuation, never as decoration. If a caption
+  could be pasted onto any other app's account, it is not done.
+- **Pinterest and email: a step more formal.** Still Liz, still plain, but complete sentences and a
+  clear shape: the pin title leads with what a parent searched for, the description says what
+  they will find; an email says one thing, in "we" for the product and "I" where Liz herself is
+  writing (the tester emails, the beta welcome, replies), never both in one message, and is
+  signed "Liz" where "I" was used. Every email ends "— Lunch Sorted, from Lila Bloom
+  Enterprises. Reply to this email and a person reads it." (the reminders add the stop link).
+- **The product, the site, the store: quiet and exact.** "We" throughout. Specific over adjectival:
+  "a main, a side, a fruit and a sweet for every school day", never "delicious, nutritious
+  lunches". No exclamation marks, no emoji, no paragraph of explanation on a screen. The help
+  page signs off "Made by a parent, in Maryland; replies come from one."
+
+### Sounds like a machine: cut on sight
+
+- Openers and closers that sell: "Say goodbye to", "game-changer", "effortless", "seamless",
+  "unlock", "we've got you covered", "stress-free", "Ready to…?", "Imagine a world where".
+- A rhetorical question as a hook. Tidy triplets ("simple, smart, stress-free"). Every sentence
+  the same length. A benefit list where a story should be. Hashtags in the first line.
+- Anything that describes a parent from the outside ("busy moms everywhere") instead of from
+  inside one morning. Anything that could not be true of Liz's own kitchen this week.
+- Praise for the app in the app's own voice. The app is allowed to be useful; it is not allowed
+  to be impressed with itself.
+
+### American English, every time
+
+American spelling and American words, in the product, the site, the store, the emails and every
+post. Liz corrected "tick" three times in the drafts of 2026-09-22 alone; it is not a style choice.
+
+| Not this | This |
+| --- | --- |
+| tick, ticked, ticking a box | check, checked, checking off |
+| the bin | the trash |
+| millilitres, litre | milliliters, liter |
+| cancelling, cancelled | canceling, canceled |
+| colour, flavour, favourite | color, flavor, favorite |
+| mum, nappy, biscuit, crisps, sweets (as a category name) | mom, diaper, cookie, chips; the app's own category is "sweet", singular, and stays |
+| "at the weekend", "in hospital", "maths" | "on the weekend", "in the hospital", "math" |
+
+What still says "tick" today, for the one pull request that fixes it (intake row Q-004): under
+ten parent-visible strings in the planner (`public/app/index.html`, the pack list and the help
+sheet; the other sixty-odd matches are class names and code, which stay), five on the help page
+(`public/help.html`), one in the App Store description (`store/listing.md`), and six in the README.
+"The bin" and "millilitres" are in the help sheet and the help page, "cancelling" on the help page.
+"Morning review" survives in four emails, the README, and the planner's own paywall line. Until
+that lands, no new copy anywhere repeats any of them, and a post never says "tick". "Lunchbox" is
+one word everywhere and is the app's own word; it stays.
+
+### Names and claims
+
+- The name is **Lunch Sorted**, two words; **the planner** for the app itself; the tabs are Pack,
+  Week, Foods, Shop, Recipes and Account; **the kid's pick**; **the after-school review** for what
+  came home (the emails and the README still say "morning review": a fix waiting, not a second
+  name); **the Household plan**; **forever** for the one-time purchase; **school rules** for the
+  flags; **Plan the week** and **Shuffle** as the app names them.
 - Never jargon, never an identifier, never "users". They are parents, households, kids, phones.
 - Every claim is one the app makes good on. Nothing is "healthy", and "balanced" only ever
   means the pairing (a crunchy side against a soft main, protein when the main is light), never
   nutrition: the app does not count calories and it is not medical.
-- Sign the tester emails "Liz". Every email ends "— Lunch Sorted, from Lila Bloom Enterprises.
-  Reply to this email and a person reads it." (the reminders add the stop link). The help page
-  signs off "Made by a parent, in Maryland; replies come from one."
+- The beta welcome in `mail.js` ends on three exclamation marks in a row; it is the one departure,
+  and Liz's to keep or cut.
+
+## The brand
+
+The look is the app's own, taken from the design tokens in `public/app/index.html` and
+`public/index.html`. Nothing is designed off-brand to look "more social"; a post that could not
+sit beside a screenshot of the planner is wrong.
+
+| | Light | Dark |
+| --- | --- | --- |
+| Ground (page) | #E9EEE6 | #0E1815 |
+| Surface (card) | #FBFCF9 | #17251F |
+| Ink (text) | #16241E | #E6EEE7 |
+| Ink, quieter | #4A5C53 / #6E7F75 (the site's third ink is #7B8C82) | #A6BAAE / #7A8E84 |
+| Line | #CFDACB | #2B3E36 |
+| Accent (the green; buttons, links) | #2E5A48 on #FBFCF9 | #79C8A2 on #0E1815 |
+| Accent, soft | #DCE8DF | #1F332A |
+| Warn / hot | #8A5A06 / #B4460F | #E0A253 / #F2A26E |
+
+The six compartment colors, light then dark: main #2E5A48 / #79C8A2, side #8A5309 / #E0A253,
+fruit #A2304C / #EA8299, sweet #57448A / #A793DC, snack #6B7A1F / #C3CF6E, drink #2B6B85 /
+#7FC3DE. Corners are 20px, 12px and 8px. Fonts: **Familjen Grotesk** for headings (400 to 700),
+**Karla** for body (400 to 700), **IBM Plex Mono** for small labels and numbers (400 and 600); all
+three are on Google Fonts (the help page loads fewer weights, which is fine). The icons are in `public/icons/` and the marketing screenshots in `public/img/`
+(750 by 1624, with WebP twins).
+
+- **Canva.** A brand kit named "Lunch Sorted" holds these colors, the three fonts and the icon, so
+  every design starts from it. Canva does not let a connector create a kit, so Liz makes it once in
+  the Canva app (Brand, then Create new Brand Kit) and every job picks it by name after that. Until
+  it exists, a design uses the hex codes above by hand. The Lila Bloom Kids kits are a different
+  brand and are never used for Lunch Sorted.
+- **Photographs and screens.** Real counters, real lunch boxes, real leftovers; never a child's
+  face or name, never a real household's screen. The app's demo screenshots carry the made-up
+  names "Emma" and "Noah", and those may appear on a public image: the no-child rule is about
+  real children, and no real child is behind either name (Liz, 2026-09-22). If a platform's own
+  rules ever object to a child's name on an image, the demo screens are reshot with the
+  nicknames "Bear" and "Monkey" rather than initials. Text on an image stays under eight words.
+- **Images made by a model.** The method comes from Liz's content pipeline app (her Lila Bloom
+  Kids posting tool, a separate repo, `netlify/lib/openart.js` there): OpenArt's `nano-banana-pro`
+  in image-to-image mode with prompt enhancement off; the reference screen is a public URL
+  (`lunchsorted.app/img/screen-*.png`) passed as the visual reference and named in the prompt only
+  as that reference, never described, because describing it makes the model redraw it wrong; the
+  prompt describes the scene around the phone; no people, no hands, no stray text; every result
+  is looked at before use, and garbled screen text is a reject. About 80 credits a pair of images,
+  and at most 400 credits a run.
 
 ## Rules that bind every job
 
@@ -88,7 +180,8 @@ The product rules in `CLAUDE.md` bind every spec, fix and proposal. On top of th
 6. **No invented numbers.** A count comes from `/admin`, the database, Stripe or Search Console
    with its date; a claim in a post comes from the README. "Approximately" is not a source.
 7. **Partners and affiliates are disclosed.** Any post or page that earns from a link says so.
-8. **One voice, one handbook.** Anything written for a parent reads as if Liz wrote it. When
+8. **One voice, one handbook.** Anything written for a parent reads as if Liz wrote it, in
+   American English and in the register its channel calls for (The voice, above). When
    this file and a job's own instructions disagree, this file wins.
 9. **The repo is public.** Nothing in it links to a private document, names a tester, or holds
    a key. The intake sheet and the org chart are reached from Liz's Drive and Claude docs, never
