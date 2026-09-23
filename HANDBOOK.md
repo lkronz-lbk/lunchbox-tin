@@ -142,9 +142,11 @@ Google Fonts. The icons are in `public/icons/` and the marketing screenshots in 
   it exists, a design uses the hex codes above by hand. The Lila Bloom Kids kits are a different
   brand and are never used for Lunch Sorted.
 - **Photographs and screens.** Real counters, real lunch boxes, real leftovers; never a child's
-  face or name, never a real household's screen. The app's demo screenshots carry the demo names
-  "Emma" and "Noah"; whether a made-up demo name may appear on a public image is Liz's call and
-  is open until she makes it. Text on an image stays under eight words.
+  face or name, never a real household's screen. The app's demo screenshots carry the made-up
+  names "Emma" and "Noah", and those may appear on a public image: the no-child rule is about
+  real children, and no real child is behind either name (Liz, 2026-09-22). If a platform's own
+  rules ever object to a child's name on an image, the demo screens are reshot with the
+  nicknames "Bear" and "Monkey" rather than initials. Text on an image stays under eight words.
 - **Images made by a model.** Follow the content pipeline's method: the reference screen is passed
   by public URL and referred to only as the reference, the prompt describes the scene around it and
   never the screen's contents, no people and no hands, and every result is looked at before it is
