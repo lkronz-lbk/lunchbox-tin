@@ -80,7 +80,7 @@ writing a word, and then read the "sounds like a machine" list below and cut any
 ### American English, every time
 
 American spelling and American words, in the product, the site, the store, the emails and every
-post. Liz has corrected "tick" three times; it is not a style choice.
+post. Liz corrected "tick" three times in the drafts of 2026-09-22 alone; it is not a style choice.
 
 | Not this | This |
 | --- | --- |
@@ -89,14 +89,17 @@ post. Liz has corrected "tick" three times; it is not a style choice.
 | millilitres, litre | milliliters, liter |
 | cancelling, cancelled | canceling, canceled |
 | colour, flavour, favourite | color, flavor, favorite |
-| lunchbox (one word, when it means the container) | lunch box; "lunchbox" stays only in the app's own tab and feature names where it already is |
 | mum, nappy, biscuit, crisps, sweets (as a category name) | mom, diaper, cookie, chips; the app's own category is "sweet", singular, and stays |
 | "at the weekend", "in hospital", "maths" | "on the weekend", "in the hospital", "math" |
 
-What still says "tick" today: the planner's own copy uses tick, ticked and ticking about seventy
-times, the help page four, and "the bin", "millilitres" and "cancelling" are on the help page.
-That is a fix waiting in the app, one pull request, filed in the intake queue; until it lands, no
-new copy anywhere repeats it, and a post never says "tick".
+What still says "tick" today, for the one pull request that fixes it (intake row Q-004): under
+ten parent-visible strings in the planner (`public/app/index.html`, the pack list and the help
+sheet; the other sixty-odd matches are class names and code, which stay), five on the help page
+(`public/help.html`), one in the App Store description (`store/listing.md`), and six in the README.
+"The bin" and "millilitres" are in the help sheet and the help page, "cancelling" on the help page.
+"Morning review" survives in four emails, the README, and the planner's own paywall line. Until
+that lands, no new copy anywhere repeats any of them, and a post never says "tick". "Lunchbox" is
+one word everywhere and is the app's own word; it stays.
 
 ### Names and claims
 
@@ -123,17 +126,17 @@ sit beside a screenshot of the planner is wrong.
 | Ground (page) | #E9EEE6 | #0E1815 |
 | Surface (card) | #FBFCF9 | #17251F |
 | Ink (text) | #16241E | #E6EEE7 |
-| Ink, quieter | #4A5C53 / #6E7F75 | #A6BAAE / #7A8E84 |
+| Ink, quieter | #4A5C53 / #6E7F75 (the site's third ink is #7B8C82) | #A6BAAE / #7A8E84 |
 | Line | #CFDACB | #2B3E36 |
 | Accent (the green; buttons, links) | #2E5A48 on #FBFCF9 | #79C8A2 on #0E1815 |
-| Accent, soft | #DCE8DF | |
-| Warn / hot | #8A5A06 / #B4460F | |
+| Accent, soft | #DCE8DF | #1F332A |
+| Warn / hot | #8A5A06 / #B4460F | #E0A253 / #F2A26E |
 
 The six compartment colors, light then dark: main #2E5A48 / #79C8A2, side #8A5309 / #E0A253,
 fruit #A2304C / #EA8299, sweet #57448A / #A793DC, snack #6B7A1F / #C3CF6E, drink #2B6B85 /
 #7FC3DE. Corners are 20px, 12px and 8px. Fonts: **Familjen Grotesk** for headings (400 to 700),
-**Karla** for body (400 to 700), **IBM Plex Mono** for small labels and numbers; all three are on
-Google Fonts. The icons are in `public/icons/` and the marketing screenshots in `public/img/`
+**Karla** for body (400 to 700), **IBM Plex Mono** for small labels and numbers (400 and 600); all
+three are on Google Fonts (the help page loads fewer weights, which is fine). The icons are in `public/icons/` and the marketing screenshots in `public/img/`
 (750 by 1624, with WebP twins).
 
 - **Canva.** A brand kit named "Lunch Sorted" holds these colors, the three fonts and the icon, so
@@ -147,10 +150,14 @@ Google Fonts. The icons are in `public/icons/` and the marketing screenshots in 
   real children, and no real child is behind either name (Liz, 2026-09-22). If a platform's own
   rules ever object to a child's name on an image, the demo screens are reshot with the
   nicknames "Bear" and "Monkey" rather than initials. Text on an image stays under eight words.
-- **Images made by a model.** Follow the content pipeline's method: the reference screen is passed
-  by public URL and referred to only as the reference, the prompt describes the scene around it and
-  never the screen's contents, no people and no hands, and every result is looked at before it is
-  used; garbled screen text is a reject.
+- **Images made by a model.** The method comes from Liz's content pipeline app (her Lila Bloom
+  Kids posting tool, a separate repo, `netlify/lib/openart.js` there): OpenArt's `nano-banana-pro`
+  in image-to-image mode with prompt enhancement off; the reference screen is a public URL
+  (`lunchsorted.app/img/screen-*.png`) passed as the visual reference and named in the prompt only
+  as that reference, never described, because describing it makes the model redraw it wrong; the
+  prompt describes the scene around the phone; no people, no hands, no stray text; every result
+  is looked at before use, and garbled screen text is a reject. About 80 credits a pair of images,
+  and at most 400 credits a run.
 
 ## Rules that bind every job
 
