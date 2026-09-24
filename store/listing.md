@@ -300,8 +300,9 @@ The one worth a look:
 ## Before you press Submit
 
 - [ ] The two subscriptions Ready to Submit, each with a display name, a description and a review
-      screenshot (the plan sheet on a TestFlight build: the founding line, both prices, the renewal line, Restore
-      purchases, Terms of use, Privacy), and selected on the version page under In-App Purchases
+      screenshot (`store/iap-review.png`, the same image on both, made by `scripts/iap-shot.mjs`:
+      the founding line, both prices, the renewal line, Restore purchases, Terms of use, Privacy;
+      rerun it with the new prices after a price change), and selected on the version page under In-App Purchases
       and Subscriptions. A first in-app purchase is reviewed with the build.
 - [ ] App Store Server Notifications URL set (above), and the code that answers it deployed
 
