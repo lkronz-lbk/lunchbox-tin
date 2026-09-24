@@ -74,7 +74,7 @@ async function state(user) {
   /* the price id travels so the app can say which of the plans this household is on,
      rather than guessing the commonest one at it */
   const [ent] = await sql()`SELECT plan, source, status, current_period_end AS "currentPeriodEnd", cancel_at_period_end AS "cancelAtPeriodEnd",
-    stripe_price_id AS price,
+    stripe_price_id AS price, apple_account_token AS "appleToken",
     (stripe_customer_id IS NOT NULL AND (${h.owner_user_id} = ${user.id} OR paid_by = ${user.id})) AS portal FROM entitlements WHERE household_id = ${h.id}`;
   return {
     household: { id: h.id, name: h.name, createdAt: h.created_at },

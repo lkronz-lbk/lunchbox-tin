@@ -360,10 +360,10 @@ the visual identity.
 3. **Built, behind the same switch** — Stripe Checkout on the web (below). Needs the four
    `STRIPE_*` variables per context and a webhook endpoint registered in Stripe.
 4. **Built** — the Capacitor iOS shell (`ios/`, `ios/README.md`) for the US storefront: it
-   loads the web app, opens Stripe in the phone's own browser, outside the app and takes the parent back through `/back.html`,
+   loads the web app and sells the plan through the App Store (in-app purchase; Stripe is the web's alone),
    builds on CI without a Mac, with the night-before kid's-pick reminder (6pm by default), and
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
-   sheet and a Home Screen widget; payments stay on the web.
+   sheet and a Home Screen widget.
 
 - **Help** — the ? at the top of every tab opens a sheet: seventeen one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
@@ -503,7 +503,10 @@ writes the same one.
 
 ## Billing
 
-The plan is a row on the household (`entitlements`) that only Stripe's webhook writes.
+The plan is a row on the household (`entitlements`) that only a payment source writes:
+Stripe's webhook for a plan bought on the web, the App Store's server notifications for one
+bought in the iPhone app (App Store, below). Each platform sells it one way only, and a plan
+paid on either side works on every phone and browser in the household.
 Free, for good, is one lunchbox, the week's plan, the shopping list, the pack list, and the
 built-in idea bank to build the food list from. The **Household** plan (yearly, or once
 forever) is the part that remembers and shares: a food written in the parent's own words,

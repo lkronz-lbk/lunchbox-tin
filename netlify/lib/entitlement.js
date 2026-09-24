@@ -13,8 +13,8 @@ import { sql } from './db.js';
      compared, so without this a late Stripe delivery (the cancellation of a subscription that
      ended months ago, retried) would pass the check above and wipe a plan the household is
      paying Apple for. It never matches until the App Store writes its first row.
-   The App Store's writer belongs beside this one, on apple_event_at, with the same refusal
-   the other way round. Returns whether the row was written. */
+   writeApple() below is the App Store's, the same shape the other way round. Returns whether
+   the row was written. */
 export async function write(hid, at, v) {
   const rows = await sql()`
     INSERT INTO entitlements (household_id, plan, source, status, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, stripe_price_id, paid_by, event_at, updated_at)
@@ -28,6 +28,28 @@ export async function write(hid, at, v) {
       paid_by = COALESCE(EXCLUDED.paid_by, entitlements.paid_by), event_at = EXCLUDED.event_at, updated_at = now()
     WHERE (entitlements.event_at IS NULL OR entitlements.event_at <= EXCLUDED.event_at)
       AND NOT (entitlements.source = 'apple' AND entitlements.status IN ('active', 'past_due'))
+    RETURNING household_id`;
+  return rows.length > 0;
+}
+
+/* The writer for the App Store, on Apple's clock (apple_event_at), which is never compared with
+   Stripe's. It applies only when the delivery is not older than the last Apple one applied, and the
+   row is not held by a live plan from the web: a Stripe subscription, a beta code or a comp.
+   cancelAtPeriodEnd null means the delivery did not say (a transaction from the phone carries no
+   renewal info), so the row keeps what the last notification set. The unique index on
+   apple_original_transaction_id throws if the purchase is already another household's. */
+export async function writeApple(hid, at, v) {
+  const keepCancel = v.cancelAtPeriodEnd === null || v.cancelAtPeriodEnd === undefined;
+  const rows = await sql()`
+    INSERT INTO entitlements (household_id, plan, source, status, current_period_end, cancel_at_period_end, apple_original_transaction_id, apple_product_id, apple_event_at, paid_by, updated_at)
+    VALUES (${hid}, ${v.plan}, ${v.source}, ${v.status}, ${v.periodEnd || null}, ${!!v.cancelAtPeriodEnd}, ${v.original}, ${v.product}, ${at}, ${v.paidBy || null}, now())
+    ON CONFLICT (household_id) DO UPDATE SET plan = EXCLUDED.plan, source = EXCLUDED.source, status = EXCLUDED.status,
+      current_period_end = EXCLUDED.current_period_end,
+      cancel_at_period_end = CASE WHEN ${keepCancel} THEN entitlements.cancel_at_period_end ELSE EXCLUDED.cancel_at_period_end END,
+      apple_original_transaction_id = EXCLUDED.apple_original_transaction_id, apple_product_id = EXCLUDED.apple_product_id,
+      apple_event_at = EXCLUDED.apple_event_at, paid_by = COALESCE(EXCLUDED.paid_by, entitlements.paid_by), updated_at = now()
+    WHERE (entitlements.apple_event_at IS NULL OR entitlements.apple_event_at <= EXCLUDED.apple_event_at)
+      AND NOT (entitlements.source IN ('stripe', 'code', 'comp') AND entitlements.status IN ('active', 'past_due'))
     RETURNING household_id`;
   return rows.length > 0;
 }

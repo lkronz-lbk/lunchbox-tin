@@ -37,6 +37,8 @@ const { default: billingHandler } = await import('../netlify/functions/api-billi
 const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
 const { default: betaHandler } = await import('../netlify/functions/beta.js');
 const { default: recipeHandler } = await import('../netlify/functions/api-recipe.js');
+const { default: appleHandler } = await import('../netlify/functions/api-apple.js');
+const appleLib = await import('../netlify/lib/apple.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
 process.env.REVIEW_EMAIL = 'review@example.com'; process.env.REVIEW_CODE = 'REVU-2468';
 process.env.BETA_CODE = 'BETA-TEST-1234'; process.env.BETA_CAP = '2';
@@ -69,7 +71,7 @@ async function apiProxy(req, res){
   const method = req.method;
   const request = new Request(`http://${req.headers.host}${req.url}`, {method, headers,
     body: (method === 'GET' || method === 'HEAD') ? undefined : Buffer.concat(chunks), duplex: 'half'});
-  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : req.url.startsWith('/api/recipe') ? recipeHandler : req.url.startsWith('/beta') ? betaHandler : householdHandler;
+  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/apple') ? appleHandler : req.url.startsWith('/api/admin') ? adminHandler : req.url.startsWith('/api/recipe') ? recipeHandler : req.url.startsWith('/beta') ? betaHandler : householdHandler;
   let resp;
   try { resp = await handler(request, {ip: '127.0.0.1'}); }
   catch (e) { res.writeHead(500); return res.end(String(e)); }
@@ -2533,6 +2535,99 @@ try {
   }
   await hook({ id: 'evt_refund_t', type: 'charge.refunded', created: t0 + 9.6, data: { object: { id: 'ch_t', object: 'charge', customer: 'cus_pat', refunded: true } } });
   check('undoing it clears the tester mark too', (await ent()).plan === 'free' && (await ent()).source === 'none', await ent());
+  /* ------------------------------------------------ the App Store */
+  {
+    const fx = (n) => fs.readFileSync(path.join(ROOT, '..', 'tests', 'fixtures', 'apple', n));
+    const real = JSON.parse(fx('real-chain.json'));
+    const at = Date.parse('2026-06-01T00:00:00Z');
+    const threw = (fn) => { try { fn(); return ''; } catch (e) { return e.message; } };
+    check('the purchase check accepts the chain Apple really signs with, and finds its marks', !threw(() => appleLib.verifyChain([real.leaf, real.intermediate, real.root], at)), threw(() => appleLib.verifyChain([real.leaf, real.intermediate, real.root], at)));
+    check('and refuses it once the signing certificate has expired', /out of date/.test(threw(() => appleLib.verifyChain([real.leaf, real.intermediate, real.root], Date.parse('2028-01-01')))));
+    const pem = (n) => new crypto.X509Certificate(fx(n + '.pem'));
+    check('and refuses any chain that does not end at Apple\'s own root', /root/.test(threw(() => appleLib.verifyChain([pem('leaf'), pem('intermediate'), pem('root')], Date.now()))));
+    /* everything after is signed with a test chain made the same way as Apple's, its root pinned in place of Apple's */
+    globalThis.__LS_APPLE_ROOT = pem('root').fingerprint256;
+    const jws = (payload, signer = 'leaf') => {
+      const x5c = [pem(signer), pem('intermediate'), pem('root')].map(c => c.raw.toString('base64'));
+      const h = Buffer.from(JSON.stringify({ alg: 'ES256', x5c })).toString('base64url'), b = Buffer.from(JSON.stringify(payload)).toString('base64url');
+      return h + '.' + b + '.' + crypto.sign('sha256', Buffer.from(h + '.' + b), { key: fx(signer + '.key'), dsaEncoding: 'ieee-p1363' }).toString('base64url');
+    };
+    const hid = patState.household.id;
+    const token = (await db.query(`SELECT apple_account_token::text AS t FROM entitlements WHERE household_id = ${hid}`)).rows[0].t;
+    let clock = Date.now();
+    const next = () => (clock += 1000);
+    const DAY = 86400000;
+    const txn = (o = {}) => Object.assign({ bundleId: 'app.lunchsorted', environment: 'Sandbox', productId: 'app.lunchsorted.household.year', originalTransactionId: '2000000000000100', transactionId: '2000000000000100', purchaseDate: clock, expiresDate: Date.now() + 365 * DAY, appAccountToken: token, type: 'Auto-Renewable Subscription', signedDate: next() }, o);
+    const link = (t, signer) => pb.evaluate(b => fetch('/api/apple/link', { method: 'POST', headers: { 'content-type': 'application/json' }, body: b }).then(async r => ({ status: r.status, body: await r.json() })), JSON.stringify({ signedTransaction: jws(t, signer) }));
+    const notify = async (type, t, renewal, o = {}) => {
+      const n = Object.assign({ notificationType: type, notificationUUID: crypto.randomUUID(), signedDate: next(), data: { bundleId: 'app.lunchsorted', environment: 'Sandbox', signedTransactionInfo: t && jws(t), signedRenewalInfo: renewal && jws(Object.assign({ signedDate: clock, environment: 'Sandbox' }, renewal)) } }, o);
+      const r = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: o.raw || jws(n) }) });
+      return { status: r.status, body: await r.json().catch(() => ({})), uuid: n.notificationUUID, n };
+    };
+    const row = async () => (await db.query(`SELECT plan, source, status, cancel_at_period_end AS cape, current_period_end AS pe, apple_original_transaction_id AS otx, apple_product_id AS product FROM entitlements WHERE household_id = ${hid}`)).rows[0];
+
+    check('every household is given its own App Store token, and the parent\'s phone is sent it', /^[0-9a-f-]{36}$/.test(token) && (await pb.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => j.entitlement.appleToken))) === token);
+    const rogue = await link(txn(), 'rogue');
+    check('a purchase signed by any Apple developer\'s certificate, not the App Store\'s, is refused', rogue.status === 400 && (await row()).plan === 'free', rogue);
+    const first = await link(txn());
+    check('a yearly purchase from the phone makes the household paid, through Apple', first.status === 200 && (await row()).plan === 'household' && (await row()).source === 'apple' && (await row()).status === 'active' && (await row()).otx === '2000000000000100' && (await row()).product === 'app.lunchsorted.household.year', [first, await row()]);
+    check('and the phone is told the new plan in the same answer', first.body.entitlement && first.body.entitlement.source === 'apple' && first.body.entitlement.plan === 'household', first.body);
+    check('and telling us twice changes nothing', (await link(txn())).status === 200 && (await row()).status === 'active');
+    const webBuy = await pb.evaluate(() => fetch('/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"plan":"year"}' }).then(async r => ({ status: r.status, body: await r.json() })));
+    check('the website will not sell the plan again to a household paying Apple, and says where it is managed', webBuy.status === 409 && webBuy.body.apple === true && /App Store/.test(webBuy.body.error), webBuy);
+    const someoneElse = await link(txn({ appAccountToken: crypto.randomUUID() }));
+    check('a purchase made for another household is not taken by this one', someoneElse.status === 409 && someoneElse.body.elsewhere === true, someoneElse);
+
+    const off = await notify('DID_CHANGE_RENEWAL_STATUS', txn(), { originalTransactionId: '2000000000000100', autoRenewStatus: 0 }, { subtype: 'AUTO_RENEW_DISABLED' });
+    check('switching off renewal in iOS Settings reaches the row as ending at the period end', off.status === 200 && (await row()).cape === true && (await row()).status === 'active', [off, await row()]);
+    await link(txn());
+    check('and a later word from the phone, which carries no renewal news, does not switch it back on', (await row()).cape === true);
+    const dup = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: jws(Object.assign({}, off.n)) }) }).then(r => r.json());
+    check('the same notification delivered twice is a no-op', dup.duplicate === true, dup);
+    const staleN = await notify('EXPIRED', txn({ expiresDate: Date.now() - DAY }), null, { signedDate: clock - 5000 });
+    check('a notification older than the last one applied cannot undo it', staleN.status === 200 && (await row()).plan === 'household', await row());
+
+    const grace = await notify('DID_FAIL_TO_RENEW', txn({ expiresDate: Date.now() - DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 1, gracePeriodExpiresDate: Date.now() + 6 * DAY }, { subtype: 'GRACE_PERIOD' });
+    check('a card Apple cannot charge keeps the plan through its grace period, as waiting on a payment', grace.status === 200 && (await row()).plan === 'household' && (await row()).status === 'past_due', await row());
+    await notify('EXPIRED', txn({ expiresDate: Date.now() - DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 0 }, { subtype: 'VOLUNTARY' });
+    check('when the Apple subscription ends the household is free again, and still bound to it', (await row()).plan === 'free' && (await row()).source === 'none' && (await row()).otx === '2000000000000100', await row());
+    await notify('SUBSCRIBED', txn({ expiresDate: Date.now() + 30 * DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 1 }, { subtype: 'RESUBSCRIBE' });
+    check('and coming back to it later picks the same household up again', (await row()).plan === 'household' && (await row()).status === 'active' && (await row()).cape === false, await row());
+
+    const forever = await link(txn({ productId: 'app.lunchsorted.household.forever', originalTransactionId: '2000000000000200', transactionId: '2000000000000200', type: 'Non-Consumable', expiresDate: undefined }));
+    check('buying forever through Apple makes it forever', forever.status === 200 && (await row()).plan === 'lifetime' && (await row()).otx === '2000000000000200', await row());
+    await notify('DID_RENEW', txn({ expiresDate: Date.now() + 365 * DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 1 });
+    await notify('EXPIRED', txn({ expiresDate: Date.now() - DAY }), null);
+    check('and the yearly one it replaced, which Apple lets run until it is cancelled in Settings, cannot lower it', (await row()).plan === 'lifetime' && (await row()).status === 'active', await row());
+    await notify('REFUND', txn({ productId: 'app.lunchsorted.household.forever', originalTransactionId: '2000000000000200', transactionId: '2000000000000200', type: 'Non-Consumable', expiresDate: undefined, revocationDate: Date.now() }), null);
+    check('a forever purchase Apple refunds is undone', (await row()).plan === 'free' && (await row()).status === 'canceled', await row());
+
+    await link(txn({ originalTransactionId: '2000000000000300', transactionId: '2000000000000300' }));
+    await notify('REFUND', txn({ originalTransactionId: '2000000000000100', expiresDate: Date.now() - 100 * DAY, revocationDate: Date.now() }), null);
+    check('a refund of an older Apple subscription does not end the one being paid for now', (await row()).plan === 'household' && (await row()).status === 'active' && (await row()).otx === '2000000000000300', await row());
+
+    const [other] = (await db.query(`SELECT household_id FROM entitlements WHERE household_id <> ${hid} LIMIT 1`)).rows;
+    await db.query(`UPDATE entitlements SET apple_original_transaction_id = '2000000000000400' WHERE household_id = ${other.household_id}`);
+    const taken = await link(txn({ originalTransactionId: '2000000000000400', transactionId: '2000000000000400', appAccountToken: undefined }));
+    check('a purchase already bound to another household cannot be restored into this one', taken.status === 409 && taken.body.elsewhere === true && (await row()).otx === '2000000000000300', [taken, await row()]);
+    await db.query(`UPDATE entitlements SET apple_original_transaction_id = NULL WHERE household_id = ${other.household_id}`);
+    const nobody = await notify('SUBSCRIBED', txn({ originalTransactionId: '2000000000000500', transactionId: '2000000000000500', appAccountToken: crypto.randomUUID() }), null);
+    check('a notification for a purchase no household made is acknowledged and changes nothing', nobody.status === 200 && (await row()).otx === '2000000000000300', nobody);
+    const wrongApp = await notify('SUBSCRIBED', txn({ bundleId: 'com.someone.else' }), null, { data: { bundleId: 'com.someone.else', environment: 'Sandbox', signedTransactionInfo: jws(txn({ bundleId: 'com.someone.else' })) } });
+    check('a notification for another app is refused', wrongApp.status === 400, wrongApp);
+    const test = await notify('TEST', null, null);
+    check('Apple\'s test notification is acknowledged', test.status === 200 && test.body.ignored === true, test);
+    const forged = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: jws({ notificationType: 'SUBSCRIBED', notificationUUID: crypto.randomUUID(), signedDate: next(), data: { bundleId: 'app.lunchsorted', environment: 'Sandbox', signedTransactionInfo: jws(txn(), 'rogue') } }) }) });
+    check('a notification carrying a purchase signed by the wrong certificate is refused', forged.status === 400);
+
+    /* a household paying on the website is not sold the plan again by the phone */
+    await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', apple_original_transaction_id = NULL, apple_product_id = NULL WHERE household_id = ${hid}`);
+    const twice = await link(txn({ originalTransactionId: '2000000000000600', transactionId: '2000000000000600' }));
+    check('an App Store purchase cannot take over a plan being paid on the website', twice.status === 409 && twice.body.paying === true && (await row()).source === 'stripe', [twice, await row()]);
+
+    delete globalThis.__LS_APPLE_ROOT;
+    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL, cancel_at_period_end = false, apple_original_transaction_id = NULL, apple_product_id = NULL, apple_event_at = NULL WHERE household_id = ${hid}`);
+  }
   /* who may manage billing: the owner, and whoever paid; a helper may buy nothing */
   await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_pat', paid_by=NULL WHERE household_id=${patState.household.id}`);
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'household');
@@ -2549,7 +2644,7 @@ try {
   /* and is not sent what the household pays in the first place */
   const sitterEnt = await ph.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => j.entitlement));
   check('and the server never hands a caretaker the household\'s plan, price or renewal date',
-    sitterEnt.plan === 'free' && sitterEnt.currentPeriodEnd === null && !sitterEnt.price && sitterEnt.portal === false, sitterEnt);
+    sitterEnt.plan === 'free' && sitterEnt.currentPeriodEnd === null && !sitterEnt.price && sitterEnt.portal === false && !sitterEnt.appleToken, sitterEnt);
   /* the Account tab a caretaker gets: no plan, no lunchbox settings, and still a way out */
   await ph.click('[data-act="tab"][data-tab="setup"]'); await ph.waitForTimeout(300);
   const sitterRows = await ph.evaluate(() => [...document.querySelectorAll('#view .item')].map(e => e.querySelector('.nm').textContent));
