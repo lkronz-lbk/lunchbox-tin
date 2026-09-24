@@ -1431,7 +1431,7 @@ function resumeAfter(){
    The phone decides nothing about the plan: it hands the server Apple's signed transaction, the
    server checks it and writes the plan, and only then is the transaction finished, so one lost on
    the way comes back at the next launch. The web keeps Stripe and never shows any of this. */
-var IAP_IDS = {year:'app.lunchsorted.household.yearly', month:'app.lunchsorted.household.month', forever:'app.lunchsorted.household.forever'};
+var IAP_IDS = {year:'app.lunchsorted.household.annual', month:'app.lunchsorted.household.month', forever:'app.lunchsorted.household.forever'};
 var IAP = {products:null, loading:null, failed:false, inFlight:false, queue:[]};
 function storeKit(){ return nativePlugin('StoreKit'); }
 function iapOn(){ return native() && !!storeKit(); }

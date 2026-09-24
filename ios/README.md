@@ -19,7 +19,7 @@ What the shell adds, and where:
   is also an in-app purchase. The plugin buys with the household's token, hands the
   page Apple's signed transaction, and the page sends it to `/api/apple/link`; the
   transaction is finished only once the server has it. The products are
-  `app.lunchsorted.household.yearly`, `.month` and `.forever` (non-consumable).
+  `app.lunchsorted.household.annual`, `.month` and `.forever` (non-consumable).
 - **Stripe, never.** The iPhone app does not open Stripe, to buy or to manage: a
   household paying on the website is told to change it at lunchsorted.app, and the
   address is named, not linked, because Stripe's portal can switch plans, which is a

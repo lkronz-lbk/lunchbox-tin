@@ -247,7 +247,7 @@ these block submission, and none need a decision now.
 - **Promo Codes**: the app now has in-app purchases, so codes (and subscription offer codes)
   would work. Not needed for launch; the beta testers' code is the website's.
 - **Game Center**, **Vietnam Game License**: not a game.
-- **Subscriptions**: one group, "Household", with `app.lunchsorted.household.yearly` and
+- **Subscriptions**: one group, "Household", with `app.lunchsorted.household.annual` and
   `app.lunchsorted.household.month`, auto-renewing. **In-App Purchases**: one non-consumable,
   `app.lunchsorted.household.forever`. Leave **Family Sharing** off on all three: the plan is
   already the household's, shared through the household, and a family-shared transaction
