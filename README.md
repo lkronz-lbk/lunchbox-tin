@@ -554,7 +554,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
   available after a plan ends, for the invoices.
 - **The App Store** is the iPhone app's way of paying, and its only one: StoreKit 2 through
-  a local plugin (`ios/App/App/StoreKitPlugin.swift`), with `app.lunchsorted.household.year`,
+  a local plugin (`ios/App/App/StoreKitPlugin.swift`), with `app.lunchsorted.household.yearly`,
   `.month` and `.forever`, at Apple's prices. Every purchase carries the household's
   `apple_account_token`, which Apple returns in every transaction and notification.
   **Link** (`POST /api/apple/link {signedTransaction}`, signed in, owner or adult) takes the

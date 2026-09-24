@@ -18,7 +18,7 @@ export const BUNDLE_ID = 'app.lunchsorted';
 
 /* the App Store products, which App Store Connect will not let us rename or reuse once made */
 export const PRODUCTS = {
-  'app.lunchsorted.household.year': 'household',
+  'app.lunchsorted.household.yearly': 'household',
   'app.lunchsorted.household.month': 'household',
   'app.lunchsorted.household.forever': 'lifetime'
 };

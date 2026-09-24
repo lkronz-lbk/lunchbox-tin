@@ -2414,7 +2414,7 @@ try {
   check('a forever purchase refunded in full is undone', (await ent()).plan === 'free' && (await ent()).status === 'canceled');
   /* one household, two ways to pay: Stripe's clock and Apple's cannot be compared, so a Stripe
      delivery late enough to pass the ordering check must still not undo a plan paid to Apple */
-  await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.year' WHERE household_id=${patState.household.id}`);
+  await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.yearly' WHERE household_id=${patState.household.id}`);
   const lateStripe = await hook(subEv('evt_apple_1', 'customer.subscription.deleted', t0 + 9.2, { status: 'canceled' }));
   check('a late Stripe delivery cannot undo a plan the household pays Apple for', lateStripe.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'apple' && (await ent()).status === 'active', await ent());
   await db.query(`UPDATE entitlements SET status='canceled' WHERE household_id=${patState.household.id}`);
@@ -2557,7 +2557,7 @@ try {
     let clock = Date.now();
     const next = () => (clock += 1000);
     const DAY = 86400000;
-    const txn = (o = {}) => Object.assign({ bundleId: 'app.lunchsorted', environment: 'Sandbox', productId: 'app.lunchsorted.household.year', originalTransactionId: '2000000000000100', transactionId: '2000000000000100', purchaseDate: clock, expiresDate: Date.now() + 365 * DAY, appAccountToken: token, type: 'Auto-Renewable Subscription', signedDate: next() }, o);
+    const txn = (o = {}) => Object.assign({ bundleId: 'app.lunchsorted', environment: 'Sandbox', productId: 'app.lunchsorted.household.yearly', originalTransactionId: '2000000000000100', transactionId: '2000000000000100', purchaseDate: clock, expiresDate: Date.now() + 365 * DAY, appAccountToken: token, type: 'Auto-Renewable Subscription', signedDate: next() }, o);
     const link = (t, signer) => pb.evaluate(b => fetch('/api/apple/link', { method: 'POST', headers: { 'content-type': 'application/json' }, body: b }).then(async r => ({ status: r.status, body: await r.json() })), JSON.stringify({ signedTransaction: jws(t, signer) }));
     const notify = async (type, t, renewal, o = {}) => {
       const n = Object.assign({ notificationType: type, notificationUUID: crypto.randomUUID(), signedDate: next(), data: { bundleId: 'app.lunchsorted', environment: 'Sandbox', signedTransactionInfo: t && jws(t), signedRenewalInfo: renewal && jws(Object.assign({ signedDate: clock, environment: 'Sandbox' }, renewal)) } }, o);
@@ -2570,7 +2570,7 @@ try {
     const rogue = await link(txn(), 'rogue');
     check('a purchase signed by any Apple developer\'s certificate, not the App Store\'s, is refused', rogue.status === 400 && (await row()).plan === 'free', rogue);
     const first = await link(txn());
-    check('a yearly purchase from the phone makes the household paid, through Apple', first.status === 200 && (await row()).plan === 'household' && (await row()).source === 'apple' && (await row()).status === 'active' && (await row()).otx === '2000000000000100' && (await row()).product === 'app.lunchsorted.household.year', [first, await row()]);
+    check('a yearly purchase from the phone makes the household paid, through Apple', first.status === 200 && (await row()).plan === 'household' && (await row()).source === 'apple' && (await row()).status === 'active' && (await row()).otx === '2000000000000100' && (await row()).product === 'app.lunchsorted.household.yearly', [first, await row()]);
     check('and the phone is told the new plan in the same answer', first.body.entitlement && first.body.entitlement.source === 'apple' && first.body.entitlement.plan === 'household', first.body);
     check('and telling us twice changes nothing', (await link(txn())).status === 200 && (await row()).status === 'active');
     const webBuy = await pb.evaluate(() => fetch('/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"plan":"year"}' }).then(async r => ({ status: r.status, body: await r.json() })));
@@ -2657,7 +2657,7 @@ try {
         Browser: { open: async () => {}, close: async () => {}, addListener: () => ({ remove() {} }) }, App: { addListener: () => ({ remove() {} }) } };
       if (hasStoreKit) P.StoreKit = {
         products: async () => ({ products: [
-          { id: 'app.lunchsorted.household.year', displayName: 'Household, yearly', displayPrice: '$34.99', kind: 'subscription', period: 'year' },
+          { id: 'app.lunchsorted.household.yearly', displayName: 'Household, yearly', displayPrice: '$34.99', kind: 'subscription', period: 'year' },
           { id: 'app.lunchsorted.household.month', displayName: 'Household, monthly', displayPrice: '$3.99', kind: 'subscription', period: 'month' },
           { id: 'app.lunchsorted.household.forever', displayName: 'Household, forever', displayPrice: '$89.99', kind: 'forever' }] }),
         purchase: async o => { window.__sk.purchases.push(o); return window.__sk.next || { status: 'cancelled' }; },
@@ -2693,10 +2693,10 @@ try {
     const bought = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000700' });
     await pn.evaluate(n => { window.__sk.next = n; }, { status: 'purchased', jws: jws(bought), transactionId: '2000000000000700', productId: bought.productId });
     const stripeBefore = stripeCalls.length;
-    await pn.click('#sheetBody [data-act="iap-buy"][data-product="app.lunchsorted.household.year"]');
+    await pn.click('#sheetBody [data-act="iap-buy"][data-product="app.lunchsorted.household.yearly"]');
     await until(pn, () => window.__sk.finished.length > 0);
     const skSeen = await pn.evaluate(() => window.__sk);
-    check('buying the yearly plan hands Apple the household\'s token, and the purchase is finished only once the server has it', skSeen.purchases.length === 1 && skSeen.purchases[0].id === 'app.lunchsorted.household.year' && skSeen.purchases[0].token === token && skSeen.finished[0] === '2000000000000700' && (await row()).source === 'apple' && (await row()).plan === 'household', [skSeen, await row()]);
+    check('buying the yearly plan hands Apple the household\'s token, and the purchase is finished only once the server has it', skSeen.purchases.length === 1 && skSeen.purchases[0].id === 'app.lunchsorted.household.yearly' && skSeen.purchases[0].token === token && skSeen.finished[0] === '2000000000000700' && (await row()).source === 'apple' && (await row()).plan === 'household', [skSeen, await row()]);
     check('and nothing was opened in a browser, and no Stripe checkout was made', skSeen.launched.length === 0 && stripeCalls.slice(stripeBefore).filter(c => c.path === '/v1/checkout/sessions').length === 0, stripeCalls.slice(stripeBefore).map(c => c.path));
     await until(pn, () => /Welcome to the Household plan/.test(document.querySelector('#toast').textContent));
     await openPane(pn, 'plan');
