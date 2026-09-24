@@ -504,8 +504,9 @@ writes the same one.
 ## Billing
 
 The plan is a row on the household (`entitlements`) that only a payment source writes:
-Stripe's webhook for a plan bought on the web, the App Store's server notifications for one
-bought in the iPhone app (App Store, below). Each platform sells it one way only, and a plan
+Stripe for a plan bought on the web, or a beta tester's code, and the App Store for one bought
+in the iPhone app, through Apple's server notifications or a purchase the phone passes on,
+signed by Apple (App Store, below). Each platform sells it one way only, and a plan
 paid on either side works on every phone and browser in the household.
 Free, for good, is one lunchbox, the week's plan, the shopping list, the pack list, and the
 built-in idea bank to build the food list from. The **Household** plan (yearly, or once

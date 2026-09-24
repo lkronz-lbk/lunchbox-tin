@@ -230,7 +230,7 @@ the free tier with the plan's pieces locked, which is also fine.
 >
 > Offline: the app works without a network once opened once; airplane mode shows the same week.
 >
-> The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, in-app purchase (StoreKit 2), the browser hand-off for a plan bought on the web, and the URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
+> The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, in-app purchase (StoreKit 2), and the URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
 
 ## Everything else in that sidebar: leave it alone
 
