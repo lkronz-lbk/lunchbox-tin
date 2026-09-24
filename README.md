@@ -527,12 +527,11 @@ the idea bank stays free so a free list is never stuck with what it has.
 
 - **Checkout** (`POST /api/billing/checkout {plan, client?}`) opens Stripe's hosted page for the
   signed-in household (owner or adult; a caretaker cannot buy). The session carries the
-  household id, comes back to `/app/?paid=1` or `/app/?paid=0` (to `/back.html?paid=…` when
-  `client` is `ios`: the iPhone app opens Stripe in the phone's own browser, outside the app, and that page hands the parent
-  back to the app through the `lunchsorted://` scheme), allows promotion codes,
+  household id, comes back to `/app/?paid=1` or `/app/?paid=0`, allows promotion codes,
   and asks Stripe Tax to add tax where it applies (if Tax is not finished in the
   dashboard the session is retried without it and the error logged). A household that
-  already has the plan is not sold it again (409).
+  already has the plan is not sold it again (409), nor is one paying through the App Store,
+  which is told where it is managed. The web only: the iPhone app never opens a checkout.
 - **Webhook** (`POST /api/billing/webhook`, signature checked against the raw body, five
   minutes of clock drift, and the event's `livemode` must match the deploy context) listens
   for `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
@@ -552,6 +551,23 @@ the idea bank stays free so a free list is never stuck with what it has.
   the iPhone app). It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
   available after a plan ends, for the invoices.
+- **The App Store** is the iPhone app's way of paying, and its only one: StoreKit 2 through
+  a local plugin (`ios/App/App/StoreKitPlugin.swift`), with `app.lunchsorted.household.year`,
+  `.month` and `.forever`, at Apple's prices. Every purchase carries the household's
+  `apple_account_token`, which Apple returns in every transaction and notification.
+  **Link** (`POST /api/apple/link {signedTransaction}`, signed in, owner or adult) takes the
+  transaction the phone has just bought or restored; **notify** (`POST /api/apple/notify`,
+  App Store Server Notifications v2) takes renewals, lapses, grace periods and refunds after.
+  Nothing either sends is believed until `netlify/lib/apple.js` has checked it against Apple's
+  root, pinned by fingerprint, with node:crypto and no library, check for check with Apple's
+  own reference, the receipt-signing mark on the leaf most of all. Sandbox purchases are taken
+  in production, because App Review and TestFlight buy there. The row is written by
+  `writeApple()` in `lib/entitlement.js` on Apple's own clock; it never overwrites a plan the
+  web holds live, as Stripe's writer never overwrites one Apple holds. A purchase is bound to
+  one household for good. Forever is never lowered by a subscription running on beside it,
+  since Apple cannot cancel one for us, and a lapse or refund of some other purchase cannot
+  end the one being paid for now. The phone finishes a transaction only once the server has
+  answered, so one lost on the way is offered again at the next launch.
 - **In the app**, the Account tab carries a **Subscription** row whose caption is the same
   one-line state (Free, On for N more days, Renews DATE, Ends DATE, Payment failed, Forever,
   Switching on…). The page behind it names the plan, what it costs — matched from the price

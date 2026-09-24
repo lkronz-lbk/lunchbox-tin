@@ -223,13 +223,13 @@ the free tier with the plan's pieces locked, which is also fine.
 >
 > How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle the week or one day; tap a compartment (the swap arrow) to change it. Shop: the list is what to buy, by aisle; the share button sends it to Notes or Reminders. Pack: one Packed check per box; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the gear beside the lunchbox name). The gear beside the lunchbox name: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
 >
-> Payments: the Household plan is sold on our website (lunchsorted.app) and not in the app. The app does not use in-app purchase. Where the app mentions the plan, it leaves the app and opens the phone's own default browser at Stripe's checkout page for our website, lunchsorted.app; nothing is bought inside the app, and it uses no StoreKit product. When Stripe is done it sends the parent to a page on our site that hands them back to the app. The review account is inside its free three weeks, so everything is on. This is a US-only listing.
+> Payments: in the iPhone app the Household plan is sold only through in-app purchase: an auto-renewing subscription, yearly or monthly, in the group "Household", or a one-time non-consumable ("forever"). Account tab → Subscription → "Keep the Household plan" (or "Get the Household plan") opens the sheet with all three at the App Store's prices, and Restore purchases, Terms of use and Privacy beside them. A parent on a computer or an Android phone can buy the same plan on our website instead, through Stripe; the iPhone app honours a plan bought there, under guideline 3.1.3(b), because the same plan is available in the app as an in-app purchase. The iPhone app never offers a web checkout. The review account is inside its free three weeks, so everything is on, and the purchase sheet is still reachable from Subscription; purchases in review go through the sandbox. This is a US-only listing.
 >
 > Recipes: two recipes are built in, from the USDA's Recipes for Healthy Kids cookbook (Food and Nutrition Administration, fna.usda.gov). They are US government works in the public domain; each is shown with a source line and a link to the original. Everything else on the Recipes tab is imported by the parent from a page or text they chose, stored on their own household and not published by us. Recipes tab → Import a recipe, if you want to see that path.
 >
 > Offline: the app works without a network once opened once; airplane mode shows the same week.
 >
-> The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, browser hand-off and URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
+> The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, in-app purchase (StoreKit 2), the browser hand-off for a plan bought on the web, and the URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
 
 ## Everything else in that sidebar: leave it alone
 
@@ -246,12 +246,14 @@ these block submission, and none need a decision now.
 - **Promo Codes**: unlocks paid downloads and in-app purchases. The app is free and has
   neither, so a code would do nothing.
 - **Game Center**, **Vietnam Game License**: not a game.
-- **In-App Purchases** and **Subscriptions**: deliberately empty, and they stay empty. The
-  Household plan is a row on the household that Stripe flips. Adding a StoreKit product to
-  "look normal" would break the product rule and hand Apple a cut of a web subscription.
-- **App Store Server Notifications** and the **App-Specific Shared Secret**: both exist to
-  tell a server about in-app purchase events. With no in-app purchases they have nothing to
-  report. Leave both unset.
+- **Subscriptions**: one group, "Household", with `app.lunchsorted.household.year` and
+  `app.lunchsorted.household.month`, auto-renewing. **In-App Purchases**: one non-consumable,
+  `app.lunchsorted.household.forever`. Leave **Family Sharing** off on all three: the plan is
+  already the household's, shared through the household, and a family-shared transaction
+  would arrive without the household's token. Product ids can never be reused, even deleted.
+- **App Store Server Notifications**: Version 2, production and sandbox both
+  `https://lunchsorted.app/api/apple/notify`. The **App-Specific Shared Secret** is for the
+  old receipt API and stays unset.
 - **Regulated Medical Devices**: required for the Medical or Health and Fitness categories,
   or if the age rating says medical information is frequent. This app is Food & Drink and
   answered None. It does not apply. Keep it that way: allergens in this app are a filter a

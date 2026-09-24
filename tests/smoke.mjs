@@ -2625,6 +2625,83 @@ try {
     const twice = await link(txn({ originalTransactionId: '2000000000000600', transactionId: '2000000000000600' }));
     check('an App Store purchase cannot take over a plan being paid on the website', twice.status === 409 && twice.body.paying === true && (await row()).source === 'stripe', [twice, await row()]);
 
+    /* ---- the iPhone app's plan sheet, on a phone with StoreKit (stubbed) and the real server behind it */
+    const fresh = () => db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL, cancel_at_period_end = false, apple_original_transaction_id = NULL, apple_product_id = NULL, apple_event_at = NULL WHERE household_id = ${hid}`);
+    await fresh();
+    const stub = (hasStoreKit) => {
+      window.__sk = { purchases: [], finished: [], managed: 0, launched: [], listeners: {}, next: null };
+      const P = { AppLauncher: { openUrl: async o => { window.__sk.launched.push(o.url); return { completed: true }; } },
+        Browser: { open: async () => {}, close: async () => {}, addListener: () => ({ remove() {} }) }, App: { addListener: () => ({ remove() {} }) } };
+      if (hasStoreKit) P.StoreKit = {
+        products: async () => ({ products: [
+          { id: 'app.lunchsorted.household.year', displayName: 'Household, yearly', displayPrice: '$34.99', kind: 'subscription', period: 'year' },
+          { id: 'app.lunchsorted.household.month', displayName: 'Household, monthly', displayPrice: '$3.99', kind: 'subscription', period: 'month' },
+          { id: 'app.lunchsorted.household.forever', displayName: 'Household, forever', displayPrice: '$89.99', kind: 'forever' }] }),
+        purchase: async o => { window.__sk.purchases.push(o); return window.__sk.next || { status: 'cancelled' }; },
+        restore: async () => ({ transactions: [] }),
+        finish: async o => { window.__sk.finished.push(o.transactionId); return { finished: true }; },
+        manage: async () => { window.__sk.managed++; },
+        addListener: (ev, fn) => { window.__sk.listeners[ev] = fn; return { remove() {} }; } };
+      window.Capacitor = { isNativePlatform: () => true, Plugins: P };
+    };
+    const saved = await pb.evaluate(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return o; });
+    const iphone = async (hasStoreKit) => {
+      const c = await browser.newContext({ viewport: { width: 375, height: 812 }, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LunchSortedApp/1' });
+      await pinClock(c); await c.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort());
+      await c.addCookies(await pb.context().cookies());
+      await c.addInitScript(o => { if (!sessionStorage.getItem('seeded')) { for (const k in o) localStorage.setItem(k, o[k]); sessionStorage.setItem('seeded', '1'); } }, saved);
+      await c.addInitScript(stub, hasStoreKit);
+      const pg = await c.newPage(); pg.on('pageerror', e => errors.push(String(e.message)));
+      await pg.goto(BASE + '/app/'); await pg.waitForLoadState('load');
+      return { c, pg };
+    };
+    const openPlanSheet = async pg => {
+      await openPane(pg, 'plan');
+      await until(pg, () => !!document.querySelector('#view [data-act="upgrade"]'));
+      await pg.click('#view [data-act="upgrade"]');
+      await until(pg, () => /Household plan/.test(document.querySelector('#sheetTitle').textContent));
+    };
+    const { c: ctxN, pg: pn } = await iphone(true);
+    await openPlanSheet(pn);
+    await until(pn, () => document.querySelectorAll('#sheetBody [data-act="iap-buy"]').length === 3);
+    const sheet = await pn.textContent('#sheetBody');
+    check('on the iPhone the plan sheet sells through the App Store, at Apple\'s own prices, with no Stripe button', /\$34\.99 a year/.test(sheet) && /\$3\.99 a month/.test(sheet) && /\$89\.99, once, forever/.test(sheet) && !/\$29/.test(sheet) && (await pn.$$eval('#sheetBody [data-act="buy"]', a => a.length)) === 0, sheet.replace(/\s+/g, ' ').slice(0, 300));
+    check('and it offers Restore purchases, Terms of use and Privacy, and promises no refund Apple would have to give', (await pn.$$eval('#sheetBody [data-act="iap-restore"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/terms.html"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/privacy.html"]', a => a.length)) === 1 && !/14 days/.test(sheet) && /Apple’s to give/.test(sheet));
+    const bought = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000700' });
+    await pn.evaluate(n => { window.__sk.next = n; }, { status: 'purchased', jws: jws(bought), transactionId: '2000000000000700', productId: bought.productId });
+    const stripeBefore = stripeCalls.length;
+    await pn.click('#sheetBody [data-act="iap-buy"][data-product="app.lunchsorted.household.year"]');
+    await until(pn, () => window.__sk.finished.length > 0);
+    const skSeen = await pn.evaluate(() => window.__sk);
+    check('buying the yearly plan hands Apple the household\'s token, and the purchase is finished only once the server has it', skSeen.purchases.length === 1 && skSeen.purchases[0].id === 'app.lunchsorted.household.year' && skSeen.purchases[0].token === token && skSeen.finished[0] === '2000000000000700' && (await row()).source === 'apple' && (await row()).plan === 'household', [skSeen, await row()]);
+    check('and nothing was opened in a browser, and no Stripe checkout was made', skSeen.launched.length === 0 && stripeCalls.slice(stripeBefore).filter(c => c.path === '/v1/checkout/sessions').length === 0, stripeCalls.slice(stripeBefore).map(c => c.path));
+    await until(pn, () => /Welcome to the Household plan/.test(document.querySelector('#toast').textContent));
+    await openPane(pn, 'plan');
+    await until(pn, () => !!document.querySelector('#view [data-act="iap-manage"]'));
+    const paneN = await pn.textContent('#view');
+    check('Subscription on the iPhone then offers Manage in the App Store, not Manage billing, and names no website price', (await pn.$$eval('#view [data-act="portal"]', a => a.length)) === 0 && !/\$29/.test(paneN) && /Manage in the App Store/.test(paneN), paneN.replace(/\s+/g, ' ').slice(0, 300));
+    await pn.click('#view [data-act="iap-manage"]'); await until(pn, () => window.__sk.managed === 1);
+    check('and Manage in the App Store opens Apple\'s own subscription sheet', (await pn.evaluate(() => window.__sk.managed)) === 1);
+    const renewed = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000701', expiresDate: Date.now() + 700 * DAY });
+    await pn.evaluate(t => window.__sk.listeners.transaction(t), { jws: jws(renewed), transactionId: '2000000000000701', productId: renewed.productId });
+    await until(pn, () => window.__sk.finished.includes('2000000000000701'));
+    check('a purchase StoreKit hands over by itself, a renewal or an Ask to Buy approved later, goes to the server and is finished', new Date((await row()).pe).getTime() > Date.now() + 600 * DAY, await row());
+    await ctxN.close();
+
+    /* a household the website bills is not sold the plan again on the iPhone */
+    await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', apple_original_transaction_id = NULL, apple_product_id = NULL WHERE household_id = ${hid}`);
+    const { c: ctxW, pg: pw } = await iphone(true);
+    await openPane(pw, 'plan'); await until(pw, () => /Household/.test(document.querySelector('#view').textContent));
+    check('a household paying on the website sees no App Store purchase on the iPhone, only Manage billing', (await pw.$$eval('[data-act="iap-buy"], [data-act="upgrade"][data-why="forever"]', a => a.length)) === 0 && (await pw.$$eval('#view [data-act="portal"]', a => a.length)) === 1);
+    await ctxW.close();
+
+    /* the iPhone app built before StoreKit still loads this page: it must sell nothing at all */
+    await fresh();
+    const { c: ctxO, pg: po } = await iphone(false);
+    await openPlanSheet(po);
+    const oldSheet = await po.textContent('#sheetBody');
+    check('an iPhone app from before the App Store plugin is told to update, and offers no way to pay', /Update Lunch Sorted/.test(oldSheet) && (await po.$$eval('#sheetBody [data-act="buy"], #sheetBody [data-act="iap-buy"]', a => a.length)) === 0, oldSheet.replace(/\s+/g, ' ').slice(0, 200));
+    await ctxO.close();
     delete globalThis.__LS_APPLE_ROOT;
     await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL, cancel_at_period_end = false, apple_original_transaction_id = NULL, apple_product_id = NULL, apple_event_at = NULL WHERE household_id = ${hid}`);
   }
