@@ -2272,9 +2272,9 @@ try {
   check('checkout is opened on the server, for this household, on Stripe\'s page', ownerCheckout.url === 'https://checkout.stripe.com/c/pay/cs_test_1' &&
     stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params.client_reference_id === String(patState.household.id) && c.params.mode === 'subscription' && c.params['line_items[0][price]'] === 'price_year' && c.params.customer_email === 'pat@example.com' && /\/app\/\?paid=1$/.test(c.params.success_url) && c.params['automatic_tax[enabled]'] === 'true' && c.auth === 'Bearer sk_test_stub'), stripeCalls.slice(-1));
   /* the iPhone app: Stripe opens in Safari and comes back through a page that hands off to the app */
-  const iosCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year","client":"ios"}'}).then(r => r.json()));
-  const iosCall = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop();
-  check('from the iPhone app, Stripe sends the parent back through the hand-off page', !!iosCheckout.url && iosCall && /\/back\.html\?paid=1$/.test(iosCall.params.success_url) && /\/back\.html\?paid=0$/.test(iosCall.params.cancel_url), iosCall && iosCall.params);
+  const sessionsBefore = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length;
+  const iosCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year","client":"ios"}'}).then(async r => ({ status: r.status, body: await r.json() })));
+  check('a checkout asked for from the iPhone app is refused, since it sells through the App Store, and Stripe is never asked', iosCheckout.status === 403 && iosCheckout.body.appStore === true && stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length === sessionsBefore, iosCheckout);
   const backPage = await pb.evaluate(() => fetch('/back.html?paid=1').then(r => r.text().then(t => ({status: r.status, csp: r.headers.get('content-security-policy'), text: t}))));
   check('and that page carries the result into the app under its own policy', backPage.status === 200 && /lunchsorted:\/\/back/.test(backPage.text) && /default-src 'none'/.test(backPage.csp) && /sha256-/.test(backPage.csp) && !/http-equiv="refresh"/.test(backPage.text));
   {
@@ -2575,8 +2575,25 @@ try {
     check('and telling us twice changes nothing', (await link(txn())).status === 200 && (await row()).status === 'active');
     const webBuy = await pb.evaluate(() => fetch('/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"plan":"year"}' }).then(async r => ({ status: r.status, body: await r.json() })));
     check('the website will not sell the plan again to a household paying Apple, and says where it is managed', webBuy.status === 409 && webBuy.body.apple === true && /App Store/.test(webBuy.body.error), webBuy);
-    const someoneElse = await link(txn({ appAccountToken: crypto.randomUUID() }));
+    const [otherHh] = (await db.query(`SELECT apple_account_token::text AS t FROM entitlements WHERE household_id <> ${hid} LIMIT 1`)).rows;
+    const someoneElse = await link(txn({ appAccountToken: otherHh.t }));
     check('a purchase made for another household is not taken by this one', someoneElse.status === 409 && someoneElse.body.elsewhere === true, someoneElse);
+    const orphan = await link(txn({ appAccountToken: crypto.randomUUID() }));
+    check('but one made for a household since deleted can be restored into this one', orphan.status === 200 && (await row()).source === 'apple', orphan);
+    check('and a purchase through Apple never makes anyone the payer of the household\'s Stripe billing', (await db.query(`SELECT paid_by FROM entitlements WHERE household_id = ${hid}`)).rows[0].paid_by === null);
+    const shared = await link(txn({ inAppOwnershipType: 'FAMILY_SHARED', appAccountToken: undefined, originalTransactionId: '2000000000000800', transactionId: '2000000000000800' }));
+    check('a purchase shared through Family Sharing is not taken, since the plan is shared through the household', shared.status === 409 && shared.body.notHere === true, shared);
+    const tokenless = await link(txn({ appAccountToken: undefined, originalTransactionId: '2000000000000810', transactionId: '2000000000000810' }));
+    check('nor is one that carries no household at all', tokenless.status === 409 && tokenless.body.notHere === true, tokenless);
+    const lost = txn({ productId: 'app.lunchsorted.household.forever', originalTransactionId: '2000000000000820', transactionId: '2000000000000820', type: 'Non-Consumable', expiresDate: undefined, appAccountToken: crypto.randomUUID() });
+    await notify('REFUND', Object.assign({}, lost, { revocationDate: Date.now(), signedDate: next() }), null);
+    const relinked = await link(Object.assign({}, lost, { appAccountToken: token }));
+    check('a purchase Apple has refunded cannot be linked afterwards, even from before the refund and with no household to hold the refund', relinked.status === 409 && relinked.body.notHere === true && (await row()).otx !== '2000000000000820', relinked);
+    const t1 = Date.now();
+    const bomb = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: Buffer.from(JSON.stringify({ alg: 'ES256', x5c: [{ length: 5e8 }, {}, {}] })).toString('base64url') + '.' + Buffer.from('{"signedDate":1}').toString('base64url') + '.x' }) });
+    check('a notification whose certificates are not text is refused at once, before anything is built from them', bomb.status === 400 && Date.now() - t1 < 2000, [bomb.status, Date.now() - t1]);
+    const summary = await notify('RENEWAL_EXTENSION', null, null, { data: undefined, summary: { bundleId: 'app.lunchsorted' } });
+    check('a summary notification, which carries no purchase, is acknowledged rather than refused', summary.status === 200 && summary.body.ignored === true, summary);
 
     const off = await notify('DID_CHANGE_RENEWAL_STATUS', txn(), { originalTransactionId: '2000000000000100', autoRenewStatus: 0 }, { subtype: 'AUTO_RENEW_DISABLED' });
     check('switching off renewal in iOS Settings reaches the row as ending at the period end', off.status === 200 && (await row()).cape === true && (await row()).status === 'active', [off, await row()]);
@@ -2596,6 +2613,8 @@ try {
 
     const forever = await link(txn({ productId: 'app.lunchsorted.household.forever', originalTransactionId: '2000000000000200', transactionId: '2000000000000200', type: 'Non-Consumable', expiresDate: undefined }));
     check('buying forever through Apple makes it forever', forever.status === 200 && (await row()).plan === 'lifetime' && (await row()).otx === '2000000000000200', await row());
+    const sandboxEnd = new Date((await row()).pe).getTime() - Date.now();
+    check('though forever bought in the sandbox, as a reviewer or a tester does for free, lasts a day and then lapses', sandboxEnd > 20 * 3600000 && sandboxEnd < 26 * 3600000, (await row()).pe);
     await notify('DID_RENEW', txn({ expiresDate: Date.now() + 365 * DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 1 });
     await notify('EXPIRED', txn({ expiresDate: Date.now() - DAY }), null);
     check('and the yearly one it replaced, which Apple lets run until it is cancelled in Settings, cannot lower it', (await row()).plan === 'lifetime' && (await row()).status === 'active', await row());
@@ -2608,7 +2627,7 @@ try {
 
     const [other] = (await db.query(`SELECT household_id FROM entitlements WHERE household_id <> ${hid} LIMIT 1`)).rows;
     await db.query(`UPDATE entitlements SET apple_original_transaction_id = '2000000000000400' WHERE household_id = ${other.household_id}`);
-    const taken = await link(txn({ originalTransactionId: '2000000000000400', transactionId: '2000000000000400', appAccountToken: undefined }));
+    const taken = await link(txn({ originalTransactionId: '2000000000000400', transactionId: '2000000000000400' }));   /* this household's own token: only the binding can refuse it */
     check('a purchase already bound to another household cannot be restored into this one', taken.status === 409 && taken.body.elsewhere === true && (await row()).otx === '2000000000000300', [taken, await row()]);
     await db.query(`UPDATE entitlements SET apple_original_transaction_id = NULL WHERE household_id = ${other.household_id}`);
     const nobody = await notify('SUBSCRIBED', txn({ originalTransactionId: '2000000000000500', transactionId: '2000000000000500', appAccountToken: crypto.randomUUID() }), null);
@@ -2620,6 +2639,10 @@ try {
     const forged = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: jws({ notificationType: 'SUBSCRIBED', notificationUUID: crypto.randomUUID(), signedDate: next(), data: { bundleId: 'app.lunchsorted', environment: 'Sandbox', signedTransactionInfo: jws(txn(), 'rogue') } }) }) });
     check('a notification carrying a purchase signed by the wrong certificate is refused', forged.status === 400);
 
+    /* an App Store plan whose end has long passed, with no word from Apple, no longer holds the row */
+    await db.query(`UPDATE entitlements SET plan = 'household', source = 'apple', status = 'active', current_period_end = now() - interval '5 days', stripe_subscription_id = NULL WHERE household_id = ${hid}`);
+    await hook(subEv('evt_after_apple_lapse', 'customer.subscription.updated', Math.floor(Date.now() / 1000) + 50, { status: 'active' }));
+    check('an App Store plan days past its end with no word from Apple is over: the website can sell the plan again', (await row()).source === 'stripe' && (await row()).status === 'active', await row());
     /* a household paying on the website is not sold the plan again by the phone */
     await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', apple_original_transaction_id = NULL, apple_product_id = NULL WHERE household_id = ${hid}`);
     const twice = await link(txn({ originalTransactionId: '2000000000000600', transactionId: '2000000000000600' }));
@@ -2666,7 +2689,7 @@ try {
     await until(pn, () => document.querySelectorAll('#sheetBody [data-act="iap-buy"]').length === 3);
     const sheet = await pn.textContent('#sheetBody');
     check('on the iPhone the plan sheet sells through the App Store, at Apple\'s own prices, with no Stripe button', /\$34\.99 a year/.test(sheet) && /\$3\.99 a month/.test(sheet) && /\$89\.99, once, forever/.test(sheet) && !/\$29/.test(sheet) && (await pn.$$eval('#sheetBody [data-act="buy"]', a => a.length)) === 0, sheet.replace(/\s+/g, ' ').slice(0, 300));
-    check('and it offers Restore purchases, Terms of use and Privacy, and promises no refund Apple would have to give', (await pn.$$eval('#sheetBody [data-act="iap-restore"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/terms.html"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/privacy.html"]', a => a.length)) === 1 && !/14 days/.test(sheet) && /Apple’s to give/.test(sheet));
+    check('and it offers Restore purchases, Terms of use and Privacy, says the plans renew, and promises no refund Apple would have to give', (await pn.$$eval('#sheetBody [data-act="iap-restore"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/terms.html"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/privacy.html"]', a => a.length)) === 1 && !/14 days/.test(sheet) && /renew until you cancel/.test(sheet) && /Apple Account/.test(sheet));
     const bought = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000700' });
     await pn.evaluate(n => { window.__sk.next = n; }, { status: 'purchased', jws: jws(bought), transactionId: '2000000000000700', productId: bought.productId });
     const stripeBefore = stripeCalls.length;
@@ -2692,7 +2715,7 @@ try {
     await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', apple_original_transaction_id = NULL, apple_product_id = NULL WHERE household_id = ${hid}`);
     const { c: ctxW, pg: pw } = await iphone(true);
     await openPane(pw, 'plan'); await until(pw, () => /Household/.test(document.querySelector('#view').textContent));
-    check('a household paying on the website sees no App Store purchase on the iPhone, only Manage billing', (await pw.$$eval('[data-act="iap-buy"], [data-act="upgrade"][data-why="forever"]', a => a.length)) === 0 && (await pw.$$eval('#view [data-act="portal"]', a => a.length)) === 1);
+    check('a household paying on the website is sold nothing on the iPhone, and the app does not open Stripe even to manage it', (await pw.$$eval('[data-act="iap-buy"], [data-act="upgrade"][data-why="forever"], [data-act="portal"]', a => a.length)) === 0 && /at lunchsorted\.app/.test(await pw.textContent('#view')), (await pw.textContent('#view')).replace(/\s+/g, ' ').slice(0, 300));
     await ctxW.close();
 
     /* the iPhone app built before StoreKit still loads this page: it must sell nothing at all */
@@ -2716,8 +2739,8 @@ try {
   await ph.goto(await ph.getAttribute('[data-dev-link]', 'href')); await ph.click('button[type="submit"]'); await ph.waitForURL(/\/app\//); await ph.waitForLoadState('load');
   await until(ph, () => !!document.querySelector('[data-act="join-accept"]')); await ph.click('[data-act="join-accept"]');
   await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
-  const helperBuy = await ph.evaluate(() => Promise.all([fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status), fetch('/api/billing/portal', {method:'POST'}).then(r => r.status)]));
-  check('a caretaker can neither buy nor manage billing, and sees no plan line', helperBuy[0] === 403 && helperBuy[1] === 403 && !/Household plan/.test(await ph.textContent('#view')), helperBuy);
+  const helperBuy = await ph.evaluate(() => Promise.all([fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status), fetch('/api/billing/portal', {method:'POST'}).then(r => r.status), fetch('/api/apple/link', {method:'POST', headers:{'content-type':'application/json'}, body:'{"signedTransaction":"x"}'}).then(r => r.status)]));
+  check('a caretaker can neither buy nor manage billing, on the website or through the App Store, and sees no plan line', helperBuy[0] === 403 && helperBuy[1] === 403 && helperBuy[2] === 403 && !/Household plan/.test(await ph.textContent('#view')), helperBuy);
   /* and is not sent what the household pays in the first place */
   const sitterEnt = await ph.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => j.entitlement));
   check('and the server never hands a caretaker the household\'s plan, price or renewal date',
@@ -2767,7 +2790,7 @@ try {
   /* deleting the account stops the money */
   stripeCalls.length = 0;
   await openPane(pb, 'account');
-  check('the delete warning says the yearly plan stops', /The yearly plan, which stops at once/.test(await pb.textContent('#view')),
+  check('the delete warning says the plan stops', /The plan, which stops at once/.test(await pb.textContent('#view')),
     (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 240));
   await pb.fill('#deleteConfirm', 'DELETE'); await pb.waitForSelector('[data-act="delete-account"]:not([disabled])');
   await pb.click('[data-act="delete-account"]');

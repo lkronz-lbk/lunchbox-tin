@@ -37,6 +37,14 @@ export const envOk = (e) => e === 'Production' || e === 'Sandbox';
 
 const pinnedRoot = () => globalThis.__LS_APPLE_ROOT || APPLE_ROOT_G3;
 
+/* An App Store plan is over once its end date has passed by more than this, whether or not Apple's
+   notification about it arrived. A missed notification must neither leave a plan on for good nor
+   stop the website ever selling the household the plan. The slack covers a late renewal notice. */
+export const LAPSE_SLACK_MS = 3 * 86400000;
+export const lapsed = (periodEnd, now = Date.now()) => !!periodEnd && new Date(periodEnd).getTime() + LAPSE_SLACK_MS < now;
+/* a row the App Store holds live: paid, and not past its end */
+export const appleLive = (row, now) => !!row && row.source === 'apple' && (row.status === 'active' || row.status === 'past_due') && !lapsed(row.current_period_end, now);
+
 /* just enough DER to list a certificate's extension OIDs; Node checks the certificate's shape when
    it parses it, and anything unexpected here reads as no extensions, which fails the check */
 function tlv(buf, pos) {
@@ -69,6 +77,9 @@ const inDate = (x, at) => new Date(x.validFrom).getTime() <= at && at <= new Dat
 /* leaf, intermediate, root as they arrive in x5c; returns the leaf when the chain is Apple's */
 export function verifyChain(certs, at) {
   if (!Array.isArray(certs) || certs.length !== 3) throw new Error('chain length');
+  /* before anything is decoded: a value that is not a short string could make Buffer.from build an
+     array of any length the sender chose, on an endpoint anyone can reach */
+  if (!certs.every(c => c instanceof crypto.X509Certificate || (typeof c === 'string' && c.length <= 8192))) throw new Error('certificate');
   const [leaf, intermediate, root] = certs.map(c => c instanceof crypto.X509Certificate ? c : new crypto.X509Certificate(Buffer.from(c, 'base64')));
   if (root.fingerprint256 !== pinnedRoot()) throw new Error('not Apple\'s root');
   if (!(intermediate.issuer === root.subject && intermediate.verify(root.publicKey) && intermediate.ca)) throw new Error('intermediate');
@@ -105,7 +116,9 @@ export function stateOf(txn, renewal, now = Date.now()) {
   const plan = PRODUCTS[txn && txn.productId];
   if (!plan) return null;
   if (txn.revocationDate) return { plan: 'free', source: 'none', status: 'canceled', periodEnd: null, cancelAtPeriodEnd: false };
-  if (plan === 'lifetime') return { plan: 'lifetime', source: 'apple', status: 'active', periodEnd: null, cancelAtPeriodEnd: false };
+  /* forever bought in the sandbox, by a reviewer or a TestFlight tester who paid nothing, lasts a day
+     and then lapses like any App Store plan; bought for real it has no end */
+  if (plan === 'lifetime') return { plan: 'lifetime', source: 'apple', status: 'active', periodEnd: txn.environment === 'Sandbox' ? iso(Number(txn.purchaseDate || txn.signedDate) + 86400000) : null, cancelAtPeriodEnd: false };
   const cancelAtPeriodEnd = renewal ? renewal.autoRenewStatus === 0 : null;
   const expires = Number(txn.expiresDate) || 0;
   const grace = (renewal && Number(renewal.gracePeriodExpiresDate)) || 0;

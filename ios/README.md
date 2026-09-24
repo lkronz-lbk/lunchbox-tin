@@ -20,13 +20,14 @@ What the shell adds, and where:
   page Apple's signed transaction, and the page sends it to `/api/apple/link`; the
   transaction is finished only once the server has it. The products are
   `app.lunchsorted.household.year`, `.month` and `.forever` (non-consumable).
-- **Stripe, for a plan bought on the web.** A household paying on the website opens
-  Manage billing from the phone in the phone's own default browser
-  (`AppLauncher.openUrl`), never an in-app browser view: `@capacitor/browser` is an
-  SFSafariViewController, and a purchase or a billing page inside it is inside the
-  app, which is what 3.1.1 rejected 1.0 (4) for. The iPhone app never offers a
-  Stripe checkout. `/back.html` hands back through the `lunchsorted://` scheme.
-  The `Browser` plugin stays, for the help and recipe pages only.
+- **Stripe, never.** The iPhone app does not open Stripe, to buy or to manage: a
+  household paying on the website is told to change it at lunchsorted.app, and the
+  address is named, not linked, because Stripe's portal can switch plans, which is a
+  purchase. (1.0 (4) was rejected for Stripe in an in-app browser view; 1.0 (5) for
+  honouring it with no in-app purchase.) `AppLauncher`, `/back.html` and the
+  `appStateChange` return path are left over from that and unused by the page; take
+  them out with the next native change. The `Browser` plugin stays, for the help and
+  recipe pages only.
 - **Icon and launch screen.** `App/App/Assets.xcassets`: the 1024 icon from
   `public/icons`, and a light and a dark launch image on the app's ground colours.
 - **The room the clock needs.** `contentInset: never` keeps the web view full height, which

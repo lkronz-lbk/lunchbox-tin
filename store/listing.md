@@ -55,8 +55,8 @@ the enrolment, so settle it before launch.
 ## Pricing and Availability
 
 - [x] Price: Free
-- [x] Availability: United States only. Linking out to Stripe is what the US storefront
-      permits, and the product rule depends on it.
+- [x] Availability: United States only for now. The in-app purchases work in any storefront;
+      before expanding, set the price in each and file the EU Digital Services Act declaration.
 - [ ] Pre-orders: leave off. Pre-order needs App Review approval first and then a delayed
       release date, which trades launch speed for launch-day volume. Approval day should be
       release day.
@@ -108,7 +108,7 @@ the enrolment, so settle it before launch.
 >
 > FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, with two kid-tested recipes to cook from, take out the ones they refuse, and set your school's rules.
 >
-> THE PAID HOUSEHOLD PLAN: Add your own foods or bring in a recipe from anywhere, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. The plan is bought on our website, not in this app.
+> THE PAID HOUSEHOLD PLAN: Add your own foods or bring in a recipe from anywhere, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. In this app the plan is an in-app purchase: yearly, monthly, or once, forever, at the price the App Store shows. The yearly and monthly plans renew automatically until you cancel them in your Apple Account's subscriptions. Terms of use: https://lunchsorted.app/terms.html · Privacy: https://lunchsorted.app/privacy.html
 >
 > Made by a mom who no longer dreads packing lunches. hello@lunchsorted.app
 
@@ -159,13 +159,14 @@ Answer **Yes, we collect data from this app**, then:
 | Contact Info → Email Address | Yes | Yes | No | App Functionality (sign-in, household sharing, the trial and renewal emails) |
 | User Content → Other User Content | Yes (the household: lunchbox names, foods, rules, plans) | Yes | No | App Functionality |
 | Identifiers → User ID | Yes (the account id) | Yes | No | App Functionality |
-| Purchases → Purchase History | Yes (which plan the household has; Stripe holds the card) | Yes | No | App Functionality |
+| Purchases → Purchase History | Yes (which plan the household has, and the Stripe or App Store reference for it; Stripe and Apple hold the payment) | Yes | No | App Functionality |
 | Everything else (location, contacts, health, browsing, diagnostics, usage data, advertising data) | No | | | |
 
 Notes that back the answers: there are no analytics or advertising SDKs in the app and no
 third-party cookies; the site's analytics are on the marketing pages only and never inside
-`/app/`; the only network calls are to lunchsorted.app; Stripe runs on its own page in the
-phone's browser, outside the app. Diagnostics stays **No**: there is no crash or performance reporting of any kind,
+`/app/`; the only network calls are to lunchsorted.app; purchases in the app go through
+StoreKit and Apple takes the payment; Stripe opens in the phone's browser only for a household
+already paying on the website (Manage billing). Diagnostics stays **No**: there is no crash or performance reporting of any kind,
 and Apple's own crash logs are collected by Apple, not by the app, so they need no
 declaring. Usage Data stays **No** on the same footing: the servers keep the day a person
 last used the app and a count of the days they have used it, both of which run the service
@@ -243,8 +244,8 @@ these block submission, and none need a decision now.
 - **Custom Product Pages** and **Product Page Optimization**: alternate screenshots and copy
   for ad campaigns, and A/B tests of them. Both want traffic you do not have yet. Come back
   when there is a paid campaign to point at one.
-- **Promo Codes**: unlocks paid downloads and in-app purchases. The app is free and has
-  neither, so a code would do nothing.
+- **Promo Codes**: the app now has in-app purchases, so codes (and subscription offer codes)
+  would work. Not needed for launch; the beta testers' code is the website's.
 - **Game Center**, **Vietnam Game License**: not a game.
 - **Subscriptions**: one group, "Household", with `app.lunchsorted.household.year` and
   `app.lunchsorted.household.month`, auto-renewing. **In-App Purchases**: one non-consumable,
@@ -273,8 +274,9 @@ The one worth a look:
 ## Account level, once each
 
 - [ ] Developer Program membership active, two-factor on
-- [ ] Free Apps agreement showing **Active** under Business. No bank or tax forms: the app
-      is free and the plan is sold on the web.
+- [ ] **Paid Applications** agreement showing **Active** under Business, with bank and tax
+      forms done. Until it is, StoreKit returns no products and the plan sheet says the App
+      Store is not answering. Join the App Store Small Business Program before the first sale.
 - [ ] Seller name settled. Individual enrolment publishes your legal name on the product page.
 - [ ] `app.lunchsorted` registered under Identifiers with Associated Domains enabled
 - [ ] `hello@lunchsorted.app` actually delivers. Apple mails it and reviewers use it.
@@ -292,6 +294,12 @@ The one worth a look:
 - [ ] Airplane mode opens the app, and a sign-in email link opens the app rather than Safari
 
 ## Before you press Submit
+
+- [ ] The three products Ready to Submit, each with a display name, a description and a review
+      screenshot (the plan sheet on a TestFlight build: the three prices, the renewal line, Restore
+      purchases, Terms of use, Privacy), and selected on the version page under In-App Purchases
+      and Subscriptions. A first in-app purchase is reviewed with the build.
+- [ ] App Store Server Notifications URL set (above), and the code that answers it deployed
 
 - [ ] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated;
       signed in with them once and a week built, within a few days of submitting

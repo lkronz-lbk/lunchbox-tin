@@ -3,6 +3,7 @@ import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
 import { write } from '../lib/entitlement.js';
+import { appleLive } from '../lib/apple.js';
 
 /* Payment happens on Stripe's own page; this side only opens the door and
    listens for the answer. Nothing the browser sends can grant a plan: the
@@ -18,7 +19,7 @@ const HANDLED = new Set(['checkout.session.completed', 'checkout.session.async_p
 
 async function membership(userId) {
   const rows = await sql()`
-    SELECT h.id, h.owner_user_id, m.role, e.plan, e.status, e.source, e.stripe_customer_id, e.stripe_subscription_id, e.paid_by
+    SELECT h.id, h.owner_user_id, m.role, e.plan, e.status, e.source, e.current_period_end, e.stripe_customer_id, e.stripe_subscription_id, e.paid_by
     FROM household_members m JOIN households h ON h.id = m.household_id
     LEFT JOIN entitlements e ON e.household_id = h.id WHERE m.user_id = ${userId}`;
   return rows[0] || null;
@@ -158,7 +159,7 @@ export default async function handler(req, context) {
       if (await throttled('beta:' + user.id, 5, 3600)) return fail('Too many tries in an hour; try again shortly', 429);
       if (!codeMatches(body.code)) return fail('That beta link is not right', 404);
       if (h.plan === 'lifetime' && h.status === 'active') return json({ ok: true, already: true });
-      if (h.source === 'apple' && (h.status === 'active' || h.status === 'past_due')) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
+      if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
       /* a household paying for the Household plan is a customer, not a tester: the card would go on being charged */
       if (h.stripe_subscription_id && (h.status === 'active' || h.status === 'past_due')) return fail('This household already has the Household plan', 409, { paying: true });
       /* two claims in the same instant can both pass this count and land at cap + 1: fine for a hand-shared link and a cap of 25 */
@@ -173,10 +174,11 @@ export default async function handler(req, context) {
     if (action === 'checkout') {
       const body = await req.json().catch(() => ({}));
       const plan = body.plan === 'lifetime' ? 'lifetime' : (body.plan === 'month' && prices().month) ? 'month' : 'year';
-      /* the iPhone app opens Stripe in Safari, so Stripe sends the parent back through a page that hands off to the app */
-      const back = body.client === 'ios' ? `${site}/back.html` : `${site}/app/`;
+      /* the iPhone app sells through the App Store only; a checkout asked for from it is refused, not opened */
+      if (body.client === 'ios') return fail('In the iPhone app the plan is bought through the App Store', 403, { appStore: true });
+      const back = `${site}/app/`;
       /* each platform sells the plan its own way: a household paying Apple is not sold it again here */
-      if (h.source === 'apple' && (h.status === 'active' || h.status === 'past_due')) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
+      if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
       if (h.plan === 'lifetime' && h.status === 'active') return fail('This household already has Lunch Sorted forever', 409);
       /* a monthly or yearly household switches between the two in Manage billing, not with a second subscription */
       if (plan !== 'lifetime' && h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);

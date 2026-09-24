@@ -337,7 +337,7 @@ code handles including a redelivery after a failure and one arriving out of orde
 gates, the plan line, cancellation, forever, a refund, who may manage billing, a deleted
 account stopping its subscription, the onboarding email step, the welcome email, the daily
 reminder job and its stop link, the pricing section on the landing page, and the iPhone
-app's paths: a checkout that returns through `/back.html`, that page under its own policy,
+app's paths: Manage billing returning through `/back.html`, that page under its own policy,
 and a phone that identifies as the app leading with the code and never being told to add
 itself to the Home Screen. The browser never downloads fonts, so a run takes about two minutes. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
 
@@ -525,13 +525,14 @@ member, tick, outcome and food it has, and cannot add more. A food already on th
 drawn, shopped for and packed exactly as before; only the writing of a new one is gated, and
 the idea bank stays free so a free list is never stuck with what it has.
 
-- **Checkout** (`POST /api/billing/checkout {plan, client?}`) opens Stripe's hosted page for the
+- **Checkout** (`POST /api/billing/checkout {plan}`) opens Stripe's hosted page for the
   signed-in household (owner or adult; a caretaker cannot buy). The session carries the
   household id, comes back to `/app/?paid=1` or `/app/?paid=0`, allows promotion codes,
   and asks Stripe Tax to add tax where it applies (if Tax is not finished in the
   dashboard the session is retried without it and the error logged). A household that
   already has the plan is not sold it again (409), nor is one paying through the App Store,
-  which is told where it is managed. The web only: the iPhone app never opens a checkout.
+  which is told where it is managed. The web only: a checkout asked for with `client: 'ios'` is
+  refused (403), and the iPhone app never opens Stripe at all, to buy or to manage.
 - **Webhook** (`POST /api/billing/webhook`, signature checked against the raw body, five
   minutes of clock drift, and the event's `livemode` must match the deploy context) listens
   for `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
@@ -560,14 +561,22 @@ the idea bank stays free so a free list is never stuck with what it has.
   App Store Server Notifications v2) takes renewals, lapses, grace periods and refunds after.
   Nothing either sends is believed until `netlify/lib/apple.js` has checked it against Apple's
   root, pinned by fingerprint, with node:crypto and no library, check for check with Apple's
-  own reference, the receipt-signing mark on the leaf most of all. Sandbox purchases are taken
-  in production, because App Review and TestFlight buy there. The row is written by
+  own reference, the receipt-signing mark on the leaf most of all, and nothing is decoded from a
+  certificate that is not a short string. Sandbox purchases are taken in production, because App
+  Review and TestFlight buy there, but a sandbox forever lasts a day. The row is written by
   `writeApple()` in `lib/entitlement.js` on Apple's own clock; it never overwrites a plan the
-  web holds live, as Stripe's writer never overwrites one Apple holds. A purchase is bound to
-  one household for good. Forever is never lowered by a subscription running on beside it,
-  since Apple cannot cancel one for us, and a lapse or refund of some other purchase cannot
-  end the one being paid for now. The phone finishes a transaction only once the server has
-  answered, so one lost on the way is offered again at the next launch.
+  web holds live, as Stripe's writer never overwrites one Apple holds, and never sets `paid_by`,
+  which is Stripe's and opens its billing portal. A purchase is bound to one household at a time;
+  one carrying another household's token is refused, one whose household has been deleted may be
+  restored elsewhere, and one carrying none (Family Sharing, an offer code) is not taken. Forever
+  is never lowered by a subscription running on beside it, since Apple cannot cancel one for us,
+  and a lapse or refund of some other purchase cannot end the one being paid for now; both hold
+  in the upsert itself, so a Restore linking several purchases at once cannot race past them.
+  Every transaction Apple refunds is kept in `apple_revoked`, apart from any household, and can
+  never be linked again. An App Store plan more than three days past its end is over on the
+  server and in the app whether or not Apple's notification came, so a missed one neither leaves
+  it on nor stops the website selling the plan. The phone finishes a transaction only once the
+  server has answered; one that arrives before the account has loaded waits until it has.
 - **In the app**, the Account tab carries a **Subscription** row whose caption is the same
   one-line state (Free, On for N more days, Renews DATE, Ends DATE, Payment failed, Forever,
   Switching on…). The page behind it names the plan, what it costs — matched from the price
@@ -576,9 +585,10 @@ the idea bank stays free so a free list is never stuck with what it has.
   cannot open the portal. Straight after paying it says only that the payment arrived and
   the plan is switching on, because the webhook has not landed and every other row would
   still read Free. It also offers "Get the Household plan" or "Switch to forever", and
-  "Manage billing" (the main button when a
+  "Manage billing", or "Manage in the App Store" for a plan Apple bills (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan
-  sheet with both prices (read from Stripe, cached an hour, never typed into the app);
+  sheet with its prices (on the web read from Stripe, cached an hour; in the iPhone app read
+  from the App Store, beside Restore purchases; never typed into the app);
   signed out it offers sign-in first, and remembers what you were doing so the sheet, or
   the lunchbox, comes back after the sign-in or the payment. The server refuses an invite
   from a free household (402) whatever the app shows, honouring the same 21 days from the

@@ -2,6 +2,7 @@ import { sql, json, fail, siteUrl, throttled } from '../lib/db.js';
 import { currentUser, createInvite, consumeInvite, peekInvite } from '../lib/auth.js';
 import { billingEnabled, cancelSubscription } from '../lib/stripe.js';
 import { trialing } from '../lib/trial.js';
+import { lapsed } from '../lib/apple.js';
 
 /* The household is the unit: one document, one version, everyone signed in
    reads and writes the same one.
@@ -22,7 +23,7 @@ async function membership(userId, withDoc) {
     ? await sql()`SELECT h.id, h.name, h.owner_user_id, h.doc, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id, h.created_at
                   FROM household_members m JOIN households h ON h.id = m.household_id WHERE m.user_id = ${userId}`
     : await sql()`SELECT h.id, h.name, h.owner_user_id, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id,
-                         e.plan, e.status, e.stripe_subscription_id, h.created_at, h.doc->>'createdAt' AS doc_created
+                         e.plan, e.status, e.source, e.current_period_end, e.stripe_subscription_id, h.created_at, h.doc->>'createdAt' AS doc_created
                   FROM household_members m JOIN households h ON h.id = m.household_id LEFT JOIN entitlements e ON e.household_id = h.id
                   WHERE m.user_id = ${userId}`;
   return rows[0] || null;
@@ -88,7 +89,8 @@ async function state(user) {
   };
 }
 
-const paid = (h) => !!(h.plan && h.plan !== 'free' && (h.status === 'active' || h.status === 'past_due'));
+/* an App Store plan past its end date is over here even if Apple's notification never came */
+const paid = (h) => !!(h.plan && h.plan !== 'free' && (h.status === 'active' || h.status === 'past_due')) && !(h.source === 'apple' && lapsed(h.current_period_end));
 const entitled = (h) => paid(h) || trialing(h);
 
 function docLooksRight(doc) {
