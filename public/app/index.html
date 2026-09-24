@@ -1431,7 +1431,7 @@ function resumeAfter(){
    The phone decides nothing about the plan: it hands the server Apple's signed transaction, the
    server checks it and writes the plan, and only then is the transaction finished, so one lost on
    the way comes back at the next launch. The web keeps Stripe and never shows any of this. */
-var IAP_IDS = {year:'app.lunchsorted.household.annual', month:'app.lunchsorted.household.month', forever:'app.lunchsorted.household.forever'};
+var IAP_IDS = {year:'app.lunchsorted.household.annual', month:'app.lunchsorted.household.month'};
 var IAP = {products:null, loading:null, failed:false, inFlight:false, queue:[]};
 function storeKit(){ return nativePlugin('StoreKit'); }
 function iapOn(){ return native() && !!storeKit(); }
@@ -1439,14 +1439,14 @@ function iapProducts(){
   var sk = storeKit();
   if(!sk) return Promise.resolve([]);
   if(IAP.products) return Promise.resolve(IAP.products);
-  /* all three or none: a sheet missing one of them would quietly offer less than the plan. Ten
+  /* both or neither: a sheet missing one of them would quietly offer less than the plan. Ten
      seconds is as long as the sheet waits before it says the App Store is not answering. */
   if(!IAP.loading) IAP.loading = Promise.race([
-      sk.products({ids:[IAP_IDS.year, IAP_IDS.month, IAP_IDS.forever]}).then(function(r){ return (r && r.products) || []; }, function(){ return []; }),
+      sk.products({ids:[IAP_IDS.year, IAP_IDS.month]}).then(function(r){ return (r && r.products) || []; }, function(){ return []; }),
       new Promise(function(res){ setTimeout(function(){ res([]); }, 10000); })
     ]).then(function(ps){
       var have = {}; ps.forEach(function(p){ have[p.id] = true; });
-      if(have[IAP_IDS.year] && have[IAP_IDS.month] && have[IAP_IDS.forever]) IAP.products = ps;
+      if(have[IAP_IDS.year] && have[IAP_IDS.month]) IAP.products = ps;
       IAP.loading = null; return IAP.products || [];
     });
   return IAP.loading;
@@ -1477,7 +1477,7 @@ function iapLink(t){
   }, function(){ return {status: 0}; });
 }
 function upgradeSheet(why){
-  var pr = (Account.billing && Account.billing.prices) || {}, forever = why === 'forever';
+  var pr = (Account.billing && Account.billing.prices) || {};
   var h = '<p style="margin:0">'+(why === 'share' ? 'Sharing the lunches with the other parent’s phone, or a caretaker, is part of the Household plan.'
         : why === 'lunchbox' ? 'A second lunchbox is part of the Household plan. The first is free for as long as you like.'
         : why === 'recipe' ? 'Keeping a recipe of your own \u2014 written out, pasted in, or read off a page \u2014 is part of the Household plan. The two the app comes with stay free to cook from, and every recipe you have kept stays yours.'
@@ -1486,10 +1486,8 @@ function upgradeSheet(why){
         : why === 'review' ? 'The morning review — what came home, what to rest — is part of the Household plan.'
         : why === 'pantry' ? 'A pantry that remembers what you already have is part of the Household plan.'
         : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.' : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
-        : forever && native() ? 'Pay once and the Household plan never renews.'+(paid() && (Account.entitlement || {}).source === 'apple' ? ' Buying it does not stop the plan you have now: cancel that in Manage in the App Store, or Apple renews it.' : '')
-        : forever ? 'You have the yearly plan. Pay once and it never renews: the year you have paid for runs to its end and is not charged again.'
         : 'The Household plan is everything the free planner is not.')+'</p>';
-  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Your own foods and your own recipes \u2014 in your own words, pasted in, or read off any page</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
+  h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Your own foods and your own recipes \u2014 in your own words, pasted in, or read off any page</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
   if(!signedIn()){
     h += '<p class="hint" style="margin:0">Sign in first — the Household plan belongs to the household, so it works on every phone.</p>'
       +  '<button class="btn primary wide" data-act="go-signin" data-why="'+esc(why || '')+'" data-close="1">Sign in</button>';
@@ -1512,14 +1510,13 @@ function upgradeSheet(why){
         +  '<button class="btn wide" data-act="iap-retry" data-why="'+esc(why || '')+'">Try again</button>';
     } else {
       var by = {}; IAP.products.forEach(function(p){ by[p.id] = p; });
-      var yr = by[IAP_IDS.year], mo = by[IAP_IDS.month], fv = by[IAP_IDS.forever];
+      var yr = by[IAP_IDS.year], mo = by[IAP_IDS.month];
       var w = ' data-why="'+esc(why || '')+'"'+(Account.buying ? ' disabled' : '');
       h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
-        +  (forever || !yr ? '' : '<button class="btn primary wide" data-act="iap-buy" data-product="'+IAP_IDS.year+'"'+w+'>'+esc(yr.displayPrice)+' a year</button>')
-        +  (forever || !mo ? '' : '<button class="btn wide" data-act="iap-buy" data-product="'+IAP_IDS.month+'"'+w+'>'+esc(mo.displayPrice)+' a month</button>')
-        +  (!fv ? '' : '<button class="btn '+(forever ? 'primary ' : '')+'wide" data-act="iap-buy" data-product="'+IAP_IDS.forever+'"'+w+'>'+esc(fv.displayPrice)+', once, forever</button>')
+        +  (!yr ? '' : '<button class="btn primary wide" data-act="iap-buy" data-product="'+IAP_IDS.year+'"'+w+'>'+esc(yr.displayPrice)+' a year</button>')
+        +  (!mo ? '' : '<button class="btn wide" data-act="iap-buy" data-product="'+IAP_IDS.month+'"'+w+'>'+esc(mo.displayPrice)+' a month</button>')
         +  '</div>'
-        +  '<p class="hint" style="margin:0;color:var(--ink-2)">'+(forever ? 'Charged to your Apple Account.' : 'Charged to your Apple Account. The yearly and monthly plans renew until you cancel, in Subscription or in iPhone Settings.')+'</p>'
+        +  '<p class="hint" style="margin:0;color:var(--ink-2)">Charged to your Apple Account. The yearly and monthly plans renew until you cancel, in Subscription or in iPhone Settings.</p>'
         +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm ghost" data-act="iap-restore">Restore purchases</button>'
         +  '<button class="btn sm ghost" data-act="help-site" data-url="/terms.html">Terms of use</button>'
         +  '<button class="btn sm ghost" data-act="help-site" data-url="/privacy.html">Privacy</button></div>';
@@ -1527,9 +1524,9 @@ function upgradeSheet(why){
   } else {
     var dis = Account.buying ? ' disabled' : '';
     h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
-      +  (forever ? '' : '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>')
-      +  (forever || !pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
-      +  '<button class="btn '+(forever ? 'primary ' : '')+'wide" data-act="buy" data-plan="lifetime" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.lifetime ? money(pr.lifetime)+', once, forever' : 'Once, forever')+'</button></div>'
+      +  '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>'
+      +  (!pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
+      +  '</div>'
       +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+'Payment is on Stripe’s page; tax is added where it applies.'+' Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
   }
   openSheet('The Household plan', h, {plan: true});
@@ -3867,11 +3864,11 @@ function panePlan(){
     +  esc(paid() ? (e.plan === 'lifetime' ? 'Paid once, never renews' : d || 'Yearly')
         : trialing() ? (trialEnd() ? fmtDay(trialEnd()) : planLabel()) : 'Not on')
     +  '</span></div>';
-  var apple = e.source === 'apple', sellsHere = native() ? (apple || !paid()) : !apple;
+  var apple = e.source === 'apple';
   if(lapsing && apple) h += '<p class="hint" style="margin:0;color:var(--warn)">Apple could not take the last payment. '+(iapOn() ? 'Tap Manage in the App Store to update how you pay' : 'Update how you pay in iPhone Settings \u2192 your name \u2192 Subscriptions')+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
   else if(lapsing) h += '<p class="hint" style="margin:0;color:var(--warn)">The last payment did not go through. Update the card in Manage billing'+(native() ? ' at lunchsorted.app' : '')+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
   h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
-    +  (paid() ? (e.plan !== 'lifetime' && sellsHere ? '<button class="btn sm" data-act="upgrade" data-why="forever">Switch to forever</button>' : '') : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
+    +  (paid() ? '' : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
     +  (apple ? (iapOn() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="iap-manage">Manage in the App Store</button>' : '')
         : e.portal && !native() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '')+'</div></div>';
   /* what free looks like, said once, in the two places a parent is about to meet it */
@@ -5463,7 +5460,6 @@ document.addEventListener('click', function(ev){
     var sk = storeKit(), tok = Account.entitlement && Account.entitlement.appleToken;
     if(!sk || Account.buying) return;
     if(!tok){ toast('Still reaching your account. Try again in a moment'); Sync.pull().catch(function(){}); return; }
-    var wasPaid = paid();
     Account.buying = true; IAP.inFlight = true;
     var label = el.textContent, row = Array.prototype.slice.call(document.querySelectorAll('[data-act="iap-buy"]'));
     row.forEach(function(b){ b.disabled = true; }); el.textContent = 'Opening the App Store\u2026';
@@ -5477,8 +5473,6 @@ document.addEventListener('click', function(ev){
         done();
         if(res.status === 200 && paid()){
           closeSheet();
-          /* forever on top of an App Store plan: Apple renews the old one until it is cancelled, so say so, where the button is */
-          if(wasPaid && (Account.entitlement || {}).plan === 'lifetime'){ UI.tab = 'setup'; UI.pane = 'plan'; render(); toast('Forever is on. Now cancel the old plan in Manage in the App Store, so it does not renew'); return; }
           render(); toast('Welcome to the Household plan'); resumeAfter(); return;
         }
         if(res.status === 400 || res.status === 409){ rememberAfter(''); toast(iapRefused(res)); return; }
