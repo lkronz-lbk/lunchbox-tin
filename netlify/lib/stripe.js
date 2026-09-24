@@ -18,14 +18,15 @@ export function stripeKey() {
   return key;
 }
 export function prices() {
-  /* yearly and forever are required; a monthly price is optional and appears when set */
+  /* yearly is required; monthly is optional and appears when set. Forever is no longer sold: its
+     price is read only so a forever purchase already made is still recognised and refundable */
   return { year: process.env.STRIPE_PRICE_YEAR || '', lifetime: process.env.STRIPE_PRICE_LIFETIME || '', month: process.env.STRIPE_PRICE_MONTH || '' };
 }
 /* read on every household request, so a mis-scoped key must disable billing, not sync:
    the build (scripts/migrate.mjs) is where it fails the deploy */
 export function billingEnabled() {
   const p = prices();
-  try { return !!(stripeKey() && p.year && p.lifetime); }
+  try { return !!(stripeKey() && p.year); }
   catch (e) { if (!billingEnabled.warned) { billingEnabled.warned = true; console.error('billing off:', e.message); } return false; }
 }
 export function isProduction() { return siteEnv() === 'production'; }
@@ -68,10 +69,12 @@ let priceCache = { at: 0, value: null };
 export async function priceInfo() {
   if (priceCache.value && Date.now() - priceCache.at < 3600 * 1000) return priceCache.value;
   const p = prices();
-  const [year, lifetime, month] = await Promise.all([stripe('GET', `/prices/${p.year}`), stripe('GET', `/prices/${p.lifetime}`), p.month ? stripe('GET', `/prices/${p.month}`) : null]);
-  /* the id travels so the app can say which of these the household is actually on */
-  const one = (x) => ({ id: x.id, amount: x.unit_amount, currency: x.currency, interval: x.recurring ? x.recurring.interval : null });
-  priceCache = { at: Date.now(), value: { year: one(year), lifetime: one(lifetime), month: month ? one(month) : null } };
+  const [year, lifetime, month] = await Promise.all([stripe('GET', `/prices/${p.year}`), p.lifetime ? stripe('GET', `/prices/${p.lifetime}`) : null, p.month ? stripe('GET', `/prices/${p.month}`) : null]);
+  /* the id travels so the app can say which of these the household is actually on. founding is set
+     in Stripe, as metadata founding = yes on the price: the early price, kept by whoever buys it for
+     as long as they stay. A new price made without it ends the founding line everywhere at once. */
+  const one = (x) => ({ id: x.id, amount: x.unit_amount, currency: x.currency, interval: x.recurring ? x.recurring.interval : null, founding: /^(yes|true|1)$/i.test((x.metadata && x.metadata.founding) || '') });
+  priceCache = { at: Date.now(), value: { year: one(year), lifetime: lifetime ? one(lifetime) : null, month: month ? one(month) : null } };
   return priceCache.value;
 }
 export function forgetPrices() { priceCache = { at: 0, value: null }; }

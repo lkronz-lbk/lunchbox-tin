@@ -1408,6 +1408,9 @@ function loadBilling(force){
     try{ localStorage.setItem(BILLING_KEY, JSON.stringify(Account.billing)); }catch(e){}
   }).catch(function(){});
 }
+/* the early price, marked in Stripe (lib/stripe.js); whoever buys it keeps it, on the web and in the App Store alike */
+function founding(){ var pr = Account.billing && Account.billing.prices; return !!(pr && pr.year && pr.year.founding); }
+var FOUNDING_LINE = '<p class="hint" style="margin:0;color:var(--ink-2)"><strong>Founding price:</strong> yours for as long as you stay subscribed.</p>';
 function money(p){
   if(!p || !Number.isFinite(p.amount)) return '';
   try{ return new Intl.NumberFormat(undefined, {style:'currency', currency:(p.currency || 'usd').toUpperCase(), minimumFractionDigits: p.amount % 100 ? 2 : 0}).format(p.amount / 100); }
@@ -1512,7 +1515,7 @@ function upgradeSheet(why){
       var by = {}; IAP.products.forEach(function(p){ by[p.id] = p; });
       var yr = by[IAP_IDS.year], mo = by[IAP_IDS.month];
       var w = ' data-why="'+esc(why || '')+'"'+(Account.buying ? ' disabled' : '');
-      h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
+      h += (founding() ? FOUNDING_LINE : '') + '<div class="row" style="gap:8px;flex-wrap:wrap">'
         +  (!yr ? '' : '<button class="btn primary wide" data-act="iap-buy" data-product="'+IAP_IDS.year+'"'+w+'>'+esc(yr.displayPrice)+' a year</button>')
         +  (!mo ? '' : '<button class="btn wide" data-act="iap-buy" data-product="'+IAP_IDS.month+'"'+w+'>'+esc(mo.displayPrice)+' a month</button>')
         +  '</div>'
@@ -1523,7 +1526,7 @@ function upgradeSheet(why){
     }
   } else {
     var dis = Account.buying ? ' disabled' : '';
-    h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
+    h += (founding() ? FOUNDING_LINE : '') + '<div class="row" style="gap:8px;flex-wrap:wrap">'
       +  '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>'
       +  (!pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
       +  '</div>'

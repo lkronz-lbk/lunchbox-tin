@@ -108,7 +108,7 @@ the enrolment, so settle it before launch.
 >
 > FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, with two kid-tested recipes to cook from, take out the ones they refuse, and set your school's rules.
 >
-> THE PAID HOUSEHOLD PLAN: Add your own foods or bring in a recipe from anywhere, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. In this app the plan is an in-app purchase: yearly, monthly, or once, forever, at the price the App Store shows. The yearly and monthly plans renew automatically until you cancel them in your Apple Account's subscriptions. Terms of use: https://lunchsorted.app/terms.html · Privacy: https://lunchsorted.app/privacy.html
+> THE PAID HOUSEHOLD PLAN: Add your own foods or bring in a recipe from anywhere, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. In this app the plan is an in-app purchase, yearly or monthly, at the price the App Store shows; the launch price is a founding price, kept for as long as you stay subscribed. Both plans renew automatically until you cancel them in your Apple Account's subscriptions. Terms of use: https://lunchsorted.app/terms.html · Privacy: https://lunchsorted.app/privacy.html
 >
 > Made by a mom who no longer dreads packing lunches. hello@lunchsorted.app
 
@@ -224,7 +224,7 @@ the free tier with the plan's pieces locked, which is also fine.
 >
 > How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle the week or one day; tap a compartment (the swap arrow) to change it. Shop: the list is what to buy, by aisle; the share button sends it to Notes or Reminders. Pack: one Packed check per box; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the gear beside the lunchbox name). The gear beside the lunchbox name: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
 >
-> Payments: in the iPhone app the Household plan is sold only through in-app purchase: an auto-renewing subscription, yearly or monthly, in the group "Household", or a one-time non-consumable ("forever"). Account tab → Subscription → "Keep the Household plan" (or "Get the Household plan") opens the sheet with all three at the App Store's prices, and Restore purchases, Terms of use and Privacy beside them. A parent on a computer or an Android phone can buy the same plan on our website instead, through Stripe; the iPhone app honours a plan bought there, under guideline 3.1.3(b), because the same plan is available in the app as an in-app purchase. The iPhone app never offers a web checkout. The review account is inside its free three weeks, so everything is on, and the purchase sheet is still reachable from Subscription; purchases in review go through the sandbox. This is a US-only listing.
+> Payments: in the iPhone app the Household plan is sold only through in-app purchase: an auto-renewing subscription, yearly or monthly, in the group "Household". Account tab → Subscription → "Keep the Household plan" (or "Get the Household plan") opens the sheet with both at the App Store's prices, and Restore purchases, Terms of use and Privacy beside them. A parent on a computer or an Android phone can buy the same plan on our website instead, through Stripe; the iPhone app honours a plan bought there, under guideline 3.1.3(b), because the same plan is available in the app as an in-app purchase. The iPhone app never offers a web checkout. The review account is inside its free three weeks, so everything is on, and the purchase sheet is still reachable from Subscription; purchases in review go through the sandbox. This is a US-only listing.
 >
 > Recipes: two recipes are built in, from the USDA's Recipes for Healthy Kids cookbook (Food and Nutrition Administration, fna.usda.gov). They are US government works in the public domain; each is shown with a source line and a link to the original. Everything else on the Recipes tab is imported by the parent from a page or text they chose, stored on their own household and not published by us. Recipes tab → Import a recipe, if you want to see that path.
 >
@@ -247,9 +247,13 @@ these block submission, and none need a decision now.
 - **Promo Codes**: the app now has in-app purchases, so codes (and subscription offer codes)
   would work. Not needed for launch; the beta testers' code is the website's.
 - **Game Center**, **Vietnam Game License**: not a game.
-- **Subscriptions**: one group, "Household", with `app.lunchsorted.household.annual` and
-  `app.lunchsorted.household.month`, auto-renewing. **In-App Purchases**: one non-consumable,
-  `app.lunchsorted.household.forever`. Leave **Family Sharing** off on all three: the plan is
+- **Subscriptions**: one group, "Household" (display name "Household plan"), with
+  `app.lunchsorted.household.annual` ($19.99, 1 year, level 1, "Household plan, yearly") and
+  `app.lunchsorted.household.month` ($2.99, 1 month, level 2, "Household plan, monthly"), both
+  described "Every lunchbox, both parents, kid's pick". These are the founding prices: when they
+  go up, schedule the change with **keep the current price for existing subscribers**, always,
+  because the terms promise it. No introductory offer; the app's three weeks are the trial.
+  **In-App Purchases**: none; forever is not sold. Leave **Family Sharing** off on both: the plan is
   already the household's, shared through the household, and a family-shared transaction
   would arrive without the household's token. Product ids can never be reused, even deleted.
 - **App Store Server Notifications**: Version 2, production and sandbox both
@@ -295,8 +299,8 @@ The one worth a look:
 
 ## Before you press Submit
 
-- [ ] The three products Ready to Submit, each with a display name, a description and a review
-      screenshot (the plan sheet on a TestFlight build: the three prices, the renewal line, Restore
+- [ ] The two subscriptions Ready to Submit, each with a display name, a description and a review
+      screenshot (the plan sheet on a TestFlight build: the founding line, both prices, the renewal line, Restore
       purchases, Terms of use, Privacy), and selected on the version page under In-App Purchases
       and Subscriptions. A first in-app purchase is reviewed with the build.
 - [ ] App Store Server Notifications URL set (above), and the code that answers it deployed

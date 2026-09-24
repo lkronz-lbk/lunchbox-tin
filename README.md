@@ -508,9 +508,21 @@ Stripe for a plan bought on the web, or a beta tester's code, and the App Store 
 in the iPhone app, through Apple's server notifications or a purchase the phone passes on,
 signed by Apple (App Store, below). Each platform sells it one way only, and a plan
 paid on either side works on every phone and browser in the household.
+Prices are Stripe's on the web and Apple's in the iPhone app, kept the same by hand. The site
+(`public/price.js`), the plan sheet and the trial emails all read Stripe's through
+`GET /api/billing`; no price is typed into them, only a fallback in the site's HTML. The launch
+price is a **founding price**, $19.99 a year or $2.99 a month: the yearly Stripe price carries
+the metadata `founding = yes`, which puts "Founding price: yours for as long as you stay
+subscribed" on the site, both plan sheets and the emails. Raising it is a new Stripe price
+without that mark, pointed at by `STRIPE_PRICE_YEAR`/`STRIPE_PRICE_MONTH`, and an App Store price
+change scheduled with *keep the current price for existing subscribers*; the terms promise the
+founding buyers keep theirs, so that choice is never optional. Forever is no longer sold:
+checkout refuses it (410) and there is no App Store product for it on sale. The server still
+understands a forever row (the beta's, or one bought before) and Apple's `.forever`, so bringing
+it back needs no migration.
 Free, for good, is one lunchbox, the week's plan, the shopping list, the pack list, and the
-built-in idea bank to build the food list from. The **Household** plan (yearly, or once
-forever) is the part that remembers and shares: a food written in the parent's own words,
+built-in idea bank to build the food list from. The **Household** plan (yearly or
+monthly) is the part that remembers and shares: a food written in the parent's own words,
 kid's pick, the morning review and resting, a pantry that carries over, every lunchbox, the
 other parent's phone and a caretaker's pack list. **Every household gets all of it for its
 first 21 days**, no card, counted from the account document's `createdAt` (the same clock on
@@ -555,7 +567,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   available after a plan ends, for the invoices.
 - **The App Store** is the iPhone app's way of paying, and its only one: StoreKit 2 through
   a local plugin (`ios/App/App/StoreKitPlugin.swift`), with `app.lunchsorted.household.annual`,
-  `.month` and `.forever`, at Apple's prices. Every purchase carries the household's
+  and `.month`, at Apple's prices (`.forever` is understood, not on sale). Every purchase carries the household's
   `apple_account_token`, which Apple returns in every transaction and notification.
   **Link** (`POST /api/apple/link {signedTransaction}`, signed in, owner or adult) takes the
   transaction the phone has just bought or restored; **notify** (`POST /api/apple/notify`,
@@ -585,7 +597,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   date it renews or ends, and a card saying how to stop it, which differs for a parent who
   cannot open the portal. Straight after paying it says only that the payment arrived and
   the plan is switching on, because the webhook has not landed and every other row would
-  still read Free. It also offers "Get the Household plan" or "Switch to forever", and
+  still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
   "Manage billing", or "Manage in the App Store" for a plan Apple bills (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan
   sheet with its prices (on the web read from Stripe, cached an hour; in the iPhone app read
@@ -601,9 +613,10 @@ the idea bank stays free so a free list is never stuck with what it has.
 - **Environment**, per deploy context, test keys everywhere but production:
   `STRIPE_SECRET_KEY` (production refuses a test key, every other context refuses a live
   one), `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
-  production URL each give their own), `STRIPE_PRICE_YEAR` and `STRIPE_PRICE_LIFETIME`
-  (the two price ids; test mode and live mode have different ones) and, optionally,
-  `STRIPE_PRICE_MONTH`, which adds a monthly button to the sheet when set. `STRIPE_TAX=0` turns
+  production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
+  id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
+  button when set, and `STRIPE_PRICE_LIFETIME`, optional now, only so a forever bought before it
+  was withdrawn is still recognised. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
 - **Email.** Sign-in asks for the address at the end of onboarding, once the week is built
   (skippable; offline or already signed in, the step does not appear). A first sign-in gets
@@ -631,7 +644,8 @@ the idea bank stays free so a free list is never stuck with what it has.
   touch that moves `last_seen_at` adds one when the New York day turns over, so signed-out
   use never reaches it, and the days from before the counter are read back from the session
   rows as a floor.
-- **Stripe setup, once per mode:** one product, two prices; Developers → Webhooks → add
+- **Stripe setup, once per mode:** one product, a yearly and a monthly price (the yearly one
+  marked `founding = yes` while it is the founding price); Developers → Webhooks → add
   `https://<site>/api/billing/webhook` with the six event types above and paste the
   signing secret; Settings → Billing → Customer portal → save the default configuration
   (live mode has none until it is saved once); Settings → Billing → Subscriptions and

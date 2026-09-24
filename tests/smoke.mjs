@@ -49,9 +49,9 @@ globalThis.__LS_STRIPE_FETCH = async (url, init) => {
   const u = new URL(url); const params = Object.fromEntries(new URLSearchParams(init.body || ''));
   stripeCalls.push({ method: init.method, path: u.pathname, params, auth: init.headers.authorization });
   const reply = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
-  if (u.pathname === '/v1/prices/price_year') return reply({ id: 'price_year', unit_amount: 2900, currency: 'usd', recurring: { interval: 'year' } });
+  if (u.pathname === '/v1/prices/price_year') return reply({ id: 'price_year', unit_amount: 1999, currency: 'usd', recurring: { interval: 'year' }, metadata: { founding: 'yes' } });
   if (u.pathname === '/v1/prices/price_life') return reply({ id: 'price_life', unit_amount: 7900, currency: 'usd' });
-  if (u.pathname === '/v1/prices/price_month') return reply({ id: 'price_month', unit_amount: 399, currency: 'usd', recurring: { interval: 'month' } });
+  if (u.pathname === '/v1/prices/price_month') return reply({ id: 'price_month', unit_amount: 299, currency: 'usd', recurring: { interval: 'month' } });
   if (u.pathname === '/v1/checkout/sessions') {
     if (params['automatic_tax[enabled]'] === 'true' && globalThis.__LS_STRIPE_NO_TAX) return reply({ error: { message: 'You must configure Stripe Tax before enabling automatic_tax', code: 'invalid_request_error' } }, 400);
     return reply({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
@@ -2127,7 +2127,14 @@ try {
   check('a pantry tick opens the sheet instead', /pantry that remembers/.test(await pb.textContent('#sheetBody')) && await pb.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('lunchsorted')).pantry).length === 0));
   await pb.click('#sheetClose'); await pb.waitForTimeout(300);
   const bcfg = await pb.evaluate(() => fetch('/api/billing').then(r => r.json()));
-  check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 2900 && bcfg.prices.lifetime.amount === 7900 && bcfg.prices.year.interval === 'year', bcfg);
+  check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 1999 && bcfg.prices.month.amount === 299 && bcfg.prices.year.interval === 'year', bcfg);
+  {
+    const { billingEnabled } = await import('../netlify/lib/stripe.js');
+    const life = process.env.STRIPE_PRICE_LIFETIME; delete process.env.STRIPE_PRICE_LIFETIME;
+    check('billing no longer needs a forever price to be on', billingEnabled() === true);
+    process.env.STRIPE_PRICE_LIFETIME = life;
+  }
+  check('and the founding price is marked in Stripe, on the yearly price, not in the app', bcfg.prices.year.founding === true && bcfg.prices.month.founding === false, bcfg.prices);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('signed out, a second lunchbox opens the Household plan sheet with a sign-in button', (await pb.$$eval('#nkName', a => a.length)) === 0 && (await pb.$$eval('[data-act="go-signin"]', a => a.length)) === 1 && /second lunchbox/i.test(await pb.textContent('#sheetBody')));
@@ -2264,7 +2271,7 @@ try {
   }
   await openPane(pb, 'household');
   await pb.click('[data-act="invite"]'); await pb.waitForTimeout(300);
-  check('and the app opens the plan sheet instead, with all three prices', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$29 a year/.test(await pb.textContent('#sheetBody')) && /\$3\.99 a month/.test(await pb.textContent('#sheetBody')) && /\$79, once, forever/.test(await pb.textContent('#sheetBody')));
+  check('and the app opens the plan sheet instead, with both prices, the founding line and no forever', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$19\.99 a year/.test(await pb.textContent('#sheetBody')) && /\$2\.99 a month/.test(await pb.textContent('#sheetBody')) && /Founding price: yours for as long as you stay subscribed/.test(await pb.textContent('#sheetBody')) && !/forever/i.test(await pb.textContent('#sheetBody')) && (await pb.$$eval('#sheetBody [data-plan="lifetime"]', a => a.length)) === 0);
   const monthly = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"month"}'}).then(r => r.json()));
   check('the monthly price opens a subscription checkout of its own', !!monthly.url && stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params['line_items[0][price]'] === 'price_month' && c.params.mode === 'subscription' && c.params['subscription_data[metadata][plan]'] === 'month'));
   check('links in the sheet use the accent, not browser blue', await pb.$eval('#sheetBody a[href="/terms.html"]', a => getComputedStyle(a).color !== 'rgb(0, 0, 238)' && getComputedStyle(a).color !== 'rgb(0, 0, 255)'));
@@ -2343,16 +2350,16 @@ try {
   const backOk = await until(pb, () => /Renews\s*Jan 15, 2027/.test(document.querySelector('#view').textContent));
   if (!backOk) console.log('  (diag) url=' + pb.url() + ' view=' + (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 400) + ' errors=' + JSON.stringify(errors.slice(-3)));
   check('and Subscription carries the renewal date, what it costs, Manage billing, and no second buy button', backOk &&
-    /\$29 a year/.test(await pb.textContent('#view')) && /Cancel it any time in Manage billing/.test(await pb.textContent('#view')) &&
+    /\$19\.99 a year/.test(await pb.textContent('#view')) && /Cancel it any time in Manage billing/.test(await pb.textContent('#view')) &&
     (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1 &&
     (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0, (await pb.textContent('#view')).match(/Renews[^\n]{0,60}/));
   /* a household on the monthly price must be told the monthly price, which only
      works if the entitlement's price id reaches the app at all */
   await db.query(`UPDATE entitlements SET stripe_price_id='price_month' WHERE household_id=${patState.household.id}`);
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
-  const monthlyShown = await until(pb, () => /\$3\.99 a month/.test(document.querySelector('#view').textContent));
+  const monthlyShown = await until(pb, () => /\$2\.99 a month/.test(document.querySelector('#view').textContent));
   check('a monthly household is told the monthly price, not the yearly one', monthlyShown &&
-    !/\$29 a year/.test(await pb.textContent('#view')), (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 200));
+    !/\$19\.99 a year/.test(await pb.textContent('#view')), (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 200));
   const smallPlan = await pb.$$eval('.btn.sm, .tg, .kidbtn, .seg button, .x, nav.tabs button, .item[data-act]', a =>
     a.filter(e => e.checkVisibility()).map(e => ({h: Math.round(e.getBoundingClientRect().height), t: e.textContent.trim().slice(0,20)})).filter(x => x.h < 44));
   check('every tappable control on the Subscription page is at least 44px tall', smallPlan.length === 0, smallPlan);
@@ -2367,9 +2374,7 @@ try {
   const dupYear = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
   check('a household that already has the yearly plan is not sold it again', dupYear === 409);
   await openPane(pb, 'plan');
-  await pb.click('[data-act="upgrade"][data-why="forever"]'); await pb.waitForTimeout(300);
-  check('Switch to forever offers only the forever price', (await pb.$$eval('[data-act="buy"][data-plan="year"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="buy"][data-plan="lifetime"]', a => a.length)) === 1 && /never renews/.test(await pb.textContent('#sheetBody')));
-  await pb.click('#sheetClose'); await pb.waitForTimeout(300);
+  check('forever is not sold: Subscription offers no switch to it', (await pb.$$eval('[data-why="forever"], [data-plan="lifetime"]', a => a.length)) === 0);
   await pb.click('[data-act="portal"]'); await pb.waitForURL(/billing\.stripe\.com/);
   check('Manage billing opens Stripe\'s portal for this customer', stripeCalls.some(c => c.path === '/v1/billing_portal/sessions' && c.params.customer === 'cus_pat' && /\/app\/\?portal=1$/.test(c.params.return_url)));
 
@@ -2393,13 +2398,13 @@ try {
   check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && portalStill);
   await pb.click('#sheetClose'); await pb.waitForTimeout(200);
 
-  /* forever */
+  /* forever, bought before it was withdrawn from sale: still honoured */
   await hook({ id: 'evt_5', type: 'checkout.session.completed', created: t0 + 4, data: { object: { id: 'cs_test_2', mode: 'payment', payment_status: 'paid', customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { household_id: String(patState.household.id), plan: 'lifetime' } } } });
   check('a lifetime purchase is forever', (await ent()).plan === 'lifetime' && (await ent()).status === 'active' && (await ent()).pe === null);
   await hook(subEv('evt_6', 'customer.subscription.deleted', t0 + 5, { status: 'canceled' }));
   check('and an old subscription ending later does not touch it', (await ent()).plan === 'lifetime');
   const lifeAgain = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"lifetime"}'}).then(r => r.status));
-  check('nor is forever sold twice', lifeAgain === 409);
+  check('and forever, no longer sold, cannot be bought again by asking the server for it', lifeAgain === 410, lifeAgain);
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
   const forever = await until(pb, () => /Household, forever/.test(document.querySelector('#view').textContent));
   check('Subscription says forever and offers no upgrade', forever && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
@@ -2688,7 +2693,7 @@ try {
     await openPlanSheet(pn);
     await until(pn, () => document.querySelectorAll('#sheetBody [data-act="iap-buy"]').length === 3);
     const sheet = await pn.textContent('#sheetBody');
-    check('on the iPhone the plan sheet sells through the App Store, at Apple\'s own prices, with no Stripe button', /\$34\.99 a year/.test(sheet) && /\$3\.99 a month/.test(sheet) && /\$89\.99, once, forever/.test(sheet) && !/\$29/.test(sheet) && (await pn.$$eval('#sheetBody [data-act="buy"]', a => a.length)) === 0, sheet.replace(/\s+/g, ' ').slice(0, 300));
+    check('on the iPhone the plan sheet sells through the App Store, at Apple\'s own prices, with no Stripe button and no forever even if the App Store still lists one', /\$34\.99 a year/.test(sheet) && /\$3\.99 a month/.test(sheet) && !/forever|\$89\.99/i.test(sheet) && !/\$19\.99/.test(sheet) && (await pn.$$eval('#sheetBody [data-act="buy"]', a => a.length)) === 0, sheet.replace(/\s+/g, ' ').slice(0, 300));
     check('and it offers Restore purchases, Terms of use and Privacy, says the plans renew, and promises no refund Apple would have to give', (await pn.$$eval('#sheetBody [data-act="iap-restore"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/terms.html"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/privacy.html"]', a => a.length)) === 1 && !/14 days/.test(sheet) && /renew until you cancel/.test(sheet) && /Apple Account/.test(sheet));
     const bought = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000700' });
     await pn.evaluate(n => { window.__sk.next = n; }, { status: 'purchased', jws: jws(bought), transactionId: '2000000000000700', productId: bought.productId });
@@ -2702,7 +2707,7 @@ try {
     await openPane(pn, 'plan');
     await until(pn, () => !!document.querySelector('#view [data-act="iap-manage"]'));
     const paneN = await pn.textContent('#view');
-    check('Subscription on the iPhone then offers Manage in the App Store, not Manage billing, and names no website price', (await pn.$$eval('#view [data-act="portal"]', a => a.length)) === 0 && !/\$29/.test(paneN) && /Manage in the App Store/.test(paneN), paneN.replace(/\s+/g, ' ').slice(0, 300));
+    check('Subscription on the iPhone then offers Manage in the App Store, not Manage billing, and names no website price', (await pn.$$eval('#view [data-act="portal"]', a => a.length)) === 0 && !/\$19\.99/.test(paneN) && /Manage in the App Store/.test(paneN), paneN.replace(/\s+/g, ' ').slice(0, 300));
     await pn.click('#view [data-act="iap-manage"]'); await until(pn, () => window.__sk.managed === 1);
     check('and Manage in the App Store opens Apple\'s own subscription sheet', (await pn.evaluate(() => window.__sk.managed)) === 1);
     const renewed = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000701', expiresDate: Date.now() + 700 * DAY });
@@ -2816,6 +2821,9 @@ try {
     const before = mails.length;
     const first = await run(Date.now(), 'https://test.example');
     const got = (to) => mails.slice(before).filter(m => m.to === to);
+    check('the trial emails quote the price Stripe has now, founding line and all, and never forever',
+      [got('ending@example.com')[0], got('ended@example.com')[0]].every(m => m && /\$19\.99 a year, or \$2\.99 a month \(the founding price, yours for as long as you stay\)/.test(m.text) && /\$19\.99 a year/.test(m.html) && !/forever|\$79|\$29\b/i.test(m.text + m.html)),
+      [got('ending@example.com')[0], got('ended@example.com')[0]].map(m => m && m.text));
     {
       const { dateWords } = await import('../netlify/lib/mail.js');
       const end = new Date(Date.now() + 3 * 86400000);
@@ -3504,10 +3512,21 @@ try {
   warn('og:image is an absolute URL (set once the domain exists)',
     /^https?:\/\//.test(await site.$eval('meta[property="og:image"]', m => m.content)));
   check('the landing page says what is free, what the plan costs, and where the terms are',
-    await site.evaluate(() => { const p = document.querySelector('#pricing'); return !!p && /\$29/.test(p.textContent) && /\$3\.99/.test(p.textContent) && /\$79/.test(p.textContent) && /three weeks/.test(p.textContent) && !!p.querySelector('a[href="/terms.html"]') && !!p.querySelector('a[href="/app/"]'); }));
+    await site.evaluate(() => { const p = document.querySelector('#pricing'); return !!p && /\$19\.99/.test(p.textContent) && /\$2\.99/.test(p.textContent) && /Founding price/.test(p.textContent) && !/forever|\$79|\$29\b/i.test(p.textContent) && /three weeks/.test(p.textContent) && !!p.querySelector('a[href="/terms.html"]') && !!p.querySelector('a[href="/app/"]'); }));
   check('the waitlist form is wired to Netlify',
     await site.$eval('form.signup', f => f.getAttribute('data-netlify') === 'true' &&
       !!f.querySelector('input[name="form-name"]')));
+  {
+    /* the front page's prices follow Stripe: a later, higher price with no founding mark replaces
+       what the HTML says, and the founding line goes with it */
+    const later = await ctx.newPage();
+    await later.route('**/api/billing', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: true, prices: { year: { amount: 2999, currency: 'usd', founding: false }, month: { amount: 399, currency: 'usd', founding: false } } }) }));
+    await later.goto(BASE+'/'); await later.waitForTimeout(500);
+    const shown = await later.evaluate(() => { const p = document.querySelector('#pricing'); const f = p.querySelector('[data-founding]'); return { text: p.innerText, founding: !!f && f.hidden }; });
+    check('the front page shows the price Stripe has now, and drops the founding line when that price is not marked founding',
+      /\$29\.99/.test(shown.text) && /\$3\.99 a month/.test(shown.text) && !/\$19\.99|\$2\.99/.test(shown.text) && !/Founding price/.test(shown.text) && shown.founding, shown);
+    await later.close();
+  }
   await site.goto(BASE+'/feedback.html'); await site.waitForTimeout(250);
   check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && !!f.querySelector('textarea[name="ideas"]') && f.querySelectorAll('input[name="want"]').length === 5 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));
   await site.goto(BASE+'/help.html'); await site.waitForTimeout(250);

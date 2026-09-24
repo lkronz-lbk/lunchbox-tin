@@ -117,7 +117,7 @@ export default async function handler(req, context) {
     if (req.method === 'GET' && !action) {
       if (!billingEnabled()) return json({ enabled: false }, 200, { 'cache-control': 'public, max-age=300' });
       let p = null; try { p = await priceInfo(); } catch (e) { console.error('billing: prices', e.message); }
-      /* without prices the gates still stand and the buttons say "Yearly plan" / "Once, forever"; ask again soon */
+      /* without prices the gates still stand and the button says "Yearly plan"; ask again soon */
       return json({ enabled: true, prices: p, since: process.env.BILLING_SINCE || null }, 200, { 'cache-control': p ? 'public, max-age=3600' : 'public, max-age=60' });
     }
 
@@ -173,7 +173,9 @@ export default async function handler(req, context) {
 
     if (action === 'checkout') {
       const body = await req.json().catch(() => ({}));
-      const plan = body.plan === 'lifetime' ? 'lifetime' : (body.plan === 'month' && prices().month) ? 'month' : 'year';
+      /* forever is no longer sold; an app open since it was asks, and is told so */
+      if (body.plan === 'lifetime') return fail('Forever is no longer offered. The yearly and monthly plans are', 410);
+      const plan = (body.plan === 'month' && prices().month) ? 'month' : 'year';
       /* the iPhone app sells through the App Store only; a checkout asked for from it is refused, not opened */
       if (body.client === 'ios') return fail('In the iPhone app the plan is bought through the App Store', 403, { appStore: true });
       const back = `${site}/app/`;
@@ -181,10 +183,10 @@ export default async function handler(req, context) {
       if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
       if (h.plan === 'lifetime' && h.status === 'active') return fail('This household already has Lunch Sorted forever', 409);
       /* a monthly or yearly household switches between the two in Manage billing, not with a second subscription */
-      if (plan !== 'lifetime' && h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);
-      if (plan !== 'lifetime' && h.plan === 'household' && h.status === 'past_due') return fail('The Household plan is waiting on a payment; update the card in Manage billing', 409);
+      if (h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);
+      if (h.plan === 'household' && h.status === 'past_due') return fail('The Household plan is waiting on a payment; update the card in Manage billing', 409);
       const params = {
-        mode: plan === 'lifetime' ? 'payment' : 'subscription',
+        mode: 'subscription',
         line_items: [{ price: prices()[plan], quantity: 1 }],
         client_reference_id: String(h.id),
         metadata: { household_id: String(h.id), plan, user_id: String(user.id) },
@@ -194,8 +196,7 @@ export default async function handler(req, context) {
         automatic_tax: { enabled: process.env.STRIPE_TAX !== '0' },
         billing_address_collection: 'auto'
       };
-      if (plan !== 'lifetime') params.subscription_data = { metadata: { household_id: String(h.id), plan } };
-      else params.invoice_creation = { enabled: true };
+      params.subscription_data = { metadata: { household_id: String(h.id), plan } };
       if (h.stripe_customer_id) { params.customer = h.stripe_customer_id; params.customer_update = { address: 'auto', name: 'auto' }; }
       else params.customer_email = user.email;
       let session;
