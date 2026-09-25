@@ -3,7 +3,7 @@ import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
 import { write } from '../lib/entitlement.js';
-import { appleLive } from '../lib/apple.js';
+import { appleLive, lapsed } from '../lib/apple.js';
 
 /* Payment happens on Stripe's own page; this side only opens the door and
    listens for the answer. Nothing the browser sends can grant a plan: the
@@ -79,6 +79,14 @@ async function applyEvent(ev) {
       cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy });
     /* a second subscription for the same household (a card that failed, then a fresh checkout) replaces the first */
     if (ok && oldSub && subId && oldSub !== subId) await cancelSubscription(oldSub);
+    if (!ok) {
+      /* paid on the web after the household had bought the plan through the App Store (a checkout
+         left open in a tab, then the iPhone): the row stays Apple's, so this subscription would
+         charge for nothing, and with no customer on the row nobody could cancel it. It is ended now
+         and its payment given back. */
+      const [row] = await q`SELECT plan, status, source, current_period_end FROM entitlements WHERE household_id = ${hid}`;
+      if (appleLive(row) && subId) { await cancelSubscription(subId); return (await refundCheckout(obj)) ? 'refunded: the App Store holds it' : 'canceled: the App Store holds it; refund by hand'; }
+    }
     return ok ? 'applied' : 'stale';
   }
 
@@ -107,6 +115,25 @@ async function applyEvent(ev) {
     return ok ? 'applied' : 'stale';
   }
   return 'skipped';
+}
+
+/* gives back what a checkout charged, through the invoice it paid; older Stripe accounts name the
+   payment on the invoice, newer ones list it under invoice_payments. Returns whether it was refunded. */
+async function refundCheckout(obj) {
+  if (!obj.amount_total || !obj.invoice) return !obj.amount_total;
+  try {
+    const invId = typeof obj.invoice === 'string' ? obj.invoice : obj.invoice.id;
+    const inv = await stripe('GET', `/invoices/${invId}`);
+    let pi = idOf(inv.payment_intent), charge = idOf(inv.charge);
+    if (!pi && !charge) {
+      const pays = await stripe('GET', '/invoice_payments', { invoice: invId });
+      const p = pays && pays.data && pays.data[0] && pays.data[0].payment;
+      pi = p && idOf(p.payment_intent); charge = p && idOf(p.charge);
+    }
+    if (!pi && !charge) throw new Error('no payment on ' + invId);
+    await stripe('POST', '/refunds', pi ? { payment_intent: pi } : { charge }, 'refund-' + obj.id);
+    return true;
+  } catch (e) { console.error('billing: REFUND BY HAND, checkout', obj.id, 'paid while the App Store held the plan:', e.message); return false; }
 }
 
 export default async function handler(req, context) {
@@ -158,7 +185,7 @@ export default async function handler(req, context) {
       const body = await req.json().catch(() => ({}));
       if (await throttled('beta:' + user.id, 5, 3600)) return fail('Too many tries in an hour; try again shortly', 429);
       if (!codeMatches(body.code)) return fail('That beta link is not right', 404);
-      if (h.plan === 'lifetime' && h.status === 'active') return json({ ok: true, already: true });
+      if (h.plan === 'lifetime' && h.status === 'active' && !(h.source === 'apple' && lapsed(h.current_period_end))) return json({ ok: true, already: true });
       if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
       /* a household paying for the Household plan is a customer, not a tester: the card would go on being charged */
       if (h.stripe_subscription_id && (h.status === 'active' || h.status === 'past_due')) return fail('This household already has the Household plan', 409, { paying: true });
@@ -174,17 +201,19 @@ export default async function handler(req, context) {
     if (action === 'checkout') {
       const body = await req.json().catch(() => ({}));
       /* forever is no longer sold; an app open since it was asks, and is told so */
-      if (body.plan === 'lifetime') return fail('Forever is no longer offered. The yearly and monthly plans are', 410);
+      if (body.plan === 'lifetime') return fail('Forever is no longer sold; the yearly and monthly plans are still here', 410);
       const plan = (body.plan === 'month' && prices().month) ? 'month' : 'year';
       /* the iPhone app sells through the App Store only; a checkout asked for from it is refused, not opened */
       if (body.client === 'ios') return fail('In the iPhone app the plan is bought through the App Store', 403, { appStore: true });
       const back = `${site}/app/`;
       /* each platform sells the plan its own way: a household paying Apple is not sold it again here */
       if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
-      if (h.plan === 'lifetime' && h.status === 'active') return fail('This household already has Lunch Sorted forever', 409);
+      /* an App Store plan days past its end, its notification missed, holds nothing: the website sells the plan again */
+      const held = !(h.source === 'apple' && lapsed(h.current_period_end));
+      if (held && h.plan === 'lifetime' && h.status === 'active') return fail('This household already has Lunch Sorted forever', 409);
       /* a monthly or yearly household switches between the two in Manage billing, not with a second subscription */
-      if (h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);
-      if (h.plan === 'household' && h.status === 'past_due') return fail('The Household plan is waiting on a payment; update the card in Manage billing', 409);
+      if (held && h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);
+      if (held && h.plan === 'household' && h.status === 'past_due') return fail('The Household plan is waiting on a payment; update the card in Manage billing', 409);
       const params = {
         mode: 'subscription',
         line_items: [{ price: prices()[plan], quantity: 1 }],
@@ -194,7 +223,9 @@ export default async function handler(req, context) {
         cancel_url: `${back}?paid=0`,
         allow_promotion_codes: true,
         automatic_tax: { enabled: process.env.STRIPE_TAX !== '0' },
-        billing_address_collection: 'auto'
+        billing_address_collection: 'auto',
+        /* half an hour, Stripe's shortest: a checkout left open in a tab cannot be paid long after the household has moved on */
+        expires_at: Math.floor(Date.now() / 1000) + 1800
       };
       params.subscription_data = { metadata: { household_id: String(h.id), plan } };
       if (h.stripe_customer_id) { params.customer = h.stripe_customer_id; params.customer_update = { address: 'auto', name: 'auto' }; }

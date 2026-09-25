@@ -70,8 +70,9 @@ by `cap sync` and not committed.
 
 1. App Store Connect → Apps → New app: bundle id `app.lunchsorted`, name
    Lunch Sorted, primary language English (U.S.), SKU `lunchsorted`. Then
-   Pricing and Availability → United States only for now. Other storefronts need
-   nothing more than the in-app purchases the app already has.
+   Pricing and Availability → United States only for now. Before adding other
+   storefronts, check each one's price and file the EU Digital Services Act
+   declaration (store/listing.md, Pricing and Availability).
 2. Xcode → Product → Archive → Distribute App → App Store Connect → Upload.
 3. App Store Connect → TestFlight → the build → add internal testers (yourself),
    then an external group once the build clears beta review.

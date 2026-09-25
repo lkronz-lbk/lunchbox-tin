@@ -56,6 +56,9 @@ globalThis.__LS_STRIPE_FETCH = async (url, init) => {
     if (params['automatic_tax[enabled]'] === 'true' && globalThis.__LS_STRIPE_NO_TAX) return reply({ error: { message: 'You must configure Stripe Tax before enabling automatic_tax', code: 'invalid_request_error' } }, 400);
     return reply({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
   }
+  if (u.pathname === '/v1/invoices/in_clash') return reply({ id: 'in_clash', object: 'invoice' });   /* a newer account: the payment is listed apart */
+  if (u.pathname === '/v1/invoice_payments') return reply({ data: [{ payment: { type: 'payment_intent', payment_intent: 'pi_clash' } }] });
+  if (u.pathname === '/v1/refunds') return reply({ id: 're_clash', status: 'succeeded' });
   if (u.pathname === '/v1/billing_portal/sessions') return reply({ url: 'https://billing.stripe.com/p/session/test_1' });
   if (u.pathname.startsWith('/v1/subscriptions/')) {
     const id = u.pathname.split('/').pop();
@@ -2278,7 +2281,8 @@ try {
   const ownerCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
   check('checkout is opened on the server, for this household, on Stripe\'s page', ownerCheckout.url === 'https://checkout.stripe.com/c/pay/cs_test_1' &&
     stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params.client_reference_id === String(patState.household.id) && c.params.mode === 'subscription' && c.params['line_items[0][price]'] === 'price_year' && c.params.customer_email === 'pat@example.com' && /\/app\/\?paid=1$/.test(c.params.success_url) && c.params['automatic_tax[enabled]'] === 'true' && c.auth === 'Bearer sk_test_stub'), stripeCalls.slice(-1));
-  /* the iPhone app: Stripe opens in Safari and comes back through a page that hands off to the app */
+  /* left over from when the iPhone app opened Stripe in Safari: the server still honours client:'ios' and back.html
+     still hands a result back to the app, though the page no longer takes this path (ios/README.md) */
   const sessionsBefore = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length;
   const iosCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year","client":"ios"}'}).then(async r => ({ status: r.status, body: await r.json() })));
   check('a checkout asked for from the iPhone app is refused, since it sells through the App Store, and Stripe is never asked', iosCheckout.status === 403 && iosCheckout.body.appStore === true && stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length === sessionsBefore, iosCheckout);
@@ -2422,6 +2426,24 @@ try {
   await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.annual' WHERE household_id=${patState.household.id}`);
   const lateStripe = await hook(subEv('evt_apple_1', 'customer.subscription.deleted', t0 + 9.2, { status: 'canceled' }));
   check('a late Stripe delivery cannot undo a plan the household pays Apple for', lateStripe.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'apple' && (await ent()).status === 'active', await ent());
+  {
+    /* a web checkout left open in a tab and paid after the iPhone bought the plan: ended and given back, not left charging */
+    const before = stripeCalls.length;
+    const clash = await hook({ id: 'evt_apple_clash', type: 'checkout.session.completed', created: t0 + 9.25, data: { object: { id: 'cs_clash', mode: 'subscription', payment_status: 'paid', amount_total: 1999, customer: 'cus_clash', subscription: 'sub_clash', invoice: 'in_clash', client_reference_id: String(patState.household.id), metadata: { plan: 'year' } } } });
+    const calls = stripeCalls.slice(before);
+    check('a web payment made after the household bought the plan through the App Store is cancelled and refunded, and the plan stays Apple\'s',
+      clash.status === 200 && calls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_clash') && calls.some(c => c.path === '/v1/refunds' && c.params.payment_intent === 'pi_clash') && (await ent()).source === 'apple' && (await ent()).status === 'active',
+      [calls.map(c => c.method + ' ' + c.path), await ent()]);
+  }
+  {
+    /* an App Store plan days past its end, Apple's notification missed: the website sells the plan again */
+    await db.query(`UPDATE entitlements SET current_period_end = now() - interval '5 days' WHERE household_id=${patState.household.id}`);
+    const again = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
+    check('a lapsed App Store plan whose notification never came does not stop the website selling the plan', again === 200, again);
+    const exp = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop();
+    check('and a checkout expires in half an hour, so one left open in a tab cannot be paid long after', !!exp && Math.abs(Number(exp.params.expires_at) - (Date.now() / 1000 + 1800)) < 120, exp && exp.params.expires_at);
+    await db.query(`UPDATE entitlements SET current_period_end = NULL WHERE household_id=${patState.household.id}`);
+  }
   await db.query(`UPDATE entitlements SET status='canceled' WHERE household_id=${patState.household.id}`);
   await hook({ id: 'evt_apple_2', type: 'checkout.session.completed', created: t0 + 9.3, data: { object: { id: 'cs_test_a', mode: 'payment', payment_status: 'paid', customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
   check('and once the Apple plan has ended, a Stripe purchase applies again', (await ent()).plan === 'lifetime' && (await ent()).source === 'stripe', await ent());
@@ -2694,7 +2716,7 @@ try {
     await until(pn, () => document.querySelectorAll('#sheetBody [data-act="iap-buy"]').length === 3);
     const sheet = await pn.textContent('#sheetBody');
     check('on the iPhone the plan sheet sells through the App Store, at Apple\'s own prices, with no Stripe button and no forever even if the App Store still lists one', /\$34\.99 a year/.test(sheet) && /\$3\.99 a month/.test(sheet) && !/forever|\$89\.99/i.test(sheet) && !/\$19\.99/.test(sheet) && (await pn.$$eval('#sheetBody [data-act="buy"]', a => a.length)) === 0, sheet.replace(/\s+/g, ' ').slice(0, 300));
-    check('and it offers Restore purchases, Terms of use and Privacy, says the plans renew, and promises no refund Apple would have to give', (await pn.$$eval('#sheetBody [data-act="iap-restore"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/terms.html"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/privacy.html"]', a => a.length)) === 1 && !/14 days/.test(sheet) && /renew until you cancel/.test(sheet) && /Apple Account/.test(sheet));
+    check('and it offers Restore purchases, Terms of use and Privacy, says the plans renew, and promises no refund Apple would have to give', (await pn.$$eval('#sheetBody [data-act="iap-restore"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/terms.html"], #sheetBody a[href="/terms.html"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/privacy.html"], #sheetBody a[href="/privacy.html"]', a => a.length)) === 1 && !/14 days/.test(sheet) && /Renews each year or month until you cancel/.test(sheet) && /Apple Account/.test(sheet));
     const bought = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000700' });
     await pn.evaluate(n => { window.__sk.next = n; }, { status: 'purchased', jws: jws(bought), transactionId: '2000000000000700', productId: bought.productId });
     const stripeBefore = stripeCalls.length;

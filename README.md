@@ -260,7 +260,7 @@ forward).
 - [x] Neon project with `production` and `staging` branches; `NETLIFY_DATABASE_URL` and
       `STAGING_DATABASE_URL` scoped to their contexts.
 - [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set.
-- [x] Stripe: product and three prices in test and live mode, a webhook endpoint per mode,
+- [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price stays only so past purchases are recognised; a webhook endpoint per mode,
       keys, secrets and price ids scoped per context (Billing, below).
 - [ ] Confirm HTTPS covers `www.lunchsorted.app` as well as the apex.
 - [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
@@ -337,7 +337,7 @@ code handles including a redelivery after a failure and one arriving out of orde
 gates, the plan line, cancellation, forever, a refund, who may manage billing, a deleted
 account stopping its subscription, the onboarding email step, the welcome email, the daily
 reminder job and its stop link, the pricing section on the landing page, and the iPhone
-app's paths: Manage billing returning through `/back.html`, that page under its own policy,
+app's paths: `/back.html` (left over from when the app opened Stripe) under its own policy,
 and a phone that identifies as the app leading with the code and never being told to add
 itself to the Home Screen. The browser never downloads fonts, so a run takes about two minutes. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
 
@@ -561,8 +561,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   cancelling the subscription in the dashboard). Deleting the account, or an owner folding
   their household into another, cancels its subscription first.
 - **Portal** (`POST /api/billing/portal`) opens Stripe's customer portal for the card,
-  invoices and cancellation, and comes back to `/app/?portal=1` (`/back.html?portal=1` for
-  the iPhone app). It is for the owner and
+  invoices and cancellation, and comes back to `/app/?portal=1`; the iPhone app never opens it. It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
   available after a plan ends, for the invoices.
 - **The App Store** is the iPhone app's way of paying, and its only one: StoreKit 2 through
