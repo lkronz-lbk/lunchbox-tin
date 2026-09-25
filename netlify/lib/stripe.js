@@ -103,7 +103,13 @@ export function periodEnd(sub) {
 export function subscriptionStatus(sub) {
   const s = sub && sub.status;
   if (s === 'active' || s === 'trialing') return 'active';
-  if (s === 'past_due') return 'past_due';                 /* Stripe is still retrying the card: paid until it gives up */
+  if (s === 'past_due') {
+    /* the first charge, when the three weeks ended, failed: nothing was ever paid, so the retries
+       are not a grace period. The plan comes back on if one of them goes through. */
+    const start = sub.current_period_start || (sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].current_period_start);
+    if (sub.trial_end && start && start === sub.trial_end) return 'canceled';
+    return 'past_due';                                       /* Stripe is still retrying the card: paid until it gives up */
+  }
   return 'canceled';                                       /* canceled, unpaid (retries exhausted), incomplete, incomplete_expired, paused */
 }
 /* a household that is deleted, or folded into another, must not keep paying */

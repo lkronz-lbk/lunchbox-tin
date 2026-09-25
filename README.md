@@ -520,7 +520,11 @@ founding buyers keep theirs, so that choice is never optional. Bought on the web
 checkout sets Stripe's `trial_end` to the household's own trial end (when it is more than 49 hours
 away, Stripe's floor being 48), so the first charge and every renewal fall a period from that day,
 and a parent who cancels before then pays nothing. The session carries `charge_later`, so the
-webhook reads its $0 total as a sale, not a beta code. The App Store cannot bill from a date of
+webhook reads its $0 total as a sale, not a beta code, unless the coupon on it takes the whole
+price off, which is the beta testers' code. The household's state carries `chargeLater`, the
+date by the same rule, so the sheet and the Subscription pane ("First charged", "Cancel before
+DATE and nothing is charged") never promise what Stripe will not do. A first charge that fails
+ends the plan at once: nothing was ever paid, so Stripe's retries are not a grace period. The App Store cannot bill from a date of
 ours: in the iPhone app the plan starts, and is charged, the day it is bought, and the sheet says
 so. Forever is no longer sold:
 checkout refuses it (410) and there is no App Store product for it on sale. The server still
@@ -600,7 +604,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   Switching on…). The page behind it names the plan, what it costs — matched from the price
   id the entitlement carries, so a monthly household is not quoted the yearly price — the
   date it renews or ends, and a card saying how to stop it, which differs for a parent who
-  cannot open the portal. Straight after paying it says only that the payment arrived and
+  cannot open the portal. Straight after checkout it says only that it is switching on and
   the plan is switching on, because the webhook has not landed and every other row would
   still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
   "Manage billing", or "Manage in the App Store" for a plan Apple bills (the main button when a
@@ -654,7 +658,9 @@ the idea bank stays free so a free list is never stuck with what it has.
   `https://<site>/api/billing/webhook` with the six event types above and paste the
   signing secret; Settings → Billing → Customer portal → save the default configuration
   (live mode has none until it is saved once); Settings → Billing → Subscriptions and
-  emails → send the renewal reminder and failed-payment emails (the terms promise both),
+  emails → send the renewal reminder and failed-payment emails (the terms promise both) and
+  the reminder before a free trial ends (a plan bought inside the three weeks is first charged
+  when they end, and the app's own trial emails stop once it is bought),
   and after the retries "cancel the subscription" rather than leave it unpaid; Stripe Tax
   on, with the origin address. Never add a Payment Link for the product: a link accepts a
   `client_reference_id` from anyone, and the webhook would honor it.

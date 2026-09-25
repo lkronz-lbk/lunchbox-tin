@@ -4,7 +4,7 @@ import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
 import { write } from '../lib/entitlement.js';
 import { appleLive, lapsed } from '../lib/apple.js';
-import { trialEnd } from '../lib/trial.js';
+import { chargeLaterUntil } from '../lib/trial.js';
 
 /* Payment happens on Stripe's own page; this side only opens the door and
    listens for the answer. Nothing the browser sends can grant a plan: the
@@ -61,10 +61,11 @@ async function applyEvent(ev) {
     const cust = idOf(obj.customer);
     const paidBy = Number(obj.metadata && obj.metadata.user_id) || null;
     const plan = PLANS[obj.metadata && obj.metadata.plan] || (obj.mode === 'payment' ? 'lifetime' : 'household');
-    /* nothing charged: a 100%-off code (the beta testers), which the admin page lists; or a plan bought
-       inside the three weeks, charged when they end, which is a sale like any other */
+    /* nothing charged: a 100%-off code (the beta testers), which the admin page lists. A plan bought
+       inside the three weeks is also $0 today, charged when they end: a sale, unless its code is the
+       100%-off one, which only the coupon itself can say */
     const deferred = !!(obj.metadata && obj.metadata.charge_later);
-    const source = obj.amount_total === 0 && !deferred ? 'code' : 'stripe';
+    const source = obj.amount_total !== 0 ? 'stripe' : !deferred ? 'code' : (await fullyOff(obj)) ? 'code' : 'stripe';
     const [cur] = await q`SELECT plan, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
     const oldSub = cur && cur.stripe_subscription_id;
     if (plan === 'lifetime') {
@@ -119,6 +120,19 @@ async function applyEvent(ev) {
     return ok ? 'applied' : 'stale';
   }
   return 'skipped';
+}
+
+/* whether a checkout carried a code that takes the whole price off */
+async function fullyOff(obj) {
+  for (const d of (Array.isArray(obj.discounts) ? obj.discounts : [])) {
+    let c = d && d.coupon;
+    try {
+      if (typeof c === 'string') c = await stripe('GET', `/coupons/${c}`);
+      else if (!c && d && d.promotion_code) { const p = await stripe('GET', `/promotion_codes/${idOf(d.promotion_code)}`); c = p && (p.coupon || (p.promotion && p.promotion.coupon)); if (typeof c === 'string') c = await stripe('GET', `/coupons/${c}`); }
+    } catch (e) { console.error('billing: could not read a code on', obj.id, e.message); c = null; }
+    if (c && Number(c.percent_off) === 100) return true;
+  }
+  return false;
 }
 
 /* gives back what a checkout charged, through the invoice it paid; older Stripe accounts name the
@@ -235,9 +249,9 @@ export default async function handler(req, context) {
       /* bought inside the free three weeks: the card is taken now and first charged when they end, so
          the year or month runs from there and no free day is lost. Stripe wants that date at least 48
          hours out; closer than that the plan is charged today, and the app says so (chargeLater()). */
-      const te = trialEnd(h);
-      if (te && te.getTime() - Date.now() > 49 * 3600000) {
-        params.subscription_data.trial_end = Math.floor(te.getTime() / 1000);
+      const later = chargeLaterUntil(h);
+      if (later) {
+        params.subscription_data.trial_end = Math.floor(new Date(later).getTime() / 1000);
         params.metadata.charge_later = '1';
       }
       if (h.stripe_customer_id) { params.customer = h.stripe_customer_id; params.customer_update = { address: 'auto', name: 'auto' }; }

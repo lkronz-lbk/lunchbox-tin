@@ -56,6 +56,8 @@ globalThis.__LS_STRIPE_FETCH = async (url, init) => {
     if (params['automatic_tax[enabled]'] === 'true' && globalThis.__LS_STRIPE_NO_TAX) return reply({ error: { message: 'You must configure Stripe Tax before enabling automatic_tax', code: 'invalid_request_error' } }, 400);
     return reply({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
   }
+  if (u.pathname === '/v1/coupons/beta100') return reply({ id: 'beta100', object: 'coupon', percent_off: 100 });
+  if (u.pathname === '/v1/coupons/tenoff') return reply({ id: 'tenoff', object: 'coupon', percent_off: 10 });
   if (u.pathname === '/v1/invoices/in_clash') return reply({ id: 'in_clash', object: 'invoice' });   /* a newer account: the payment is listed apart */
   if (u.pathname === '/v1/invoice_payments') return reply({ data: [{ payment: { type: 'payment_intent', payment_intent: 'pi_clash' } }] });
   if (u.pathname === '/v1/refunds') return reply({ id: 're_clash', status: 'succeeded' });
@@ -2291,13 +2293,15 @@ try {
     await db.query(`UPDATE households SET created_at = '${born}', doc = jsonb_set(doc, '{createdAt}', to_jsonb('${born}'::text)) WHERE id = ${hid}`);
     await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
     const inTrial = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop().params;
+    const st = await pb.evaluate(() => fetch('/api/household').then(r => r.json()));
+    check('the household\'s state tells the app the same date, so the sheet promises only what checkout does', st.chargeLater && Math.floor(new Date(st.chargeLater).getTime() / 1000) === Number(inTrial['subscription_data[trial_end]']), st.chargeLater);
     const want = Math.floor(trialEnd({ created_at: born, doc_created: born }).getTime() / 1000);
     check('bought inside the three weeks, the first charge is set for the day they end, and the session says so for the webhook',
       Number(inTrial['subscription_data[trial_end]']) === want && inTrial['metadata[charge_later]'] === '1', [inTrial['subscription_data[trial_end]'], want]);
     const late = new Date(Date.now() - 20 * 86400000).toISOString();
     await db.query(`UPDATE households SET created_at = '${late}', doc = jsonb_set(doc, '{createdAt}', to_jsonb('${late}'::text)) WHERE id = ${hid}`);
     await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
-    check('and in its last day, too close for Stripe, it is charged the day it is bought', !stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop().params['subscription_data[trial_end]']);
+    check('and in its last day, too close for Stripe, it is charged the day it is bought, and the state says so', !stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop().params['subscription_data[trial_end]'] && (await pb.evaluate(() => fetch('/api/household').then(r => r.json()))).chargeLater === null);
     await db.query(`UPDATE households SET created_at = $1, doc = jsonb_set(doc, '{createdAt}', to_jsonb($2::text)) WHERE id = ${hid}`, [was.created_at, was.doc_created]);
   }
   /* left over from when the iPhone app opened Stripe in Safari: the server still honours client:'ios' and back.html
@@ -2453,6 +2457,19 @@ try {
     await hook({ id: 'evt_later', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000), data: { object: { id: 'cs_later', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later', client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
     const [e2] = (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${h2.id}`)).rows;
     check('and a plan bought inside the three weeks, nothing charged yet, is on and counted as a sale, not a beta code', e2.plan === 'household' && e2.source === 'stripe' && e2.status === 'active', e2);
+    await db.query(`UPDATE entitlements SET plan='free', source='none', status='none', stripe_subscription_id=NULL, event_at=NULL WHERE household_id = ${h2.id}`);
+    await hook({ id: 'evt_later_beta', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000) + 1, data: { object: { id: 'cs_later_b', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later_b', discounts: [{ coupon: 'beta100' }], client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
+    const [e3] = (await db.query(`SELECT source FROM entitlements WHERE household_id = ${h2.id}`)).rows;
+    await db.query(`UPDATE entitlements SET plan='free', source='none', status='none', stripe_subscription_id=NULL, event_at=NULL WHERE household_id = ${h2.id}`);
+    await hook({ id: 'evt_later_ten', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000) + 2, data: { object: { id: 'cs_later_t', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later_t', discounts: [{ coupon: 'tenoff' }], client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
+    const [e4] = (await db.query(`SELECT source FROM entitlements WHERE household_id = ${h2.id}`)).rows;
+    check('but the beta testers\' 100%-off code, used inside the three weeks, still marks them as testers; any smaller code is a sale', e3.source === 'code' && e4.source === 'stripe', [e3, e4]);
+    {
+      const { subscriptionStatus } = await import('../netlify/lib/stripe.js');
+      const firstFailed = subscriptionStatus({ status: 'past_due', trial_end: 1800000000, items: { data: [{ current_period_start: 1800000000 }] } });
+      const renewalFailed = subscriptionStatus({ status: 'past_due', trial_end: 1700000000, items: { data: [{ current_period_start: 1800000000 }] } });
+      check('a first charge that fails when the three weeks end ends the plan; a failed renewal keeps it while Stripe retries', firstFailed === 'canceled' && renewalFailed === 'past_due', [firstFailed, renewalFailed]);
+    }
     await db.query(`DELETE FROM entitlements WHERE household_id = ${h2.id}`); await db.query(`DELETE FROM households WHERE id = ${h2.id}`); await db.query(`DELETE FROM users WHERE id = ${u.id}`);   /* the numbers page counts every row */
   }
   {

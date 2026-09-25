@@ -16,6 +16,14 @@ export function trialEnd(h) {
   const start = trialStart(h);
   return start ? new Date(start.getTime() + TRIAL_DAYS * 86400000) : null;
 }
+/* a plan bought on the website inside the three weeks is first charged the day they end
+   (api-billing.js checkout), which Stripe allows only more than 48 hours out; this is the one
+   cut-off, and the household's state carries its answer to the app (api-household.js) */
+export const CHARGE_LATER_MS = 49 * 3600000;
+export function chargeLaterUntil(h, now = Date.now()) {
+  const end = trialEnd(h);
+  return end && end.getTime() - now > CHARGE_LATER_MS ? end.toISOString() : null;
+}
 export function trialing(h, now = Date.now()) {
   const end = trialEnd(h);
   return !!end && end.getTime() > now;

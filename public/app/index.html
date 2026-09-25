@@ -1375,8 +1375,14 @@ function trialing(){ return billingOn() && !paid() && trialDaysLeft() > 0; }
 function entitled(){ return paid() || trialing(); }
 function gated(){ return billingOn() && !entitled(); }
 /* a plan bought on the website inside the three weeks is first charged when they end (api-billing.js);
-   the last two days are too close for Stripe, and are charged the day of buying */
-function chargeLater(){ var t = trialEnd(); return !native() && trialing() && !!t && t.getTime() - Date.now() > 50 * 3600000; }
+   the last two days are too close for Stripe, and are charged the day of buying. The server says
+   which, by the same rule checkout uses, so the sheet never promises what Stripe will not do. */
+function chargeLater(){ var t = Account.chargeLater ? new Date(Account.chargeLater) : null; return !native() && trialing() && !!t && !isNaN(t) && t.getTime() > Date.now() ? t : null; }
+/* bought that way and not charged yet: the pane says when the first charge falls, and that cancelling first costs nothing */
+function firstChargeAhead(){
+  var e = Account.entitlement || {}, t = trialEnd(), pe = e.currentPeriodEnd ? new Date(e.currentPeriodEnd) : null;
+  return paid() && e.source === 'stripe' && !!t && !!pe && !isNaN(pe) && pe.getTime() > Date.now() && Math.abs(pe.getTime() - t.getTime()) < 86400000 ? pe : null;
+}
 function fmtDay(d){ return d ? d.toLocaleDateString(undefined, {month:'short', day:'numeric'}) : ''; }
 /* a premium feature wears a small tag, with the days left, while everything is on; a lock once it is not */
 function premiumTag(){
@@ -1491,7 +1497,7 @@ function upgradeSheet(why){
         : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
         : why === 'review' ? 'The morning review — what came home, what to rest — is part of the Household plan.'
         : why === 'pantry' ? 'A pantry that remembers what you already have is part of the Household plan.'
-        : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.'+(chargeLater() ? ' Nothing is charged until '+esc(fmtDay(trialEnd()))+', and it renews from then.' : ' It starts, and is charged, the day you buy.') : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
+        : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.'+(chargeLater() ? ' Nothing is charged until '+esc(fmtDay(chargeLater()))+', and the year or month runs from then.' : ' It starts, and is charged, the day you buy.') : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
         : 'The Household plan is everything the free planner is not.')+'</p>';
   h += '<ul class="hint muted" style="margin:0;padding-left:18px"><li>Your own foods and your own recipes \u2014 in your own words, pasted in, or read off any page</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
   if(!signedIn()){
@@ -1532,7 +1538,7 @@ function upgradeSheet(why){
       +  '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>'
       +  (!pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
       +  '</div>'
-      +  '<p class="hint muted" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+'Payment is on Stripe’s page; tax is added where it applies. Renews each year or month until you cancel, any time, in Account \u2192 Subscription. Refunds within 14 days, no questions: write to hello@lunchsorted.app.</p>'
+      +  '<p class="hint muted" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+'Payment is on Stripe’s page; tax is added where it applies. Renews each year or month until you cancel, any time, in Account \u2192 Subscription. Refunds within 14 days of the first charge, no questions: write to hello@lunchsorted.app.</p>'
       +  '<div class="row" style="gap:8px;flex-wrap:wrap">'+siteLink('/terms.html', 'Terms of use', false, 'sm ghost')+siteLink('/privacy.html', 'Privacy', false, 'sm ghost')+'</div>';
   }
   openSheet('The Household plan', h, {plan: true});
@@ -1543,7 +1549,7 @@ function firstNameFrom(email){ var p = String(email || '').split('@')[0].split(/
 function applyState(st){
   Store.markAccount(true);   /* so an offline boot knows this phone belongs to a household */
   Account.user = {id:st.me.userId, email:st.me.email}; Account.me = st.me; Account.members = st.members || [];
-  Account.entitlement = st.entitlement || null; Account.version = st.version || 0; Account.household = st.household || null;
+  Account.entitlement = st.entitlement || null; Account.version = st.version || 0; Account.household = st.household || null; Account.chargeLater = st.chargeLater || null;
   if(IAP.queue.length){ var waiting = IAP.queue.splice(0); setTimeout(function(){ waiting.forEach(iapArrived); }, 0); }
   /* ahead of the sheet, for a household it may open for; while the App Store is not answering, not on every sync */
   if(iapOn() && !paid() && !IAP.products && !isHelper() && Date.now() - (IAP.triedAt || 0) > 600000){ IAP.triedAt = Date.now(); iapProducts(); }
@@ -3859,14 +3865,14 @@ function panePlan(){
      still say Free. One line is the honest thing to show. */
   if(Account.settling){
     return '<div class="card stack" style="gap:10px"><h3>Thank you</h3>'
-      +  '<p class="hint" style="margin:0">Payment received. Switching the Household plan on now — it takes a few seconds.</p></div>';
+      +  '<p class="hint" style="margin:0">Switching the Household plan on now — it takes a few seconds.</p></div>';
   }
   var h = '<div class="card stack" style="gap:12px">'
     +  '<div class="kv"><span>Your plan</span><span>'+esc(lapsing ? 'Household — payment failed' : paid() ? (e.plan === 'lifetime' ? 'Household, forever' : 'Household') : trialing() ? 'Household, free trial' : 'Free')+'</span></div>';
   var cost = planCost();
   if(cost) h += '<div class="kv"><span>Cost</span><span>'+esc(cost)+'</span></div>';
   h += '<div class="kv"><span>'
-    +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
+    +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : firstChargeAhead() ? 'First charged' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
     +  '</span><span>'
     +  esc(paid() ? (e.plan === 'lifetime' ? 'Paid once, never renews' : d || 'Yearly')
         : trialing() ? (trialEnd() ? fmtDay(trialEnd()) : planLabel()) : 'Not on')
@@ -3889,7 +3895,7 @@ function panePlan(){
       +  (e.cancelAtPeriodEnd ? 'You have canceled it. '
         : apple ? (iapOn() ? 'Cancel it any time in Manage in the App Store. ' : 'It was bought through the App Store: cancel it in iPhone Settings \u2192 your name \u2192 Subscriptions, on the Apple Account that paid. ')
         : native() ? (e.portal ? 'It was bought on the website: cancel it there, at lunchsorted.app, in Manage billing. ' : 'It was bought on the website: whoever paid can cancel it at lunchsorted.app, in Manage billing, or write to us and we will do it. ')
-        : e.portal ? 'Cancel it any time in Manage billing. '
+        : e.portal ? 'Cancel it any time in Manage billing. '+(firstChargeAhead() ? 'Cancel before '+esc(fmtDay(firstChargeAhead()))+' and nothing is charged. ' : '')
         : 'Whoever paid can cancel it in Manage billing on their own phone, or write to us and we will do it. ')
       +  'It works until '+esc(d || 'the end of the period')+', then '+freeAgain+'</p></div>';
   }
@@ -3904,12 +3910,12 @@ function panePlan(){
 function planCost(){
   var e = Account.entitlement || {}, pr = (Account.billing && Account.billing.prices) || {};
   /* a household whose three weeks are over is not waiting for a trial to end */
-  if(!paid()) return trialing() && pr.year && !native() ? money(pr.year)+' a year, '+(chargeLater() ? 'from '+fmtDay(trialEnd()) : 'from the day you buy') : '';
+  if(!paid()) return trialing() && pr.year && !native() ? money(pr.year)+' a year, '+(chargeLater() ? 'from '+fmtDay(chargeLater()) : 'from the day you buy') : '';
   if(e.source === 'apple') return 'Through the App Store';            /* Apple's price is Apple's to say; the website's may differ */
   if(e.plan === 'lifetime') return pr.lifetime ? money(pr.lifetime)+', once' : '';
   var k = ['year','month'].filter(function(n){ return pr[n] && pr[n].id && pr[n].id === e.price; })[0];
   /* a household on an earlier price (the founding one, after a rise) is quoted nothing rather than someone else's */
-  return k ? money(pr[k])+' a '+k : '';
+  return k ? money(pr[k])+' a '+k+(firstChargeAhead() ? ', from '+fmtDay(firstChargeAhead()) : '') : '';
 }
 
 /* what a bug report needs and a parent should not have to type: the build, the phone, the shape of the household; never a food or a name */
@@ -3994,7 +4000,7 @@ function planLabel(){
   if(e.plan === 'lifetime') return 'Forever';
   if(e.status === 'past_due') return 'Payment failed';
   var d = planDate();
-  return d ? (e.cancelAtPeriodEnd ? 'Ends ' : 'Renews ') + d : 'Yearly';
+  return d ? (e.cancelAtPeriodEnd ? 'Ends ' : firstChargeAhead() ? 'First charged ' : 'Renews ') + d : 'Yearly';
 }
 
 /* --------------------------------------------------------------- sheets */
@@ -5777,7 +5783,7 @@ Store.load().then(function(r){
     settle.on = true;
     var looks = 0, look = function(){
       if(paid()){ settle.on = false; Account.settling = false; render(); toast('Welcome to the Household plan'); resumeAfter(); return; }
-      if(++looks > 8){ settle.on = false; Account.settling = false; render(); toast('Paid \u2014 it can take a minute to show up here'); return; }
+      if(++looks > 8){ settle.on = false; Account.settling = false; render(); toast('Done \u2014 it can take a minute to show up here'); return; }
       setTimeout(function(){ Sync.pull().then(look).catch(look); }, looks < 3 ? 1500 : 3000);
     };
     setTimeout(look, 1200);

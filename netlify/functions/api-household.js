@@ -1,7 +1,7 @@
 import { sql, json, fail, siteUrl, throttled } from '../lib/db.js';
 import { currentUser, createInvite, consumeInvite, peekInvite } from '../lib/auth.js';
 import { billingEnabled, cancelSubscription } from '../lib/stripe.js';
-import { trialing } from '../lib/trial.js';
+import { trialing, chargeLaterUntil } from '../lib/trial.js';
 import { lapsed } from '../lib/apple.js';
 
 /* The household is the unit: one document, one version, everyone signed in
@@ -85,7 +85,11 @@ async function state(user) {
     /* a caretaker is never shown the plan, so they are never sent it either: what the
        household pays, and when it renews, is not theirs to know */
     entitlement: (helper || !ent) ? { plan: 'free', source: 'none', status: 'none', currentPeriodEnd: null, cancelAtPeriodEnd: false, price: null, portal: false } : ent,
-    billing: billingEnabled()
+    billing: billingEnabled(),
+    /* the day a plan bought on the website now would first be charged, when that is the end of the
+       three weeks: the same rule, clock and cut-off as checkout's (api-billing.js), so the sheet
+       never promises what Stripe will not do */
+    chargeLater: helper ? null : chargeLaterUntil({ created_at: h.created_at, doc_created: h.doc && h.doc.createdAt })
   };
 }
 
