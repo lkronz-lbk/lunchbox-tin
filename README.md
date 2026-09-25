@@ -416,9 +416,6 @@ is: **Liz** for a dashboard, a form or a decision, **code** for a change here. S
 out by deleting it in the commit that does it.
 
 **Stripe, Netlify and the stores**
-- **Liz: archive the old live prices.** In live mode, set the Household product's default
-  price to the $19.99 yearly one, then archive $29 yearly and $3.99 monthly. The test-mode
-  ones are done; the connected key cannot write live prices.
 - **Liz: Netlify's `dev-server` context** still points `STRIPE_PRICE_YEAR`/`_MONTH` at the old
   test prices, now archived, so a checkout under `netlify dev` fails. Set them to the new test
   prices (the other contexts are done).
