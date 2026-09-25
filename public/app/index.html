@@ -1374,6 +1374,9 @@ function trialWhen(){ var n = trialCalendarDays(); return n <= 0 ? 'today' : n =
 function trialing(){ return billingOn() && !paid() && trialDaysLeft() > 0; }
 function entitled(){ return paid() || trialing(); }
 function gated(){ return billingOn() && !entitled(); }
+/* a plan bought on the website inside the three weeks is first charged when they end (api-billing.js);
+   the last two days are too close for Stripe, and are charged the day of buying */
+function chargeLater(){ var t = trialEnd(); return !native() && trialing() && !!t && t.getTime() - Date.now() > 50 * 3600000; }
 function fmtDay(d){ return d ? d.toLocaleDateString(undefined, {month:'short', day:'numeric'}) : ''; }
 /* a premium feature wears a small tag, with the days left, while everything is on; a lock once it is not */
 function premiumTag(){
@@ -1488,7 +1491,7 @@ function upgradeSheet(why){
         : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
         : why === 'review' ? 'The morning review — what came home, what to rest — is part of the Household plan.'
         : why === 'pantry' ? 'A pantry that remembers what you already have is part of the Household plan.'
-        : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes. It starts, and is charged, the day you buy.' : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
+        : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.'+(chargeLater() ? ' Nothing is charged until '+esc(fmtDay(trialEnd()))+', and it renews from then.' : ' It starts, and is charged, the day you buy.') : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
         : 'The Household plan is everything the free planner is not.')+'</p>';
   h += '<ul class="hint muted" style="margin:0;padding-left:18px"><li>Your own foods and your own recipes \u2014 in your own words, pasted in, or read off any page</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
   if(!signedIn()){
@@ -3901,7 +3904,7 @@ function panePlan(){
 function planCost(){
   var e = Account.entitlement || {}, pr = (Account.billing && Account.billing.prices) || {};
   /* a household whose three weeks are over is not waiting for a trial to end */
-  if(!paid()) return trialing() && pr.year && !native() ? money(pr.year)+' a year, from the day you buy' : '';
+  if(!paid()) return trialing() && pr.year && !native() ? money(pr.year)+' a year, '+(chargeLater() ? 'from '+fmtDay(trialEnd()) : 'from the day you buy') : '';
   if(e.source === 'apple') return 'Through the App Store';            /* Apple's price is Apple's to say; the website's may differ */
   if(e.plan === 'lifetime') return pr.lifetime ? money(pr.lifetime)+', once' : '';
   var k = ['year','month'].filter(function(n){ return pr[n] && pr[n].id && pr[n].id === e.price; })[0];

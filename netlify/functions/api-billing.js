@@ -4,6 +4,7 @@ import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
 import { write } from '../lib/entitlement.js';
 import { appleLive, lapsed } from '../lib/apple.js';
+import { trialEnd } from '../lib/trial.js';
 
 /* Payment happens on Stripe's own page; this side only opens the door and
    listens for the answer. Nothing the browser sends can grant a plan: the
@@ -19,7 +20,7 @@ const HANDLED = new Set(['checkout.session.completed', 'checkout.session.async_p
 
 async function membership(userId) {
   const rows = await sql()`
-    SELECT h.id, h.owner_user_id, m.role, e.plan, e.status, e.source, e.current_period_end, e.stripe_customer_id, e.stripe_subscription_id, e.paid_by
+    SELECT h.id, h.owner_user_id, h.created_at, h.doc->>'createdAt' AS doc_created, m.role, e.plan, e.status, e.source, e.current_period_end, e.stripe_customer_id, e.stripe_subscription_id, e.paid_by
     FROM household_members m JOIN households h ON h.id = m.household_id
     LEFT JOIN entitlements e ON e.household_id = h.id WHERE m.user_id = ${userId}`;
   return rows[0] || null;
@@ -60,7 +61,10 @@ async function applyEvent(ev) {
     const cust = idOf(obj.customer);
     const paidBy = Number(obj.metadata && obj.metadata.user_id) || null;
     const plan = PLANS[obj.metadata && obj.metadata.plan] || (obj.mode === 'payment' ? 'lifetime' : 'household');
-    const source = obj.amount_total === 0 ? 'code' : 'stripe';          /* nothing charged: a 100%-off code (the beta testers); the admin page lists them */
+    /* nothing charged: a 100%-off code (the beta testers), which the admin page lists; or a plan bought
+       inside the three weeks, charged when they end, which is a sale like any other */
+    const deferred = !!(obj.metadata && obj.metadata.charge_later);
+    const source = obj.amount_total === 0 && !deferred ? 'code' : 'stripe';
     const [cur] = await q`SELECT plan, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
     const oldSub = cur && cur.stripe_subscription_id;
     if (plan === 'lifetime') {
@@ -228,6 +232,14 @@ export default async function handler(req, context) {
         expires_at: Math.floor(Date.now() / 1000) + 1800
       };
       params.subscription_data = { metadata: { household_id: String(h.id), plan } };
+      /* bought inside the free three weeks: the card is taken now and first charged when they end, so
+         the year or month runs from there and no free day is lost. Stripe wants that date at least 48
+         hours out; closer than that the plan is charged today, and the app says so (chargeLater()). */
+      const te = trialEnd(h);
+      if (te && te.getTime() - Date.now() > 49 * 3600000) {
+        params.subscription_data.trial_end = Math.floor(te.getTime() / 1000);
+        params.metadata.charge_later = '1';
+      }
       if (h.stripe_customer_id) { params.customer = h.stripe_customer_id; params.customer_update = { address: 'auto', name: 'auto' }; }
       else params.customer_email = user.email;
       let session;

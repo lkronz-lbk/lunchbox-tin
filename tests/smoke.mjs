@@ -2281,6 +2281,25 @@ try {
   const ownerCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
   check('checkout is opened on the server, for this household, on Stripe\'s page', ownerCheckout.url === 'https://checkout.stripe.com/c/pay/cs_test_1' &&
     stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params.client_reference_id === String(patState.household.id) && c.params.mode === 'subscription' && c.params['line_items[0][price]'] === 'price_year' && c.params.customer_email === 'pat@example.com' && /\/app\/\?paid=1$/.test(c.params.success_url) && c.params['automatic_tax[enabled]'] === 'true' && c.auth === 'Bearer sk_test_stub'), stripeCalls.slice(-1));
+  check('a household whose three weeks are over is charged the day it buys', !stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop().params['subscription_data[trial_end]']);
+  {
+    /* bought inside the three weeks: first charged when they end, so no free day is lost */
+    const { trialEnd } = await import('../netlify/lib/trial.js');
+    const hid = patState.household.id;
+    const [was] = (await db.query(`SELECT created_at, doc->>'createdAt' AS doc_created FROM households WHERE id = ${hid}`)).rows;
+    const born = new Date(Date.now() - 5 * 86400000).toISOString();
+    await db.query(`UPDATE households SET created_at = '${born}', doc = jsonb_set(doc, '{createdAt}', to_jsonb('${born}'::text)) WHERE id = ${hid}`);
+    await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
+    const inTrial = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop().params;
+    const want = Math.floor(trialEnd({ created_at: born, doc_created: born }).getTime() / 1000);
+    check('bought inside the three weeks, the first charge is set for the day they end, and the session says so for the webhook',
+      Number(inTrial['subscription_data[trial_end]']) === want && inTrial['metadata[charge_later]'] === '1', [inTrial['subscription_data[trial_end]'], want]);
+    const late = new Date(Date.now() - 20 * 86400000).toISOString();
+    await db.query(`UPDATE households SET created_at = '${late}', doc = jsonb_set(doc, '{createdAt}', to_jsonb('${late}'::text)) WHERE id = ${hid}`);
+    await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
+    check('and in its last day, too close for Stripe, it is charged the day it is bought', !stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop().params['subscription_data[trial_end]']);
+    await db.query(`UPDATE households SET created_at = $1, doc = jsonb_set(doc, '{createdAt}', to_jsonb($2::text)) WHERE id = ${hid}`, [was.created_at, was.doc_created]);
+  }
   /* left over from when the iPhone app opened Stripe in Safari: the server still honours client:'ios' and back.html
      still hands a result back to the app, though the page no longer takes this path (ios/README.md) */
   const sessionsBefore = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length;
@@ -2426,6 +2445,16 @@ try {
   await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.annual' WHERE household_id=${patState.household.id}`);
   const lateStripe = await hook(subEv('evt_apple_1', 'customer.subscription.deleted', t0 + 9.2, { status: 'canceled' }));
   check('a late Stripe delivery cannot undo a plan the household pays Apple for', lateStripe.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'apple' && (await ent()).status === 'active', await ent());
+  {
+    /* a plan bought on the web inside the three weeks completes with nothing charged yet: a sale, not a beta code */
+    const [u] = (await db.query(`INSERT INTO users (email) VALUES ('later@example.com') RETURNING id`)).rows;
+    const [h2] = (await db.query(`INSERT INTO households (owner_user_id, doc) VALUES (${u.id}, '{}'::jsonb) RETURNING id`)).rows;
+    await db.query(`INSERT INTO entitlements (household_id, plan, status) VALUES (${h2.id}, 'free', 'none')`);
+    await hook({ id: 'evt_later', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000), data: { object: { id: 'cs_later', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later', client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
+    const [e2] = (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${h2.id}`)).rows;
+    check('and a plan bought inside the three weeks, nothing charged yet, is on and counted as a sale, not a beta code', e2.plan === 'household' && e2.source === 'stripe' && e2.status === 'active', e2);
+    await db.query(`DELETE FROM entitlements WHERE household_id = ${h2.id}`); await db.query(`DELETE FROM households WHERE id = ${h2.id}`); await db.query(`DELETE FROM users WHERE id = ${u.id}`);   /* the numbers page counts every row */
+  }
   {
     /* a web checkout left open in a tab and paid after the iPhone bought the plan: ended and given back, not left charging */
     const before = stripeCalls.length;

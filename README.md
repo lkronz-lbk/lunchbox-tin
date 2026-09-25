@@ -516,7 +516,13 @@ the metadata `founding = yes`, which puts "Founding price: yours for as long as 
 subscribed" on the site, both plan sheets and the emails. Raising it is a new Stripe price
 without that mark, pointed at by `STRIPE_PRICE_YEAR`/`STRIPE_PRICE_MONTH`, and an App Store price
 change scheduled with *keep the current price for existing subscribers*; the terms promise the
-founding buyers keep theirs, so that choice is never optional. Forever is no longer sold:
+founding buyers keep theirs, so that choice is never optional. Bought on the website inside the free three weeks, a plan is not charged until they end:
+checkout sets Stripe's `trial_end` to the household's own trial end (when it is more than 49 hours
+away, Stripe's floor being 48), so the first charge and every renewal fall a period from that day,
+and a parent who cancels before then pays nothing. The session carries `charge_later`, so the
+webhook reads its $0 total as a sale, not a beta code. The App Store cannot bill from a date of
+ours: in the iPhone app the plan starts, and is charged, the day it is bought, and the sheet says
+so. Forever is no longer sold:
 checkout refuses it (410) and there is no App Store product for it on sale. The server still
 understands a forever row (the beta's, or one bought before) and Apple's `.forever`, so bringing
 it back needs no migration.
