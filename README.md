@@ -409,6 +409,81 @@ ever shown once. `npm run csp`
 refuses a build whose note names an older build, so the note cannot be forgotten; set the
 text to `''` for a release with nothing to say.
 
+### Owed (said we would, not done yet)
+
+Promised or needed since the App Store work (PR #19, September 2026). Each line says whose it
+is: **Liz** for a dashboard, a form or a decision, **code** for a change here. Strike a line
+out by deleting it in the commit that does it.
+
+**Stripe, Netlify and the stores**
+- **Liz: archive the old live prices.** In live mode, set the Household product's default
+  price to the $19.99 yearly one, then archive $29 yearly and $3.99 monthly. The test-mode
+  ones are done; the connected key cannot write live prices.
+- **Liz: Netlify's `dev-server` context** still points `STRIPE_PRICE_YEAR`/`_MONTH` at the old
+  test prices, now archived, so a checkout under `netlify dev` fails. Set them to the new test
+  prices (the other contexts are done).
+- **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
+  approval, not before.
+- **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
+  (`store/listing.md`, After approval).
+- **Every price rise, both stores together:** a new Stripe price with no `founding` metadata,
+  pointed at by `STRIPE_PRICE_YEAR`/`_MONTH`; in App Store Connect, schedule the change with
+  **keep the current price for existing subscribers**, always, because the terms promise it;
+  then `node scripts/iap-shot.mjs <yearly> <monthly>` for a new review screenshot. The plan
+  so far: $19.99 for the first 100 paying households, $29.99 for the next 400, then $39.99
+  from 500. Nothing counts to 100 by itself; watch `/admin`.
+
+**Decisions waiting**
+- **Liz: the beta link** still gives the first `BETA_CAP` households the plan free forever.
+  Keep it as the testers' thanks, or close it (`BETA_CAP=0`) now that forever is off sale.
+- **Liz: the new terms and privacy wording** (September 2026): whether the change
+  needs announcing to the beta households before launch.
+
+**Code**
+- **The numbers page after a price rise.** `api-admin.js` counts monthly against yearly by the
+  current price id, so a founding monthly household reads as yearly once `STRIPE_PRICE_MONTH`
+  moves on, and a plan bought inside the three weeks (Stripe `trialing`) counts as paying
+  before anything is charged. Classify by the price's interval, and show "subscribed, first
+  charge DATE" apart.
+- **Two App Store cases to try in the sandbox.** A refund of an older renewal, or the old
+  transaction left behind by an upgrade within the group, carries a `revocationDate`, and
+  `stateOf()` ends the whole plan for it, even when the current period is paid. And `iapLink`
+  finishes a transaction the server answered 400, so a genuine purchase the server failed to
+  verify is not offered again at the next launch (Restore still finds it).
+- **The iPhone's first charge inside the three weeks.** The web charges when they end; the App
+  Store charges the day of buying. The closest Apple allows is a promotional offer, signed by
+  the server, for the free period that fits, rounded down to Apple's lengths (3 days, 1 week,
+  2 weeks). It needs an In-App Purchase key from App Store Connect, a signing endpoint, the
+  plugin passing the offer to `purchase`, a new build and review.
+- **Take the web checkout out of the shell** with the next native change: `@capacitor/app-launcher`,
+  `public/back.html` and its CSP block, the `appStateChange` listener, the `client: 'ios'`
+  branches in `api-billing.js`, and the back.html checks in `tests/smoke.mjs`.
+- **Tests for what the sheet says about charging later.** Nothing checks the web sheet's
+  "Nothing is charged until DATE" or the pane's "First charged" and "Cancel before DATE";
+  the server's `chargeLater` is checked, the copy is not.
+- **Known edges, watched, not fixed:** a purchase made on a phone whose state is stale, after
+  the household has started paying on the web, is refused and the parent told to ask Apple
+  for a refund; a subscription restarted from iPhone Settings while the web is billing; a
+  billing retry that Apple succeeds after its grace period; a second parent tapping Manage in
+  the App Store on an Apple Account that did not pay.
+
+**Blue Hour Ventures LLC** (filed with Maryland; about eight weeks)
+- **Liz, once it is approved:** EIN (IRS.gov, free), business bank account, D-U-N-S number
+  through Apple's free lookup, then ask Apple Developer Support to convert the individual
+  membership to an organization, and update the bank and tax form in App Store Connect
+  (W-9 with the EIN). Stripe: business type Company, the LLC's name, the EIN and the bank.
+  Register Lila Bloom Enterprises as the LLC's trade name. Assign the app, code, domain and
+  brand to the LLC in writing. Move service accounts (domain, Netlify, Neon, email) as they
+  renew. Ask whoever helps with the LLC whether Stripe's business details, already named for
+  the LLC, should be in Liz's name until approval.
+- **Code, then:** the operator line in `public/terms.html` ("Lila Bloom Enterprises, a trade
+  name of Blue Hour Ventures LLC") and the copyright line in `store/listing.md`.
+
+**Other storefronts, when wanted:** Canada, Australia and New Zealand first (English; check the
+privacy page against their laws). The EU and UK after the LLC exists: the EU trader
+declaration publishes the seller's name, address, phone and email, and the privacy page would
+need GDPR's terms. The in-app purchases need nothing more.
+
 ### Backlog (ideas to revisit, not scheduled)
 
 - **Home-cooked or store-bought.** Setup asks whether sides and sweets are mostly cooked at
