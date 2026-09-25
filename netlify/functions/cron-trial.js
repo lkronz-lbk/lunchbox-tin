@@ -1,7 +1,7 @@
 import { sql, siteUrl, siteEnv } from '../lib/db.js';
-import { billingEnabled } from '../lib/stripe.js';
+import { billingEnabled, priceInfo } from '../lib/stripe.js';
 import { trialEnd, stampOrNull } from '../lib/trial.js';
-import { sendTrialEnding, sendTrialEnded } from '../lib/mail.js';
+import { sendTrialEnding, sendTrialEnded, priceWords } from '../lib/mail.js';
 
 /* Once a day: the households whose three weeks end in about three days get one
    email saying when; the ones whose three weeks ended yesterday get one saying
@@ -21,7 +21,7 @@ export async function run(now = Date.now(), siteOverride = '') {
   const rows = since && now - since.getTime() < 25 * DAY
     ? await q`SELECT h.id, h.created_at, h.doc->>'createdAt' AS doc_created, h.doc->>'tz' AS tz, e.plan, e.status FROM households h LEFT JOIN entitlements e ON e.household_id = h.id ORDER BY h.id LIMIT 5000`
     : await q`SELECT h.id, h.created_at, h.doc->>'createdAt' AS doc_created, h.doc->>'tz' AS tz, e.plan, e.status FROM households h LEFT JOIN entitlements e ON e.household_id = h.id WHERE h.created_at > now() - interval '40 days' ORDER BY h.id LIMIT 5000`;
-  let sent = 0;
+  let sent = 0, price = null;
   for (const h of rows) {
     if (sent >= PER_RUN) break;
     const paid = h.plan && h.plan !== 'free' && (h.status === 'active' || h.status === 'past_due');
@@ -47,7 +47,9 @@ export async function run(now = Date.now(), siteOverride = '') {
         const stop = `${site}/api/auth/mail-stop?t=${token}`;
         try {
           const tz = typeof h.tz === 'string' && h.tz.length <= 64 && /^[A-Za-z_]+(\/[A-Za-z0-9_+\-]+)*$/.test(h.tz) ? h.tz : null;   /* the document is the phone's word; only a zone-shaped one is tried */
-          if (kind === 'trial_ending') await sendTrialEnding(p.email, site, end, stop, tz); else await sendTrialEnded(p.email, site, stop);
+          /* asked of Stripe once a run, and only when there is someone to write to */
+          if (price === null) { try { price = priceWords(await priceInfo()); } catch (e) { price = ''; console.error('cron-trial: prices', e.message); } }
+          if (kind === 'trial_ending') await sendTrialEnding(p.email, site, end, stop, tz, price); else await sendTrialEnded(p.email, site, stop, price);
           any = true; sent++;
         } catch (e) { console.error('cron-trial: could not send to', p.id, e.message); }
       }

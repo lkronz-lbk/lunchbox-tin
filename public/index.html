@@ -153,6 +153,7 @@ footer .row{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;a
 footer a{color:var(--ink-2)}
 </style>
 <script src="/ga.js" defer></script>
+<script src="/price.js" defer></script>
 </head>
 <body>
 
@@ -292,8 +293,9 @@ footer a{color:var(--ink-2)}
       </div>
       <div class="plan featured">
         <span class="lab">Household plan</span>
-        <b>$29 <small>a year</small></b>
-        <p class="alt">or $3.99 a month, or $79 once, forever</p>
+        <b><span data-price="year">$19.99</span> <small>a year</small></b>
+        <p class="alt" data-price="month-line">or <span data-price="month">$2.99</span> a month</p>
+        <p class="alt" data-founding><strong>Founding price:</strong> yours for as long as you stay subscribed.</p>
         <ul>
           <li>Your own foods and your own recipes &mdash; in your own words, pasted in, or read off any page</li>
           <li>Every lunchbox, each with its own rules</li>
@@ -304,7 +306,7 @@ footer a{color:var(--ink-2)}
       </div>
     </div>
     <p class="plans-cta"><a class="btn primary" href="/app/">Start free</a></p>
-    <p class="fine">Prices in US dollars; sales tax added where it applies. Full refund within 14 days, no questions.
+    <p class="fine">Prices in US dollars; sales tax added where it applies. Bought here, a full refund within 14 days of the first charge, no questions; in the iPhone app, the App Store sets the price and Apple handles refunds.
       <a href="/terms.html">Terms</a>.</p>
   </section>
 

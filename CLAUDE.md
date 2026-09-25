@@ -31,8 +31,10 @@ author and the Netlify + Neon stack. Read `README.md` first; it is the product s
   draw a resting food rather than leave a compartment empty.
 - Signed out, everything stays on the phone. Signed in, the household document is the unit
   of sync; merge by record timestamp (`LSMerge`), the local copy wins ties.
-- Payments happen on the web, never through the App Store. The entitlement is a row on the
-  household; Stripe (and one day StoreKit) only ever flip that row.
+- Each platform takes payment its own way: the iPhone app through the App Store only, the
+  web through Stripe only. The entitlement is a row on the household, and only a payment
+  source ever writes it: Stripe, a beta code, or the App Store (Apple's notifications, or a
+  purchase the phone passes on, signed by Apple). A plan paid on one side works everywhere.
 - Every user-visible string is written for a parent: no jargon, no IDs, descriptors under
   44px controls, nothing explanatory as a paragraph on screen.
 

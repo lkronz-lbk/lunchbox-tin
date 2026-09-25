@@ -1345,7 +1345,12 @@ function claimBeta(){
     claimBeta.failed = true; render();                             /* a hiccup: the code stays, the banner offers another go */
   }).catch(function(){ claimBeta.busy = false; claimBeta.failed = true; render(); });
 }
-function paid(){ var e = Account.entitlement; return !!(e && e.plan !== 'free' && (e.status === 'active' || e.status === 'past_due')); }
+function paid(){
+  var e = Account.entitlement;
+  if(!(e && e.plan !== 'free' && (e.status === 'active' || e.status === 'past_due'))) return false;
+  /* an App Store plan more than three days past its end is over, as the server also decides, even if Apple's word never came */
+  return !(e.source === 'apple' && e.currentPeriodEnd && Date.parse(e.currentPeriodEnd) + 3 * 86400000 < Date.now());
+}
 function billingOn(){ return !!(Account.billing && Account.billing.enabled) && !isHelper(); }
 /* the first three weeks are the whole product, no card asked: the trial runs from the day the
    household was made, on this phone or any other, and ends the same day everywhere */
@@ -1369,6 +1374,15 @@ function trialWhen(){ var n = trialCalendarDays(); return n <= 0 ? 'today' : n =
 function trialing(){ return billingOn() && !paid() && trialDaysLeft() > 0; }
 function entitled(){ return paid() || trialing(); }
 function gated(){ return billingOn() && !entitled(); }
+/* a plan bought on the website inside the three weeks is first charged when they end (api-billing.js);
+   the last two days are too close for Stripe, and are charged the day of buying. The server says
+   which, by the same rule checkout uses, so the sheet never promises what Stripe will not do. */
+function chargeLater(){ var t = Account.chargeLater ? new Date(Account.chargeLater) : null; return !native() && trialing() && !!t && !isNaN(t) && t.getTime() > Date.now() ? t : null; }
+/* bought that way and not charged yet: the pane says when the first charge falls, and that cancelling first costs nothing */
+function firstChargeAhead(){
+  var e = Account.entitlement || {}, t = trialEnd(), pe = e.currentPeriodEnd ? new Date(e.currentPeriodEnd) : null;
+  return paid() && e.source === 'stripe' && !!t && !!pe && !isNaN(pe) && pe.getTime() > Date.now() && Math.abs(pe.getTime() - t.getTime()) < 86400000 ? pe : null;
+}
 function fmtDay(d){ return d ? d.toLocaleDateString(undefined, {month:'short', day:'numeric'}) : ''; }
 /* a premium feature wears a small tag, with the days left, while everything is on; a lock once it is not */
 function premiumTag(){
@@ -1403,6 +1417,9 @@ function loadBilling(force){
     try{ localStorage.setItem(BILLING_KEY, JSON.stringify(Account.billing)); }catch(e){}
   }).catch(function(){});
 }
+/* the early price, marked in Stripe (lib/stripe.js); whoever buys it keeps it, on the web and in the App Store alike */
+function founding(){ var pr = Account.billing && Account.billing.prices; return !!(pr && pr.year && pr.year.founding); }
+var FOUNDING_LINE = '<p class="hint muted" style="margin:0"><strong>Founding price:</strong> yours for as long as you stay subscribed.</p>';
 function money(p){
   if(!p || !Number.isFinite(p.amount)) return '';
   try{ return new Intl.NumberFormat(undefined, {style:'currency', currency:(p.currency || 'usd').toUpperCase(), minimumFractionDigits: p.amount % 100 ? 2 : 0}).format(p.amount / 100); }
@@ -1422,8 +1439,57 @@ function resumeAfter(){
   else if(why === 'food'){ UI.tab = 'foods'; UI.pane = ''; render(); addOwnSheet(); }
   else if(why === 'recipe'){ UI.tab = 'recipes'; UI.pane = ''; render(); recipeImportSheet(null, null); }
 }
+/* ---- the App Store, the iPhone app's way of paying (ios/App/App/StoreKitPlugin.swift, /api/apple).
+   The phone decides nothing about the plan: it hands the server Apple's signed transaction, the
+   server checks it and writes the plan, and only then is the transaction finished, so one lost on
+   the way comes back at the next launch. The web keeps Stripe and never shows any of this. */
+var IAP_IDS = {year:'app.lunchsorted.household.annual', month:'app.lunchsorted.household.month'};
+var IAP = {products:null, loading:null, failed:false, inFlight:false, queue:[]};
+function storeKit(){ return nativePlugin('StoreKit'); }
+function iapOn(){ return native() && !!storeKit(); }
+function iapProducts(){
+  var sk = storeKit();
+  if(!sk) return Promise.resolve([]);
+  if(IAP.products) return Promise.resolve(IAP.products);
+  /* both or neither: a sheet missing one of them would quietly offer less than the plan. Ten
+     seconds is as long as the sheet waits before it says the App Store is not answering. */
+  if(!IAP.loading) IAP.loading = Promise.race([
+      sk.products({ids:[IAP_IDS.year, IAP_IDS.month]}).then(function(r){ return (r && r.products) || []; }, function(){ return []; }),
+      new Promise(function(res){ setTimeout(function(){ res([]); }, 10000); })
+    ]).then(function(ps){
+      var have = {}; ps.forEach(function(p){ have[p.id] = true; });
+      if(have[IAP_IDS.year] && have[IAP_IDS.month]) IAP.products = ps;
+      IAP.loading = null; return IAP.products || [];
+    });
+  return IAP.loading;
+}
+/* what the server said, for a parent: its own words are for the log */
+function iapRefused(r){
+  return r.elsewhere ? 'This Apple Account paid for another Lunch Sorted household. Sign in to that one to use it'
+    : r.paying ? 'This household already pays on the website, so this purchase was not used. To ask Apple for your money back, see Help'
+    : 'That purchase could not be used here. Write to hello@lunchsorted.app and we will sort it';
+}
+/* a purchase StoreKit hands over by itself: a renewal, an Ask to Buy approved later, one left
+   unfinished last time. At launch it can arrive before the account has, so it waits in the queue
+   until applyState() knows whose phone this is. */
+function iapArrived(t){
+  if(!t || !t.jws) return;
+  if(!signedIn()){ IAP.queue.push(t); return; }
+  var wasPaid = paid();
+  iapLink(t).then(function(r){ if(r.status === 200){ render(); if(!wasPaid && paid()) toast('Welcome to the Household plan'); } });
+}
+/* once the server has answered at all it has decided: a purchase it refuses (another household's,
+   or one for a household the website bills) will never be taken, so it is finished too. One it never
+   heard, offline or signed out, is left for StoreKit to hand back at the next launch. */
+function iapLink(t){
+  return api('POST', '/api/apple/link', {signedTransaction: t.jws}).then(function(r){
+    if(r.status === 200 || r.status === 400 || r.status === 409){ var sk = storeKit(); if(sk) sk.finish({transactionId: t.transactionId}).catch(function(){}); }
+    if(r.status === 200 && r.entitlement) Account.entitlement = Object.assign({}, Account.entitlement || {}, r.entitlement);
+    return r;
+  }, function(){ return {status: 0}; });
+}
 function upgradeSheet(why){
-  var pr = (Account.billing && Account.billing.prices) || {}, forever = why === 'forever';
+  var pr = (Account.billing && Account.billing.prices) || {};
   var h = '<p style="margin:0">'+(why === 'share' ? 'Sharing the lunches with the other parent’s phone, or a caretaker, is part of the Household plan.'
         : why === 'lunchbox' ? 'A second lunchbox is part of the Household plan. The first is free for as long as you like.'
         : why === 'recipe' ? 'Keeping a recipe of your own \u2014 written out, pasted in, or read off a page \u2014 is part of the Household plan. The two the app comes with stay free to cook from, and every recipe you have kept stays yours.'
@@ -1431,22 +1497,51 @@ function upgradeSheet(why){
         : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
         : why === 'review' ? 'The morning review — what came home, what to rest — is part of the Household plan.'
         : why === 'pantry' ? 'A pantry that remembers what you already have is part of the Household plan.'
-        : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.' : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
-        : forever ? 'You have the yearly plan. Pay once and it never renews: the year you have paid for runs to its end and is not charged again.'
+        : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.'+(chargeLater() ? ' Nothing is charged until '+esc(fmtDay(chargeLater()))+', and the year or month runs from then.' : ' It starts, and is charged, the day you buy.') : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
         : 'The Household plan is everything the free planner is not.')+'</p>';
-  if(!forever) h += '<ul class="hint" style="margin:0;padding-left:18px"><li>Your own foods and your own recipes \u2014 in your own words, pasted in, or read off any page</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
+  h += '<ul class="hint muted" style="margin:0;padding-left:18px"><li>Your own foods and your own recipes \u2014 in your own words, pasted in, or read off any page</li><li>Kid’s pick, the after-school review, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
   if(!signedIn()){
     h += '<p class="hint" style="margin:0">Sign in first — the Household plan belongs to the household, so it works on every phone.</p>'
       +  '<button class="btn primary wide" data-act="go-signin" data-why="'+esc(why || '')+'" data-close="1">Sign in</button>';
+  } else if(native()){
+    /* the iPhone app sells through the App Store alone: not Stripe, and not a household the website
+       already bills, which would pay twice for one plan */
+    var ent = Account.entitlement || {};
+    if(paid() && ent.source !== 'apple'){
+      /* the iPhone app never opens Stripe, to buy or to manage: the website is named, not linked */
+      h += '<p class="hint" style="margin:0">'+(ent.source === 'stripe'
+             ? 'This household’s plan is paid on the website. Change or cancel it there, at lunchsorted.app, in Manage billing.'
+             : 'This household already has the Household plan, so there is nothing to buy.')+'</p>';
+    } else if(!iapOn()){
+      h += '<p class="hint" style="margin:0">Update Lunch Sorted from the App Store to get the Household plan on this phone.</p>';
+    } else if(!IAP.products && !IAP.failed){
+      h += '<p class="hint" style="margin:0">Getting the prices from the App Store\u2026</p>';
+      iapProducts().then(function(){ if(!IAP.products) IAP.failed = true; if(sheetState && sheetState.plan) upgradeSheet(why); });
+    } else if(!IAP.products){
+      h += '<p class="hint" style="margin:0">The App Store is not answering. Check the signal and try again.</p>'
+        +  '<button class="btn wide" data-act="iap-retry" data-why="'+esc(why || '')+'">Try again</button>';
+    } else {
+      var by = {}; IAP.products.forEach(function(p){ by[p.id] = p; });
+      var yr = by[IAP_IDS.year], mo = by[IAP_IDS.month];
+      var w = ' data-why="'+esc(why || '')+'"'+(Account.buying ? ' disabled' : '');
+      h += (founding() ? FOUNDING_LINE : '') + '<div class="row" style="gap:8px;flex-wrap:wrap">'
+        +  (!yr ? '' : '<button class="btn primary wide" data-act="iap-buy" data-product="'+IAP_IDS.year+'"'+w+'>'+esc(yr.displayPrice)+' a year</button>')
+        +  (!mo ? '' : '<button class="btn wide" data-act="iap-buy" data-product="'+IAP_IDS.month+'"'+w+'>'+esc(mo.displayPrice)+' a month</button>')
+        +  '</div>'
+        +  '<p class="hint muted" style="margin:0">Charged to your Apple Account. Renews each year or month until you cancel, any time, in Account \u2192 Subscription or iPhone Settings.</p>'
+        +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm ghost" data-act="iap-restore">Restore purchases</button>'
+        +  siteLink('/terms.html', 'Terms of use', false, 'sm ghost') + siteLink('/privacy.html', 'Privacy', false, 'sm ghost') + '</div>';
+    }
   } else {
     var dis = Account.buying ? ' disabled' : '';
-    h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
-      +  (forever ? '' : '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>')
-      +  (forever || !pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
-      +  '<button class="btn '+(forever ? 'primary ' : '')+'wide" data-act="buy" data-plan="lifetime" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.lifetime ? money(pr.lifetime)+', once, forever' : 'Once, forever')+'</button></div>'
-      +  '<p class="hint" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+(native() ? 'Payment opens in your browser, on Stripe’s page, and brings you back here when you are done; tax is added where it applies.' : 'Payment is on Stripe’s page; tax is added where it applies.')+' Refunds within 14 days, no questions: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. <a href="/terms.html" target="_blank" rel="noopener">Terms</a>.</p>';
+    h += (founding() ? FOUNDING_LINE : '') + '<div class="row" style="gap:8px;flex-wrap:wrap">'
+      +  '<button class="btn primary wide" data-act="buy" data-plan="year" data-why="'+esc(why || '')+'"'+dis+'>'+(pr.year ? money(pr.year)+' a year' : 'Yearly plan')+'</button>'
+      +  (!pr.month ? '' : '<button class="btn wide" data-act="buy" data-plan="month" data-why="'+esc(why || '')+'"'+dis+'>'+money(pr.month)+' a month</button>')
+      +  '</div>'
+      +  '<p class="hint muted" style="margin:0">'+(pr.year ? '' : 'The price is shown on the next page. ')+'Payment is on Stripe’s page; tax is added where it applies. Renews each year or month until you cancel, any time, in Account \u2192 Subscription. Refunds within 14 days of the first charge, no questions: write to hello@lunchsorted.app.</p>'
+      +  '<div class="row" style="gap:8px;flex-wrap:wrap">'+siteLink('/terms.html', 'Terms of use', false, 'sm ghost')+siteLink('/privacy.html', 'Privacy', false, 'sm ghost')+'</div>';
   }
-  openSheet('The Household plan', h);
+  openSheet('The Household plan', h, {plan: true});
 }
 function isHelper(){ return !!(Account.me && Account.me.role === 'helper'); }
 function canWrite(){ return signedIn() && !isHelper(); }
@@ -1454,7 +1549,10 @@ function firstNameFrom(email){ var p = String(email || '').split('@')[0].split(/
 function applyState(st){
   Store.markAccount(true);   /* so an offline boot knows this phone belongs to a household */
   Account.user = {id:st.me.userId, email:st.me.email}; Account.me = st.me; Account.members = st.members || [];
-  Account.entitlement = st.entitlement || null; Account.version = st.version || 0; Account.household = st.household || null;
+  Account.entitlement = st.entitlement || null; Account.version = st.version || 0; Account.household = st.household || null; Account.chargeLater = st.chargeLater || null;
+  if(IAP.queue.length){ var waiting = IAP.queue.splice(0); setTimeout(function(){ waiting.forEach(iapArrived); }, 0); }
+  /* ahead of the sheet, for a household it may open for; while the App Store is not answering, not on every sync */
+  if(iapOn() && !paid() && !IAP.products && !isHelper() && Date.now() - (IAP.triedAt || 0) > 600000){ IAP.triedAt = Date.now(); iapProducts(); }
   if(betaWaiting()) setTimeout(claimBeta, 0);                       /* signed in with a beta code waiting: switch it on */
   if(typeof st.billing === 'boolean' && (!Account.billing || Account.billing.enabled !== st.billing)) loadBilling(true).then(render);
   /* the person on this phone is the member the server says they are, once the
@@ -1578,7 +1676,7 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v23';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v24';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
@@ -1594,7 +1692,8 @@ var APP_BUILD = 'lunchsorted-v23';     /* the same tag as VERSION in sw.js; npm 
 /* v23 says nothing, by Liz's call: it is the App Review fix and four bug fixes, nothing a parent
    would recognise as new, and v22's Recipes note had already had its run. Not the carry-forward
    the paragraph above describes — that is for a release that skips a note, not one with none. */
-var WHATS_NEW = {build:'lunchsorted-v23', text:'', steps:[]};
+/* v24 says nothing: App Store purchase in the iPhone shell, which no parent has yet; the web is unchanged. */
+var WHATS_NEW = {build:'lunchsorted-v24', text:'', steps:[]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
 function whatsNew(){
@@ -2910,7 +3009,7 @@ function openSheet(title, html, state){
   sheetEl.classList.add('open'); backEl.classList.add('open'); bodyEl.scrollTop = 0;
   document.body.style.overflow = 'hidden';
 }
-function closeSheet(){ sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
+function closeSheet(){ if(typeof IAP !== 'undefined' && IAP.inFlight){ IAP.inFlight = false; Account.buying = false; } sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
   UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = ''; }
 /* The what’s new note is retired by the parent coming out of the walk-through the way
    it is left when it has been read: Got it at its foot, or Done at its head. A tap on the
@@ -3704,7 +3803,7 @@ function paneAccount(){
       +  (owner
           ? '<li>Every lunchbox, food, plan, photo and answer, from our servers and from this phone</li>'
             + (others.length ? '<li>'+esc(andList(others))+'’s sign-in to this household — whatever is already on their phone stays on it</li>' : '')
-            + (paid() ? '<li>'+(Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The yearly plan, which stops at once')+'</li>' : '')
+            + (paid() ? '<li>'+(Account.entitlement.source === 'apple' ? 'The Household plan here. Apple\u2019s billing is not: cancel it first '+(iapOn() ? 'in Subscription \u2192 Manage in the App Store' : 'on your iPhone, in Settings \u2192 your name \u2192 Subscriptions')+', or Apple keeps charging' : Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The plan, which stops at once')+'</li>' : '')
           : '<li>Your place in this household, and the lunches from this phone</li>')
       +  '</ul>'
       +  (owner ? '' : '<p class="hint" style="margin:0">The household and its lunches stay'+(others.length ? ' with '+esc(andList(others)) : '')+'. To keep your place and only clear this phone, sign out instead.</p>')
@@ -3766,22 +3865,25 @@ function panePlan(){
      still say Free. One line is the honest thing to show. */
   if(Account.settling){
     return '<div class="card stack" style="gap:10px"><h3>Thank you</h3>'
-      +  '<p class="hint" style="margin:0">Payment received. Switching the Household plan on now — it takes a few seconds.</p></div>';
+      +  '<p class="hint" style="margin:0">Switching the Household plan on now — it takes a few seconds.</p></div>';
   }
   var h = '<div class="card stack" style="gap:12px">'
     +  '<div class="kv"><span>Your plan</span><span>'+esc(lapsing ? 'Household — payment failed' : paid() ? (e.plan === 'lifetime' ? 'Household, forever' : 'Household') : trialing() ? 'Household, free trial' : 'Free')+'</span></div>';
   var cost = planCost();
   if(cost) h += '<div class="kv"><span>Cost</span><span>'+esc(cost)+'</span></div>';
   h += '<div class="kv"><span>'
-    +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
+    +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : firstChargeAhead() ? 'First charged' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
     +  '</span><span>'
     +  esc(paid() ? (e.plan === 'lifetime' ? 'Paid once, never renews' : d || 'Yearly')
         : trialing() ? (trialEnd() ? fmtDay(trialEnd()) : planLabel()) : 'Not on')
     +  '</span></div>';
-  if(lapsing) h += '<p class="hint" style="margin:0;color:var(--warn)">The last payment did not go through. Update the card in Manage billing'+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
+  var apple = e.source === 'apple';
+  if(lapsing && apple) h += '<p class="hint" style="margin:0;color:var(--warn)">Apple could not take the last payment. '+(iapOn() ? 'Tap Manage in the App Store to update how you pay' : 'Update how you pay in iPhone Settings \u2192 your name \u2192 Subscriptions')+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
+  else if(lapsing) h += '<p class="hint" style="margin:0;color:var(--warn)">The last payment did not go through. '+(e.portal ? 'Update the card in Manage billing'+(native() ? ' at lunchsorted.app' : '') : 'Whoever paid can update the card in Manage billing'+(native() ? ' at lunchsorted.app' : ''))+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
   h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
-    +  (paid() ? (e.plan !== 'lifetime' ? '<button class="btn sm" data-act="upgrade" data-why="forever">Switch to forever</button>' : '') : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
-    +  (e.portal ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '')+'</div></div>';
+    +  (paid() ? '' : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
+    +  (apple ? (iapOn() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="iap-manage">Manage in the App Store</button>' : '')
+        : e.portal && !native() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '')+'</div></div>';
   /* what free looks like, said once, in the two places a parent is about to meet it */
   var freeAgain = 'one lunchbox, the week, the shopping list, the pack list and the idea bank stay free. What you have added stays.';
   if(trialing()){
@@ -3791,7 +3893,9 @@ function panePlan(){
     h += '<div class="card stack" style="gap:10px"><h3>Stopping it</h3>'
       +  '<p class="hint" style="margin:0">'
       +  (e.cancelAtPeriodEnd ? 'You have canceled it. '
-        : e.portal ? 'Cancel it any time in Manage billing. '
+        : apple ? (iapOn() ? 'Cancel it any time in Manage in the App Store. ' : 'It was bought through the App Store: cancel it in iPhone Settings \u2192 your name \u2192 Subscriptions, on the Apple Account that paid. ')
+        : native() ? (e.portal ? 'It was bought on the website: cancel it there, at lunchsorted.app, in Manage billing. ' : 'It was bought on the website: whoever paid can cancel it at lunchsorted.app, in Manage billing, or write to us and we will do it. ')
+        : e.portal ? 'Cancel it any time in Manage billing. '+(firstChargeAhead() ? 'Cancel before '+esc(fmtDay(firstChargeAhead()))+' and nothing is charged. ' : '')
         : 'Whoever paid can cancel it in Manage billing on their own phone, or write to us and we will do it. ')
       +  'It works until '+esc(d || 'the end of the period')+', then '+freeAgain+'</p></div>';
   }
@@ -3806,10 +3910,12 @@ function panePlan(){
 function planCost(){
   var e = Account.entitlement || {}, pr = (Account.billing && Account.billing.prices) || {};
   /* a household whose three weeks are over is not waiting for a trial to end */
-  if(!paid()) return trialing() && pr.year ? money(pr.year)+' a year when the three weeks end' : '';
+  if(!paid()) return trialing() && pr.year && !native() ? money(pr.year)+' a year, '+(chargeLater() ? 'from '+fmtDay(chargeLater()) : 'from the day you buy') : '';
+  if(e.source === 'apple') return 'Through the App Store';            /* Apple's price is Apple's to say; the website's may differ */
   if(e.plan === 'lifetime') return pr.lifetime ? money(pr.lifetime)+', once' : '';
   var k = ['year','month'].filter(function(n){ return pr[n] && pr[n].id && pr[n].id === e.price; })[0];
-  return k ? money(pr[k])+' a '+k : (pr.year ? money(pr.year)+' a year' : '');
+  /* a household on an earlier price (the founding one, after a rise) is quoted nothing rather than someone else's */
+  return k ? money(pr[k])+' a '+k+(firstChargeAhead() ? ', from '+fmtDay(firstChargeAhead()) : '') : '';
 }
 
 /* what a bug report needs and a parent should not have to type: the build, the phone, the shape of the household; never a food or a name */
@@ -3894,7 +4000,7 @@ function planLabel(){
   if(e.plan === 'lifetime') return 'Forever';
   if(e.status === 'past_due') return 'Payment failed';
   var d = planDate();
-  return d ? (e.cancelAtPeriodEnd ? 'Ends ' : 'Renews ') + d : 'Yearly';
+  return d ? (e.cancelAtPeriodEnd ? 'Ends ' : firstChargeAhead() ? 'First charged ' : 'Renews ') + d : 'Yearly';
 }
 
 /* --------------------------------------------------------------- sheets */
@@ -4487,8 +4593,8 @@ function foodSheet(kidId, foodId){
   openSheet(f.n, h);
 }
 /* a page on the site, from inside the app: Safari with its Done button in the iPhone app, a new tab on the web */
-function siteLink(path, label, primary){
-  var cls = 'btn'+(primary ? ' primary' : '');
+function siteLink(path, label, primary, extra){
+  var cls = 'btn'+(primary ? ' primary' : '')+(extra ? ' '+extra : '');
   return nativePlugin('Browser') ? '<button class="'+cls+'" data-act="help-site" data-url="'+esc(path)+'">'+label+'</button>'
                                  : '<a class="'+cls+'" href="'+esc(path)+'" target="_blank" rel="noopener">'+label+'</a>';
 }
@@ -4517,7 +4623,9 @@ function helpSheet(){
     ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from and its two recipes to cook from. Foods in your own words, recipes of your own, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
     ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, or keeping a recipe of your own, is part of the Household plan. The idea bank, and the recipes that come with it, stay free.']
   ];
-  if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel.' + (native() ? ' Buying and Manage billing both open your browser, because the plan is sold on the web \u2014 that page hands you back when you are done.' : '')]);
+  if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', native()
+    ? 'Account tab \u2192 Subscription: the plan, the date it renews or ends, and Manage in the App Store to change or cancel it; refunds are Apple\u2019s. Paid but not on? Restore purchases, under the prices. A plan bought on the website is changed there, at lunchsorted.app.'
+    : 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel. A plan bought in the iPhone app is changed in the App Store.']);
   var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
     return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
   }).join('') + '</div>'
@@ -5359,6 +5467,63 @@ document.addEventListener('click', function(ev){
   }
   if(act==='upgrade'){ upgradeSheet(el.getAttribute('data-why') || ''); return; }
   if(act==='go-signin'){ rememberAfter(el.getAttribute('data-why')); UI.tab = 'setup'; UI.pane = ''; render(); setTimeout(function(){ var el = document.getElementById('signinEmail'); if(el) el.focus(); }, 120); return; }
+  /* the iPhone app never opens Stripe, to buy or to manage: neither button is drawn there, and neither works */
+  if((act==='buy' || act==='portal') && native()) return;
+  if(act==='iap-retry'){ IAP.failed = false; upgradeSheet(el.getAttribute('data-why') || ''); return; }
+  if(act==='iap-buy'){
+    var sk = storeKit(), tok = Account.entitlement && Account.entitlement.appleToken;
+    if(!sk || Account.buying) return;
+    if(!tok){ toast('Still reaching your account. Try again in a moment'); Sync.pull().catch(function(){}); return; }
+    Account.buying = true; IAP.inFlight = true;
+    var label = el.textContent, row = Array.prototype.slice.call(document.querySelectorAll('[data-act="iap-buy"]'));
+    row.forEach(function(b){ b.disabled = true; }); el.textContent = 'Opening the App Store\u2026';
+    var done = function(){ Account.buying = false; IAP.inFlight = false; el.textContent = label; row.forEach(function(b){ b.disabled = false; }); };
+    rememberAfter(el.getAttribute('data-why'));
+    sk.purchase({id: el.getAttribute('data-product'), token: tok}).then(function(r){
+      if(!r || r.status === 'cancelled'){ done(); rememberAfter(''); return; }
+      if(r.status === 'pending'){ done(); closeSheet(); toast('Waiting for approval. The plan switches on as soon as it comes through'); return; }
+      el.textContent = 'Switching it on\u2026';
+      return iapLink(r).then(function(res){
+        done();
+        if(res.status === 200 && paid()){
+          closeSheet();
+          render(); toast('Welcome to the Household plan'); resumeAfter(); return;
+        }
+        if(res.status === 400 || res.status === 409){ rememberAfter(''); toast(iapRefused(res)); return; }
+        /* the server did not answer: the transaction stays unfinished, and Apple's own notification switches it on */
+        closeSheet(); UI.tab = 'setup'; UI.pane = 'plan'; render();
+        toast('Paid \u2014 it can take a minute to show up here');
+        setTimeout(function(){ Sync.pull().then(render).catch(function(){}); }, 6000);
+      });
+    }).catch(function(){ done(); toast('The purchase did not go through. Try again in a moment'); });
+    return;
+  }
+  if(act==='iap-restore'){
+    var skr = storeKit();
+    if(!skr || Account.buying) return;
+    Account.buying = true; el.disabled = true;
+    var prices = Array.prototype.slice.call(document.querySelectorAll('[data-act="iap-buy"]'));
+    prices.forEach(function(b){ b.disabled = true; });
+    var was = el.textContent, back = function(){ Account.buying = false; el.disabled = false; el.textContent = was; prices.forEach(function(b){ b.disabled = false; }); };
+    el.textContent = 'Asking the App Store\u2026';
+    skr.restore().then(function(r){
+      var list = (r && r.transactions) || [];
+      if(!list.length){ back(); toast('Nothing to restore on this Apple Account'); return; }
+      return Promise.all(list.map(iapLink)).then(function(rs){
+        back();
+        if(paid() && rs.some(function(x){ return x.status === 200; })){ closeSheet(); render(); toast('Restored \u2014 the Household plan is on'); return; }
+        var said = rs.filter(function(x){ return x.status === 400 || x.status === 409; })[0];
+        toast(said ? iapRefused(said) : 'The plans on this Apple Account have ended');
+      });
+    }).catch(function(){ back(); toast('The App Store did not answer. Try again in a moment'); });
+    return;
+  }
+  if(act==='iap-manage'){
+    var skm = storeKit();
+    /* no pull after: a change made on Apple's sheet reaches the server as Apple's notification, not from here */
+    if(skm) skm.manage().catch(function(){ toast('The App Store would not open. Try iPhone Settings \u2192 your name \u2192 Subscriptions'); });
+    return;
+  }
   if(act==='buy' || act==='portal'){
     if(Account.buying) return;
     Account.buying = true; var was = el.textContent; el.disabled = true;
@@ -5368,31 +5533,9 @@ document.addEventListener('click', function(ev){
     sibs.forEach(function(b){ b.disabled = true; });
     var undoBtn = function(){ Account.buying = false; el.disabled = false; el.textContent = was; sibs.forEach(function(b){ b.disabled = false; }); };
     if(act==='buy') rememberAfter(el.getAttribute('data-why'));
-    var client = native() ? 'ios' : undefined;
-    var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') || 'year', client: client}) : api('POST', '/api/billing/portal', {client: client});
+    var call = act==='buy' ? api('POST', '/api/billing/checkout', {plan: el.getAttribute('data-plan') || 'year'}) : api('POST', '/api/billing/portal', {});
     call.then(function(r){
       if(r.status !== 200 || !r.url){ undoBtn(); toast(r.error || (act==='buy' ? 'Could not open the payment page' : 'Could not open your billing page')); return; }
-      /* the iPhone app: Stripe must open in the default browser, not in a browser view inside the
-         app \u2014 a purchase that never leaves the app is the one thing guideline 3.1.1 forbids.
-         back.html carries the result home over the lunchsorted:// scheme. The branch is on
-         native(), not on the plugin: a shell built before AppLauncher existed still loads this
-         page from the live site, and has to fail here rather than fall through to a navigation
-         that would put Stripe back inside the app. The sheet stays open until the hand-off
-         actually takes, so a failure leaves the prices where the parent can reach them. */
-      if(native()){
-        var launcher = nativePlugin('AppLauncher');
-        var page = act==='buy' ? 'the payment page' : 'your billing page';
-        if(!launcher || !launcher.openUrl){ undoBtn(); toast('Could not open your browser \u2014 update the app, or sign in at lunchsorted.app'); return; }   /* a shell from before this branch: trying again never works, and help.html promises this sentence */
-        /* Browser.open allowlisted http/https down in Swift; UIApplication.open allowlists nothing
-           and would fire tel:, shortcuts: or any app's scheme. Our own checkout is always Stripe. */
-        if(!/^https:\/\/[a-z0-9-]+\.stripe\.com\//i.test(r.url)){ undoBtn(); toast('Could not open '+page+' \u2014 try again'); return; }
-        leftForCheckout(true);
-        launcher.openUrl({url: r.url}).then(function(res){
-          if(res && res.completed === false){ leftForCheckout(false); undoBtn(); toast('Could not open '+page+' \u2014 try again'); return; }
-          closeSheet(); undoBtn();
-        }).catch(function(){ leftForCheckout(false); undoBtn(); toast('Could not open '+page+' \u2014 try again'); });
-        return;
-      }
       location.href = r.url;                                 /* the web: Stripe's page; it sends you back to /app/ */
     }).catch(function(){ undoBtn(); offline(); });
     return;
@@ -5640,12 +5783,18 @@ Store.load().then(function(r){
     settle.on = true;
     var looks = 0, look = function(){
       if(paid()){ settle.on = false; Account.settling = false; render(); toast('Welcome to the Household plan'); resumeAfter(); return; }
-      if(++looks > 8){ settle.on = false; Account.settling = false; render(); toast('Paid \u2014 it can take a minute to show up here'); return; }
+      if(++looks > 8){ settle.on = false; Account.settling = false; render(); toast('Done \u2014 it can take a minute to show up here'); return; }
       setTimeout(function(){ Sync.pull().then(look).catch(look); }, looks < 3 ? 1500 : 3000);
     };
     setTimeout(look, 1200);
   }
   /* the iPhone app: a sign-in link or back.html opening the app lands here, with the url */
+  /* the App Store: renewals, an Ask to Buy approved later, one left unfinished last time. Signed
+     out they are left unfinished, and StoreKit offers them again at the next launch. */
+  var skBoot = storeKit();
+  if(skBoot && skBoot.addListener){
+    skBoot.addListener('transaction', iapArrived);
+  }
   var app = nativePlugin('App');
   if(app && app.addListener){
     app.addListener('appUrlOpen', function(ev){
