@@ -1,5 +1,5 @@
 /* The ideas pages: the help page's look, shared so a new article is one HTML file. */
-:root{color-scheme:light dark;--ground:#E9EEE6;--ink:#16241E;--ink-2:#46584F;--ink-3:#78897F;--line:#CFDACB;--accent:#2E5A48}
+:root{color-scheme:light dark;--ground:#E9EEE6;--ink:#16241E;--ink-2:#46584F;--ink-3:#5F7067;--line:#CFDACB;--accent:#2E5A48}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ground:#0E1815;--ink:#E6EEE7;--ink-2:#A6BAAE;--ink-3:#7A8E84;--line:#2B3E36;--accent:#79C8A2}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -11,6 +11,7 @@ p,li{color:var(--ink-2);max-width:62ch} p{margin:0 0 14px}
 ul{padding-left:20px;margin:0 0 14px} li{margin:0 0 6px}
 .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px}
 a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
 strong{color:var(--ink)}
 .list{list-style:none;padding:0;margin:24px 0 0}
 .list li{margin:0;border-top:1px solid var(--line)}

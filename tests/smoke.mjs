@@ -3635,13 +3635,13 @@ try {
     const locs = [...sitemap.matchAll(/<loc>https:\/\/lunchsorted\.app(\/[^<]*)<\/loc>\s*<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/g)].map(m => m[1]);
     check('the sitemap lists the public pages with a date each, and none of the private ones, and every one exists',
       locs.length === (sitemap.match(/<url>/g) || []).length && ['/', '/help.html', '/ideas/', '/ideas/nut-free-school-lunch-week.html'].every(l => locs.includes(l))
-      && !locs.some(l => /^\/(app|beta|back|thanks|on-the-list)/.test(l))
+      && !locs.some(l => /^\/(app|api|admin|beta|back|thanks|on-the-list)/.test(l))
       && locs.every(l => fs.existsSync(path.join(ROOT, l.endsWith('/') ? l + 'index.html' : l))), locs);
     check('robots.txt points at the sitemap', /\nSitemap: https:\/\/lunchsorted\.app\/sitemap\.xml\n/.test(fs.readFileSync(path.join(ROOT, 'robots.txt'), 'utf8')));
   }
   await site.goto(BASE+'/privacy.html');
   await site.waitForTimeout(250);
-  check('the privacy page names every page that runs analytics', /front page of this site and the lunch ideas pages/.test(await site.textContent('body')));
+  check('the privacy page names the pages that run analytics: the front page, the ideas pages and the beta page', /front page of this site, the lunch ideas pages under \/ideas\/ and the beta page at \/beta/.test(await site.textContent('body')));
   warn('the privacy page has a real contact address, not the placeholder',
     !(await site.content()).includes('hello@example.com'));
   /* the sign-in link only opens the app if this file parses, carries the team, and claims
