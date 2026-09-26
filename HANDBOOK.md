@@ -96,22 +96,18 @@ post. Liz corrected "tick" three times in the drafts of 2026-09-22 alone; it is 
 | mum, nappy, biscuit, crisps, sweets (as a category name) | mom, diaper, cookie, chips; the app's own category is "sweet", singular, and stays |
 | "at the weekend", "in hospital", "maths" | "on the weekend", "in the hospital", "math" |
 
-What still says "tick" today, for the one pull request that fixes it (intake row Q-004): under
-ten parent-visible strings in the planner (`public/app/index.html`, the pack list and the help
-sheet; the other sixty-odd matches are class names and code, which stay), five on the help page
-(`public/help.html`), one in the App Store description (`store/listing.md`), and six in the README.
-"The bin" and "millilitres" are in the help sheet and the help page, "cancelling" on the help page.
-"Morning review" survives in four emails, the README, and the planner's own paywall line. Until
-that lands, no new copy anywhere repeats any of them, and a post never says "tick". "Lunchbox" is
-one word everywhere and is the app's own word; it stays.
+Intake row Q-004 took all of these out of the planner, the help page, the terms, the emails, the
+store listing and the README. The code still says "tick" in about sixty class names and
+identifiers, which no parent sees, and they stay. The App Store description changes at the next
+version that can be edited. New copy never brings any of them back, and a post never says
+"tick". "Lunchbox" is one word everywhere and is the app's own word; it stays.
 
 ### Names and claims
 
 - The name is **Lunch Sorted**, two words; **the planner** for the app itself; the tabs are Pack,
   Week, Foods, Shop, Recipes and Account; **the kid's pick**; **the after-school review** for what
-  came home (the emails and the README still say "morning review": a fix waiting, not a second
-  name); **the Household plan**; **founding price** for today's price (never "forever": it is no
-  longer sold); **school rules** for the
+  came home (never "morning review", its old name); **the Household plan**; **founding price**
+  for today's price (never "forever": it is no longer sold); **school rules** for the
   flags; **Plan the week** and **Shuffle** as the app names them.
 - Never jargon, never an identifier, never "users". They are parents, households, kids, phones.
 - Every claim is one the app makes good on. Nothing is "healthy", and "balanced" only ever
