@@ -108,7 +108,8 @@ function serve(){
     if(p.endsWith('/')) p += 'index.html';
     const file = path.join(ROOT, p);
     if(!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()){
-      res.writeHead(404); return res.end('not found');
+      /* as Netlify does: a path that is not there gets the site's own 404 page, with a 404 */
+      res.writeHead(404, {'Content-Type': 'text/html'}); return fs.createReadStream(path.join(ROOT, '404.html')).pipe(res);
     }
     const hdr = {'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream'};
     const csp = cspFor(p.replace(/index\.html$/, m => (p === '/index.html' ? m : m)));
@@ -2783,7 +2784,7 @@ try {
     k.past = [{d: iso, dow: y.getDay(), slots, lock: {}, kidPick: {}}]; k.packed = k.packed || {}; k.packed[iso] = {main:{at:new Date().toISOString(), by:null}};
     localStorage.setItem('lunchsorted', JSON.stringify(d)); });
   await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
-  check('the morning review is locked in place: the question shows, the answers wait for the plan', /How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('.chip.lock', a => a.length)) >= 1);
+  check('the after-school review is locked in place: the question shows, the answers wait for the plan', /How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('.chip.lock', a => a.length)) >= 1);
   await pb.click('[data-act="tab"][data-tab="shop"]'); await pb.waitForTimeout(250);
   check('the shopping list is still free, the pantry tick is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
   await pb.click('[data-act="have"]'); await pb.waitForTimeout(300);
@@ -3865,7 +3866,7 @@ try {
     /* the box is where a parent is standing: on the step, not three taps back on the
        overview — and the step and the folded whole list are two views of one tick */
     await pr2.click('[data-act="cook-step"][data-i="2"]'); await pr2.waitForTimeout(250);
-    check('the amounts under a step each carry a box to tick, at a size a floury thumb can hit',
+    check('the amounts under a step each carry a box to check off, at a size a floury thumb can hit',
       await pr2.$$eval('ul.steping .item', a => a.length > 0
         && a.every(b => b.getAttribute('data-act') === 'cook-tick'
           && b.querySelector('.box') && b.getBoundingClientRect().height >= 44)),
@@ -4237,6 +4238,8 @@ try {
   const site = await ctx.newPage();
   const siteErrors = [];
   site.on('pageerror', e => siteErrors.push(String(e.message)));
+  /* a block the page's own policy refuses is a console error, never a pageerror */
+  site.on('console', m => { if(m.type() === 'error' && /Content Security Policy/i.test(m.text())) siteErrors.push(m.text()); });
   await site.goto(BASE+'/');
   await site.waitForTimeout(400);
   check('the landing page never scrolls sideways on a phone',
@@ -4270,6 +4273,17 @@ try {
     /^https?:\/\//.test(await site.$eval('meta[property="og:image"]', m => m.content)));
   check('the landing page says what is free, what the plan costs, and where the terms are',
     await site.evaluate(() => { const p = document.querySelector('#pricing'); return !!p && /\$19\.99/.test(p.textContent) && /\$2\.99/.test(p.textContent) && /Founding price/.test(p.textContent) && !/forever|\$79|\$29\b/i.test(p.textContent) && /three weeks/.test(p.textContent) && !!p.querySelector('a[href="/terms.html"]') && !!p.querySelector('a[href="/app/"]'); }));
+  {
+    const ld = await site.evaluate(() => { const b = document.querySelector('script[type="application/ld+json"]'); return b ? JSON.parse(b.textContent) : null; });
+    const app = ld && ld['@graph'].find(x => x['@type'] === 'WebApplication');
+    const typed = await site.evaluate(() => [...document.querySelectorAll('#pricing [data-price="year"], #pricing [data-price="month"]')].map(e => e.getAttribute('data-price')));
+    const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    const printed = k => (html.match(new RegExp('data-price="' + k + '">\\$([0-9.]+)<')) || [])[1];
+    const offer = n => (app.offers.find(o => new RegExp(n).test(o.name)) || {}).price;
+    check('the home page tells search engines what it is, at the prices the page itself prints',
+      !!app && offer('yearly') === printed('year') && offer('monthly') === printed('month') && !app.offers.some(o => /forever/i.test(o.name)) && typed.length === 2,
+      [app && app.offers, printed('year'), printed('month')]);
+  }
   check('the waitlist form is wired to Netlify',
     await site.$eval('form.signup', f => f.getAttribute('data-netlify') === 'true' &&
       !!f.querySelector('input[name="form-name"]')));
@@ -4287,7 +4301,30 @@ try {
   await site.goto(BASE+'/feedback.html'); await site.waitForTimeout(250);
   check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && !!f.querySelector('textarea[name="ideas"]') && f.querySelectorAll('input[name="want"]').length === 5 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));
   await site.goto(BASE+'/help.html'); await site.waitForTimeout(250);
+  {
+    /* the answers told to search engines are the answers on the page, word for word, and name no price */
+    const faq = await site.evaluate(() => {
+      const ld = JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent);
+      const onPage = {};
+      document.querySelectorAll('h2').forEach(h => { const p = h.nextElementSibling; if(p && p.tagName === 'P') onPage[h.textContent.trim()] = p.textContent.replace(/\s+/g, ' ').trim(); });
+      return { type: ld['@type'], qa: ld.mainEntity.map(q => ({ q: q.name, same: onPage[q.name] === q.acceptedAnswer.text })), text: JSON.stringify(ld) };
+    });
+    check('the help page\'s FAQPage answers are its own answers, word for word, with no price in them',
+      faq.type === 'FAQPage' && faq.qa.length >= 5 && faq.qa.every(x => x.same) && !/\$\d/.test(faq.text), faq.qa.filter(x => !x.same));
+    check('and it carries a description and a canonical address', !!(await site.$('meta[name="description"]')) && (await site.$eval('link[rel="canonical"]', l => l.href)) === 'https://lunchsorted.app/help.html');
+  }
   check('the help page answers the questions and points at the planner and the address', /pick the week/.test(await site.textContent('body')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href^="mailto:hello@lunchsorted.app"]')));
+  {
+    const r = await site.goto(BASE+'/no-such-page'); await site.waitForTimeout(150);
+    check('a path that is not there gets the site\'s own page, with a 404, the way home, and no place in search',
+      r.status() === 404 && /isn.t here/.test(await site.textContent('h1')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href="/help.html"]'))
+      && (await site.$eval('meta[name="robots"]', m => m.content)) === 'noindex');
+    check('and it carries the site\'s policy, like every other page', POLICIES['/404.html'] === POLICIES['/help.html']);
+    const noindex = ['thanks', 'on-the-list'].map(n => /<meta name="robots" content="noindex">/.test(fs.readFileSync(path.join(ROOT, n + '.html'), 'utf8')));
+    check('the pages after a form is sent stay out of search', noindex.every(Boolean), noindex);
+    const llms = fs.readFileSync(path.join(ROOT, 'llms.txt'), 'utf8');
+    check('llms.txt says what the app is and names no price', /^# Lunch Sorted\n\n> /.test(llms) && !/\$\d/.test(llms));
+  }
   await site.goto(BASE+'/privacy.html');
   await site.waitForTimeout(250);
   warn('the privacy page has a real contact address, not the placeholder',

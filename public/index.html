@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lunch Sorted — a week of school lunches in about a minute</title>
-<meta name="description" content="Answer three questions and get a week of packed school lunches, matched so each box goes together, with the shopping list built for you. Free, works offline, nothing to install.">
+<meta name="description" content="Answer three questions and get a week of packed school lunches, matched so each box goes together, with the shopping list built for you. Free to plan.">
 <meta name="theme-color" content="#E9EEE6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<meta property="og:title" content="Lunch Sorted">
+<meta property="og:title" content="Lunch Sorted: a week of school lunches in about a minute">
 <meta property="og:description" content="A week of packed school lunches in about a minute — matched boxes, school rules respected, shopping list built for you.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://lunchsorted.app/">
@@ -154,6 +154,62 @@ footer a{color:var(--ink-2)}
 </style>
 <script src="/ga.js" defer></script>
 <script src="/price.js" defer></script>
+<!-- for search engines; the prices here are typed, not filled in by price.js: change them with the founding price -->
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "Organization",
+   "@id": "https://lunchsorted.app/#org",
+   "name": "Lunch Sorted",
+   "url": "https://lunchsorted.app/",
+   "logo": "https://lunchsorted.app/icons/icon-512.png",
+   "email": "hello@lunchsorted.app",
+   "parentOrganization": {
+    "@type": "Organization",
+    "name": "Lila Bloom Enterprises"
+   }
+  },
+  {
+   "@type": "WebApplication",
+   "@id": "https://lunchsorted.app/#app",
+   "name": "Lunch Sorted",
+   "url": "https://lunchsorted.app/app/",
+   "description": "A school-lunch planner for parents. Answer three questions and it plans a week of packed lunches from foods your kid will eat, matched so each box goes together, keeps your school's rules, and builds the shopping list.",
+   "applicationCategory": "LifestyleApplication",
+   "operatingSystem": "Any; works in a phone's browser and installs to the home screen",
+   "browserRequirements": "A current browser",
+   "publisher": {
+    "@id": "https://lunchsorted.app/#org"
+   },
+   "image": "https://lunchsorted.app/img/og.png",
+   "screenshot": "https://lunchsorted.app/img/screen-week.png",
+   "offers": [
+    {
+     "@type": "Offer",
+     "name": "Free",
+     "price": "0",
+     "priceCurrency": "USD",
+     "description": "One lunchbox, planned and shopped for, free for good."
+    },
+    {
+     "@type": "Offer",
+     "name": "Household plan, yearly",
+     "price": "19.99",
+     "priceCurrency": "USD"
+    },
+    {
+     "@type": "Offer",
+     "name": "Household plan, monthly",
+     "price": "2.99",
+     "priceCurrency": "USD"
+    }
+   ]
+  }
+ ]
+}
+</script>
 </head>
 <body>
 
@@ -173,9 +229,9 @@ footer a{color:var(--ink-2)}
           <a class="btn primary" href="/app/">Plan this week &mdash; free</a>
           <a class="btn" href="#how">See how it works</a>
         </div>
-        <p class="free">Free to plan · everything on for your first three weeks · no card, no account needed</p>
+        <p class="free">Free to plan · everything on for your first three weeks · no card, no account needed · <a href="/help.html">questions, answered</a></p>
       </div>
-      <div class="shot"><picture><source type="image/webp" srcset="/img/screen-week.webp"><img src="/img/screen-week.png" width="375" height="812" decoding="async" alt="The planner's week view: two lunchboxes named across the top, a Let Emma pick the week button under the date, and each school day drawn as a four-compartment tin with a main, side, fruit and sweet."></picture></div>
+      <div class="shot"><picture><source type="image/webp" srcset="/img/screen-week.webp"><img src="/img/screen-week.png" width="375" height="812" decoding="async" fetchpriority="high" alt="The planner's week view: two lunchboxes named across the top, a Let Emma pick the week button under the date, and each school day drawn as a four-compartment tin with a main, side, fruit and sweet."></picture></div>
     </div>
   </header>
 </div>

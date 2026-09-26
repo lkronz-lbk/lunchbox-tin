@@ -1,7 +1,7 @@
 # App Store listing
 
 Everything App Store Connect asks for, as a checklist, grouped by the page it asks on.
-Paste from here. Character limits are Apple's. Tick as you go.
+Paste from here. Character limits are Apple's. Check them off as you go.
 
 ## Where each field lives
 
@@ -22,8 +22,8 @@ appear.
 
 The **seller name** on the finished product page is not a listing field at all. It is the
 legal entity name on the developer account, set under **Business** (Agreements, Tax and
-Banking). Individual enrolment publishes your legal name. Changing it later means changing
-the enrolment, so settle it before launch.
+Banking). Individual enrollment publishes your legal name. Changing it later means changing
+the enrollment, so settle it before launch.
 
 ## App Information
 
@@ -90,7 +90,7 @@ the enrolment, so settle it before launch.
 > Everything you planned across all kids, in one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
 >
 > TWO RECIPES IN, THE REST YOU BRING
-> A Recipes tab of its own, for the whole household rather than one lunchbox. Two kid-tested recipes come with it, free, and once you have kept a few of your own you can search them by name or by what is already in the cupboard. One step at a time on the screen while you are at the counter, with a box to tick for each ingredient, in US measures or metric, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
+> A Recipes tab of its own, for the whole household rather than one lunchbox. Two kid-tested recipes come with it, free, and once you have kept a few of your own you can search them by name or by what is already in the cupboard. One step at a time on the screen while you are at the counter, with a box to check off for each ingredient, in US measures or metric, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
 
 > BUILT FOR MULTIPLE KIDS
 > Simplify shopping by matching all kids' lunchboxes, while honoring each school's rules with alternative options. Kids with wildly different preferences can have totally different lunchbox plans. You choose your setup, and one shopping list still covers them all.
@@ -252,7 +252,7 @@ Most of what App Store Connect offers is conditional on something this app is no
 these block submission, and none need a decision now.
 
 - [ ] **App Accessibility** (the accessibility labels): optional, and it can be added any
-      time without a new build. Only tick a feature you have actually tested with it on.
+      time without a new build. Only check a feature you have actually tested with it on.
       Worth doing after launch, not before.
 - **In-App Events**: for a real, time-limited happening inside the app. There isn't one.
 - **Custom Product Pages** and **Product Page Optimization**: alternate screenshots and copy
@@ -300,7 +300,7 @@ The one worth a look:
       the seller; it appears in the Copyright line instead. Apple reissues the agreements from
       time to time and an unaccepted one takes your apps off sale, so check Business whenever
       Apple emails about updated terms. What renews annually is the Developer Program
-      membership, on its enrolment anniversary.
+      membership, on its enrollment anniversary.
 - [x] `app.lunchsorted` registered under Identifiers with Associated Domains enabled
 - [x] `hello@lunchsorted.app` actually delivers. Apple mails it and reviewers use it.
 
