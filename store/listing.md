@@ -184,7 +184,7 @@ Data is **Yes, Product Interaction, linked, not tracking, Analytics**: beside th
 used the app and a count of the days they have used it (both run the service: the three-week
 trial, the reminder emails, knowing whether an account is live), the servers keep six dates a
 household (made, first week planned, back in week two, second phone joined, checkout opened,
-first paid; migration 0006_milestones_errors), which measure whether the app is working for people and so are
+first paid; migration 0009_milestones_errors), which measure whether the app is working for people and so are
 declared as analytics. Nothing narrower than those six moments is recorded; revisit this answer
 if anything else is ever kept. Everything linked to a person is collected only after the parent signs in; until then the one
 thing that leaves the phone is a crash report, which names nobody. App Store Connect has no way to

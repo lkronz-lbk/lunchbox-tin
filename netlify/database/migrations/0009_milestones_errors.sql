@@ -1,4 +1,4 @@
--- 0006: two small tables for the people who look after the app rather than the people who
+-- 0009 (written as 0006 on dev, renumbered when dev met main's 0006_storekit: Netlify refuses two of one number): two small tables for the people who look after the app rather than the people who
 -- use it. Neither holds a lunch, a food, a name or an address.
 --
 -- milestones: one row a household a moment on the way from a sign-up to a paid plan, so

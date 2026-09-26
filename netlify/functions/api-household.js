@@ -43,7 +43,7 @@ async function ensureHousehold(user, withDoc) {
   return { ...h, doc_empty: true, role: 'owner', member_id: memberId, milestones: ['signed_up'] };
 }
 
-/* The moments the numbers count (migration 0006_milestones_errors), each written once and read back with the
+/* The moments the numbers count (migration 0009_milestones_errors), each written once and read back with the
    household so a request that has nothing new to say costs nothing. Week two is the README's
    own measure: did the household come back between seven and fourteen days old. */
 const DAY = 86400000;

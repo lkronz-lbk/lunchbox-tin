@@ -293,7 +293,7 @@ export async function stats(now = Date.now()) {
       tester: !!h && h.source === 'code'
     };
   });
-  /* the six moments a household (migration 0006_milestones_errors): every household counted once a kind, the cohort
+  /* the six moments a household (migration 0009_milestones_errors): every household counted once a kind, the cohort
      being the households that signed up in the last 30 days */
   const funnel = await q`SELECT m.kind, count(*) FILTER (WHERE s.at > now() - interval '30 days')::int AS month, count(*)::int AS total
     FROM milestones m JOIN milestones s ON s.household_id = m.household_id AND s.kind = 'signed_up' GROUP BY m.kind`;

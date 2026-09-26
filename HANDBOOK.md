@@ -257,7 +257,7 @@ As of 2026-09-22. Change this section first when the priority moves.
   home page's waitlist form, because the beta is capped at 25 households and cannot take a
   spike. The App Store link replaces the waitlist when the listing is live.
 - **Measure week two.** The one number the README asks for: do strangers come back in their
-  second week. The milestones table (migration 0006_milestones_errors) makes it a query.
+  second week. The milestones table (migration 0009_milestones_errors) makes it a query.
 - **Listen before building.** The backlog in `README.md` (home-cooked or store-bought, the
   shopping hand-off, rated products, a quality score, macros) is ideas, not a plan; evidence from
   the intake queue decides what gets a spec.

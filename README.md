@@ -529,9 +529,9 @@ Connect have to move in the same sitting:
 - [x] **The build.** `main` took v24 first (App Store purchase, no note), so `dev` was brought
       level with it as v25 on 2026-09-25. v25 carries the note `dev` had written as v24's; no
       phone has read it, since main's v24 said nothing, so there is no `seenAs`.
-- [ ] **Migration `0006_milestones_errors`** applies itself on the `main` deploy (the build command runs
+- [ ] **Migration `0009_milestones_errors`** applies itself on the `main` deploy (the build command runs
       `scripts/migrate.mjs`): it backfills `signed_up` exactly and `paid` approximately, and
-      is already applied and frozen on the staging branch.
+      was applied on the staging branch as `0006_milestones_errors`; under its new number it runs there once more and changes nothing, since every statement in it is `IF NOT EXISTS` or `ON CONFLICT DO NOTHING`.
 - [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' https://lunchsorted.app/api/errors`
       answers 404 to a GET, `/admin` shows The funnel and Broken screens, and the privacy page's
       "Last updated" names the day of that deploy (set it in the deploy commit: the live page
@@ -926,7 +926,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   which opens the plan sheet on arrival. The suite captures every email through
   `globalThis.__LS_MAIL`; nothing reaches Resend from a test.
 - **Milestones**: one row a household a moment, written once each by the functions
-  (migration 0006_milestones_errors, `milestone()` in `netlify/lib/db.js`): `signed_up` when the household row is
+  (migration 0009_milestones_errors, `milestone()` in `netlify/lib/db.js`): `signed_up` when the household row is
   made, `first_plan` on the first push whose document holds a planned week, `week_two` when a
   parent's phone (never a caretaker's) reaches the server between seven and fourteen days after
   the row was made (the measure this file asks for; the window runs from sign-in, not from the
