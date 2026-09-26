@@ -330,7 +330,7 @@ forward).
 - [x] Neon project with `production` and `staging` branches; `NETLIFY_DATABASE_URL` and
       `STAGING_DATABASE_URL` scoped to their contexts.
 - [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set.
-- [x] Stripe: product and three prices in test and live mode, a webhook endpoint per mode,
+- [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price stays only so past purchases are recognised; a webhook endpoint per mode,
       keys, secrets and price ids scoped per context (Billing, below).
 - [ ] Confirm HTTPS covers `www.lunchsorted.app` as well as the apex.
 - [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
@@ -411,7 +411,7 @@ code handles including a redelivery after a failure and one arriving out of orde
 gates, the plan line, cancellation, forever, a refund, who may manage billing, a deleted
 account stopping its subscription, the onboarding email step, the welcome email, the daily
 reminder job and its stop link, the pricing section on the landing page, and the iPhone
-app's paths: a checkout that returns through `/back.html`, that page under its own policy,
+app's paths: `/back.html` (left over from when the app opened Stripe) under its own policy,
 and a phone that identifies as the app leading with the code and never being told to add
 itself to the Home Screen. The browser never downloads fonts, so a run takes about two minutes. No test framework — one file, one dependency. CI runs it on every push to `main` or `dev` and on every pull request.
 
@@ -434,10 +434,10 @@ the visual identity.
 3. **Built, behind the same switch** — Stripe Checkout on the web (below). Needs the four
    `STRIPE_*` variables per context and a webhook endpoint registered in Stripe.
 4. **Built** — the Capacitor iOS shell (`ios/`, `ios/README.md`) for the US storefront: it
-   loads the web app, opens Stripe in the phone's own browser, outside the app, and takes the parent back through `/back.html`,
+   loads the web app and sells the plan through the App Store (in-app purchase; Stripe is the web's alone),
    builds on CI without a Mac, with the night-before kid's-pick reminder (6pm by default), and
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
-   sheet and a Home Screen widget; payments stay on the web.
+   sheet and a Home Screen widget.
 
 - **Help** — the ? at the top of every tab opens a sheet: twenty-one one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
@@ -521,23 +521,99 @@ Connect have to move in the same sitting:
       Analytics. The answers and the notes behind them are in `store/listing.md` under App
       Privacy; the label then reads "Data Linked to You: Contact Info, User Content,
       Identifiers, Purchases, Usage Data" and "Data Not Linked to You: Diagnostics". Until
-      `main` carries this work the questionnaire stays at its v23 answers (no Crash Data, no
+      `main` carries this work the questionnaire stays at its live answers (no Crash Data, no
       Usage Data), because the live app collects neither.
 - [ ] **The description**, at the next version that can be edited: "nothing leaves your phone
       until you choose to sign in" becomes "your lunches never leave your phone until you
       choose to sign in" (`store/listing.md`, Description). The privacy page already says it.
-- [ ] **The build.** If `main` still serves v23, v24 goes as it is. If `main` has taken v24 by
-      then, this becomes v25 and carries v24's `WHATS_NEW` forward with `seenAs` (above).
-- [ ] **Migration 0006** applies itself on the `main` deploy (the build command runs
+- [x] **The build.** `main` took v24 first (App Store purchase, no note), so `dev` was brought
+      level with it as v25 on 2026-09-25. v25 carries the note `dev` had written as v24's; no
+      phone has read it, since main's v24 said nothing, so there is no `seenAs`.
+- [ ] **Migration `0009_milestones_errors`** applies itself on the `main` deploy (the build command runs
       `scripts/migrate.mjs`): it backfills `signed_up` exactly and `paid` approximately, and
-      is already applied and frozen on the staging branch.
+      was applied on the staging branch as `0006_milestones_errors`; under its new number it runs there once more and changes nothing, since every statement in it is `IF NOT EXISTS` or `ON CONFLICT DO NOTHING`.
 - [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' https://lunchsorted.app/api/errors`
-      answers 404 to a GET, `/admin` shows The funnel and Broken screens, and the privacy page
-      reads "Last updated 22 September 2026". The Ops routine checks the site and the error
+      answers 404 to a GET, `/admin` shows The funnel and Broken screens, and the privacy page's
+      "Last updated" names the day of that deploy (set it in the deploy commit: the live page
+      does not yet describe error reports or the six dates). The Ops routine checks the site and the error
       table from the next weekday morning.
 
 Two calls Liz made on 2026-09-22, so nobody reopens them: error reports go out signed out too
 (CLAUDE.md names the exception), and the six milestones are declared Usage Data, Analytics.
+
+### Owed (said we would, not done yet)
+
+Promised or needed since the App Store work (PR #19, September 2026). Each line says whose it
+is: **Liz** for a dashboard, a form or a decision, **code** for a change here. Strike a line
+out by deleting it in the commit that does it.
+
+**Stripe, Netlify and the stores**
+- **Liz: Netlify's `dev-server` context** (Preview Server & Agent Runners) still points
+  `STRIPE_PRICE_YEAR`/`_MONTH` at the old test prices, now archived, so a checkout there fails.
+  Set them to the new test prices; every other context, local `dev` included, is done.
+- **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
+  approval, not before.
+- **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
+  (`store/listing.md`, After approval).
+- **Every price rise, both stores together:** a new Stripe price with no `founding` metadata,
+  pointed at by `STRIPE_PRICE_YEAR`/`_MONTH`; in App Store Connect, schedule the change with
+  **keep the current price for existing subscribers**, always, because the terms promise it;
+  then `node scripts/iap-shot.mjs <yearly> <monthly>` for a new review screenshot. The plan
+  so far: $19.99 for the first 100 paying households, $29.99 for the next 400, then $39.99
+  from 500. Nothing counts to 100 by itself; watch `/admin`.
+
+**Decisions waiting**
+- **Liz: the beta link** still gives the first `BETA_CAP` households the plan free forever.
+  Keep it as the testers' thanks, or close it (`BETA_CAP=0`) now that forever is off sale.
+- **Liz: the new terms and privacy wording** (September 2026): whether the change
+  needs announcing to the beta households before launch.
+
+**Code**
+- **The numbers page after a price rise.** `api-admin.js` counts monthly against yearly by the
+  current price id, so a founding monthly household reads as yearly once `STRIPE_PRICE_MONTH`
+  moves on, and a plan bought inside the three weeks (Stripe `trialing`) counts as paying
+  before anything is charged. Classify by the price's interval, and show "subscribed, first
+  charge DATE" apart.
+- **Two App Store cases to try in the sandbox.** A refund of an older renewal, or the old
+  transaction left behind by an upgrade within the group, carries a `revocationDate`, and
+  `stateOf()` ends the whole plan for it, even when the current period is paid. And `iapLink`
+  finishes a transaction the server answered 400, so a genuine purchase the server failed to
+  verify is not offered again at the next launch (Restore still finds it).
+- **The iPhone's first charge inside the three weeks.** The web charges when they end; the App
+  Store charges the day of buying. The closest Apple allows is a promotional offer, signed by
+  the server, for the free period that fits, rounded down to Apple's lengths (3 days, 1 week,
+  2 weeks). It needs an In-App Purchase key from App Store Connect, a signing endpoint, the
+  plugin passing the offer to `purchase`, a new build and review.
+- **Take the web checkout out of the shell** with the next native change: `@capacitor/app-launcher`,
+  `public/back.html` and its CSP block, the `appStateChange` listener, the `client: 'ios'`
+  return-URL branches in `api-billing.js` (the portal's back.html return and the log tag), and
+  the back.html checks in `tests/smoke.mjs`. Keep the 403 that refuses a checkout asked for by
+  the iPhone app, and its check: an older build may still ask.
+- **Tests for what the sheet says about charging later.** Nothing checks the web sheet's
+  "Nothing is charged until DATE" or the pane's "First charged" and "Cancel before DATE";
+  the server's `chargeLater` is checked, the copy is not.
+- **Known edges, watched, not fixed:** a purchase made on a phone whose state is stale, after
+  the household has started paying on the web, is refused and the parent told to ask Apple
+  for a refund; a subscription restarted from iPhone Settings while the web is billing; a
+  billing retry that Apple succeeds after its grace period; a second parent tapping Manage in
+  the App Store on an Apple Account that did not pay.
+
+**Blue Hour Ventures LLC** (filed with Maryland; about eight weeks)
+- **Liz, once it is approved:** EIN (IRS.gov, free), business bank account, D-U-N-S number
+  through Apple's free lookup, then ask Apple Developer Support to convert the individual
+  membership to an organization, and update the bank and tax form in App Store Connect
+  (W-9 with the EIN). Stripe: business type Company, the LLC's name, the EIN and the bank.
+  Register Lila Bloom Enterprises as the LLC's trade name. Assign the app, code, domain and
+  brand to the LLC in writing. Move service accounts (domain, Netlify, Neon, email) as they
+  renew. Ask whoever helps with the LLC whether Stripe's business details, already named for
+  the LLC, should be in Liz's name until approval.
+- **Code, then:** the operator line in `public/terms.html` ("Lila Bloom Enterprises, a trade
+  name of Blue Hour Ventures LLC") and the copyright line in `store/listing.md`.
+
+**Other storefronts, when wanted:** Canada, Australia and New Zealand first (English; check the
+privacy page against their laws). The EU and UK after the LLC exists: the EU trader
+declaration publishes the seller's name, address, phone and email, and the privacy page would
+need GDPR's terms. The in-app purchases need nothing more.
 
 ### Backlog (ideas to revisit, not scheduled)
 
@@ -650,7 +726,7 @@ mean the first chip below and the checkbox above it are now on opposite sides of
 
 ## Accounts and sync
 
-Signed out, the app is the phone-only app it always was, but for one thing: since v24 an error
+Signed out, the app is the phone-only app it always was, but for one thing: since v25 an error
 report leaves the phone when the planner's own code breaks, and it carries nothing of the
 household (**Broken screens**, below). Signed in, the household
 document also lives on the server, versioned, and every phone in the household reads and
@@ -714,10 +790,36 @@ writes the same one.
 
 ## Billing
 
-The plan is a row on the household (`entitlements`) that only Stripe's webhook writes.
+The plan is a row on the household (`entitlements`) that only a payment source writes:
+Stripe for a plan bought on the web, or a beta tester's code, and the App Store for one bought
+in the iPhone app, through Apple's server notifications or a purchase the phone passes on,
+signed by Apple (App Store, below). Each platform sells it one way only, and a plan
+paid on either side works on every phone and browser in the household.
+Prices are Stripe's on the web and Apple's in the iPhone app, kept the same by hand. The site
+(`public/price.js`), the plan sheet and the trial emails all read Stripe's through
+`GET /api/billing`; no price is typed into them, only a fallback in the site's HTML. The launch
+price is a **founding price**, $19.99 a year or $2.99 a month: the yearly Stripe price carries
+the metadata `founding = yes`, which puts "Founding price: yours for as long as you stay
+subscribed" on the site, both plan sheets and the emails. Raising it is a new Stripe price
+without that mark, pointed at by `STRIPE_PRICE_YEAR`/`STRIPE_PRICE_MONTH`, and an App Store price
+change scheduled with *keep the current price for existing subscribers*; the terms promise the
+founding buyers keep theirs, so that choice is never optional. Bought on the website inside the free three weeks, a plan is not charged until they end:
+checkout sets Stripe's `trial_end` to the household's own trial end (when it is more than 49 hours
+away, Stripe's floor being 48), so the first charge and every renewal fall a period from that day,
+and a parent who cancels before then pays nothing. The session carries `charge_later`, so the
+webhook reads its $0 total as a sale, not a beta code, unless the coupon on it takes the whole
+price off, which is the beta testers' code. The household's state carries `chargeLater`, the
+date by the same rule, so the sheet and the Subscription pane ("First charged", "Cancel before
+DATE and nothing is charged") never promise what Stripe will not do. A first charge that fails
+ends the plan at once: nothing was ever paid, so Stripe's retries are not a grace period. The App Store cannot bill from a date of
+ours: in the iPhone app the plan starts, and is charged, the day it is bought, and the sheet says
+so. Forever is no longer sold:
+checkout refuses it (410) and there is no App Store product for it on sale. The server still
+understands a forever row (the beta's, or one bought before) and Apple's `.forever`, so bringing
+it back needs no migration.
 Free, for good, is one lunchbox, the week's plan, the shopping list, the pack list, and the
-built-in idea bank to build the food list from. The **Household** plan (yearly, or once
-forever) is the part that remembers and shares: a food written in the parent's own words,
+built-in idea bank to build the food list from. The **Household** plan (yearly or
+monthly) is the part that remembers and shares: a food written in the parent's own words,
 kid's pick, the morning review and resting, a pantry that carries over, every lunchbox, the
 other parent's phone and a caretaker's pack list. **Every household gets all of it for its
 first 21 days**, no card, counted from the account document's `createdAt` (the same clock on
@@ -733,14 +835,14 @@ member, tick, outcome and food it has, and cannot add more. A food already on th
 drawn, shopped for and packed exactly as before; only the writing of a new one is gated, and
 the idea bank stays free so a free list is never stuck with what it has.
 
-- **Checkout** (`POST /api/billing/checkout {plan, client?}`) opens Stripe's hosted page for the
+- **Checkout** (`POST /api/billing/checkout {plan}`) opens Stripe's hosted page for the
   signed-in household (owner or adult; a caretaker cannot buy). The session carries the
-  household id, comes back to `/app/?paid=1` or `/app/?paid=0` (to `/back.html?paid=…` when
-  `client` is `ios`: the iPhone app opens Stripe in the phone's own browser, outside the app, and that page hands the parent
-  back to the app through the `lunchsorted://` scheme), allows promotion codes,
+  household id, comes back to `/app/?paid=1` or `/app/?paid=0`, allows promotion codes,
   and asks Stripe Tax to add tax where it applies (if Tax is not finished in the
   dashboard the session is retried without it and the error logged). A household that
-  already has the plan is not sold it again (409).
+  already has the plan is not sold it again (409), nor is one paying through the App Store,
+  which is told where it is managed. The web only: a checkout asked for with `client: 'ios'` is
+  refused (403), and the iPhone app never opens Stripe at all, to buy or to manage.
 - **Webhook** (`POST /api/billing/webhook`, signature checked against the raw body, five
   minutes of clock drift, and the event's `livemode` must match the deploy context) listens
   for `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
@@ -756,21 +858,46 @@ the idea bank stays free so a free list is never stuck with what it has.
   cancelling the subscription in the dashboard). Deleting the account, or an owner folding
   their household into another, cancels its subscription first.
 - **Portal** (`POST /api/billing/portal`) opens Stripe's customer portal for the card,
-  invoices and cancellation, and comes back to `/app/?portal=1` (`/back.html?portal=1` for
-  the iPhone app). It is for the owner and
+  invoices and cancellation, and comes back to `/app/?portal=1`; the iPhone app never opens it. It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
   available after a plan ends, for the invoices.
+- **The App Store** is the iPhone app's way of paying, and its only one: StoreKit 2 through
+  a local plugin (`ios/App/App/StoreKitPlugin.swift`), with `app.lunchsorted.household.annual`,
+  and `.month`, at Apple's prices (`.forever` is understood, not on sale). Every purchase carries the household's
+  `apple_account_token`, which Apple returns in every transaction and notification.
+  **Link** (`POST /api/apple/link {signedTransaction}`, signed in, owner or adult) takes the
+  transaction the phone has just bought or restored; **notify** (`POST /api/apple/notify`,
+  App Store Server Notifications v2) takes renewals, lapses, grace periods and refunds after.
+  Nothing either sends is believed until `netlify/lib/apple.js` has checked it against Apple's
+  root, pinned by fingerprint, with node:crypto and no library, check for check with Apple's
+  own reference, the receipt-signing mark on the leaf most of all, and nothing is decoded from a
+  certificate that is not a short string. Sandbox purchases are taken in production, because App
+  Review and TestFlight buy there, but a sandbox forever lasts a day. The row is written by
+  `writeApple()` in `lib/entitlement.js` on Apple's own clock; it never overwrites a plan the
+  web holds live, as Stripe's writer never overwrites one Apple holds, and never sets `paid_by`,
+  which is Stripe's and opens its billing portal. A purchase is bound to one household at a time;
+  one carrying another household's token is refused, one whose household has been deleted may be
+  restored elsewhere, and one carrying none (Family Sharing, an offer code) is not taken. Forever
+  is never lowered by a subscription running on beside it, since Apple cannot cancel one for us,
+  and a lapse or refund of some other purchase cannot end the one being paid for now; both hold
+  in the upsert itself, so a Restore linking several purchases at once cannot race past them.
+  Every transaction Apple refunds is kept in `apple_revoked`, apart from any household, and can
+  never be linked again. An App Store plan more than three days past its end is over on the
+  server and in the app whether or not Apple's notification came, so a missed one neither leaves
+  it on nor stops the website selling the plan. The phone finishes a transaction only once the
+  server has answered; one that arrives before the account has loaded waits until it has.
 - **In the app**, the Account tab carries a **Subscription** row whose caption is the same
   one-line state (Free, On for N more days, Renews DATE, Ends DATE, Payment failed, Forever,
   Switching on…). The page behind it names the plan, what it costs — matched from the price
   id the entitlement carries, so a monthly household is not quoted the yearly price — the
   date it renews or ends, and a card saying how to stop it, which differs for a parent who
-  cannot open the portal. Straight after paying it says only that the payment arrived and
+  cannot open the portal. Straight after checkout it says only that it is switching on and
   the plan is switching on, because the webhook has not landed and every other row would
-  still read Free. It also offers "Get the Household plan" or "Switch to forever", and
-  "Manage billing" (the main button when a
+  still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
+  "Manage billing", or "Manage in the App Store" for a plan Apple bills (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan
-  sheet with both prices (read from Stripe, cached an hour, never typed into the app);
+  sheet with its prices (on the web read from Stripe, cached an hour; in the iPhone app read
+  from the App Store, beside Restore purchases; never typed into the app);
   signed out it offers sign-in first, and remembers what you were doing so the sheet, or
   the lunchbox, comes back after the sign-in or the payment. The server refuses an invite
   from a free household (402) whatever the app shows, honouring the same 21 days from the
@@ -782,9 +909,10 @@ the idea bank stays free so a free list is never stuck with what it has.
 - **Environment**, per deploy context, test keys everywhere but production:
   `STRIPE_SECRET_KEY` (production refuses a test key, every other context refuses a live
   one), `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
-  production URL each give their own), `STRIPE_PRICE_YEAR` and `STRIPE_PRICE_LIFETIME`
-  (the two price ids; test mode and live mode have different ones) and, optionally,
-  `STRIPE_PRICE_MONTH`, which adds a monthly button to the sheet when set. `STRIPE_TAX=0` turns
+  production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
+  id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
+  button when set, and `STRIPE_PRICE_LIFETIME`, optional now, only so a forever bought before it
+  was withdrawn is still recognised. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
 - **Email.** Sign-in asks for the address at the end of onboarding, once the week is built
   (skippable; offline or already signed in, the step does not appear). A first sign-in gets
@@ -798,14 +926,18 @@ the idea bank stays free so a free list is never stuck with what it has.
   which opens the plan sheet on arrival. The suite captures every email through
   `globalThis.__LS_MAIL`; nothing reaches Resend from a test.
 - **Milestones**: one row a household a moment, written once each by the functions
-  (migration 0006, `milestone()` in `netlify/lib/db.js`): `signed_up` when the household row is
+  (migration 0009_milestones_errors, `milestone()` in `netlify/lib/db.js`): `signed_up` when the household row is
   made, `first_plan` on the first push whose document holds a planned week, `week_two` when a
   parent's phone (never a caretaker's) reaches the server between seven and fourteen days after
   the row was made (the measure this file asks for; the window runs from sign-in, not from the
   document's own birthday that the trial uses), `second_phone` when someone joins on an invite,
   `checkout` when a checkout session is created for it, the moment before the browser opens
-  Stripe's page, `paid` when the entitlement row is first written paid by Stripe (a tester on a
-  100%-off code keeps `source = 'code'` and is never `paid`). The kinds a household already has
+  Stripe's page, `paid` when the entitlement row is first written paid by Stripe or the App Store (a tester on a
+  100%-off code keeps `source = 'code'` and is never `paid`; nor is a plan bought inside the three
+  weeks until its first charge goes through, nor a purchase in Apple's sandbox; both writers are in
+  `netlify/lib/entitlement.js`, and the caller says whether money was taken). `checkout` is the
+  web's alone: an App Store buyer reaches `paid` without it, so on `/admin` "went to pay" counts
+  web checkouts only. The kinds a household already has
   come back with the membership query, so `first_plan` and `week_two` are checked in memory and
   written once; the other three are one idempotent insert at moments that are rare anyway. A
   household's rows go with it, so a cohort shrinks when a household is deleted or folded into
@@ -838,11 +970,14 @@ the idea bank stays free so a free list is never stuck with what it has.
   touch that moves `last_seen_at` adds one when the New York day turns over, so signed-out
   use never reaches it, and the days from before the counter are read back from the session
   rows as a floor.
-- **Stripe setup, once per mode:** one product, two prices; Developers → Webhooks → add
+- **Stripe setup, once per mode:** one product, a yearly and a monthly price (the yearly one
+  marked `founding = yes` while it is the founding price); Developers → Webhooks → add
   `https://<site>/api/billing/webhook` with the six event types above and paste the
   signing secret; Settings → Billing → Customer portal → save the default configuration
   (live mode has none until it is saved once); Settings → Billing → Subscriptions and
-  emails → send the renewal reminder and failed-payment emails (the terms promise both),
+  emails → send the renewal reminder and failed-payment emails (the terms promise both) and
+  the reminder before a free trial ends (a plan bought inside the three weeks is first charged
+  when they end, and the app's own trial emails stop once it is bought),
   and after the retries "cancel the subscription" rather than leave it unpaid; Stripe Tax
   on, with the origin address. Never add a Payment Link for the product: a link accepts a
   `client_reference_id` from anyone, and the webhook would honor it.

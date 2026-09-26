@@ -11,16 +11,23 @@ What the shell adds, and where:
 
 - **Sign-in.** A tapped email link opens Safari, not the app, so inside the app the
   email step leads with the code. Universal links fix that later (below).
-- **Stripe.** Checkout and the billing portal open the phone's own default
-  browser (`AppLauncher.openUrl`, i.e. `UIApplication.open`) — never an in-app
-  browser view. `@capacitor/browser` is an SFSafariViewController: the parent
-  never leaves the app, so the purchase happens inside it, and that is what
-  guideline 3.1.1 rejected 1.0 (4) for. Do not simplify it back to
-  `Browser.open()`. The server sends the parent to `/back.html`, which hands off
-  through the `lunchsorted://` URL scheme (`Info.plist`, `CFBundleURLTypes`);
-  `appUrlOpen` settles the paid row, and `appStateChange` catches a parent who
-  swipes back instead of tapping through. The `Browser` plugin stays, for the
-  help and recipe pages only. Payments never touch StoreKit.
+- **The App Store.** The iPhone app sells the plan through StoreKit 2 and nothing
+  else: `App/App/StoreKitPlugin.swift`, a local plugin registered in
+  `SafeAreaViewController.capacitorDidLoad` (`cap sync` only knows packaged ones).
+  Apple rejected 1.0 (5) under 3.1.1 because the app honoured a plan bought on the
+  web with no way to buy it in the app; 3.1.3(b) allows that only when the same plan
+  is also an in-app purchase. The plugin buys with the household's token, hands the
+  page Apple's signed transaction, and the page sends it to `/api/apple/link`; the
+  transaction is finished only once the server has it. The products are
+  `app.lunchsorted.household.annual` and `.month`. There is no forever product on sale.
+- **Stripe, never.** The iPhone app does not open Stripe, to buy or to manage: a
+  household paying on the website is told to change it at lunchsorted.app, and the
+  address is named, not linked, because Stripe's portal can switch plans, which is a
+  purchase. (1.0 (4) was rejected for Stripe in an in-app browser view; 1.0 (5) for
+  honouring it with no in-app purchase.) `AppLauncher`, `/back.html` and the
+  `appStateChange` return path are left over from that and unused by the page; take
+  them out with the next native change. The `Browser` plugin stays, for the help and
+  recipe pages only.
 - **Icon and launch screen.** `App/App/Assets.xcassets`: the 1024 icon from
   `public/icons`, and a light and a dark launch image on the app's ground colours.
 - **The room the clock needs.** `contentInset: never` keeps the web view full height, which
@@ -63,8 +70,9 @@ by `cap sync` and not committed.
 
 1. App Store Connect → Apps → New app: bundle id `app.lunchsorted`, name
    Lunch Sorted, primary language English (U.S.), SKU `lunchsorted`. Then
-   Pricing and Availability → United States only: linking out to Stripe is what
-   the US storefront permits, and the product rule depends on it.
+   Pricing and Availability → United States only for now. Before adding other
+   storefronts, check each one's price and file the EU Digital Services Act
+   declaration (store/listing.md, Pricing and Availability).
 2. Xcode → Product → Archive → Distribute App → App Store Connect → Upload.
 3. App Store Connect → TestFlight → the build → add internal testers (yourself),
    then an external group once the build clears beta review.
@@ -146,6 +154,8 @@ stays in Safari. That is expected; test universal links against production.
 The app is the web app in a shell, which Apple's guideline 4.2 can object to.
 What answers it: it works offline, it installs, the kid's-pick screen and the
 morning review are app-shaped, and version 1.1 adds the night-before reminder,
-the share sheet and a Home Screen widget. Payments happen on the web; the app
-links out to Stripe, which the US storefront permits. Do not add StoreKit to
-"be safe": the product rule is that Stripe only ever flips the entitlement row.
+the share sheet and a Home Screen widget. The iPhone app sells the plan through
+the App Store only, and honours a plan bought on the website, which 3.1.3(b)
+allows because the same plan is an in-app purchase. Do not take the in-app
+purchases out to "keep it simple": without them 3.1.1 rejects the app, as it did
+1.0 (5). Do not add a Stripe checkout to the app either.

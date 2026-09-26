@@ -16,6 +16,13 @@ class SafeAreaViewController: CAPBridgeViewController {
 
     private var progress: NSKeyValueObservation?
 
+    /// The App Store plugin lives in this target rather than in node_modules, so it is handed to
+    /// the bridge by hand; `cap sync` only knows about packaged plugins.
+    override func capacitorDidLoad() {
+        super.capacitorDidLoad()
+        bridge?.registerPluginInstance(StoreKitPlugin())
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         progress = webView?.observe(\.estimatedProgress, options: [.new]) { [weak self] _, _ in

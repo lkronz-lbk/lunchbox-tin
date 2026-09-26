@@ -13,13 +13,17 @@ Enterprises; the Stripe account is Blue Hour Ventures LLC). Three questions and 
 week of packed lunches from foods the kid will eat, pairs them so a box makes sense, keeps the
 school's rules, writes the shopping list, asks what came home, and lets the kid pick which of
 the week's boxes is next. Phone-first web app that installs to the home screen; an iPhone shell
-is built and TestFlight is next; payments happen on the web, never through the App Store.
+is in App Review. The iPhone app sells the plan through the App Store only, the web through
+Stripe only; a plan bought on either side works on both.
 
 - **Free**: one lunchbox on one phone, planned and shopped for, with everything on for the first
   three weeks.
 - **Household plan**: every lunchbox, the other parent's phone, a caretaker's pack list, foods in
   the parent's own words, recipes, the kid's pick, the after-school review, the pantry.
-  $3.99 a month, $29 a year, or $79 once, forever. Refunds within 14 days, no questions.
+  A founding price, $19.99 a year or $2.99 a month, kept for as long as the household stays
+  subscribed; the price goes up for later households. Bought on the web inside the three weeks,
+  it is first charged when they end (in their last two days, the day it is bought). Forever is no longer sold (households that bought it keep
+  it). Refunds within 14 days of the first charge, no questions.
 - **Beta**: the first 25 households through `/beta` get the Household plan forever, free, and
   three short emails in their first week asking what to try and what broke.
 
@@ -106,7 +110,8 @@ one word everywhere and is the app's own word; it stays.
 - The name is **Lunch Sorted**, two words; **the planner** for the app itself; the tabs are Pack,
   Week, Foods, Shop, Recipes and Account; **the kid's pick**; **the after-school review** for what
   came home (the emails and the README still say "morning review": a fix waiting, not a second
-  name); **the Household plan**; **forever** for the one-time purchase; **school rules** for the
+  name); **the Household plan**; **founding price** for today's price (never "forever": it is no
+  longer sold); **school rules** for the
   flags; **Plan the week** and **Shuffle** as the app names them.
 - Never jargon, never an identifier, never "users". They are parents, households, kids, phones.
 - Every claim is one the app makes good on. Nothing is "healthy", and "balanced" only ever
@@ -252,7 +257,7 @@ As of 2026-09-22. Change this section first when the priority moves.
   home page's waitlist form, because the beta is capped at 25 households and cannot take a
   spike. The App Store link replaces the waitlist when the listing is live.
 - **Measure week two.** The one number the README asks for: do strangers come back in their
-  second week. The milestones table (migration 0006) makes it a query.
+  second week. The milestones table (migration 0009_milestones_errors) makes it a query.
 - **Listen before building.** The backlog in `README.md` (home-cooked or store-bought, the
   shopping hand-off, rated products, a quality score, macros) is ideas, not a plan; evidence from
   the intake queue decides what gets a spec.
@@ -267,7 +272,7 @@ As of 2026-09-22. Change this section first when the priority moves.
 | Beta link, tester short link | /beta, /tester |
 | Short link for Instagram | /ig |
 | Email addresses | hello@lunchsorted.app (reply-to on everything), forms@lunchsorted.app (form notifications), hello@mail.lunchsorted.app (the sender) |
-| Stack | Netlify (site, functions, forms), Neon (Postgres), Resend (email), Stripe (payments, on the web), GitHub Actions (tests, the iOS build), Capacitor (the iPhone shell) |
+| Stack | Netlify (site, functions, forms), Neon (Postgres), Resend (email), Stripe (payments on the web), the App Store (payments in the iPhone app), GitHub Actions (tests, the iOS build), Capacitor (the iPhone shell) |
 | Repo | github.com/lkronz-lbk/lunchbox-tin, still named for the app's first name; `dev` is the working branch, `main` deploys |
 | Trial | 21 days of everything, from the household's first day, no card |
 | Beta cap | 25 households, `BETA_CAP` in the Netlify environment |

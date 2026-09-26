@@ -74,23 +74,32 @@ export const dateWords = (d, tz) => {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 };
 
-export function sendTrialEnding(to, site, end, stopUrl, tz) {
+/* what the plan costs, in words, from Stripe's prices (lib/stripe.js priceInfo), so an email never
+   quotes a price the website has moved on from. Without them the email names no price at all. */
+const dollars = (p) => new Intl.NumberFormat('en-US', { style: 'currency', currency: (p.currency || 'usd').toUpperCase(), minimumFractionDigits: p.amount % 100 ? 2 : 0 }).format(p.amount / 100);
+export function priceWords(prices) {
+  const y = prices && prices.year, m = prices && prices.month;
+  if (!y || !Number.isFinite(y.amount)) return '';
+  return `${dollars(y)} a year${m && Number.isFinite(m.amount) ? `, or ${dollars(m)} a month` : ''}${y.founding ? ' (the founding price, yours for as long as you stay)' : ''}`;
+}
+
+export function sendTrialEnding(to, site, end, stopUrl, tz, price = '') {
   const keep = `${site}/app/?upgrade=1`, when = dateWords(end, tz);
   return send({
     to,
     subject: `Your three weeks of everything end ${when}`,
-    text: `Your three weeks of Lunch Sorted with everything on end on ${when}.\n\nThe lunches stay, and planning, the shopping list and the idea bank — and the two recipes that come with it — stay free for good. Writing in your own foods or bringing one in from a recipe page, kid's pick, the morning review and the pantry pause unless you keep the Household plan; the lunchboxes and phones you already have stay as they are, you just can't add more. $29 a year, $3.99 a month, or $79 once, forever.\n\nKeep everything: ${keep}\n\nNothing happens automatically. If you do nothing, the free planner carries on.` + foot(stopUrl).text,
-    html: `<p>Your three weeks of Lunch Sorted with everything on end on <b>${esc(when)}</b>.</p><p>The lunches stay, and planning, the shopping list and the idea bank — and the two recipes that come with it — stay free for good. Writing in your own foods or bringing one in from a recipe page, kid’s pick, the morning review and the pantry pause unless you keep the Household plan; the lunchboxes and phones you already have stay as they are, you just can’t add more. $29 a year, $3.99 a month, or $79 once, forever.</p>${btn(keep, 'Keep everything')}<p style="color:#6E7F75;font-size:13px">Nothing happens automatically. If you do nothing, the free planner carries on.</p>` + foot(stopUrl).html
+    text: `Your three weeks of Lunch Sorted with everything on end on ${when}.\n\nThe lunches stay, and planning, the shopping list and the idea bank — and the two recipes that come with it — stay free for good. Writing in your own foods or bringing one in from a recipe page, kid's pick, the morning review and the pantry pause unless you keep the Household plan; the lunchboxes and phones you already have stay as they are, you just can't add more.${price ? ` The Household plan is ${price}.` : ''}\n\nKeep everything: ${keep}\n\nNothing happens automatically. If you do nothing, the free planner carries on.` + foot(stopUrl).text,
+    html: `<p>Your three weeks of Lunch Sorted with everything on end on <b>${esc(when)}</b>.</p><p>The lunches stay, and planning, the shopping list and the idea bank — and the two recipes that come with it — stay free for good. Writing in your own foods or bringing one in from a recipe page, kid’s pick, the morning review and the pantry pause unless you keep the Household plan; the lunchboxes and phones you already have stay as they are, you just can’t add more.${price ? ` The Household plan is ${esc(price)}.` : ''}</p>${btn(keep, 'Keep everything')}<p style="color:#6E7F75;font-size:13px">Nothing happens automatically. If you do nothing, the free planner carries on.</p>` + foot(stopUrl).html
   });
 }
 
-export function sendTrialEnded(to, site, stopUrl) {
+export function sendTrialEnded(to, site, stopUrl, price = '') {
   const keep = `${site}/app/?upgrade=1`;
   return send({
     to,
     subject: 'Your three weeks are up. The lunches stay.',
-    text: `Your three weeks of everything on Lunch Sorted are up.\n\nPlanning the week, the shopping list and the idea bank — and the two recipes that come with it — are still free, and everything you added is still there. Your own foods, kid's pick, the morning review and the pantry are waiting under the Household plan, along with adding lunchboxes and phones: $29 a year, $3.99 a month, or $79 once, forever.\n\nSwitch it back on: ${keep}\n\nThis is the last email about it.` + foot(stopUrl).text,
-    html: `<p>Your three weeks of everything on Lunch Sorted are up.</p><p>Planning the week, the shopping list and the idea bank — and the two recipes that come with it — are still free, and everything you added is still there. Your own foods, kid’s pick, the morning review and the pantry are waiting under the Household plan, along with adding lunchboxes and phones: $29 a year, $3.99 a month, or $79 once, forever.</p>${btn(keep, 'Switch it back on')}<p style="color:#6E7F75;font-size:13px">This is the last email about it.</p>` + foot(stopUrl).html
+    text: `Your three weeks of everything on Lunch Sorted are up.\n\nPlanning the week, the shopping list and the idea bank — and the two recipes that come with it — are still free, and everything you added is still there. Your own foods, kid's pick, the morning review and the pantry are waiting under the Household plan, along with adding lunchboxes and phones${price ? `: ${price}` : ''}.\n\nSwitch it back on: ${keep}\n\nThis is the last email about it.` + foot(stopUrl).text,
+    html: `<p>Your three weeks of everything on Lunch Sorted are up.</p><p>Planning the week, the shopping list and the idea bank — and the two recipes that come with it — are still free, and everything you added is still there. Your own foods, kid’s pick, the morning review and the pantry are waiting under the Household plan, along with adding lunchboxes and phones${price ? `: ${esc(price)}` : ''}.</p>${btn(keep, 'Switch it back on')}<p style="color:#6E7F75;font-size:13px">This is the last email about it.</p>` + foot(stopUrl).html
   });
 }
 

@@ -2,6 +2,9 @@ import { sql, json, fail, siteUrl, throttled, milestone } from '../lib/db.js';
 import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
+import { write } from '../lib/entitlement.js';
+import { appleLive, lapsed } from '../lib/apple.js';
+import { chargeLaterUntil } from '../lib/trial.js';
 
 /* Payment happens on Stripe's own page; this side only opens the door and
    listens for the answer. Nothing the browser sends can grant a plan: the
@@ -17,7 +20,7 @@ const HANDLED = new Set(['checkout.session.completed', 'checkout.session.async_p
 
 async function membership(userId) {
   const rows = await sql()`
-    SELECT h.id, h.owner_user_id, m.role, e.plan, e.status, e.stripe_customer_id, e.stripe_subscription_id, e.paid_by
+    SELECT h.id, h.owner_user_id, h.created_at, h.doc->>'createdAt' AS doc_created, m.role, e.plan, e.status, e.source, e.current_period_end, e.stripe_customer_id, e.stripe_subscription_id, e.paid_by
     FROM household_members m JOIN households h ON h.id = m.household_id
     LEFT JOIN entitlements e ON e.household_id = h.id WHERE m.user_id = ${userId}`;
   return rows[0] || null;
@@ -44,28 +47,7 @@ async function householdFor(obj) {
   return byCust[0] ? byCust[0].household_id : null;
 }
 
-/* Every write is one upsert that only applies when the event is not older than the last one
-   applied to the row, so two deliveries racing each other are ordered by Postgres, not by us. */
-async function write(hid, at, v) {
-  const rows = await sql()`
-    INSERT INTO entitlements (household_id, plan, source, status, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, stripe_price_id, paid_by, event_at, updated_at)
-    VALUES (${hid}, ${v.plan}, ${v.source}, ${v.status}, ${v.periodEnd || null}, ${!!v.cancelAtPeriodEnd}, ${v.customer || null}, ${v.subscription || null}, ${v.price || null}, ${v.paidBy || null}, ${at}, now())
-    ON CONFLICT (household_id) DO UPDATE SET plan = EXCLUDED.plan,
-      source = CASE WHEN ${!!v.keepCode} AND entitlements.source = 'code' AND EXCLUDED.plan <> 'free' THEN 'code' ELSE EXCLUDED.source END,   /* a tester stays a tester through renewals; a real purchase later is a sale */
-      status = EXCLUDED.status,
-      current_period_end = EXCLUDED.current_period_end, cancel_at_period_end = EXCLUDED.cancel_at_period_end,
-      stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, entitlements.stripe_customer_id),
-      stripe_subscription_id = EXCLUDED.stripe_subscription_id, stripe_price_id = EXCLUDED.stripe_price_id,
-      paid_by = COALESCE(EXCLUDED.paid_by, entitlements.paid_by), event_at = EXCLUDED.event_at, updated_at = now()
-    WHERE entitlements.event_at IS NULL OR entitlements.event_at <= EXCLUDED.event_at
-    RETURNING household_id, source, status`;
-  const ok = rows.length > 0;
-  /* the first time Stripe says a household is paid is a milestone; a tester on a 100%-off code keeps
-     source = 'code' through the same events, so the row as written is what decides, not the event */
-  if (ok && rows[0].source === 'stripe' && (rows[0].status === 'active' || rows[0].status === 'past_due')) await milestone(hid, 'paid');
-  return ok;
-}
-
+/* the row itself is written by lib/entitlement.js, which every way of paying shares */
 async function applyEvent(ev) {
   const q = sql();
   const at = new Date(ev.created * 1000).toISOString();
@@ -79,11 +61,15 @@ async function applyEvent(ev) {
     const cust = idOf(obj.customer);
     const paidBy = Number(obj.metadata && obj.metadata.user_id) || null;
     const plan = PLANS[obj.metadata && obj.metadata.plan] || (obj.mode === 'payment' ? 'lifetime' : 'household');
-    const source = obj.amount_total === 0 ? 'code' : 'stripe';          /* nothing charged: a 100%-off code (the beta testers); the admin page lists them */
+    /* nothing charged: a 100%-off code (the beta testers), which the admin page lists. A plan bought
+       inside the three weeks is also $0 today, charged when they end: a sale, unless its code is the
+       100%-off one, which only the coupon itself can say */
+    const deferred = !!(obj.metadata && obj.metadata.charge_later);
+    const source = obj.amount_total !== 0 ? 'stripe' : !deferred ? 'code' : (await fullyOff(obj)) ? 'code' : 'stripe';
     const [cur] = await q`SELECT plan, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
     const oldSub = cur && cur.stripe_subscription_id;
     if (plan === 'lifetime') {
-      const ok = await write(hid, at, { plan: 'lifetime', source, status: 'active', customer: cust, subscription: null, price: prices().lifetime, paidBy });
+      const ok = await write(hid, at, { plan: 'lifetime', source, status: 'active', customer: cust, subscription: null, price: prices().lifetime, paidBy, charged: obj.payment_status === 'paid' });
       /* a yearly plan bought before this one stops at its period end, so nobody pays twice */
       if (ok && oldSub) { try { await stripe('POST', `/subscriptions/${oldSub}`, { cancel_at_period_end: true }); } catch (e) { console.error('billing: could not stop the old subscription', oldSub, e.message); } }
       return ok ? 'applied' : 'stale';
@@ -95,9 +81,18 @@ async function applyEvent(ev) {
     let sub = null;
     if (subId) { try { sub = await stripe('GET', `/subscriptions/${subId}`); } catch (e) { console.error('billing: could not read', subId, e.message); } }
     const ok = await write(hid, at, { plan: 'household', source, status: sub ? subscriptionStatus(sub) : 'active', periodEnd: periodEnd(sub),
-      cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy });
+      cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy,
+      charged: obj.payment_status === 'paid' });   /* $0 today inside the three weeks: charged later, on the subscription's own event */
     /* a second subscription for the same household (a card that failed, then a fresh checkout) replaces the first */
     if (ok && oldSub && subId && oldSub !== subId) await cancelSubscription(oldSub);
+    if (!ok) {
+      /* paid on the web after the household had bought the plan through the App Store (a checkout
+         left open in a tab, then the iPhone): the row stays Apple's, so this subscription would
+         charge for nothing, and with no customer on the row nobody could cancel it. It is ended now
+         and its payment given back. */
+      const [row] = await q`SELECT plan, status, source, current_period_end FROM entitlements WHERE household_id = ${hid}`;
+      if (appleLive(row) && subId) { await cancelSubscription(subId); return (await refundCheckout(obj)) ? 'refunded: the App Store holds it' : 'canceled: the App Store holds it; refund by hand'; }
+    }
     return ok ? 'applied' : 'stale';
   }
 
@@ -110,7 +105,8 @@ async function applyEvent(ev) {
     const status = ev.type === 'customer.subscription.deleted' ? 'canceled' : subscriptionStatus(obj);
     const price = obj.items && obj.items.data && obj.items.data[0] && obj.items.data[0].price && obj.items.data[0].price.id;
     const ok = await write(hid, at, { plan: status === 'canceled' ? 'free' : 'household', source: status === 'canceled' ? 'none' : 'stripe', status,
-      periodEnd: periodEnd(obj), cancelAtPeriodEnd: obj.cancel_at_period_end, customer: idOf(obj.customer), subscription: obj.id, price, keepCode: true });
+      periodEnd: periodEnd(obj), cancelAtPeriodEnd: obj.cancel_at_period_end, customer: idOf(obj.customer), subscription: obj.id, price, keepCode: true,
+      charged: obj.status === 'active' || obj.status === 'past_due' });   /* trialing has charged nothing yet */
     return ok ? 'applied' : 'stale';
   }
 
@@ -128,6 +124,38 @@ async function applyEvent(ev) {
   return 'skipped';
 }
 
+/* whether a checkout carried a code that takes the whole price off */
+async function fullyOff(obj) {
+  for (const d of (Array.isArray(obj.discounts) ? obj.discounts : [])) {
+    let c = d && d.coupon;
+    try {
+      if (typeof c === 'string') c = await stripe('GET', `/coupons/${c}`);
+      else if (!c && d && d.promotion_code) { const p = await stripe('GET', `/promotion_codes/${idOf(d.promotion_code)}`); c = p && (p.coupon || (p.promotion && p.promotion.coupon)); if (typeof c === 'string') c = await stripe('GET', `/coupons/${c}`); }
+    } catch (e) { console.error('billing: could not read a code on', obj.id, e.message); c = null; }
+    if (c && Number(c.percent_off) === 100) return true;
+  }
+  return false;
+}
+
+/* gives back what a checkout charged, through the invoice it paid; older Stripe accounts name the
+   payment on the invoice, newer ones list it under invoice_payments. Returns whether it was refunded. */
+async function refundCheckout(obj) {
+  if (!obj.amount_total || !obj.invoice) return !obj.amount_total;
+  try {
+    const invId = typeof obj.invoice === 'string' ? obj.invoice : obj.invoice.id;
+    const inv = await stripe('GET', `/invoices/${invId}`);
+    let pi = idOf(inv.payment_intent), charge = idOf(inv.charge);
+    if (!pi && !charge) {
+      const pays = await stripe('GET', '/invoice_payments', { invoice: invId });
+      const p = pays && pays.data && pays.data[0] && pays.data[0].payment;
+      pi = p && idOf(p.payment_intent); charge = p && idOf(p.charge);
+    }
+    if (!pi && !charge) throw new Error('no payment on ' + invId);
+    await stripe('POST', '/refunds', pi ? { payment_intent: pi } : { charge }, 'refund-' + obj.id);
+    return true;
+  } catch (e) { console.error('billing: REFUND BY HAND, checkout', obj.id, 'paid while the App Store held the plan:', e.message); return false; }
+}
+
 export default async function handler(req, context) {
   const url = new URL(req.url);
   const parts = url.pathname.replace(/\/$/, '').split('/');
@@ -136,7 +164,7 @@ export default async function handler(req, context) {
     if (req.method === 'GET' && !action) {
       if (!billingEnabled()) return json({ enabled: false }, 200, { 'cache-control': 'public, max-age=300' });
       let p = null; try { p = await priceInfo(); } catch (e) { console.error('billing: prices', e.message); }
-      /* without prices the gates still stand and the buttons say "Yearly plan" / "Once, forever"; ask again soon */
+      /* without prices the gates still stand and the button says "Yearly plan"; ask again soon */
       return json({ enabled: true, prices: p, since: process.env.BILLING_SINCE || null }, 200, { 'cache-control': p ? 'public, max-age=3600' : 'public, max-age=60' });
     }
 
@@ -177,7 +205,8 @@ export default async function handler(req, context) {
       const body = await req.json().catch(() => ({}));
       if (await throttled('beta:' + user.id, 5, 3600)) return fail('Too many tries in an hour; try again shortly', 429);
       if (!codeMatches(body.code)) return fail('That beta link is not right', 404);
-      if (h.plan === 'lifetime' && h.status === 'active') return json({ ok: true, already: true });
+      if (h.plan === 'lifetime' && h.status === 'active' && !(h.source === 'apple' && lapsed(h.current_period_end))) return json({ ok: true, already: true });
+      if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
       /* a household paying for the Household plan is a customer, not a tester: the card would go on being charged */
       if (h.stripe_subscription_id && (h.status === 'active' || h.status === 'past_due')) return fail('This household already has the Household plan', 409, { paying: true });
       /* two claims in the same instant can both pass this count and land at cap + 1: fine for a hand-shared link and a cap of 25 */
@@ -191,15 +220,22 @@ export default async function handler(req, context) {
 
     if (action === 'checkout') {
       const body = await req.json().catch(() => ({}));
-      const plan = body.plan === 'lifetime' ? 'lifetime' : (body.plan === 'month' && prices().month) ? 'month' : 'year';
-      /* the iPhone app opens Stripe in Safari, so Stripe sends the parent back through a page that hands off to the app */
-      const back = body.client === 'ios' ? `${site}/back.html` : `${site}/app/`;
-      if (h.plan === 'lifetime' && h.status === 'active') return fail('This household already has Lunch Sorted forever', 409);
+      /* forever is no longer sold; an app open since it was asks, and is told so */
+      if (body.plan === 'lifetime') return fail('Forever is no longer sold; the yearly and monthly plans are still here', 410);
+      const plan = (body.plan === 'month' && prices().month) ? 'month' : 'year';
+      /* the iPhone app sells through the App Store only; a checkout asked for from it is refused, not opened */
+      if (body.client === 'ios') return fail('In the iPhone app the plan is bought through the App Store', 403, { appStore: true });
+      const back = `${site}/app/`;
+      /* each platform sells the plan its own way: a household paying Apple is not sold it again here */
+      if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
+      /* an App Store plan days past its end, its notification missed, holds nothing: the website sells the plan again */
+      const held = !(h.source === 'apple' && lapsed(h.current_period_end));
+      if (held && h.plan === 'lifetime' && h.status === 'active') return fail('This household already has Lunch Sorted forever', 409);
       /* a monthly or yearly household switches between the two in Manage billing, not with a second subscription */
-      if (plan !== 'lifetime' && h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);
-      if (plan !== 'lifetime' && h.plan === 'household' && h.status === 'past_due') return fail('The Household plan is waiting on a payment; update the card in Manage billing', 409);
+      if (held && h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);
+      if (held && h.plan === 'household' && h.status === 'past_due') return fail('The Household plan is waiting on a payment; update the card in Manage billing', 409);
       const params = {
-        mode: plan === 'lifetime' ? 'payment' : 'subscription',
+        mode: 'subscription',
         line_items: [{ price: prices()[plan], quantity: 1 }],
         client_reference_id: String(h.id),
         metadata: { household_id: String(h.id), plan, user_id: String(user.id) },
@@ -207,10 +243,19 @@ export default async function handler(req, context) {
         cancel_url: `${back}?paid=0`,
         allow_promotion_codes: true,
         automatic_tax: { enabled: process.env.STRIPE_TAX !== '0' },
-        billing_address_collection: 'auto'
+        billing_address_collection: 'auto',
+        /* half an hour, Stripe's shortest: a checkout left open in a tab cannot be paid long after the household has moved on */
+        expires_at: Math.floor(Date.now() / 1000) + 1800
       };
-      if (plan !== 'lifetime') params.subscription_data = { metadata: { household_id: String(h.id), plan } };
-      else params.invoice_creation = { enabled: true };
+      params.subscription_data = { metadata: { household_id: String(h.id), plan } };
+      /* bought inside the free three weeks: the card is taken now and first charged when they end, so
+         the year or month runs from there and no free day is lost. Stripe wants that date at least 48
+         hours out; closer than that the plan is charged today, and the app says so (chargeLater()). */
+      const later = chargeLaterUntil(h);
+      if (later) {
+        params.subscription_data.trial_end = Math.floor(new Date(later).getTime() / 1000);
+        params.metadata.charge_later = '1';
+      }
       if (h.stripe_customer_id) { params.customer = h.stripe_customer_id; params.customer_update = { address: 'auto', name: 'auto' }; }
       else params.customer_email = user.email;
       let session;

@@ -55,8 +55,8 @@ the enrolment, so settle it before launch.
 ## Pricing and Availability
 
 - [x] Price: Free
-- [x] Availability: United States only. Linking out to Stripe is what the US storefront
-      permits, and the product rule depends on it.
+- [x] Availability: United States only for now. The in-app purchases work in any storefront;
+      before expanding, set the price in each and file the EU Digital Services Act declaration.
 - [x] Pre-orders: leave off. Pre-order needs App Review approval first and then a delayed
       release date, which trades launch speed for launch-day volume. Approval day should be
       release day.
@@ -108,7 +108,7 @@ the enrolment, so settle it before launch.
 >
 > FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, with two kid-tested recipes to cook from, take out the ones they refuse, and set your school's rules.
 >
-> THE PAID HOUSEHOLD PLAN: Add your own foods or bring in a recipe from anywhere, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. The plan is bought on our website, not in this app.
+> THE PAID HOUSEHOLD PLAN: Add your own foods or bring in a recipe from anywhere, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. In this app the plan is an in-app purchase, yearly or monthly, at the price the App Store shows; the launch price is a founding price, kept for as long as you stay subscribed. Both plans renew automatically until you cancel them in your Apple Account's subscriptions. Terms of use: https://lunchsorted.app/terms.html · Privacy: https://lunchsorted.app/privacy.html
 >
 > Made by a mom who no longer dreads packing lunches. hello@lunchsorted.app
 
@@ -156,7 +156,9 @@ video for version 1.
 
 ## App Privacy (the questionnaire)
 
-- [x] Answered and published
+- [x] Answered and published, at the answers the live app earns: Crash Data and Usage Data
+      below stay **No** in App Store Connect until `main` carries the day-one work, then are
+      entered in the same sitting as that deploy (README.md, "When the day-one work moves to main")
 
 Answer **Yes, we collect data from this app**, then:
 
@@ -165,15 +167,16 @@ Answer **Yes, we collect data from this app**, then:
 | Contact Info → Email Address | Yes | Yes | No | App Functionality (sign-in, household sharing, the trial and renewal emails) |
 | User Content → Other User Content | Yes (the household: lunchbox names, foods, rules, plans) | Yes | No | App Functionality |
 | Identifiers → User ID | Yes (the account id) | Yes | No | App Functionality |
-| Purchases → Purchase History | Yes (which plan the household has; Stripe holds the card) | Yes | No | App Functionality |
+| Purchases → Purchase History | Yes (which plan the household has, and the Stripe or App Store reference for it; Stripe and Apple hold the payment) | Yes | No | App Functionality |
 | Usage Data → Product Interaction | Yes (six dated moments per household: made, first week planned, back in week two, second phone joined, checkout opened, first paid) | Yes | No | Analytics |
 | Diagnostics → Crash Data | Yes (what the planner's own code reports when it breaks: the message, the trail of code it passed through, the build, the browser's user-agent string) | No | No | App Functionality |
 | Everything else (location, contacts, health, browsing, performance data, advertising data) | No | | | |
 
 Notes that back the answers: there are no analytics or advertising SDKs in the app and no
 third-party cookies; the site's analytics are on the marketing pages only and never inside
-`/app/`; the only network calls are to lunchsorted.app; Stripe runs on its own page in the
-phone's browser, outside the app. Diagnostics is **Yes, Crash Data, not linked, not tracking, App Functionality**: when the planner's
+`/app/`; the only network calls are to lunchsorted.app; purchases in the app go through
+StoreKit and Apple takes the payment; the app never opens Stripe, to buy or to manage: a household
+already paying on the website is told to change it at lunchsorted.app, named rather than linked. Diagnostics is **Yes, Crash Data, not linked, not tracking, App Functionality**: when the planner's
 own code breaks it posts the message, the stack, the build and the browser's user-agent string to our own server
 (`/api/errors`), with no session, no household and no identifier, kept thirty days; there is no
 performance reporting, and Apple's own crash logs are collected by Apple, not by the app. Usage
@@ -181,7 +184,7 @@ Data is **Yes, Product Interaction, linked, not tracking, Analytics**: beside th
 used the app and a count of the days they have used it (both run the service: the three-week
 trial, the reminder emails, knowing whether an account is live), the servers keep six dates a
 household (made, first week planned, back in week two, second phone joined, checkout opened,
-first paid; migration 0006), which measure whether the app is working for people and so are
+first paid; migration 0009_milestones_errors), which measure whether the app is working for people and so are
 declared as analytics. Nothing narrower than those six moments is recorded; revisit this answer
 if anything else is ever kept. Everything linked to a person is collected only after the parent signs in; until then the one
 thing that leaves the phone is a crash report, which names nobody. App Store Connect has no way to
@@ -235,13 +238,13 @@ the free tier with the plan's pieces locked, which is also fine.
 >
 > How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: shuffle the week or one day; tap a compartment (the swap arrow) to change it. Shop: the list is what to buy, by aisle; the share button sends it to Notes or Reminders. Pack: one Packed check per box; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the sliders icon beside the lunchbox name, labelled Lunchbox settings). The sliders icon beside the lunchbox name, labelled Lunchbox settings: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
 >
-> Payments: the Household plan is sold on our website (lunchsorted.app) and not in the app. The app does not use in-app purchase. Where the app mentions the plan, it leaves the app and opens the phone's own default browser at Stripe's checkout page for our website, lunchsorted.app; nothing is bought inside the app, and it uses no StoreKit product. When Stripe is done it sends the parent to a page on our site that hands them back to the app. The review account is inside its free three weeks, so everything is on. This is a US-only listing.
+> Payments: in the iPhone app the Household plan is sold only through in-app purchase: an auto-renewing subscription, yearly or monthly, in the group "Household". Account tab → Subscription → "Keep the Household plan" (or "Get the Household plan") opens the sheet with both at the App Store's prices, and Restore purchases, Terms of use and Privacy beside them. A parent on a computer or an Android phone can buy the same plan on our website instead, through Stripe; the iPhone app honours a plan bought there, under guideline 3.1.3(b), because the same plan is available in the app as an in-app purchase. The iPhone app never offers a web checkout. The review account is inside its free three weeks, so everything is on, and the purchase sheet is still reachable from Subscription; purchases in review go through the sandbox. This is a US-only listing.
 >
 > Recipes: two recipes are built in, from the USDA's Recipes for Healthy Kids cookbook (Food and Nutrition Administration, fna.usda.gov). They are US government works in the public domain; each is shown with a source line and a link to the original. Everything else on the Recipes tab is imported by the parent from a page or text they chose, stored on their own household and not published by us. Recipes tab → Import a recipe, if you want to see that path.
 >
 > Offline: the app works without a network once opened once; airplane mode shows the same week.
 >
-> The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, browser hand-off and URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
+> The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, in-app purchase (StoreKit 2), and the URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
 
 ## Everything else in that sidebar: leave it alone
 
@@ -255,15 +258,21 @@ these block submission, and none need a decision now.
 - **Custom Product Pages** and **Product Page Optimization**: alternate screenshots and copy
   for ad campaigns, and A/B tests of them. Both want traffic you do not have yet. Come back
   when there is a paid campaign to point at one.
-- **Promo Codes**: unlocks paid downloads and in-app purchases. The app is free and has
-  neither, so a code would do nothing.
+- **Promo Codes**: the app now has in-app purchases, so codes (and subscription offer codes)
+  would work. Not needed for launch; the beta testers' code is the website's.
 - **Game Center**, **Vietnam Game License**: not a game.
-- **In-App Purchases** and **Subscriptions**: deliberately empty, and they stay empty. The
-  Household plan is a row on the household that Stripe flips. Adding a StoreKit product to
-  "look normal" would break the product rule and hand Apple a cut of a web subscription.
-- **App Store Server Notifications** and the **App-Specific Shared Secret**: both exist to
-  tell a server about in-app purchase events. With no in-app purchases they have nothing to
-  report. Leave both unset.
+- **Subscriptions**: one group, "Household" (display name "Household plan"), with
+  `app.lunchsorted.household.annual` ($19.99, 1 year, level 1, "Household plan, yearly") and
+  `app.lunchsorted.household.month` ($2.99, 1 month, level 2, "Household plan, monthly"), both
+  described "Every lunchbox, both parents, kid's pick". These are the founding prices: when they
+  go up, schedule the change with **keep the current price for existing subscribers**, always,
+  because the terms promise it. No introductory offer; the app's three weeks are the trial.
+  **In-App Purchases**: none; forever is not sold. Leave **Family Sharing** off on both: the plan is
+  already the household's, shared through the household, and a family-shared transaction
+  would arrive without the household's token. Product ids can never be reused, even deleted.
+- **App Store Server Notifications**: Version 2, production and sandbox both
+  `https://lunchsorted.app/api/apple/notify`. The **App-Specific Shared Secret** is for the
+  old receipt API and stays unset.
 - **Regulated Medical Devices**: required for the Medical or Health and Fitness categories,
   or if the age rating says medical information is frequent. This app is Food & Drink and
   answered None. It does not apply. Keep it that way: allergens in this app are a filter a
@@ -283,17 +292,15 @@ The one worth a look:
 ## Account level, once each
 
 - [x] Developer Program membership active, two-factor on
-- [x] Free Apps agreement showing **Active** under Business. No bank or tax forms: the app
-      is free and the plan is sold on the web.
+- [ ] **Paid Applications** agreement showing **Active** under Business, with bank and tax
+      forms done. Until it is, StoreKit returns no products and the plan sheet says the App
+      Store is not answering. Join the App Store Small Business Program before the first sale.
 - [x] Seller name: **Elizabeth Kronzek**, the legal entity on the account. A sole
       proprietorship is not a separate legal person, so Lila Bloom Enterprises cannot be
-      the seller; it appears in the Copyright line instead. Do **not** sign the Paid Apps
-      Agreement: it is what lets you charge for a download or sell in-app purchase, and
-      signing it pulls in the tax and banking forms. This app is free and the plan is sold
-      on the web, so neither applies. The Free Apps Agreement has no renewal date: Apple
-      reissues the agreements from time to time and an unaccepted one takes your apps off
-      sale, so check Business whenever Apple emails about updated terms. What does renew
-      annually is the Developer Program membership, on its enrolment anniversary.
+      the seller; it appears in the Copyright line instead. Apple reissues the agreements from
+      time to time and an unaccepted one takes your apps off sale, so check Business whenever
+      Apple emails about updated terms. What renews annually is the Developer Program
+      membership, on its enrolment anniversary.
 - [x] `app.lunchsorted` registered under Identifiers with Associated Domains enabled
 - [x] `hello@lunchsorted.app` actually delivers. Apple mails it and reviewers use it.
 
@@ -311,13 +318,20 @@ The one worth a look:
 
 ## Before you press Submit
 
+- [ ] The two subscriptions Ready to Submit, each with a display name, a description and a review
+      screenshot (`store/iap-review.png`, the same image on both, made by `scripts/iap-shot.mjs`:
+      the founding line, both prices, the renewal line, Restore purchases, Terms of use, Privacy;
+      rerun it with the new prices after a price change), and selected on the version page under In-App Purchases
+      and Subscriptions. A first in-app purchase is reviewed with the build.
+- [ ] App Store Server Notifications URL set (above), and the code that answers it deployed
+
 - [x] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated;
       signed in with them once and a week built, within a few days of submitting
 - [ ] Screenshots regenerated since the last interface change — 01-week and 02-pack
       predate the Babybel rename; see the note under Screenshots above
 - [x] Privacy policy URL loads and matches the App Privacy answers above — with one
       caveat: the Crash Data and Usage Data rows describe the day-one work that is on `dev`
-      since 2026-09-22. While `main` serves v23 the questionnaire stays at No for both, because
+      since 2026-09-22. Until `main` carries it the questionnaire stays at No for both, because
       the live app collects neither; the moment `main` carries that work, enter them in the
       same sitting as the deploy. The checklist is in README.md, "When the day-one work moves
       to main"

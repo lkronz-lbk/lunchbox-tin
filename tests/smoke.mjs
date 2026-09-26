@@ -38,6 +38,8 @@ const { default: adminHandler, stats: adminStats } = await import('../netlify/fu
 const { default: betaHandler } = await import('../netlify/functions/beta.js');
 const { default: recipeHandler } = await import('../netlify/functions/api-recipe.js');
 const { default: errorsHandler, ipBucket } = await import('../netlify/functions/api-errors.js');
+const { default: appleHandler } = await import('../netlify/functions/api-apple.js');
+const appleLib = await import('../netlify/lib/apple.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
 process.env.REVIEW_EMAIL = 'review@example.com'; process.env.REVIEW_CODE = 'REVU-2468';
 process.env.BETA_CODE = 'BETA-TEST-1234'; process.env.BETA_CAP = '2';
@@ -48,13 +50,18 @@ globalThis.__LS_STRIPE_FETCH = async (url, init) => {
   const u = new URL(url); const params = Object.fromEntries(new URLSearchParams(init.body || ''));
   stripeCalls.push({ method: init.method, path: u.pathname, params, auth: init.headers.authorization });
   const reply = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
-  if (u.pathname === '/v1/prices/price_year') return reply({ id: 'price_year', unit_amount: 2900, currency: 'usd', recurring: { interval: 'year' } });
+  if (u.pathname === '/v1/prices/price_year') return reply({ id: 'price_year', unit_amount: 1999, currency: 'usd', recurring: { interval: 'year' }, metadata: { founding: 'yes' } });
   if (u.pathname === '/v1/prices/price_life') return reply({ id: 'price_life', unit_amount: 7900, currency: 'usd' });
-  if (u.pathname === '/v1/prices/price_month') return reply({ id: 'price_month', unit_amount: 399, currency: 'usd', recurring: { interval: 'month' } });
+  if (u.pathname === '/v1/prices/price_month') return reply({ id: 'price_month', unit_amount: 299, currency: 'usd', recurring: { interval: 'month' } });
   if (u.pathname === '/v1/checkout/sessions') {
     if (params['automatic_tax[enabled]'] === 'true' && globalThis.__LS_STRIPE_NO_TAX) return reply({ error: { message: 'You must configure Stripe Tax before enabling automatic_tax', code: 'invalid_request_error' } }, 400);
     return reply({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
   }
+  if (u.pathname === '/v1/coupons/beta100') return reply({ id: 'beta100', object: 'coupon', percent_off: 100 });
+  if (u.pathname === '/v1/coupons/tenoff') return reply({ id: 'tenoff', object: 'coupon', percent_off: 10 });
+  if (u.pathname === '/v1/invoices/in_clash') return reply({ id: 'in_clash', object: 'invoice' });   /* a newer account: the payment is listed apart */
+  if (u.pathname === '/v1/invoice_payments') return reply({ data: [{ payment: { type: 'payment_intent', payment_intent: 'pi_clash' } }] });
+  if (u.pathname === '/v1/refunds') return reply({ id: 're_clash', status: 'succeeded' });
   if (u.pathname === '/v1/billing_portal/sessions') return reply({ url: 'https://billing.stripe.com/p/session/test_1' });
   if (u.pathname.startsWith('/v1/subscriptions/')) {
     const id = u.pathname.split('/').pop();
@@ -70,7 +77,7 @@ async function apiProxy(req, res){
   const method = req.method;
   const request = new Request(`http://${req.headers.host}${req.url}`, {method, headers,
     body: (method === 'GET' || method === 'HEAD') ? undefined : Buffer.concat(chunks), duplex: 'half'});
-  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/admin') ? adminHandler : req.url.startsWith('/api/recipe') ? recipeHandler : req.url.startsWith('/api/errors') ? errorsHandler : req.url.startsWith('/beta') ? betaHandler : householdHandler;
+  const handler = req.url.startsWith('/api/auth/') ? authHandler : req.url.startsWith('/api/billing') ? billingHandler : req.url.startsWith('/api/apple') ? appleHandler : req.url.startsWith('/api/admin') ? adminHandler : req.url.startsWith('/api/recipe') ? recipeHandler : req.url.startsWith('/api/errors') ? errorsHandler : req.url.startsWith('/beta') ? betaHandler : householdHandler;
   let resp;
   try { resp = await handler(request, {ip: '127.0.0.1'}); }
   catch (e) { res.writeHead(500); return res.end(String(e)); }
@@ -2783,7 +2790,14 @@ try {
   check('a pantry tick opens the sheet instead', /pantry that remembers/.test(await pb.textContent('#sheetBody')) && await pb.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('lunchsorted')).pantry).length === 0));
   await sheetDone(pb); await pb.waitForTimeout(300);
   const bcfg = await pb.evaluate(() => fetch('/api/billing').then(r => r.json()));
-  check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 2900 && bcfg.prices.lifetime.amount === 7900 && bcfg.prices.year.interval === 'year', bcfg);
+  check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 1999 && bcfg.prices.month.amount === 299 && bcfg.prices.year.interval === 'year', bcfg);
+  {
+    const { billingEnabled } = await import('../netlify/lib/stripe.js');
+    const life = process.env.STRIPE_PRICE_LIFETIME; delete process.env.STRIPE_PRICE_LIFETIME;
+    check('billing no longer needs a forever price to be on', billingEnabled() === true);
+    process.env.STRIPE_PRICE_LIFETIME = life;
+  }
+  check('and the founding price is marked in Stripe, on the yearly price, not in the app', bcfg.prices.year.founding === true && bcfg.prices.month.founding === false, bcfg.prices);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('signed out, a second lunchbox opens the Household plan sheet with a sign-in button', (await pb.$$eval('#nkName', a => a.length)) === 0 && (await pb.$$eval('[data-act="go-signin"]', a => a.length)) === 1 && /second lunchbox/i.test(await pb.textContent('#sheetBody')));
@@ -2937,17 +2951,39 @@ try {
   }
   await openPane(pb, 'household');
   await pb.click('[data-act="invite"]'); await pb.waitForTimeout(300);
-  check('and the app opens the plan sheet instead, with all three prices', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$29 a year/.test(await pb.textContent('#sheetBody')) && /\$3\.99 a month/.test(await pb.textContent('#sheetBody')) && /\$79, once, forever/.test(await pb.textContent('#sheetBody')));
+  check('and the app opens the plan sheet instead, with both prices, the founding line and no forever', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$19\.99 a year/.test(await pb.textContent('#sheetBody')) && /\$2\.99 a month/.test(await pb.textContent('#sheetBody')) && /Founding price: yours for as long as you stay subscribed/.test(await pb.textContent('#sheetBody')) && !/forever/i.test(await pb.textContent('#sheetBody')) && (await pb.$$eval('#sheetBody [data-plan="lifetime"]', a => a.length)) === 0);
   const monthly = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"month"}'}).then(r => r.json()));
   check('the monthly price opens a subscription checkout of its own', !!monthly.url && stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params['line_items[0][price]'] === 'price_month' && c.params.mode === 'subscription' && c.params['subscription_data[metadata][plan]'] === 'month'));
   check('links in the sheet use the accent, not browser blue', await pb.$eval('#sheetBody a[href="/terms.html"]', a => getComputedStyle(a).color !== 'rgb(0, 0, 238)' && getComputedStyle(a).color !== 'rgb(0, 0, 255)'));
   const ownerCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
   check('checkout is opened on the server, for this household, on Stripe\'s page', ownerCheckout.url === 'https://checkout.stripe.com/c/pay/cs_test_1' &&
     stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params.client_reference_id === String(patState.household.id) && c.params.mode === 'subscription' && c.params['line_items[0][price]'] === 'price_year' && c.params.customer_email === 'pat@example.com' && /\/app\/\?paid=1$/.test(c.params.success_url) && c.params['automatic_tax[enabled]'] === 'true' && c.auth === 'Bearer sk_test_stub'), stripeCalls.slice(-1));
-  /* the iPhone app: Stripe opens in Safari and comes back through a page that hands off to the app */
-  const iosCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year","client":"ios"}'}).then(r => r.json()));
-  const iosCall = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop();
-  check('from the iPhone app, Stripe sends the parent back through the hand-off page', !!iosCheckout.url && iosCall && /\/back\.html\?paid=1$/.test(iosCall.params.success_url) && /\/back\.html\?paid=0$/.test(iosCall.params.cancel_url), iosCall && iosCall.params);
+  check('a household whose three weeks are over is charged the day it buys', !stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop().params['subscription_data[trial_end]']);
+  {
+    /* bought inside the three weeks: first charged when they end, so no free day is lost */
+    const { trialEnd } = await import('../netlify/lib/trial.js');
+    const hid = patState.household.id;
+    const [was] = (await db.query(`SELECT created_at, doc->>'createdAt' AS doc_created FROM households WHERE id = ${hid}`)).rows;
+    const born = new Date(Date.now() - 5 * 86400000).toISOString();
+    await db.query(`UPDATE households SET created_at = '${born}', doc = jsonb_set(doc, '{createdAt}', to_jsonb('${born}'::text)) WHERE id = ${hid}`);
+    await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
+    const inTrial = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop().params;
+    const st = await pb.evaluate(() => fetch('/api/household').then(r => r.json()));
+    check('the household\'s state tells the app the same date, so the sheet promises only what checkout does', st.chargeLater && Math.floor(new Date(st.chargeLater).getTime() / 1000) === Number(inTrial['subscription_data[trial_end]']), st.chargeLater);
+    const want = Math.floor(trialEnd({ created_at: born, doc_created: born }).getTime() / 1000);
+    check('bought inside the three weeks, the first charge is set for the day they end, and the session says so for the webhook',
+      Number(inTrial['subscription_data[trial_end]']) === want && inTrial['metadata[charge_later]'] === '1', [inTrial['subscription_data[trial_end]'], want]);
+    const late = new Date(Date.now() - 20 * 86400000).toISOString();
+    await db.query(`UPDATE households SET created_at = '${late}', doc = jsonb_set(doc, '{createdAt}', to_jsonb('${late}'::text)) WHERE id = ${hid}`);
+    await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json()));
+    check('and in its last day, too close for Stripe, it is charged the day it is bought, and the state says so', !stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop().params['subscription_data[trial_end]'] && (await pb.evaluate(() => fetch('/api/household').then(r => r.json()))).chargeLater === null);
+    await db.query(`UPDATE households SET created_at = $1, doc = jsonb_set(doc, '{createdAt}', to_jsonb($2::text)) WHERE id = ${hid}`, [was.created_at, was.doc_created]);
+  }
+  /* left over from when the iPhone app opened Stripe in Safari: the server still honours client:'ios' and back.html
+     still hands a result back to the app, though the page no longer takes this path (ios/README.md) */
+  const sessionsBefore = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length;
+  const iosCheckout = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year","client":"ios"}'}).then(async r => ({ status: r.status, body: await r.json() })));
+  check('a checkout asked for from the iPhone app is refused, since it sells through the App Store, and Stripe is never asked', iosCheckout.status === 403 && iosCheckout.body.appStore === true && stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length === sessionsBefore, iosCheckout);
   const backPage = await pb.evaluate(() => fetch('/back.html?paid=1').then(r => r.text().then(t => ({status: r.status, csp: r.headers.get('content-security-policy'), text: t}))));
   check('and that page carries the result into the app under its own policy', backPage.status === 200 && /lunchsorted:\/\/back/.test(backPage.text) && /default-src 'none'/.test(backPage.csp) && /sha256-/.test(backPage.csp) && !/http-equiv="refresh"/.test(backPage.text));
   {
@@ -2998,6 +3034,8 @@ try {
   const ok = await hook(completed);
   check('a delivery that failed mid-apply is retried by Stripe and applied the second time', blinked.status === 500 && ok.status === 200 && !ok.body.duplicate && (await ent()).plan === 'household', [blinked.status, ok.body]);
   check('a signed checkout.session.completed makes the household paid, with the renewal date from the subscription itself', (await ent()).status === 'active' && (await ent()).cust === 'cus_pat' && (await ent()).sub === 'sub_pat' && new Date((await ent()).pe).toISOString() === '2027-01-15T08:00:00.000Z' && stripeCalls.some(c => c.method === 'GET' && c.path === '/v1/subscriptions/sub_pat'), await ent());
+  const paidKinds = async (h) => (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${h} AND kind = 'paid'`)).rows[0].n;
+  check('a checkout that took the money is the household\'s paid milestone', (await paidKinds(patState.household.id)) === 1);
   const again = await hook(completed);
   check('the same event delivered twice is a no-op', again.status === 200 && again.body.duplicate === true);
   const subEv = (id, type, created, extra = {}) => ({ id, type, created, data: { object: Object.assign({ id: 'sub_pat', object: 'subscription', customer: 'cus_pat', status: 'active', cancel_at_period_end: false, items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] }, metadata: { household_id: String(patState.household.id) } }, extra) } });
@@ -3016,16 +3054,16 @@ try {
   const backOk = await until(pb, () => /Renews\s*Jan 15, 2027/.test(document.querySelector('#view').textContent));
   if (!backOk) console.log('  (diag) url=' + pb.url() + ' view=' + (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 400) + ' errors=' + JSON.stringify(errors.slice(-3)));
   check('and Subscription carries the renewal date, what it costs, Manage billing, and no second buy button', backOk &&
-    /\$29 a year/.test(await pb.textContent('#view')) && /Cancel it any time in Manage billing/.test(await pb.textContent('#view')) &&
+    /\$19\.99 a year/.test(await pb.textContent('#view')) && /Cancel it any time in Manage billing/.test(await pb.textContent('#view')) &&
     (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1 &&
     (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0, (await pb.textContent('#view')).match(/Renews[^\n]{0,60}/));
   /* a household on the monthly price must be told the monthly price, which only
      works if the entitlement's price id reaches the app at all */
   await db.query(`UPDATE entitlements SET stripe_price_id='price_month' WHERE household_id=${patState.household.id}`);
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
-  const monthlyShown = await until(pb, () => /\$3\.99 a month/.test(document.querySelector('#view').textContent));
+  const monthlyShown = await until(pb, () => /\$2\.99 a month/.test(document.querySelector('#view').textContent));
   check('a monthly household is told the monthly price, not the yearly one', monthlyShown &&
-    !/\$29 a year/.test(await pb.textContent('#view')), (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 200));
+    !/\$19\.99 a year/.test(await pb.textContent('#view')), (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 200));
   const smallPlan = await pb.$$eval('.btn.sm, .tg, .kidbtn, .seg button, .x, nav.tabs button, .item[data-act]', a =>
     a.filter(e => e.checkVisibility()).map(e => ({h: Math.round(e.getBoundingClientRect().height), t: e.textContent.trim().slice(0,20)})).filter(x => x.h < 44));
   check('every tappable control on the Subscription page is at least 44px tall', smallPlan.length === 0, smallPlan);
@@ -3040,9 +3078,7 @@ try {
   const dupYear = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
   check('a household that already has the yearly plan is not sold it again', dupYear === 409);
   await openPane(pb, 'plan');
-  await pb.click('[data-act="upgrade"][data-why="forever"]'); await pb.waitForTimeout(300);
-  check('Switch to forever offers only the forever price', (await pb.$$eval('[data-act="buy"][data-plan="year"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="buy"][data-plan="lifetime"]', a => a.length)) === 1 && /never renews/.test(await pb.textContent('#sheetBody')));
-  await sheetDone(pb); await pb.waitForTimeout(300);
+  check('forever is not sold: Subscription offers no switch to it', (await pb.$$eval('[data-why="forever"], [data-plan="lifetime"]', a => a.length)) === 0);
   await pb.click('[data-act="portal"]'); await pb.waitForURL(/billing\.stripe\.com/);
   check('Manage billing opens Stripe\'s portal for this customer', stripeCalls.some(c => c.path === '/v1/billing_portal/sessions' && c.params.customer === 'cus_pat' && /\/app\/\?portal=1$/.test(c.params.return_url)));
 
@@ -3066,13 +3102,13 @@ try {
   check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && portalStill);
   await sheetDone(pb); await pb.waitForTimeout(200);
 
-  /* forever */
+  /* forever, bought before it was withdrawn from sale: still honoured */
   await hook({ id: 'evt_5', type: 'checkout.session.completed', created: t0 + 4, data: { object: { id: 'cs_test_2', mode: 'payment', payment_status: 'paid', customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { household_id: String(patState.household.id), plan: 'lifetime' } } } });
   check('a lifetime purchase is forever', (await ent()).plan === 'lifetime' && (await ent()).status === 'active' && (await ent()).pe === null);
   await hook(subEv('evt_6', 'customer.subscription.deleted', t0 + 5, { status: 'canceled' }));
   check('and an old subscription ending later does not touch it', (await ent()).plan === 'lifetime');
   const lifeAgain = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"lifetime"}'}).then(r => r.status));
-  check('nor is forever sold twice', lifeAgain === 409);
+  check('and forever, no longer sold, cannot be bought again by asking the server for it', lifeAgain === 410, lifeAgain);
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
   const forever = await until(pb, () => /Household, forever/.test(document.querySelector('#view').textContent));
   check('Subscription says forever and offers no upgrade', forever && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
@@ -3085,6 +3121,72 @@ try {
   check('a partial refund changes nothing', (await ent()).plan === 'lifetime');
   await hook({ id: 'evt_refund', type: 'charge.refunded', created: t0 + 9, data: { object: { id: 'ch_1', object: 'charge', customer: 'cus_pat', refunded: true } } });
   check('a forever purchase refunded in full is undone', (await ent()).plan === 'free' && (await ent()).status === 'canceled');
+  /* one household, two ways to pay: Stripe's clock and Apple's cannot be compared, so a Stripe
+     delivery late enough to pass the ordering check must still not undo a plan paid to Apple */
+  await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.annual' WHERE household_id=${patState.household.id}`);
+  const lateStripe = await hook(subEv('evt_apple_1', 'customer.subscription.deleted', t0 + 9.2, { status: 'canceled' }));
+  check('a late Stripe delivery cannot undo a plan the household pays Apple for', lateStripe.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'apple' && (await ent()).status === 'active', await ent());
+  {
+    /* a plan bought on the web inside the three weeks completes with nothing charged yet: a sale, not a beta code */
+    const [u] = (await db.query(`INSERT INTO users (email) VALUES ('later@example.com') RETURNING id`)).rows;
+    const [h2] = (await db.query(`INSERT INTO households (owner_user_id, doc) VALUES (${u.id}, '{}'::jsonb) RETURNING id`)).rows;
+    await db.query(`INSERT INTO entitlements (household_id, plan, status) VALUES (${h2.id}, 'free', 'none')`);
+    await hook({ id: 'evt_later', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000), data: { object: { id: 'cs_later', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later', client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
+    const [e2] = (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${h2.id}`)).rows;
+    check('and a plan bought inside the three weeks, nothing charged yet, is on and counted as a sale, not a beta code', e2.plan === 'household' && e2.source === 'stripe' && e2.status === 'active', e2);
+    const laterSub = (id, created, status) => ({ id, type: 'customer.subscription.updated', created, data: { object: { id: 'sub_later', object: 'subscription', customer: 'cus_later', status, cancel_at_period_end: false, items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] }, metadata: { household_id: String(h2.id) } } } });
+    const paidH2 = async () => (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${h2.id} AND kind = 'paid'`)).rows[0].n;
+    const stillFree = await paidH2();
+    await hook(laterSub('evt_later_trial', Math.floor(Date.now() / 1000) + 0.5, 'trialing'));
+    const trialFree = await paidH2();
+    await hook(laterSub('evt_later_charged', Math.floor(Date.now() / 1000) + 0.7, 'active'));
+    check('but it is not paid until the three weeks end and the first charge goes through', stillFree === 0 && trialFree === 0 && (await paidH2()) === 1, [stillFree, trialFree]);
+    await db.query(`UPDATE entitlements SET plan='free', source='none', status='none', stripe_subscription_id=NULL, event_at=NULL WHERE household_id = ${h2.id}`);
+    await hook({ id: 'evt_later_beta', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000) + 1, data: { object: { id: 'cs_later_b', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later_b', discounts: [{ coupon: 'beta100' }], client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
+    const [e3] = (await db.query(`SELECT source FROM entitlements WHERE household_id = ${h2.id}`)).rows;
+    await db.query(`UPDATE entitlements SET plan='free', source='none', status='none', stripe_subscription_id=NULL, event_at=NULL WHERE household_id = ${h2.id}`);
+    await hook({ id: 'evt_later_ten', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000) + 2, data: { object: { id: 'cs_later_t', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later_t', discounts: [{ coupon: 'tenoff' }], client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
+    const [e4] = (await db.query(`SELECT source FROM entitlements WHERE household_id = ${h2.id}`)).rows;
+    check('but the beta testers\' 100%-off code, used inside the three weeks, still marks them as testers; any smaller code is a sale', e3.source === 'code' && e4.source === 'stripe', [e3, e4]);
+    {
+      const { subscriptionStatus } = await import('../netlify/lib/stripe.js');
+      const firstFailed = subscriptionStatus({ status: 'past_due', trial_end: 1800000000, items: { data: [{ current_period_start: 1800000000 }] } });
+      const renewalFailed = subscriptionStatus({ status: 'past_due', trial_end: 1700000000, items: { data: [{ current_period_start: 1800000000 }] } });
+      check('a first charge that fails when the three weeks end ends the plan; a failed renewal keeps it while Stripe retries', firstFailed === 'canceled' && renewalFailed === 'past_due', [firstFailed, renewalFailed]);
+    }
+    await db.query(`DELETE FROM entitlements WHERE household_id = ${h2.id}`); await db.query(`DELETE FROM households WHERE id = ${h2.id}`); await db.query(`DELETE FROM users WHERE id = ${u.id}`);   /* the numbers page counts every row */
+  }
+  {
+    /* a web checkout left open in a tab and paid after the iPhone bought the plan: ended and given back, not left charging */
+    const before = stripeCalls.length;
+    const clash = await hook({ id: 'evt_apple_clash', type: 'checkout.session.completed', created: t0 + 9.25, data: { object: { id: 'cs_clash', mode: 'subscription', payment_status: 'paid', amount_total: 1999, customer: 'cus_clash', subscription: 'sub_clash', invoice: 'in_clash', client_reference_id: String(patState.household.id), metadata: { plan: 'year' } } } });
+    const calls = stripeCalls.slice(before);
+    check('a web payment made after the household bought the plan through the App Store is cancelled and refunded, and the plan stays Apple\'s',
+      clash.status === 200 && calls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_clash') && calls.some(c => c.path === '/v1/refunds' && c.params.payment_intent === 'pi_clash') && (await ent()).source === 'apple' && (await ent()).status === 'active',
+      [calls.map(c => c.method + ' ' + c.path), await ent()]);
+  }
+  {
+    /* an App Store plan days past its end, Apple's notification missed: the website sells the plan again */
+    await db.query(`UPDATE entitlements SET current_period_end = now() - interval '5 days' WHERE household_id=${patState.household.id}`);
+    const again = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
+    check('a lapsed App Store plan whose notification never came does not stop the website selling the plan', again === 200, again);
+    const exp = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop();
+    check('and a checkout expires in half an hour, so one left open in a tab cannot be paid long after', !!exp && Math.abs(Number(exp.params.expires_at) - (Date.now() / 1000 + 1800)) < 120, exp && exp.params.expires_at);
+    await db.query(`UPDATE entitlements SET current_period_end = NULL WHERE household_id=${patState.household.id}`);
+  }
+  await db.query(`UPDATE entitlements SET status='canceled' WHERE household_id=${patState.household.id}`);
+  await hook({ id: 'evt_apple_2', type: 'checkout.session.completed', created: t0 + 9.3, data: { object: { id: 'cs_test_a', mode: 'payment', payment_status: 'paid', customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
+  check('and once the Apple plan has ended, a Stripe purchase applies again', (await ent()).plan === 'lifetime' && (await ent()).source === 'stripe', await ent());
+  await db.query(`UPDATE entitlements SET plan='free', source='none', status='canceled', apple_original_transaction_id=NULL, apple_product_id=NULL, event_at='${new Date((t0 + 9) * 1000).toISOString()}' WHERE household_id=${patState.household.id}`);
+  {
+    /* one App Store subscription unlocks one household: a second claim on it is refused */
+    const [other] = (await db.query(`SELECT household_id FROM entitlements WHERE household_id <> ${patState.household.id} LIMIT 1`)).rows;
+    let refused = false;
+    await db.query(`UPDATE entitlements SET apple_original_transaction_id='2000000000000009' WHERE household_id=${patState.household.id}`);
+    if (other) { try { await db.query(`UPDATE entitlements SET apple_original_transaction_id='2000000000000009' WHERE household_id=${other.household_id}`); } catch (e) { refused = /unique|duplicate/i.test(e.message); } }
+    check('one App Store subscription can belong to one household only', !!other && refused, { other, refused });
+    await db.query(`UPDATE entitlements SET apple_original_transaction_id=NULL WHERE household_id=${patState.household.id}`);
+  }
   /* a beta tester: forever, on a 100%-off code, nothing charged; the admin page lists them by email */
   await hook({ id: 'evt_tester', type: 'checkout.session.completed', created: t0 + 9.5, data: { object: { id: 'cs_test_t', mode: 'payment', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
   check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
@@ -3190,6 +3292,204 @@ try {
   }
   await hook({ id: 'evt_refund_t', type: 'charge.refunded', created: t0 + 9.6, data: { object: { id: 'ch_t', object: 'charge', customer: 'cus_pat', refunded: true } } });
   check('undoing it clears the tester mark too', (await ent()).plan === 'free' && (await ent()).source === 'none', await ent());
+  /* ------------------------------------------------ the App Store */
+  {
+    const fx = (n) => fs.readFileSync(path.join(ROOT, '..', 'tests', 'fixtures', 'apple', n));
+    const real = JSON.parse(fx('real-chain.json'));
+    const at = Date.parse('2026-06-01T00:00:00Z');
+    const threw = (fn) => { try { fn(); return ''; } catch (e) { return e.message; } };
+    check('the purchase check accepts the chain Apple really signs with, and finds its marks', !threw(() => appleLib.verifyChain([real.leaf, real.intermediate, real.root], at)), threw(() => appleLib.verifyChain([real.leaf, real.intermediate, real.root], at)));
+    check('and refuses it once the signing certificate has expired', /out of date/.test(threw(() => appleLib.verifyChain([real.leaf, real.intermediate, real.root], Date.parse('2028-01-01')))));
+    const pem = (n) => new crypto.X509Certificate(fx(n + '.pem'));
+    check('and refuses any chain that does not end at Apple\'s own root', /root/.test(threw(() => appleLib.verifyChain([pem('leaf'), pem('intermediate'), pem('root')], Date.now()))));
+    /* everything after is signed with a test chain made the same way as Apple's, its root pinned in place of Apple's */
+    globalThis.__LS_APPLE_ROOT = pem('root').fingerprint256;
+    const jws = (payload, signer = 'leaf') => {
+      const x5c = [pem(signer), pem('intermediate'), pem('root')].map(c => c.raw.toString('base64'));
+      const h = Buffer.from(JSON.stringify({ alg: 'ES256', x5c })).toString('base64url'), b = Buffer.from(JSON.stringify(payload)).toString('base64url');
+      return h + '.' + b + '.' + crypto.sign('sha256', Buffer.from(h + '.' + b), { key: fx(signer + '.key'), dsaEncoding: 'ieee-p1363' }).toString('base64url');
+    };
+    const hid = patState.household.id;
+    const token = (await db.query(`SELECT apple_account_token::text AS t FROM entitlements WHERE household_id = ${hid}`)).rows[0].t;
+    let clock = Date.now();
+    const next = () => (clock += 1000);
+    const DAY = 86400000;
+    const txn = (o = {}) => Object.assign({ bundleId: 'app.lunchsorted', environment: 'Sandbox', productId: 'app.lunchsorted.household.annual', originalTransactionId: '2000000000000100', transactionId: '2000000000000100', purchaseDate: clock, expiresDate: Date.now() + 365 * DAY, appAccountToken: token, type: 'Auto-Renewable Subscription', signedDate: next() }, o);
+    const link = (t, signer) => pb.evaluate(b => fetch('/api/apple/link', { method: 'POST', headers: { 'content-type': 'application/json' }, body: b }).then(async r => ({ status: r.status, body: await r.json() })), JSON.stringify({ signedTransaction: jws(t, signer) }));
+    const notify = async (type, t, renewal, o = {}) => {
+      const n = Object.assign({ notificationType: type, notificationUUID: crypto.randomUUID(), signedDate: next(), data: { bundleId: 'app.lunchsorted', environment: 'Sandbox', signedTransactionInfo: t && jws(t), signedRenewalInfo: renewal && jws(Object.assign({ signedDate: clock, environment: 'Sandbox' }, renewal)) } }, o);
+      const r = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: o.raw || jws(n) }) });
+      return { status: r.status, body: await r.json().catch(() => ({})), uuid: n.notificationUUID, n };
+    };
+    const row = async () => (await db.query(`SELECT plan, source, status, cancel_at_period_end AS cape, current_period_end AS pe, apple_original_transaction_id AS otx, apple_product_id AS product FROM entitlements WHERE household_id = ${hid}`)).rows[0];
+
+    check('every household is given its own App Store token, and the parent\'s phone is sent it', /^[0-9a-f-]{36}$/.test(token) && (await pb.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => j.entitlement.appleToken))) === token);
+    const rogue = await link(txn(), 'rogue');
+    check('a purchase signed by any Apple developer\'s certificate, not the App Store\'s, is refused', rogue.status === 400 && (await row()).plan === 'free', rogue);
+    await db.query(`DELETE FROM milestones WHERE household_id = ${hid} AND kind = 'paid'`);   /* its Stripe plan above was paid */
+    const first = await link(txn());
+    check('a yearly purchase from the phone makes the household paid, through Apple', first.status === 200 && (await row()).plan === 'household' && (await row()).source === 'apple' && (await row()).status === 'active' && (await row()).otx === '2000000000000100' && (await row()).product === 'app.lunchsorted.household.annual', [first, await row()]);
+    check('and the phone is told the new plan in the same answer', first.body.entitlement && first.body.entitlement.source === 'apple' && first.body.entitlement.plan === 'household', first.body);
+    check('and telling us twice changes nothing', (await link(txn())).status === 200 && (await row()).status === 'active');
+    const sandboxPaid = (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${hid} AND kind = 'paid'`)).rows[0].n;
+    const live = await link(txn({ environment: 'Production' }));
+    const livePaid = (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${hid} AND kind = 'paid'`)).rows[0].n;
+    check('a purchase in Apple\'s sandbox (App Review, TestFlight) is not a paid household; the same purchase for real is', sandboxPaid === 0 && live.status === 200 && livePaid === 1, [sandboxPaid, live.status, livePaid]);
+    const webBuy = await pb.evaluate(() => fetch('/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"plan":"year"}' }).then(async r => ({ status: r.status, body: await r.json() })));
+    check('the website will not sell the plan again to a household paying Apple, and says where it is managed', webBuy.status === 409 && webBuy.body.apple === true && /App Store/.test(webBuy.body.error), webBuy);
+    const [otherHh] = (await db.query(`SELECT apple_account_token::text AS t FROM entitlements WHERE household_id <> ${hid} LIMIT 1`)).rows;
+    const someoneElse = await link(txn({ appAccountToken: otherHh.t }));
+    check('a purchase made for another household is not taken by this one', someoneElse.status === 409 && someoneElse.body.elsewhere === true, someoneElse);
+    const orphan = await link(txn({ appAccountToken: crypto.randomUUID() }));
+    check('but one made for a household since deleted can be restored into this one', orphan.status === 200 && (await row()).source === 'apple', orphan);
+    check('and a purchase through Apple never makes anyone the payer of the household\'s Stripe billing', (await db.query(`SELECT paid_by FROM entitlements WHERE household_id = ${hid}`)).rows[0].paid_by === null);
+    const shared = await link(txn({ inAppOwnershipType: 'FAMILY_SHARED', appAccountToken: undefined, originalTransactionId: '2000000000000800', transactionId: '2000000000000800' }));
+    check('a purchase shared through Family Sharing is not taken, since the plan is shared through the household', shared.status === 409 && shared.body.notHere === true, shared);
+    const tokenless = await link(txn({ appAccountToken: undefined, originalTransactionId: '2000000000000810', transactionId: '2000000000000810' }));
+    check('nor is one that carries no household at all', tokenless.status === 409 && tokenless.body.notHere === true, tokenless);
+    const lost = txn({ productId: 'app.lunchsorted.household.forever', originalTransactionId: '2000000000000820', transactionId: '2000000000000820', type: 'Non-Consumable', expiresDate: undefined, appAccountToken: crypto.randomUUID() });
+    await notify('REFUND', Object.assign({}, lost, { revocationDate: Date.now(), signedDate: next() }), null);
+    const relinked = await link(Object.assign({}, lost, { appAccountToken: token }));
+    check('a purchase Apple has refunded cannot be linked afterwards, even from before the refund and with no household to hold the refund', relinked.status === 409 && relinked.body.notHere === true && (await row()).otx !== '2000000000000820', relinked);
+    const t1 = Date.now();
+    const bomb = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: Buffer.from(JSON.stringify({ alg: 'ES256', x5c: [{ length: 5e8 }, {}, {}] })).toString('base64url') + '.' + Buffer.from('{"signedDate":1}').toString('base64url') + '.x' }) });
+    check('a notification whose certificates are not text is refused at once, before anything is built from them', bomb.status === 400 && Date.now() - t1 < 2000, [bomb.status, Date.now() - t1]);
+    const summary = await notify('RENEWAL_EXTENSION', null, null, { data: undefined, summary: { bundleId: 'app.lunchsorted' } });
+    check('a summary notification, which carries no purchase, is acknowledged rather than refused', summary.status === 200 && summary.body.ignored === true, summary);
+
+    const off = await notify('DID_CHANGE_RENEWAL_STATUS', txn(), { originalTransactionId: '2000000000000100', autoRenewStatus: 0 }, { subtype: 'AUTO_RENEW_DISABLED' });
+    check('switching off renewal in iOS Settings reaches the row as ending at the period end', off.status === 200 && (await row()).cape === true && (await row()).status === 'active', [off, await row()]);
+    await link(txn());
+    check('and a later word from the phone, which carries no renewal news, does not switch it back on', (await row()).cape === true);
+    const dup = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: jws(Object.assign({}, off.n)) }) }).then(r => r.json());
+    check('the same notification delivered twice is a no-op', dup.duplicate === true, dup);
+    const staleN = await notify('EXPIRED', txn({ expiresDate: Date.now() - DAY }), null, { signedDate: clock - 5000 });
+    check('a notification older than the last one applied cannot undo it', staleN.status === 200 && (await row()).plan === 'household', await row());
+
+    const grace = await notify('DID_FAIL_TO_RENEW', txn({ expiresDate: Date.now() - DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 1, gracePeriodExpiresDate: Date.now() + 6 * DAY }, { subtype: 'GRACE_PERIOD' });
+    check('a card Apple cannot charge keeps the plan through its grace period, as waiting on a payment', grace.status === 200 && (await row()).plan === 'household' && (await row()).status === 'past_due', await row());
+    await notify('EXPIRED', txn({ expiresDate: Date.now() - DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 0 }, { subtype: 'VOLUNTARY' });
+    check('when the Apple subscription ends the household is free again, and still bound to it', (await row()).plan === 'free' && (await row()).source === 'none' && (await row()).otx === '2000000000000100', await row());
+    await notify('SUBSCRIBED', txn({ expiresDate: Date.now() + 30 * DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 1 }, { subtype: 'RESUBSCRIBE' });
+    check('and coming back to it later picks the same household up again', (await row()).plan === 'household' && (await row()).status === 'active' && (await row()).cape === false, await row());
+
+    const forever = await link(txn({ productId: 'app.lunchsorted.household.forever', originalTransactionId: '2000000000000200', transactionId: '2000000000000200', type: 'Non-Consumable', expiresDate: undefined }));
+    check('buying forever through Apple makes it forever', forever.status === 200 && (await row()).plan === 'lifetime' && (await row()).otx === '2000000000000200', await row());
+    const sandboxEnd = new Date((await row()).pe).getTime() - Date.now();
+    check('though forever bought in the sandbox, as a reviewer or a tester does for free, lasts a day and then lapses', sandboxEnd > 20 * 3600000 && sandboxEnd < 26 * 3600000, (await row()).pe);
+    await notify('DID_RENEW', txn({ expiresDate: Date.now() + 365 * DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 1 });
+    await notify('EXPIRED', txn({ expiresDate: Date.now() - DAY }), null);
+    check('and the yearly one it replaced, which Apple lets run until it is cancelled in Settings, cannot lower it', (await row()).plan === 'lifetime' && (await row()).status === 'active', await row());
+    await notify('REFUND', txn({ productId: 'app.lunchsorted.household.forever', originalTransactionId: '2000000000000200', transactionId: '2000000000000200', type: 'Non-Consumable', expiresDate: undefined, revocationDate: Date.now() }), null);
+    check('a forever purchase Apple refunds is undone', (await row()).plan === 'free' && (await row()).status === 'canceled', await row());
+
+    await link(txn({ originalTransactionId: '2000000000000300', transactionId: '2000000000000300' }));
+    await notify('REFUND', txn({ originalTransactionId: '2000000000000100', expiresDate: Date.now() - 100 * DAY, revocationDate: Date.now() }), null);
+    check('a refund of an older Apple subscription does not end the one being paid for now', (await row()).plan === 'household' && (await row()).status === 'active' && (await row()).otx === '2000000000000300', await row());
+
+    const [other] = (await db.query(`SELECT household_id FROM entitlements WHERE household_id <> ${hid} LIMIT 1`)).rows;
+    await db.query(`UPDATE entitlements SET apple_original_transaction_id = '2000000000000400' WHERE household_id = ${other.household_id}`);
+    const taken = await link(txn({ originalTransactionId: '2000000000000400', transactionId: '2000000000000400' }));   /* this household's own token: only the binding can refuse it */
+    check('a purchase already bound to another household cannot be restored into this one', taken.status === 409 && taken.body.elsewhere === true && (await row()).otx === '2000000000000300', [taken, await row()]);
+    await db.query(`UPDATE entitlements SET apple_original_transaction_id = NULL WHERE household_id = ${other.household_id}`);
+    const nobody = await notify('SUBSCRIBED', txn({ originalTransactionId: '2000000000000500', transactionId: '2000000000000500', appAccountToken: crypto.randomUUID() }), null);
+    check('a notification for a purchase no household made is acknowledged and changes nothing', nobody.status === 200 && (await row()).otx === '2000000000000300', nobody);
+    const wrongApp = await notify('SUBSCRIBED', txn({ bundleId: 'com.someone.else' }), null, { data: { bundleId: 'com.someone.else', environment: 'Sandbox', signedTransactionInfo: jws(txn({ bundleId: 'com.someone.else' })) } });
+    check('a notification for another app is refused', wrongApp.status === 400, wrongApp);
+    const test = await notify('TEST', null, null);
+    check('Apple\'s test notification is acknowledged', test.status === 200 && test.body.ignored === true, test);
+    const forged = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: jws({ notificationType: 'SUBSCRIBED', notificationUUID: crypto.randomUUID(), signedDate: next(), data: { bundleId: 'app.lunchsorted', environment: 'Sandbox', signedTransactionInfo: jws(txn(), 'rogue') } }) }) });
+    check('a notification carrying a purchase signed by the wrong certificate is refused', forged.status === 400);
+
+    /* an App Store plan whose end has long passed, with no word from Apple, no longer holds the row */
+    await db.query(`UPDATE entitlements SET plan = 'household', source = 'apple', status = 'active', current_period_end = now() - interval '5 days', stripe_subscription_id = NULL WHERE household_id = ${hid}`);
+    await hook(subEv('evt_after_apple_lapse', 'customer.subscription.updated', Math.floor(Date.now() / 1000) + 50, { status: 'active' }));
+    check('an App Store plan days past its end with no word from Apple is over: the website can sell the plan again', (await row()).source === 'stripe' && (await row()).status === 'active', await row());
+    /* a household paying on the website is not sold the plan again by the phone */
+    await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', apple_original_transaction_id = NULL, apple_product_id = NULL WHERE household_id = ${hid}`);
+    const twice = await link(txn({ originalTransactionId: '2000000000000600', transactionId: '2000000000000600' }));
+    check('an App Store purchase cannot take over a plan being paid on the website', twice.status === 409 && twice.body.paying === true && (await row()).source === 'stripe', [twice, await row()]);
+
+    /* ---- the iPhone app's plan sheet, on a phone with StoreKit (stubbed) and the real server behind it */
+    const fresh = () => db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL, cancel_at_period_end = false, apple_original_transaction_id = NULL, apple_product_id = NULL, apple_event_at = NULL WHERE household_id = ${hid}`);
+    await fresh();
+    const stub = (hasStoreKit) => {
+      window.__sk = { purchases: [], finished: [], managed: 0, launched: [], listeners: {}, next: null };
+      const P = { AppLauncher: { openUrl: async o => { window.__sk.launched.push(o.url); return { completed: true }; } },
+        Browser: { open: async () => {}, close: async () => {}, addListener: () => ({ remove() {} }) }, App: { addListener: () => ({ remove() {} }) } };
+      if (hasStoreKit) P.StoreKit = {
+        products: async () => ({ products: [
+          { id: 'app.lunchsorted.household.annual', displayName: 'Household, yearly', displayPrice: '$34.99', kind: 'subscription', period: 'year' },
+          { id: 'app.lunchsorted.household.month', displayName: 'Household, monthly', displayPrice: '$3.99', kind: 'subscription', period: 'month' },
+          { id: 'app.lunchsorted.household.forever', displayName: 'Household, forever', displayPrice: '$89.99', kind: 'forever' }] }),
+        purchase: async o => { window.__sk.purchases.push(o); return window.__sk.next || { status: 'cancelled' }; },
+        restore: async () => ({ transactions: [] }),
+        finish: async o => { window.__sk.finished.push(o.transactionId); return { finished: true }; },
+        manage: async () => { window.__sk.managed++; },
+        addListener: (ev, fn) => { window.__sk.listeners[ev] = fn; return { remove() {} }; } };
+      window.Capacitor = { isNativePlatform: () => true, Plugins: P };
+    };
+    const saved = await pb.evaluate(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return o; });
+    const iphone = async (hasStoreKit) => {
+      const c = await browser.newContext({ viewport: { width: 375, height: 812 }, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LunchSortedApp/1' });
+      await pinClock(c); await c.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort());
+      await c.addCookies(await pb.context().cookies());
+      await c.addInitScript(o => { if (!sessionStorage.getItem('seeded')) { for (const k in o) localStorage.setItem(k, o[k]); sessionStorage.setItem('seeded', '1'); } }, saved);
+      await c.addInitScript(stub, hasStoreKit);
+      const pg = await c.newPage(); pg.on('pageerror', e => errors.push(String(e.message)));
+      await pg.goto(BASE + '/app/'); await pg.waitForLoadState('load');
+      return { c, pg };
+    };
+    const openPlanSheet = async pg => {
+      await openPane(pg, 'plan');
+      await until(pg, () => !!document.querySelector('#view [data-act="upgrade"]'));
+      await pg.click('#view [data-act="upgrade"]');
+      await until(pg, () => /Household plan/.test(document.querySelector('#sheetTitle').textContent));
+    };
+    const { c: ctxN, pg: pn } = await iphone(true);
+    await openPlanSheet(pn);
+    await until(pn, () => document.querySelectorAll('#sheetBody [data-act="iap-buy"]').length === 3);
+    const sheet = await pn.textContent('#sheetBody');
+    check('on the iPhone the plan sheet sells through the App Store, at Apple\'s own prices, with no Stripe button and no forever even if the App Store still lists one', /\$34\.99 a year/.test(sheet) && /\$3\.99 a month/.test(sheet) && !/forever|\$89\.99/i.test(sheet) && !/\$19\.99/.test(sheet) && (await pn.$$eval('#sheetBody [data-act="buy"]', a => a.length)) === 0, sheet.replace(/\s+/g, ' ').slice(0, 300));
+    check('and it offers Restore purchases, Terms of use and Privacy, says the plans renew, and promises no refund Apple would have to give', (await pn.$$eval('#sheetBody [data-act="iap-restore"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/terms.html"], #sheetBody a[href="/terms.html"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/privacy.html"], #sheetBody a[href="/privacy.html"]', a => a.length)) === 1 && !/14 days/.test(sheet) && /Renews each year or month until you cancel/.test(sheet) && /Apple Account/.test(sheet));
+    const bought = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000700' });
+    await pn.evaluate(n => { window.__sk.next = n; }, { status: 'purchased', jws: jws(bought), transactionId: '2000000000000700', productId: bought.productId });
+    const stripeBefore = stripeCalls.length;
+    await pn.click('#sheetBody [data-act="iap-buy"][data-product="app.lunchsorted.household.annual"]');
+    await until(pn, () => window.__sk.finished.length > 0);
+    const skSeen = await pn.evaluate(() => window.__sk);
+    check('buying the yearly plan hands Apple the household\'s token, and the purchase is finished only once the server has it', skSeen.purchases.length === 1 && skSeen.purchases[0].id === 'app.lunchsorted.household.annual' && skSeen.purchases[0].token === token && skSeen.finished[0] === '2000000000000700' && (await row()).source === 'apple' && (await row()).plan === 'household', [skSeen, await row()]);
+    check('and nothing was opened in a browser, and no Stripe checkout was made', skSeen.launched.length === 0 && stripeCalls.slice(stripeBefore).filter(c => c.path === '/v1/checkout/sessions').length === 0, stripeCalls.slice(stripeBefore).map(c => c.path));
+    await until(pn, () => /Welcome to the Household plan/.test(document.querySelector('#toast').textContent));
+    await openPane(pn, 'plan');
+    await until(pn, () => !!document.querySelector('#view [data-act="iap-manage"]'));
+    const paneN = await pn.textContent('#view');
+    check('Subscription on the iPhone then offers Manage in the App Store, not Manage billing, and names no website price', (await pn.$$eval('#view [data-act="portal"]', a => a.length)) === 0 && !/\$19\.99/.test(paneN) && /Manage in the App Store/.test(paneN), paneN.replace(/\s+/g, ' ').slice(0, 300));
+    await pn.click('#view [data-act="iap-manage"]'); await until(pn, () => window.__sk.managed === 1);
+    check('and Manage in the App Store opens Apple\'s own subscription sheet', (await pn.evaluate(() => window.__sk.managed)) === 1);
+    const renewed = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000701', expiresDate: Date.now() + 700 * DAY });
+    await pn.evaluate(t => window.__sk.listeners.transaction(t), { jws: jws(renewed), transactionId: '2000000000000701', productId: renewed.productId });
+    await until(pn, () => window.__sk.finished.includes('2000000000000701'));
+    check('a purchase StoreKit hands over by itself, a renewal or an Ask to Buy approved later, goes to the server and is finished', new Date((await row()).pe).getTime() > Date.now() + 600 * DAY, await row());
+    await ctxN.close();
+
+    /* a household the website bills is not sold the plan again on the iPhone */
+    await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', apple_original_transaction_id = NULL, apple_product_id = NULL WHERE household_id = ${hid}`);
+    const { c: ctxW, pg: pw } = await iphone(true);
+    await openPane(pw, 'plan'); await until(pw, () => /Household/.test(document.querySelector('#view').textContent));
+    check('a household paying on the website is sold nothing on the iPhone, and the app does not open Stripe even to manage it', (await pw.$$eval('[data-act="iap-buy"], [data-act="upgrade"][data-why="forever"], [data-act="portal"]', a => a.length)) === 0 && /at lunchsorted\.app/.test(await pw.textContent('#view')), (await pw.textContent('#view')).replace(/\s+/g, ' ').slice(0, 300));
+    await ctxW.close();
+
+    /* the iPhone app built before StoreKit still loads this page: it must sell nothing at all */
+    await fresh();
+    const { c: ctxO, pg: po } = await iphone(false);
+    await openPlanSheet(po);
+    const oldSheet = await po.textContent('#sheetBody');
+    check('an iPhone app from before the App Store plugin is told to update, and offers no way to pay', /Update Lunch Sorted/.test(oldSheet) && (await po.$$eval('#sheetBody [data-act="buy"], #sheetBody [data-act="iap-buy"]', a => a.length)) === 0, oldSheet.replace(/\s+/g, ' ').slice(0, 200));
+    await ctxO.close();
+    delete globalThis.__LS_APPLE_ROOT;
+    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL, cancel_at_period_end = false, apple_original_transaction_id = NULL, apple_product_id = NULL, apple_event_at = NULL WHERE household_id = ${hid}`);
+  }
   /* who may manage billing: the owner, and whoever paid; a helper may buy nothing */
   await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_pat', paid_by=NULL WHERE household_id=${patState.household.id}`);
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'household');
@@ -3201,12 +3501,12 @@ try {
   await ph.goto(await ph.getAttribute('[data-dev-link]', 'href')); await ph.click('button[type="submit"]'); await ph.waitForURL(/\/app\//); await ph.waitForLoadState('load');
   await until(ph, () => !!document.querySelector('[data-act="join-accept"]')); await ph.click('[data-act="join-accept"]');
   await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
-  const helperBuy = await ph.evaluate(() => Promise.all([fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status), fetch('/api/billing/portal', {method:'POST'}).then(r => r.status)]));
-  check('a caretaker can neither buy nor manage billing, and sees no plan line', helperBuy[0] === 403 && helperBuy[1] === 403 && !/Household plan/.test(await ph.textContent('#view')), helperBuy);
+  const helperBuy = await ph.evaluate(() => Promise.all([fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status), fetch('/api/billing/portal', {method:'POST'}).then(r => r.status), fetch('/api/apple/link', {method:'POST', headers:{'content-type':'application/json'}, body:'{"signedTransaction":"x"}'}).then(r => r.status)]));
+  check('a caretaker can neither buy nor manage billing, on the website or through the App Store, and sees no plan line', helperBuy[0] === 403 && helperBuy[1] === 403 && helperBuy[2] === 403 && !/Household plan/.test(await ph.textContent('#view')), helperBuy);
   /* and is not sent what the household pays in the first place */
   const sitterEnt = await ph.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => j.entitlement));
   check('and the server never hands a caretaker the household\'s plan, price or renewal date',
-    sitterEnt.plan === 'free' && sitterEnt.currentPeriodEnd === null && !sitterEnt.price && sitterEnt.portal === false, sitterEnt);
+    sitterEnt.plan === 'free' && sitterEnt.currentPeriodEnd === null && !sitterEnt.price && sitterEnt.portal === false && !sitterEnt.appleToken, sitterEnt);
   /* the Account tab a caretaker gets: no plan, no lunchbox settings, and still a way out */
   await ph.click('[data-act="tab"][data-tab="setup"]'); await ph.waitForTimeout(300);
   const sitterRows = await ph.evaluate(() => [...document.querySelectorAll('#view .item')].map(e => e.querySelector('.nm').textContent));
@@ -3252,7 +3552,7 @@ try {
   /* deleting the account stops the money */
   stripeCalls.length = 0;
   await openPane(pb, 'account');
-  check('the delete warning says the yearly plan stops', /The yearly plan, which stops at once/.test(await pb.textContent('#view')),
+  check('the delete warning says the plan stops', /The plan, which stops at once/.test(await pb.textContent('#view')),
     (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 240));
   await pb.fill('#deleteConfirm', 'DELETE'); await pb.waitForSelector('[data-act="delete-account"]:not([disabled])');
   await pb.click('[data-act="delete-account"]');
@@ -3278,6 +3578,9 @@ try {
     const before = mails.length;
     const first = await run(Date.now(), 'https://test.example');
     const got = (to) => mails.slice(before).filter(m => m.to === to);
+    check('the trial emails quote the price Stripe has now, founding line and all, and never forever',
+      [got('ending@example.com')[0], got('ended@example.com')[0]].every(m => m && /\$19\.99 a year, or \$2\.99 a month \(the founding price, yours for as long as you stay\)/.test(m.text) && /\$19\.99 a year/.test(m.html) && !/forever|\$79|\$29\b/i.test(m.text + m.html)),
+      [got('ending@example.com')[0], got('ended@example.com')[0]].map(m => m && m.text));
     {
       const { dateWords } = await import('../netlify/lib/mail.js');
       const end = new Date(Date.now() + 3 * 86400000);
@@ -3966,10 +4269,21 @@ try {
   warn('og:image is an absolute URL (set once the domain exists)',
     /^https?:\/\//.test(await site.$eval('meta[property="og:image"]', m => m.content)));
   check('the landing page says what is free, what the plan costs, and where the terms are',
-    await site.evaluate(() => { const p = document.querySelector('#pricing'); return !!p && /\$29/.test(p.textContent) && /\$3\.99/.test(p.textContent) && /\$79/.test(p.textContent) && /three weeks/.test(p.textContent) && !!p.querySelector('a[href="/terms.html"]') && !!p.querySelector('a[href="/app/"]'); }));
+    await site.evaluate(() => { const p = document.querySelector('#pricing'); return !!p && /\$19\.99/.test(p.textContent) && /\$2\.99/.test(p.textContent) && /Founding price/.test(p.textContent) && !/forever|\$79|\$29\b/i.test(p.textContent) && /three weeks/.test(p.textContent) && !!p.querySelector('a[href="/terms.html"]') && !!p.querySelector('a[href="/app/"]'); }));
   check('the waitlist form is wired to Netlify',
     await site.$eval('form.signup', f => f.getAttribute('data-netlify') === 'true' &&
       !!f.querySelector('input[name="form-name"]')));
+  {
+    /* the front page's prices follow Stripe: a later, higher price with no founding mark replaces
+       what the HTML says, and the founding line goes with it */
+    const later = await ctx.newPage();
+    await later.route('**/api/billing', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: true, prices: { year: { amount: 2999, currency: 'usd', founding: false }, month: { amount: 399, currency: 'usd', founding: false } } }) }));
+    await later.goto(BASE+'/'); await later.waitForTimeout(500);
+    const shown = await later.evaluate(() => { const p = document.querySelector('#pricing'); const f = p.querySelector('[data-founding]'); return { text: p.innerText, founding: !!f && f.hidden }; });
+    check('the front page shows the price Stripe has now, and drops the founding line when that price is not marked founding',
+      /\$29\.99/.test(shown.text) && /\$3\.99 a month/.test(shown.text) && !/\$19\.99|\$2\.99/.test(shown.text) && !/Founding price/.test(shown.text) && shown.founding, shown);
+    await later.close();
+  }
   await site.goto(BASE+'/feedback.html'); await site.waitForTimeout(250);
   check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && !!f.querySelector('textarea[name="ideas"]') && f.querySelectorAll('input[name="want"]').length === 5 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));
   await site.goto(BASE+'/help.html'); await site.waitForTimeout(250);
