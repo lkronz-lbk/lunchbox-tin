@@ -58,7 +58,7 @@ async function apply(hid, at, txn, renewal) {
   if (other && appleLive(cur) && cur.plan === 'lifetime' && PRODUCTS[txn.productId] !== 'lifetime') return 'lifetime kept';
   if (other && appleLive(cur) && !LIVE.has(st.status)) return 'other purchase';
   try {
-    const ok = await writeApple(hid, at, { ...st, original, product: txn.productId });
+    const ok = await writeApple(hid, at, { ...st, original, product: txn.productId, charged: txn.environment === 'Production' });
     return ok ? 'applied' : 'stale';
   } catch (e) {
     if (e && (e.code === '23505' || /unique|duplicate/i.test(e.message || ''))) return 'elsewhere';

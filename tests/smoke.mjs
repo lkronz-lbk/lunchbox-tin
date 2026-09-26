@@ -3034,6 +3034,8 @@ try {
   const ok = await hook(completed);
   check('a delivery that failed mid-apply is retried by Stripe and applied the second time', blinked.status === 500 && ok.status === 200 && !ok.body.duplicate && (await ent()).plan === 'household', [blinked.status, ok.body]);
   check('a signed checkout.session.completed makes the household paid, with the renewal date from the subscription itself', (await ent()).status === 'active' && (await ent()).cust === 'cus_pat' && (await ent()).sub === 'sub_pat' && new Date((await ent()).pe).toISOString() === '2027-01-15T08:00:00.000Z' && stripeCalls.some(c => c.method === 'GET' && c.path === '/v1/subscriptions/sub_pat'), await ent());
+  const paidKinds = async (h) => (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${h} AND kind = 'paid'`)).rows[0].n;
+  check('a checkout that took the money is the household\'s paid milestone', (await paidKinds(patState.household.id)) === 1);
   const again = await hook(completed);
   check('the same event delivered twice is a no-op', again.status === 200 && again.body.duplicate === true);
   const subEv = (id, type, created, extra = {}) => ({ id, type, created, data: { object: Object.assign({ id: 'sub_pat', object: 'subscription', customer: 'cus_pat', status: 'active', cancel_at_period_end: false, items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] }, metadata: { household_id: String(patState.household.id) } }, extra) } });
@@ -3132,6 +3134,13 @@ try {
     await hook({ id: 'evt_later', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000), data: { object: { id: 'cs_later', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later', client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
     const [e2] = (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${h2.id}`)).rows;
     check('and a plan bought inside the three weeks, nothing charged yet, is on and counted as a sale, not a beta code', e2.plan === 'household' && e2.source === 'stripe' && e2.status === 'active', e2);
+    const laterSub = (id, created, status) => ({ id, type: 'customer.subscription.updated', created, data: { object: { id: 'sub_later', object: 'subscription', customer: 'cus_later', status, cancel_at_period_end: false, items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] }, metadata: { household_id: String(h2.id) } } } });
+    const paidH2 = async () => (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${h2.id} AND kind = 'paid'`)).rows[0].n;
+    const stillFree = await paidH2();
+    await hook(laterSub('evt_later_trial', Math.floor(Date.now() / 1000) + 0.5, 'trialing'));
+    const trialFree = await paidH2();
+    await hook(laterSub('evt_later_charged', Math.floor(Date.now() / 1000) + 0.7, 'active'));
+    check('but it is not paid until the three weeks end and the first charge goes through', stillFree === 0 && trialFree === 0 && (await paidH2()) === 1, [stillFree, trialFree]);
     await db.query(`UPDATE entitlements SET plan='free', source='none', status='none', stripe_subscription_id=NULL, event_at=NULL WHERE household_id = ${h2.id}`);
     await hook({ id: 'evt_later_beta', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000) + 1, data: { object: { id: 'cs_later_b', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later_b', discounts: [{ coupon: 'beta100' }], client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
     const [e3] = (await db.query(`SELECT source FROM entitlements WHERE household_id = ${h2.id}`)).rows;
@@ -3317,10 +3326,15 @@ try {
     check('every household is given its own App Store token, and the parent\'s phone is sent it', /^[0-9a-f-]{36}$/.test(token) && (await pb.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => j.entitlement.appleToken))) === token);
     const rogue = await link(txn(), 'rogue');
     check('a purchase signed by any Apple developer\'s certificate, not the App Store\'s, is refused', rogue.status === 400 && (await row()).plan === 'free', rogue);
+    await db.query(`DELETE FROM milestones WHERE household_id = ${hid} AND kind = 'paid'`);   /* its Stripe plan above was paid */
     const first = await link(txn());
     check('a yearly purchase from the phone makes the household paid, through Apple', first.status === 200 && (await row()).plan === 'household' && (await row()).source === 'apple' && (await row()).status === 'active' && (await row()).otx === '2000000000000100' && (await row()).product === 'app.lunchsorted.household.annual', [first, await row()]);
     check('and the phone is told the new plan in the same answer', first.body.entitlement && first.body.entitlement.source === 'apple' && first.body.entitlement.plan === 'household', first.body);
     check('and telling us twice changes nothing', (await link(txn())).status === 200 && (await row()).status === 'active');
+    const sandboxPaid = (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${hid} AND kind = 'paid'`)).rows[0].n;
+    const live = await link(txn({ environment: 'Production' }));
+    const livePaid = (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${hid} AND kind = 'paid'`)).rows[0].n;
+    check('a purchase in Apple\'s sandbox (App Review, TestFlight) is not a paid household; the same purchase for real is', sandboxPaid === 0 && live.status === 200 && livePaid === 1, [sandboxPaid, live.status, livePaid]);
     const webBuy = await pb.evaluate(() => fetch('/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"plan":"year"}' }).then(async r => ({ status: r.status, body: await r.json() })));
     check('the website will not sell the plan again to a household paying Apple, and says where it is managed', webBuy.status === 409 && webBuy.body.apple === true && /App Store/.test(webBuy.body.error), webBuy);
     const [otherHh] = (await db.query(`SELECT apple_account_token::text AS t FROM entitlements WHERE household_id <> ${hid} LIMIT 1`)).rows;

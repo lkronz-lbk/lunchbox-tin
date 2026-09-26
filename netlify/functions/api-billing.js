@@ -69,7 +69,7 @@ async function applyEvent(ev) {
     const [cur] = await q`SELECT plan, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
     const oldSub = cur && cur.stripe_subscription_id;
     if (plan === 'lifetime') {
-      const ok = await write(hid, at, { plan: 'lifetime', source, status: 'active', customer: cust, subscription: null, price: prices().lifetime, paidBy });
+      const ok = await write(hid, at, { plan: 'lifetime', source, status: 'active', customer: cust, subscription: null, price: prices().lifetime, paidBy, charged: obj.payment_status === 'paid' });
       /* a yearly plan bought before this one stops at its period end, so nobody pays twice */
       if (ok && oldSub) { try { await stripe('POST', `/subscriptions/${oldSub}`, { cancel_at_period_end: true }); } catch (e) { console.error('billing: could not stop the old subscription', oldSub, e.message); } }
       return ok ? 'applied' : 'stale';
@@ -81,7 +81,8 @@ async function applyEvent(ev) {
     let sub = null;
     if (subId) { try { sub = await stripe('GET', `/subscriptions/${subId}`); } catch (e) { console.error('billing: could not read', subId, e.message); } }
     const ok = await write(hid, at, { plan: 'household', source, status: sub ? subscriptionStatus(sub) : 'active', periodEnd: periodEnd(sub),
-      cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy });
+      cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy,
+      charged: obj.payment_status === 'paid' });   /* $0 today inside the three weeks: charged later, on the subscription's own event */
     /* a second subscription for the same household (a card that failed, then a fresh checkout) replaces the first */
     if (ok && oldSub && subId && oldSub !== subId) await cancelSubscription(oldSub);
     if (!ok) {
@@ -104,7 +105,8 @@ async function applyEvent(ev) {
     const status = ev.type === 'customer.subscription.deleted' ? 'canceled' : subscriptionStatus(obj);
     const price = obj.items && obj.items.data && obj.items.data[0] && obj.items.data[0].price && obj.items.data[0].price.id;
     const ok = await write(hid, at, { plan: status === 'canceled' ? 'free' : 'household', source: status === 'canceled' ? 'none' : 'stripe', status,
-      periodEnd: periodEnd(obj), cancelAtPeriodEnd: obj.cancel_at_period_end, customer: idOf(obj.customer), subscription: obj.id, price, keepCode: true });
+      periodEnd: periodEnd(obj), cancelAtPeriodEnd: obj.cancel_at_period_end, customer: idOf(obj.customer), subscription: obj.id, price, keepCode: true,
+      charged: obj.status === 'active' || obj.status === 'past_due' });   /* trialing has charged nothing yet */
     return ok ? 'applied' : 'stale';
   }
 

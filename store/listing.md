@@ -156,7 +156,9 @@ video for version 1.
 
 ## App Privacy (the questionnaire)
 
-- [x] Answered and published
+- [x] Answered and published, at the answers the live app earns: Crash Data and Usage Data
+      below stay **No** in App Store Connect until `main` carries the day-one work, then are
+      entered in the same sitting as that deploy (README.md, "When the day-one work moves to main")
 
 Answer **Yes, we collect data from this app**, then:
 
@@ -182,7 +184,7 @@ Data is **Yes, Product Interaction, linked, not tracking, Analytics**: beside th
 used the app and a count of the days they have used it (both run the service: the three-week
 trial, the reminder emails, knowing whether an account is live), the servers keep six dates a
 household (made, first week planned, back in week two, second phone joined, checkout opened,
-first paid; migration 0006), which measure whether the app is working for people and so are
+first paid; migration 0006_milestones_errors), which measure whether the app is working for people and so are
 declared as analytics. Nothing narrower than those six moments is recorded; revisit this answer
 if anything else is ever kept. Everything linked to a person is collected only after the parent signs in; until then the one
 thing that leaves the phone is a crash report, which names nobody. App Store Connect has no way to
@@ -329,7 +331,7 @@ The one worth a look:
       predate the Babybel rename; see the note under Screenshots above
 - [x] Privacy policy URL loads and matches the App Privacy answers above — with one
       caveat: the Crash Data and Usage Data rows describe the day-one work that is on `dev`
-      since 2026-09-22. While `main` serves v23 the questionnaire stays at No for both, because
+      since 2026-09-22. Until `main` carries it the questionnaire stays at No for both, because
       the live app collects neither; the moment `main` carries that work, enter them in the
       same sitting as the deploy. The checklist is in README.md, "When the day-one work moves
       to main"

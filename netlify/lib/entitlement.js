@@ -34,9 +34,10 @@ export async function write(hid, at, v) {
                AND (entitlements.current_period_end IS NULL OR entitlements.current_period_end > now() - interval '3 days'))
     RETURNING household_id, source, status`;
   const ok = rows.length > 0;
-  /* the first time Stripe says a household is paid is a milestone; a tester on a 100%-off code keeps
-     source = 'code' through the same events, so the row as written is what decides, not the event */
-  if (ok && rows[0].source === 'stripe' && (rows[0].status === 'active' || rows[0].status === 'past_due')) await milestone(hid, 'paid');
+  /* the first time money is taken is a milestone. The caller says whether it was (v.charged): a plan
+     bought inside the three weeks is live from checkout but charged only when they end. A tester on
+     a 100%-off code keeps source = 'code' through the same events, so the row as written decides that */
+  if (ok && v.charged && rows[0].source === 'stripe' && (rows[0].status === 'active' || rows[0].status === 'past_due')) await milestone(hid, 'paid');
   return ok;
 }
 
@@ -71,7 +72,8 @@ export async function writeApple(hid, at, v) {
                AND (NOT ${live} OR (entitlements.plan = 'lifetime' AND EXCLUDED.plan <> 'lifetime')))
     RETURNING household_id, status`;
   const ok = rows.length > 0;
-  /* a household paying Apple has paid as surely as one paying Stripe */
-  if (ok && (rows[0].status === 'active' || rows[0].status === 'past_due')) await milestone(hid, 'paid');
+  /* a household paying Apple has paid as surely as one paying Stripe; a sandbox purchase (App Review,
+     TestFlight) cost nothing, so the caller does not mark it charged */
+  if (ok && v.charged && (rows[0].status === 'active' || rows[0].status === 'past_due')) await milestone(hid, 'paid');
   return ok;
 }

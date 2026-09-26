@@ -521,7 +521,7 @@ Connect have to move in the same sitting:
       Analytics. The answers and the notes behind them are in `store/listing.md` under App
       Privacy; the label then reads "Data Linked to You: Contact Info, User Content,
       Identifiers, Purchases, Usage Data" and "Data Not Linked to You: Diagnostics". Until
-      `main` carries this work the questionnaire stays at its v23 answers (no Crash Data, no
+      `main` carries this work the questionnaire stays at its live answers (no Crash Data, no
       Usage Data), because the live app collects neither.
 - [ ] **The description**, at the next version that can be edited: "nothing leaves your phone
       until you choose to sign in" becomes "your lunches never leave your phone until you
@@ -529,12 +529,13 @@ Connect have to move in the same sitting:
 - [x] **The build.** `main` took v24 first (App Store purchase, no note), so `dev` was brought
       level with it as v25 on 2026-09-25. v25 carries the note `dev` had written as v24's; no
       phone has read it, since main's v24 said nothing, so there is no `seenAs`.
-- [ ] **Migration 0006** applies itself on the `main` deploy (the build command runs
+- [ ] **Migration `0006_milestones_errors`** applies itself on the `main` deploy (the build command runs
       `scripts/migrate.mjs`): it backfills `signed_up` exactly and `paid` approximately, and
       is already applied and frozen on the staging branch.
 - [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' https://lunchsorted.app/api/errors`
-      answers 404 to a GET, `/admin` shows The funnel and Broken screens, and the privacy page
-      reads "Last updated 24 September 2026". The Ops routine checks the site and the error
+      answers 404 to a GET, `/admin` shows The funnel and Broken screens, and the privacy page's
+      "Last updated" names the day of that deploy (set it in the deploy commit: the live page
+      does not yet describe error reports or the six dates). The Ops routine checks the site and the error
       table from the next weekday morning.
 
 Two calls Liz made on 2026-09-22, so nobody reopens them: error reports go out signed out too
@@ -925,14 +926,18 @@ the idea bank stays free so a free list is never stuck with what it has.
   which opens the plan sheet on arrival. The suite captures every email through
   `globalThis.__LS_MAIL`; nothing reaches Resend from a test.
 - **Milestones**: one row a household a moment, written once each by the functions
-  (migration 0006, `milestone()` in `netlify/lib/db.js`): `signed_up` when the household row is
+  (migration 0006_milestones_errors, `milestone()` in `netlify/lib/db.js`): `signed_up` when the household row is
   made, `first_plan` on the first push whose document holds a planned week, `week_two` when a
   parent's phone (never a caretaker's) reaches the server between seven and fourteen days after
   the row was made (the measure this file asks for; the window runs from sign-in, not from the
   document's own birthday that the trial uses), `second_phone` when someone joins on an invite,
   `checkout` when a checkout session is created for it, the moment before the browser opens
   Stripe's page, `paid` when the entitlement row is first written paid by Stripe or the App Store (a tester on a
-  100%-off code keeps `source = 'code'` and is never `paid`; both writers are in `netlify/lib/entitlement.js`). The kinds a household already has
+  100%-off code keeps `source = 'code'` and is never `paid`; nor is a plan bought inside the three
+  weeks until its first charge goes through, nor a purchase in Apple's sandbox; both writers are in
+  `netlify/lib/entitlement.js`, and the caller says whether money was taken). `checkout` is the
+  web's alone: an App Store buyer reaches `paid` without it, so on `/admin` "went to pay" counts
+  web checkouts only. The kinds a household already has
   come back with the membership query, so `first_plan` and `week_two` are checked in memory and
   written once; the other three are one idempotent insert at moments that are rare anyway. A
   household's rows go with it, so a cohort shrinks when a household is deleted or folded into
