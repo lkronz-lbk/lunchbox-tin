@@ -95,11 +95,13 @@ async function apiProxy(req, res){
 function cspFor(p){
   if(p.startsWith('/app/')) return POLICIES['/app/*'];
   if(p === '/back.html') return POLICIES['/back.html'];
+  if(p.startsWith('/ideas/')) return POLICIES['/ideas/*'];
   if(p === '/' || p === '/index.html') return POLICIES['/index.html'];
   return POLICIES[p] || null;
 }
 const TYPES = {'.html':'text/html','.js':'text/javascript','.png':'image/png','.webp':'image/webp','.json':'application/json',
-  '.webmanifest':'application/manifest+json','.txt':'text/plain','.svg':'image/svg+xml'};
+  '.webmanifest':'application/manifest+json','.txt':'text/plain','.svg':'image/svg+xml',
+  '.css':'text/css','.xml':'application/xml'};
 
 function serve(){
   const server = http.createServer((req, res) => {
@@ -4288,8 +4290,47 @@ try {
   check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && !!f.querySelector('textarea[name="ideas"]') && f.querySelectorAll('input[name="want"]').length === 5 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));
   await site.goto(BASE+'/help.html'); await site.waitForTimeout(250);
   check('the help page answers the questions and points at the planner and the address', /pick the week/.test(await site.textContent('body')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href^="mailto:hello@lunchsorted.app"]')));
+  check('the help page carries the two anchors the ideas pages link to', !!(await site.$('h2#pick')) && !!(await site.$('h2#rules')) && !!(await site.$('a[href="/ideas/"]')));
+  {
+    /* the ideas pages load /ga.js like the front page, so they are served under the front page's
+       policy; the tag itself is stubbed, which still proves the policy lets it run */
+    const ideas = await ctx.newPage();
+    const ideaErrors = [];
+    ideas.on('pageerror', e => ideaErrors.push(String(e.message)));
+    ideas.on('console', m => { if (m.type() === 'error') ideaErrors.push(m.text()); });
+    await ideas.route('https://www.googletagmanager.com/**', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
+    await ideas.route('https://fonts.googleapis.com/**', r => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+    check('the ideas pages share the front page\'s policy, analytics and all', POLICIES['/ideas/*'] === POLICIES['/index.html']);
+    for (const u of ['/ideas/', '/ideas/picky-eater-lunch-week.html', '/ideas/nut-free-school-lunch-week.html']) {
+      const resp = await ideas.goto(BASE+u); await ideas.waitForTimeout(250);
+      const got = await ideas.evaluate(() => ({
+        h1: document.querySelectorAll('h1').length,
+        canonical: (document.querySelector('link[rel="canonical"]') || {}).href || '',
+        og: (document.querySelector('meta[property="og:image"]') || {}).content || '',
+        tw: !!document.querySelector('meta[name="twitter:card"]') && !!document.querySelector('meta[name="description"]'),
+        home: !!document.querySelector('a[href="/"]'), help: !!document.querySelector('a[href^="/help.html"]'),
+        foot: ['/feedback.html','/privacy.html','/terms.html','/app/'].every(h => document.querySelector('footer a[href="'+h+'"]')),
+        styled: getComputedStyle(document.body).backgroundColor !== 'rgba(0, 0, 0, 0)',
+        ga: typeof window.gtag === 'function',
+        wide: document.documentElement.scrollWidth > window.innerWidth + 1 }));
+      check('the ideas page '+u+' opens under its policy with one h1, its canonical, the share tags, the way back and the footer, and analytics',
+        resp.status() === 200 && resp.headers()['content-security-policy'] === POLICIES['/ideas/*'] && got.h1 === 1
+        && got.canonical === 'https://lunchsorted.app'+u && got.og === 'https://lunchsorted.app/img/og.png' && got.tw
+        && got.home && got.help && got.foot && got.styled && got.ga && !got.wide, got);
+    }
+    check('and nothing on them is refused or thrown', ideaErrors.length === 0, ideaErrors);
+    await ideas.close();
+    const sitemap = fs.readFileSync(path.join(ROOT, 'sitemap.xml'), 'utf8');
+    const locs = [...sitemap.matchAll(/<loc>https:\/\/lunchsorted\.app(\/[^<]*)<\/loc>\s*<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/g)].map(m => m[1]);
+    check('the sitemap lists the public pages with a date each, and none of the private ones, and every one exists',
+      locs.length === (sitemap.match(/<url>/g) || []).length && ['/', '/help.html', '/ideas/', '/ideas/nut-free-school-lunch-week.html'].every(l => locs.includes(l))
+      && !locs.some(l => /^\/(app|beta|back|thanks|on-the-list)/.test(l))
+      && locs.every(l => fs.existsSync(path.join(ROOT, l.endsWith('/') ? l + 'index.html' : l))), locs);
+    check('robots.txt points at the sitemap', /\nSitemap: https:\/\/lunchsorted\.app\/sitemap\.xml\n/.test(fs.readFileSync(path.join(ROOT, 'robots.txt'), 'utf8')));
+  }
   await site.goto(BASE+'/privacy.html');
   await site.waitForTimeout(250);
+  check('the privacy page names every page that runs analytics', /front page of this site and the lunch ideas pages/.test(await site.textContent('body')));
   warn('the privacy page has a real contact address, not the placeholder',
     !(await site.content()).includes('hello@example.com'));
   /* the sign-in link only opens the app if this file parses, carries the team, and claims
