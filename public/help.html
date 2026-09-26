@@ -22,7 +22,7 @@ h2{font-family:"Familjen Grotesk",sans-serif;font-size:20px;font-weight:600;marg
 p,li{color:var(--ink-2);max-width:62ch} p{margin:0 0 14px}
 .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px}
 a{color:var(--accent)}
-.back{display:inline-block;margin-top:24px;padding:10px 0;font-size:14px}
+.back{display:inline-block;margin-top:24px;padding:10px 0;font-size:14px;white-space:nowrap}
 strong{color:var(--ink)}
 </style>
 </head>
@@ -32,7 +32,7 @@ strong{color:var(--ink)}
 <h1>Questions, answered</h1>
 <p>Short answers to what parents ask. Anything else: <a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>.</p>
 
-<h2>How does it pick the week?</h2>
+<h2 id="pick">How does it pick the week?</h2>
 <p>From the foods on your list, matched so each box goes together: something crunchy against a soft main, protein when the main is light, something tangy to cut the salt. Each compartment shows the words the pairing used. It is not a random draw, and it never rewrites a day that has already gone.</p>
 
 <h2>Can I plan more than one week?</h2>
@@ -62,7 +62,7 @@ strong{color:var(--ink)}
 <h2>Can I put a recipe on a food I already have, or get rid of one?</h2>
 <p>Yes. Tap the food on <strong>Foods</strong>. If it has no recipe yet it says so, with <strong>Add a recipe</strong> underneath &mdash; paste the address of a recipe page, or paste the recipe itself, exactly as above. It is kept on the <strong>Recipes</strong> tab like any other, and the food points at it &mdash; as does the same dish in your other lunchboxes, because one recipe serves them all. To get rid of one, open it from the <strong>Recipes</strong> tab and remove it there; there is an Undo, the foods that used it stay on their lists, and a dish named after one of the two the app comes with falls back to that built-in recipe. Like importing, this is part of the Household plan, because it writes to your household.</p>
 
-<h2>Why did a food stop showing up?</h2>
+<h2 id="rules">Why did a food stop showing up?</h2>
 <p>A school rule or an allergen you set in the lunchbox settings &mdash; the sliders at the top beside the ?, or Account &rarr; Lunchboxes &mdash; is keeping it out. The Foods tab marks each food it skips and says which rule. Change the rule, or remove the food. Rules never delete a food, and they never rewrite a day that has already gone.</p>
 
 <h2>Can I put in a food a rule says no to?</h2>
@@ -116,7 +116,7 @@ strong{color:var(--ink)}
 <h2>Contact</h2>
 <p><a href="mailto:hello@lunchsorted.app">hello@lunchsorted.app</a>. Made by a parent, in Maryland; replies come from one.</p>
 
-<a class="back" href="/">&larr; Back to Lunch Sorted</a> &nbsp;·&nbsp; <a class="back" href="/app/">Open the planner</a>
+<a class="back" href="/">&larr; Back to Lunch Sorted</a> &nbsp;·&nbsp; <a class="back" href="/app/">Open the planner</a> &nbsp;·&nbsp; <a class="back" href="/ideas/">Lunch ideas</a>
 </div>
 </body>
 </html>
