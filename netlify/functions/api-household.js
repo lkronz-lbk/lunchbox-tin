@@ -1,7 +1,8 @@
 import { sql, json, fail, siteUrl, throttled, milestone } from '../lib/db.js';
 import { currentUser, createInvite, consumeInvite, peekInvite } from '../lib/auth.js';
 import { billingEnabled, cancelSubscription } from '../lib/stripe.js';
-import { trialing } from '../lib/trial.js';
+import { trialing, chargeLaterUntil } from '../lib/trial.js';
+import { lapsed } from '../lib/apple.js';
 
 /* The household is the unit: one document, one version, everyone signed in
    reads and writes the same one.
@@ -23,7 +24,7 @@ async function membership(userId, withDoc) {
                          (SELECT array_agg(kind) FROM milestones ms WHERE ms.household_id = h.id) AS milestones
                   FROM household_members m JOIN households h ON h.id = m.household_id WHERE m.user_id = ${userId}`
     : await sql()`SELECT h.id, h.name, h.owner_user_id, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id,
-                         e.plan, e.status, e.stripe_subscription_id, h.created_at, h.doc->>'createdAt' AS doc_created,
+                         e.plan, e.status, e.source, e.current_period_end, e.stripe_subscription_id, h.created_at, h.doc->>'createdAt' AS doc_created,
                          (SELECT array_agg(kind) FROM milestones ms WHERE ms.household_id = h.id) AS milestones
                   FROM household_members m JOIN households h ON h.id = m.household_id LEFT JOIN entitlements e ON e.household_id = h.id
                   WHERE m.user_id = ${userId}`;
@@ -99,7 +100,7 @@ async function state(user) {
   /* the price id travels so the app can say which of the plans this household is on,
      rather than guessing the commonest one at it */
   const [ent] = await sql()`SELECT plan, source, status, current_period_end AS "currentPeriodEnd", cancel_at_period_end AS "cancelAtPeriodEnd",
-    stripe_price_id AS price,
+    stripe_price_id AS price, apple_account_token AS "appleToken",
     (stripe_customer_id IS NOT NULL AND (${h.owner_user_id} = ${user.id} OR paid_by = ${user.id})) AS portal FROM entitlements WHERE household_id = ${h.id}`;
   return {
     household: { id: h.id, name: h.name, createdAt: h.created_at },
@@ -109,11 +110,16 @@ async function state(user) {
     /* a caretaker is never shown the plan, so they are never sent it either: what the
        household pays, and when it renews, is not theirs to know */
     entitlement: (helper || !ent) ? { plan: 'free', source: 'none', status: 'none', currentPeriodEnd: null, cancelAtPeriodEnd: false, price: null, portal: false } : ent,
-    billing: billingEnabled()
+    billing: billingEnabled(),
+    /* the day a plan bought on the website now would first be charged, when that is the end of the
+       three weeks: the same rule, clock and cut-off as checkout's (api-billing.js), so the sheet
+       never promises what Stripe will not do */
+    chargeLater: helper ? null : chargeLaterUntil({ created_at: h.created_at, doc_created: h.doc && h.doc.createdAt })
   };
 }
 
-const paid = (h) => !!(h.plan && h.plan !== 'free' && (h.status === 'active' || h.status === 'past_due'));
+/* an App Store plan past its end date is over here even if Apple's notification never came */
+const paid = (h) => !!(h.plan && h.plan !== 'free' && (h.status === 'active' || h.status === 'past_due')) && !(h.source === 'apple' && lapsed(h.current_period_end));
 const entitled = (h) => paid(h) || trialing(h);
 
 function docLooksRight(doc) {
