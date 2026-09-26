@@ -416,9 +416,9 @@ is: **Liz** for a dashboard, a form or a decision, **code** for a change here. S
 out by deleting it in the commit that does it.
 
 **Stripe, Netlify and the stores**
-- **Liz: Netlify's `dev-server` context** still points `STRIPE_PRICE_YEAR`/`_MONTH` at the old
-  test prices, now archived, so a checkout under `netlify dev` fails. Set them to the new test
-  prices (the other contexts are done).
+- **Liz: Netlify's `dev-server` context** (Preview Server & Agent Runners) still points
+  `STRIPE_PRICE_YEAR`/`_MONTH` at the old test prices, now archived, so a checkout there fails.
+  Set them to the new test prices; every other context, local `dev` included, is done.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
@@ -454,7 +454,9 @@ out by deleting it in the commit that does it.
   plugin passing the offer to `purchase`, a new build and review.
 - **Take the web checkout out of the shell** with the next native change: `@capacitor/app-launcher`,
   `public/back.html` and its CSP block, the `appStateChange` listener, the `client: 'ios'`
-  branches in `api-billing.js`, and the back.html checks in `tests/smoke.mjs`.
+  return-URL branches in `api-billing.js` (the portal's back.html return and the log tag), and
+  the back.html checks in `tests/smoke.mjs`. Keep the 403 that refuses a checkout asked for by
+  the iPhone app, and its check: an older build may still ask.
 - **Tests for what the sheet says about charging later.** Nothing checks the web sheet's
   "Nothing is charged until DATE" or the pane's "First charged" and "Cancel before DATE";
   the server's `chargeLater` is checked, the copy is not.
