@@ -70,7 +70,7 @@ throwing app script cannot leave it up forever. From there:
   it out is skipped and named when another box takes it, and gets it flagged when it is the only
   box. The "Add it to" choice sticks for the rest of the session. The idea bank is not redrawn by
   a tap, so a parent keeps their place down a long list; tapping a row again takes back exactly
-  what that tap added, from exactly the boxes it added to, with Undo. A row already ticked when
+  what that tap added, from exactly the boxes it added to, with Undo. A row already checked when
   the sheet opened may be a food written by hand that only shares a name with the bank, so it
   takes two taps: the first arms that row alone ("Tap again to take it off", where its aisle
   was), names the lists, and says so when the food is one of the parent's own; the second takes
@@ -84,7 +84,7 @@ throwing app script cannot leave it up forever. From there:
   marked "off the list", so a lunch the parent was about to pack does not become an empty
   compartment they cannot account for; it is off every draw from that moment, and the next
   shuffle or plan replaces it. Only the views that show what a box holds read `boxFood`; every
-  draw, pairing and rules sweep reads `foodById` and never sees it. Both ways out — the bin on
+  draw, pairing and rules sweep reads `foodById` and never sees it. Both ways out — the trash can on
   Foods and the second tap in the bank — go through `dropFoods`, which writes to no day at all,
   so a day that has gone is untouched by construction. A food in the parent's own words is kept
   after it comes off, under **Taken off** on the Foods tab with its photo and shopping line, and
@@ -109,11 +109,11 @@ throwing app script cannot leave it up forever. From there:
   a food seeded before lists existed takes the bank's, and "Add your own" asks for one.
   **Copy** puts the list on the clipboard grouped by aisle; the share button opens the phone’s share
   sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
-  Share plugin in the iPhone app. A tick is a pantry row, not a row on a list, and the pantry
-  is keyed by the food's name: a food on this week's list and next week's is one tick, so
-  ticking it under *Next week* crosses it off above as well, and takes it off both blocks of
+  Share plugin in the iPhone app. A check is a pantry row, not a row on a list, and the pantry
+  is keyed by the food's name: a food on this week's list and next week's is one check, so
+  checking it off under *Next week* crosses it off above as well, and takes it off both blocks of
   the copied list. That is the intent — a jar of peanut butter bought once is bought once —
-  and it is what lets a tick survive the week it was made in.
+  and it is what lets a check survive the week it was made in.
 - **Recipes** — the sixth tab, and the household's, not a lunchbox's: one list however
   many kids are packed for, so it carries no lunchbox tabs. What the household has kept
   sits above the two the app ships with, each row opening straight into cooking. The search
@@ -166,17 +166,17 @@ throwing app script cannot leave it up forever. From there:
   (`HEAD_KIND`) answers to the word in front of it, so "fold in the feta" finds the feta
   cheese; and a word the step said as one ingredient's whole name puts every line of that
   thing back in play, so an ingredient divided over two lines shows both), each with a
-  box to tick as it goes in. **What you need**, on a step, is what that step needs, open
+  box to check off as it goes in. **What you need**, on a step, is what that step needs, open
   rather than folded — a list a parent has to ask for is a list they cook without, and the
   whole recipe is already one tap away above. An ingredient is one thing however many rows
   show it: `stepIng` carries the indices it drew from (`data-ti`, space-separated where two
-  lines read alike), a row is done only when all of them are in, and a tick re-reads every
+  lines read alike), a row is done only when all of them are in, and a check re-reads every
   row for it from its own indices rather than rebuilding, so the sheet neither scrolls nor
-  reads the step out again mid-tick. The way on follows the amounts and sticks to the floor
+  reads the step out again mid-check. The way on follows the amounts and sticks to the floor
   of the sheet on a step too tall for the screen, so it is never what falls off it. None of it is written to the document, because a
   half-made recipe is not something the other phone needs. **US** or **Metric** converts what can honestly be converted, both
   ways: a cup of a thing whose density we know is weighed, a pourable thing is given in
-  millilitres, an oven set in Fahrenheit carries its Celsius, anything under about 15 g
+  milliliters, an oven set in Fahrenheit carries its Celsius, anything under about 15 g
   stays a spoonful, a cup of cherry tomatoes stays a cup, and a recipe written in grams
   reads back in cups. The + and − change how much it makes — lunches for the app's own
   mains, whatever the recipe counted in for anything else — and scale every amount,
@@ -270,7 +270,7 @@ throwing app script cannot leave it up forever. From there:
   are still ahead and only covers the days still to come; otherwise it goes into next week. An
   existing plan is re-drawn in place until its last day has gone by, and a shuffle never touches
   a day that has already gone: what was packed stays exactly as it was, for the review and the
-  pack checks. The shopping list likewise skips days already gone. The morning review only asks about a
+  pack checks. The shopping list likewise skips days already gone. The after-school review only asks about a
   day the plan already existed on, or that had something checked into the bag.
 - **Lunchbox settings** — the gear beside the lunchbox name on Week, Pack, Shop and Foods:
   lunchboxes, name, pack days, per-lunchbox school rules (cold-only, no ice pack, short
@@ -313,8 +313,8 @@ before the zone was kept learns it from its next change, and one that never says
 as the East Coast.
 
 Every entity (account, member, lunchbox, food, week) carries `id`/`createdAt`/`updatedAt`;
-event rows (packed ticks, pantry ticks, eat answers, kid picks) carry `at`/`by`. Deletion is a
-`deletedAt` tombstone (kept for ninety days; `prune()` also drops packed ticks from before the
+event rows (packed checks, pantry checks, eat answers, kid picks) carry `at`/`by`. Deletion is a
+`deletedAt` tombstone (kept for ninety days; `prune()` also drops packed checks from before the
 current week and eat answers older than a year, so the document stays bounded),
 so a future sync can merge and propagate removals. **All persistence goes through the
 `Store` object** — two async methods over `localStorage`. Replacing those two bodies with
@@ -330,7 +330,7 @@ forward).
 - [x] Neon project with `production` and `staging` branches; `NETLIFY_DATABASE_URL` and
       `STAGING_DATABASE_URL` scoped to their contexts.
 - [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set.
-- [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price stays only so past purchases are recognised; a webhook endpoint per mode,
+- [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price stays only so past purchases are recognized; a webhook endpoint per mode,
       keys, secrets and price ids scoped per context (Billing, below).
 - [ ] Confirm HTTPS covers `www.lunchsorted.app` as well as the apex.
 - [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
@@ -398,7 +398,7 @@ plans is the same week whatever day it runs on (a Thursday used to leave the kid
 nothing to offer). `SMOKE_TODAY=2026-09-14 npm test` pins another day.
 
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
-onboarding, the week draw and its trait words, packing, the kid's pick, the morning review
+onboarding, the week draw and its trait words, packing, the kid's pick, the after-school review
 and resting, the school rules re-checking a live plan, compartments switching on and off,
 anchoring, the shopping list, recipes (the two the app ships, an ingredient claimed by the step
 that means it, cook mode, the measures and the scaling,
@@ -442,6 +442,11 @@ the visual identity.
 - **Help** — the ? at the top of every tab opens a sheet: twenty-one one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
+- **For search engines and assistants** — the home page carries Organization and WebApplication
+  JSON-LD (its prices typed, so they change with the founding price); `help.html` carries a
+  FAQPage whose answers are the page's own paragraphs word for word, with no price, and the smoke
+  suite fails if the two drift apart: edit the page, then regenerate the block. `public/llms.txt`
+  is the one-page summary for assistants; `public/404.html` is the page for any path not there.
 
 ### Migrations are frozen once applied
 
@@ -502,7 +507,7 @@ That hazard is only real once the intervening build has actually shipped. **An u
 free to amend**: while `dev` sits above the tag production is serving, more work on it is more
 work on the same unreleased build, and it does not bump. A *shipped* build is the opposite —
 bump it, always, or the cache-first service worker keeps serving the old shell. Do not read the
-first rule as licence to skip the second. Nothing enforces either: `npm run csp` compares
+first rule as license to skip the second. Nothing enforces either: `npm run csp` compares
 `APP_BUILD`, `VERSION` and `WHATS_NEW.build` to each other, and cannot tell that the app changed
 and the tag did not.
 
@@ -553,12 +558,15 @@ out by deleting it in the commit that does it.
   Set them to the new test prices; every other context, local `dev` included, is done.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
+- **After App Review answers:** `public/llms.txt` says "An iPhone app is in review"; change it the
+  same day (to the store link once it is live).
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
   (`store/listing.md`, After approval).
 - **Every price rise, both stores together:** a new Stripe price with no `founding` metadata,
   pointed at by `STRIPE_PRICE_YEAR`/`_MONTH`; in App Store Connect, schedule the change with
   **keep the current price for existing subscribers**, always, because the terms promise it;
-  then `node scripts/iap-shot.mjs <yearly> <monthly>` for a new review screenshot. The plan
+  then `node scripts/iap-shot.mjs <yearly> <monthly>` for a new review screenshot, and the two
+  prices typed into the home page's JSON-LD (`public/index.html`, above `</head>`). The plan
   so far: $19.99 for the first 100 paying households, $29.99 for the next 400, then $39.99
   from 500. Nothing counts to 100 by itself; watch `/admin`.
 
@@ -608,7 +616,8 @@ out by deleting it in the commit that does it.
   renew. Ask whoever helps with the LLC whether Stripe's business details, already named for
   the LLC, should be in Liz's name until approval.
 - **Code, then:** the operator line in `public/terms.html` ("Lila Bloom Enterprises, a trade
-  name of Blue Hour Ventures LLC") and the copyright line in `store/listing.md`.
+  name of Blue Hour Ventures LLC"), the copyright line in `store/listing.md`, the Organization
+  in the home page's JSON-LD and the maker line in `public/llms.txt`.
 
 **Other storefronts, when wanted:** Canada, Australia and New Zealand first (English; check the
 privacy page against their laws). The EU and UK after the LLC exists: the EU trader
@@ -718,11 +727,6 @@ mean the first chip below and the checkbox above it are now on opposite sides of
   per-day tally, for children with diabetes, allergies beyond avoidance, or a prescribed
   diet. Needs nutrition data per food, portion sizes, and a clear "not medical advice"
   line.
-- **What the morning review is called.** The app and the emails both call it the morning
-  review, but it asks once the box is home, not the next morning, and the tester emails now
-  say "after your kid gets home". Settle on one name and change it everywhere at once: the
-  paywall line and the help sheet in `public/app/index.html`, the welcome and both trial
-  emails in `netlify/lib/mail.js`, the site, and the store listing.
 
 ## Accounts and sync
 
@@ -750,8 +754,8 @@ writes the same one.
   `PUT` with the version you last saw; if the server has moved on you get `409` with its
   copy, merge, and try again. The merge rules are the first script block in
   `public/app/index.html` (`window.LSMerge`): newer `updatedAt` wins per record, a newer
-  deletion beats an older edit, packed and eat and pantry ticks merge by their own `at`
-  stamps (an un-tick is a row marked `off`, so it travels too; a review row's stamp is its
+  deletion beats an older edit, packed and eat and pantry checks merge by their own `at`
+  stamps (an uncheck is a row marked `off`, so it travels too; a review row's stamp is its
   latest answer), the newer plan wins day by day except that a day already gone keeps the
   plan that existed on it, lists come out in a fixed order so both phones compute the same
   document, and the local copy wins ties. The test suite runs the block on its own. A push
@@ -761,9 +765,9 @@ writes the same one.
   link that works once, for a week; opening it lands at the top of the Account tab with the sign-in
   card and the inviter's name. A phone that already has lunches brings them into the
   household when it joins, and keeps the member it already was. A helper receives only the
-  plan, the foods in it and the ticks (no rules, allergens, history or addresses), cannot
+  plan, the foods in it and the checks (no rules, allergens, history or addresses), cannot
   push (the server refuses, and the app says "Only a parent can change the plan"), and
-  their ticks stay on their phone.
+  their checks stay on their phone.
 - **Leaving** a household leaves the lunches with it: the phone starts fresh in its own
   empty household. Being removed signs that person's phones out; whatever is on their phone
   stays there. **Delete my account and data** — the only irreversible control, gated on
@@ -785,7 +789,7 @@ writes the same one.
   about one request in twenty-five.
 - **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
   drive three browser contexts through sign-in by link and by code, a forged sign-in form,
-  invite, joining with lunches of one's own, an edit on each phone, an un-tick round trip,
+  invite, joining with lunches of one's own, an edit on each phone, an uncheck round trip,
   a helper's refused push, sign-out and delete, plus the merge rules on their own.
 
 ## Billing
@@ -820,18 +824,18 @@ it back needs no migration.
 Free, for good, is one lunchbox, the week's plan, the shopping list, the pack list, and the
 built-in idea bank to build the food list from. The **Household** plan (yearly or
 monthly) is the part that remembers and shares: a food written in the parent's own words,
-kid's pick, the morning review and resting, a pantry that carries over, every lunchbox, the
+kid's pick, the after-school review and resting, a pantry that carries over, every lunchbox, the
 other parent's phone and a caretaker's pack list. **Every household gets all of it for its
 first 21 days**, no card, counted from the account document's `createdAt` (the same clock on
 every phone and on the server), and then drops to free with the premium pieces locked in
-place, not hidden: the kid's-pick button, the review card, the pantry tick and "Add your
+place, not hidden: the kid's-pick button, the review card, the pantry check and "Add your
 own" on Foods stay on screen with a lock and open the plan sheet. During the three weeks the
 same pieces wear a small "Household plan" tag so it is clear what is being tried; three days
 before the end a banner says when, and once after it says what changed, each dismissable
 once. With no `STRIPE_*` variables in a deploy nothing is gated or tagged and the app is
 exactly the free one.
 Nothing is ever taken away: a household whose plan or trial ends keeps every lunchbox,
-member, tick, outcome and food it has, and cannot add more. A food already on the list is
+member, check, outcome and food it has, and cannot add more. A food already on the list is
 drawn, shopped for and packed exactly as before; only the writing of a new one is gated, and
 the idea bank stays free so a free list is never stuck with what it has.
 
@@ -855,7 +859,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   lifetime purchase is never lowered by a subscription ending; buying forever on top of a
   yearly plan stops the yearly plan at its period end; a fresh yearly checkout replaces an
   unpaid one; a forever purchase refunded in full is undone (a yearly refund is paired with
-  cancelling the subscription in the dashboard). Deleting the account, or an owner folding
+  canceling the subscription in the dashboard). Deleting the account, or an owner folding
   their household into another, cancels its subscription first.
 - **Portal** (`POST /api/billing/portal`) opens Stripe's customer portal for the card,
   invoices and cancellation, and comes back to `/app/?portal=1`; the iPhone app never opens it. It is for the owner and
@@ -912,7 +916,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
   button when set, and `STRIPE_PRICE_LIFETIME`, optional now, only so a forever bought before it
-  was withdrawn is still recognised. `STRIPE_TAX=0` turns
+  was withdrawn is still recognized. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
 - **Email.** Sign-in asks for the address at the end of onboarding, once the week is built
   (skippable; offline or already signed in, the step does not appear). A first sign-in gets

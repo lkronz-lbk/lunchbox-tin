@@ -17,8 +17,8 @@ SHOTS = [
     ('pack',    '02-pack',    'Mornings: one box,\none check.',            'Today’s box, an ice-pack flag when it needs one, and the rest of the week coming up.'),
     ('kidpick', '03-kidpick', 'Hand them the phone.\nThey pick.',       'Tomorrow’s box, chosen from the week you already shopped for. A lunch they chose comes home emptier.'),
     ('shop',    '04-shop',    'The shopping list\nwrites itself.',      'Everything planned, grouped by aisle. Check off whatever you already have at home.'),
-    ('recipes', '05-recipes', 'Recipes that make\nsix lunches.',       'Two kid-tested ones come free. Scale the batch, switch between US measures and metric, and tick off what you already have.'),
-    ('cook',    '06-cook',    'Cook it one step\nat a time.',          'One step on the screen, with the amounts for just that step underneath it and a box to tick against each one as it goes in.'),
+    ('recipes', '05-recipes', 'Recipes that make\nsix lunches.',       'Two kid-tested ones come free. Scale the batch, switch between US measures and metric, and check off what you already have.'),
+    ('cook',    '06-cook',    'Cook it one step\nat a time.',          'One step on the screen, with the amounts for just that step underneath it and a box to check off for each one as it goes in.'),
     ('setup',   '07-rules',   'Your school’s rules,\nrespected.',       'Nut-free, cold-only, no ice pack, a short eating window. Foods are flagged, never silently dropped.'),
     ('foods',   '08-foods',   'Foods they’ll\nactually eat.',           'Start from what parents pack, add more from a long list of ideas, and tell it what came home. Next week’s draw learns.'),
 ]
