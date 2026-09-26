@@ -11,7 +11,7 @@ The parent who packs a school lunch, usually for a child in kindergarten through
 ## What it does
 
 - Plans a main, a side, a fruit and a sweet for every school day, from the family's own food list, paired so a box makes sense (crunchy against soft, protein when the main is light).
-- Keeps school rules: nuts, seeds and sesame, dairy, gluten, egg, soy or fish kept out; cold lunches only; no ice pack; a short eating time; no chocolate or candy. A food that breaks a rule is flagged, never deleted.
+- Keeps school rules (cold lunches only, no ice pack, a short eating time, no chocolate or candy) and keeps out what the parent chooses: nuts, seeds and sesame, dairy, gluten, egg, soy or fish. A food that breaks a rule is flagged, never deleted.
 - Builds one shopping list for the week, grouped by aisle.
 - Asks after school what came home; a food that comes home twice in a row rests for three weeks.
 - Plans more than one lunchbox, matched, with each box keeping its own rules.

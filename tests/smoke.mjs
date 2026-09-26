@@ -4319,7 +4319,7 @@ try {
     check('a path that is not there gets the site\'s own page, with a 404, the way home, and no place in search',
       r.status() === 404 && /isn.t here/.test(await site.textContent('h1')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href="/help.html"]'))
       && (await site.$eval('meta[name="robots"]', m => m.content)) === 'noindex');
-    check('and it carries the site\'s policy, like every other page', POLICIES['/404.html'] === POLICIES['/help.html']);
+    check('and a direct request for /404.html carries the site\'s policy, like every other page', POLICIES['/404.html'] === POLICIES['/help.html']);
     const noindex = ['thanks', 'on-the-list'].map(n => /<meta name="robots" content="noindex">/.test(fs.readFileSync(path.join(ROOT, n + '.html'), 'utf8')));
     check('the pages after a form is sent stay out of search', noindex.every(Boolean), noindex);
     const llms = fs.readFileSync(path.join(ROOT, 'llms.txt'), 'utf8');

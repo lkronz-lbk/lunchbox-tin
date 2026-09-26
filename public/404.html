@@ -22,7 +22,8 @@ h2{font-family:"Familjen Grotesk",sans-serif;font-size:20px;font-weight:600;marg
 p,li{color:var(--ink-2);max-width:62ch} p{margin:0 0 14px}
 .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px}
 a{color:var(--accent)}
-.back{display:inline-block;margin-top:24px;padding:10px 0;font-size:14px}
+.go{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 20px;border-radius:12px;background:var(--accent);color:var(--accent-fg);font-family:"Familjen Grotesk",sans-serif;font-weight:600;font-size:15.5px;text-decoration:none;margin:4px 0 14px}
+.back{display:inline-flex;align-items:center;min-height:44px;margin-top:24px;font-size:14px}
 strong{color:var(--ink)}
 </style>
 </head>
@@ -30,7 +31,8 @@ strong{color:var(--ink)}
 <div class="wrap">
 <p class="eyebrow">Not found</p>
 <h1>That page isn&rsquo;t here.</h1>
-<p>The planner is at <a href="/app/">/app/</a>, and the answers are on the <a href="/help.html">help page</a>.</p>
+<a class="go" href="/app/">Open the planner</a>
+<p>Questions? <a href="/help.html">The help page</a> has the answers.</p>
 
 <a class="back" href="/">&larr; Back to Lunch Sorted</a>
 </div>

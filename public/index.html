@@ -20,7 +20,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@600;700&family=Karla:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
 :root{
   color-scheme:light dark;
@@ -73,6 +73,7 @@ h1{font-family:var(--f-display);font-size:clamp(36px,7.4vw,58px);font-weight:700
   line-height:1.03;margin:0 0 18px;text-wrap:balance}
 .lede{font-size:19px;color:var(--ink-2);margin:0 0 26px;max-width:46ch}
 .cta{display:flex;flex-wrap:wrap;gap:11px;align-items:center}
+.qa{display:inline-flex;align-items:center;min-height:44px;white-space:nowrap;font:600 14px var(--f-display);color:var(--accent)}
 .free{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
   margin:16px 0 0}
 .shot{border:1.6px solid var(--line-strong);border-radius:26px;overflow:hidden;background:var(--surface);
@@ -229,9 +230,10 @@ footer a{color:var(--ink-2)}
           <a class="btn primary" href="/app/">Plan this week &mdash; free</a>
           <a class="btn" href="#how">See how it works</a>
         </div>
-        <p class="free">Free to plan · everything on for your first three weeks · no card, no account needed · <a href="/help.html">questions, answered</a></p>
+        <p class="free">Free to plan · everything on for your first three weeks · no card, no account needed</p>
+        <a class="qa" href="/help.html">Questions? The answers</a>
       </div>
-      <div class="shot"><picture><source type="image/webp" srcset="/img/screen-week.webp"><img src="/img/screen-week.png" width="375" height="812" decoding="async" fetchpriority="high" alt="The planner's week view: two lunchboxes named across the top, a Let Emma pick the week button under the date, and each school day drawn as a four-compartment tin with a main, side, fruit and sweet."></picture></div>
+      <div class="shot"><picture><source type="image/webp" srcset="/img/screen-week.webp"><img src="/img/screen-week.png" width="375" height="812" decoding="async" fetchpriority="high" alt="The planner's week view: two lunchboxes named across the top, a Let Emma pick the week button under the date, and each school day drawn as a four-compartment box with a main, side, fruit and sweet."></picture></div>
     </div>
   </header>
 </div>
@@ -303,7 +305,7 @@ footer a{color:var(--ink-2)}
       <p>Designed at phone size first, because that's where lunch actually gets planned.</p>
     </div>
     <div class="shots">
-      <figure><picture><source type="image/webp" srcset="/img/screen-week.webp"><img src="/img/screen-week.png" width="375" height="812" loading="lazy" decoding="async" alt="Week view with a row of lunchbox names across the top, one selected, a Let Emma pick the week button under the date, and each school day drawn as a four-compartment tin."></picture>
+      <figure><picture><source type="image/webp" srcset="/img/screen-week.webp"><img src="/img/screen-week.png" width="375" height="812" loading="lazy" decoding="async" alt="Week view with a row of lunchbox names across the top, one selected, a Let Emma pick the week button under the date, and each school day drawn as a four-compartment box."></picture>
         <figcaption>The week</figcaption></figure>
       <figure><picture><source type="image/webp" srcset="/img/screen-shop.webp"><img src="/img/screen-shop.png" width="375" height="812" loading="lazy" decoding="async" alt="One shopping list for the whole household, grouped by store aisle, each item showing which lunchboxes need it."></picture>
         <figcaption>The list</figcaption></figure>

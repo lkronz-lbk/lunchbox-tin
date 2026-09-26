@@ -442,6 +442,11 @@ the visual identity.
 - **Help** — the ? at the top of every tab opens a sheet: twenty-one one-line answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
+- **For search engines and assistants** — the home page carries Organization and WebApplication
+  JSON-LD (its prices typed, so they change with the founding price); `help.html` carries a
+  FAQPage whose answers are the page's own paragraphs word for word, with no price, and the smoke
+  suite fails if the two drift apart: edit the page, then regenerate the block. `public/llms.txt`
+  is the one-page summary for assistants; `public/404.html` is the page for any path not there.
 
 ### Migrations are frozen once applied
 
@@ -502,7 +507,7 @@ That hazard is only real once the intervening build has actually shipped. **An u
 free to amend**: while `dev` sits above the tag production is serving, more work on it is more
 work on the same unreleased build, and it does not bump. A *shipped* build is the opposite —
 bump it, always, or the cache-first service worker keeps serving the old shell. Do not read the
-first rule as licence to skip the second. Nothing enforces either: `npm run csp` compares
+first rule as license to skip the second. Nothing enforces either: `npm run csp` compares
 `APP_BUILD`, `VERSION` and `WHATS_NEW.build` to each other, and cannot tell that the app changed
 and the tag did not.
 
@@ -553,6 +558,8 @@ out by deleting it in the commit that does it.
   Set them to the new test prices; every other context, local `dev` included, is done.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
+- **After App Review answers:** `public/llms.txt` says "An iPhone app is in review"; change it the
+  same day (to the store link once it is live).
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
   (`store/listing.md`, After approval).
 - **Every price rise, both stores together:** a new Stripe price with no `founding` metadata,
@@ -609,7 +616,8 @@ out by deleting it in the commit that does it.
   renew. Ask whoever helps with the LLC whether Stripe's business details, already named for
   the LLC, should be in Liz's name until approval.
 - **Code, then:** the operator line in `public/terms.html` ("Lila Bloom Enterprises, a trade
-  name of Blue Hour Ventures LLC") and the copyright line in `store/listing.md`.
+  name of Blue Hour Ventures LLC"), the copyright line in `store/listing.md`, the Organization
+  in the home page's JSON-LD and the maker line in `public/llms.txt`.
 
 **Other storefronts, when wanted:** Canada, Australia and New Zealand first (English; check the
 privacy page against their laws). The EU and UK after the LLC exists: the EU trader

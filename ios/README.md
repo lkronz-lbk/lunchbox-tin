@@ -58,7 +58,7 @@ npm run ios:sync      # writes Package.swift and App/App/capacitor.config.json
 npm run ios:open      # opens App/App.xcodeproj
 ```
 
-Xcode → the App target → Signing & Capabilities → tick "Automatically manage
+Xcode → the App target → Signing & Capabilities → check "Automatically manage
 signing" and pick the team. Run on a simulator or a plugged-in phone. Swift
 packages resolve on first open (Capacitor and the five plugins — App, App Launcher, Browser, Local
 Notifications and Share — from `node_modules`, so `npm ci` first).
@@ -153,7 +153,7 @@ stays in Safari. That is expected; test universal links against production.
 
 The app is the web app in a shell, which Apple's guideline 4.2 can object to.
 What answers it: it works offline, it installs, the kid's-pick screen and the
-morning review are app-shaped, and version 1.1 adds the night-before reminder,
+after-school review are app-shaped, and version 1.1 adds the night-before reminder,
 the share sheet and a Home Screen widget. The iPhone app sells the plan through
 the App Store only, and honours a plan bought on the website, which 3.1.3(b)
 allows because the same plan is an in-app purchase. Do not take the in-app
