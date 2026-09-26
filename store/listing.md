@@ -130,6 +130,9 @@ the enrollment, so settle it before launch.
 
 - [ ] Uploaded, regenerated after the last interface change
       01-week and 02-pack were captured before the Babybel rename and still show it.
+      05-recipes and 06-cook still carry "tick" in their captions (fixed in
+      `scripts/store-compose.py`; they change when it next runs). 01-week should be taken
+      after kid's pick is on, so it shows Let Emma pick the week.
       Reshoot and re-upload at the next editable moment: a version In Review cannot have
       its screenshots swapped without pulling the submission back.
 
@@ -328,7 +331,7 @@ The one worth a look:
 - [x] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated;
       signed in with them once and a week built, within a few days of submitting
 - [ ] Screenshots regenerated since the last interface change — 01-week and 02-pack
-      predate the Babybel rename; see the note under Screenshots above
+      predate the Babybel rename, 05 and 06 say "tick"; see the note under Screenshots above
 - [x] Privacy policy URL loads and matches the App Privacy answers above — with one
       caveat: the Crash Data and Usage Data rows describe the day-one work that is on `dev`
       since 2026-09-22. Until `main` carries it the questionnaire stays at No for both, because

@@ -194,7 +194,7 @@ Four inlets, two inboxes, one queue.
 
 | Inlet | Where it lands | Notes |
 | --- | --- | --- |
-| The feedback form, `public/feedback.html` | Netlify Forms, notified to **forms@lunchsorted.app** | Email, what they were doing, what happened, would they keep it, ideas, and ticks against the planned list |
+| The feedback form, `public/feedback.html` | Netlify Forms, notified to **forms@lunchsorted.app** | Email, what they were doing, what happened, would they keep it, ideas, and checks against the planned list |
 | "Something is wrong" and "Ask a question" in the app's help sheet | **hello@lunchsorted.app** | The build and the phone are already in the body |
 | Replies to any email the app sends | **hello@lunchsorted.app** | Welcome, tester days 1, 3 and 6, trial reminders, sign-in links |
 | The private beta Facebook group | The group (the link is `BETA_GROUP` in `netlify/lib/mail.js`) | No API; read as a member, quote with the date, never a name |
