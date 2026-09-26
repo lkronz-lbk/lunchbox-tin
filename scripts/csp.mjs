@@ -72,7 +72,7 @@ export const SITE_CSP = [
   "form-action 'self'"
 ].join('; ');
 
-/* the front page alone carries Google Analytics (public/ga.js); the other pages, and the planner, never do */
+/* the front page and the /ideas/ articles carry Google Analytics (public/ga.js); the other pages, and the planner, never do */
 export const LANDING_CSP = SITE_CSP
   .replace("script-src 'none'", "script-src 'self' https://www.googletagmanager.com")
   .replace("img-src 'self' data:", "img-src 'self' data: https://www.googletagmanager.com https://*.google-analytics.com")
@@ -125,7 +125,7 @@ if (process.argv[1] && process.argv[1].endsWith('csp.mjs')) {
   let toml = assertParseable(fs.readFileSync('netlify.toml', 'utf8'));
   if (process.argv.includes('--check')) {
     const have = readPolicies(toml);
-    const want = {'/app/*': APP_CSP, '/': LANDING_CSP, '/index.html': LANDING_CSP, '/privacy.html': SITE_CSP, '/terms.html': SITE_CSP, '/help.html': SITE_CSP, '/feedback.html': SITE_CSP, '/thanks.html': SITE_CSP, '/on-the-list.html': SITE_CSP, '/back.html': BACK_CSP};
+    const want = {'/app/*': APP_CSP, '/': LANDING_CSP, '/index.html': LANDING_CSP, '/ideas/*': LANDING_CSP, '/privacy.html': SITE_CSP, '/terms.html': SITE_CSP, '/help.html': SITE_CSP, '/feedback.html': SITE_CSP, '/thanks.html': SITE_CSP, '/on-the-list.html': SITE_CSP, '/back.html': BACK_CSP};
     const stale = Object.keys(want).filter(p => have[p] !== want[p]);
     if (stale.length) { console.error('netlify.toml CSP is stale for ' + stale.join(', ') + ' — run `npm run csp`'); process.exit(1); }
     console.log('CSP up to date'); process.exit(0);
@@ -137,7 +137,7 @@ if (process.argv[1] && process.argv[1].endsWith('csp.mjs')) {
     toml = toml.replace(re, '$1' + value + '$2');
   };
   put('/app/*', APP_CSP);
-  ['/', '/index.html'].forEach(p => put(p, LANDING_CSP));
+  ['/', '/index.html', '/ideas/*'].forEach(p => put(p, LANDING_CSP));
   ['/privacy.html', '/terms.html', '/help.html', '/feedback.html', '/thanks.html', '/on-the-list.html'].forEach(p => put(p, SITE_CSP));
   put('/back.html', BACK_CSP);
   fs.writeFileSync('netlify.toml', toml);
