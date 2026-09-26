@@ -4323,7 +4323,7 @@ try {
     const sitemap = fs.readFileSync(path.join(ROOT, 'sitemap.xml'), 'utf8');
     const locs = [...sitemap.matchAll(/<loc>https:\/\/lunchsorted\.app(\/[^<]*)<\/loc>\s*<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/g)].map(m => m[1]);
     check('the sitemap lists the public pages with a date each, and none of the private ones, and every one exists',
-      locs.length === (sitemap.match(/<url>/g) || []).length && ['/', '/help.html', '/ideas/', '/ideas/nut-free-school-lunch-week.html'].every(l => locs.includes(l))
+      locs.length === (sitemap.match(/<url>/g) || []).length && ['/', '/help.html', '/ideas/', '/ideas/picky-eater-lunch-week.html', '/ideas/nut-free-school-lunch-week.html'].every(l => locs.includes(l))
       && !locs.some(l => /^\/(app|api|admin|beta|back|thanks|on-the-list)/.test(l))
       && locs.every(l => fs.existsSync(path.join(ROOT, l.endsWith('/') ? l + 'index.html' : l))), locs);
     check('robots.txt points at the sitemap', /\nSitemap: https:\/\/lunchsorted\.app\/sitemap\.xml\n/.test(fs.readFileSync(path.join(ROOT, 'robots.txt'), 'utf8')));
