@@ -11,8 +11,8 @@ const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','
 function page(title, body, status = 200) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <title>${esc(title)} · Lunch Sorted</title><meta name="color-scheme" content="light dark"><script src="/ga.js" defer></script><meta name="theme-color" content="#E9EEE6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
-<style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--ink:#16241E;--ink-2:#4A5C53;--ink-3:#6E7F75;--accent:#2E5A48;--accent-fg:#FBFCF9}
-@media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--ink:#E6EEE7;--ink-2:#A6BAAE;--ink-3:#7A8E84;--accent:#79C8A2;--accent-fg:#0E1815}}
+<style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--line-strong:#1E3329;--ink:#16241E;--ink-2:#3E4D45;--ink-3:#414C46;--accent:#2A5141;--accent-fg:#FBFCF9}
+@media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--line-strong:#5A8272;--ink:#E6EEE7;--ink-2:#AFC1B6;--ink-3:#B3BFB9;--accent:#81CBA8;--accent-fg:#0E1815}}
 body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.6 Karla,"Helvetica Neue",sans-serif;padding:40px 22px 70px}
 .wrap{max-width:560px;margin:0 auto}
 .eyebrow{font:600 11px ui-monospace,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px}
@@ -22,7 +22,7 @@ p{color:var(--ink-2);margin:0 0 14px;max-width:60ch} strong{color:var(--ink)} li
 .left{font:600 13px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 22px}
 a{color:var(--accent)}
 .signup{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 6px;max-width:460px}
-.signup input[type=email]{flex:1 1 220px;min-height:48px;padding:0 15px;border-radius:13px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit}
+.signup input[type=email]{flex:1 1 220px;min-height:48px;padding:0 15px;border-radius:13px;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);font:inherit}
 .signup input[type=email]:focus{border-color:var(--accent);outline:none}
 .signup .btn{margin:0;border:0;font:inherit;font-weight:600;cursor:pointer}
 .hp{position:absolute;left:-9999px}
@@ -31,7 +31,8 @@ a{color:var(--accent)}
 .qr{display:none;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);max-width:220px}
 .qr svg{display:block;width:150px;height:150px;background:#fff;padding:10px;border-radius:8px}
 .qr p{font-size:13px;margin:10px 0 0}
-@media (hover:hover) and (pointer:fine){.qr{display:block}}</style></head><body><div class="wrap">${body}</div></body></html>`;
+@media (hover:hover) and (pointer:fine){.qr{display:block}}
+::placeholder{color:var(--ink-2);opacity:1}</style></head><body><div class="wrap">${body}</div></body></html>`;
   return new Response(html, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': CSP, 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex' } });
 }
 

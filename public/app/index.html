@@ -20,6 +20,8 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0}
 img{max-width:100%}
 [hidden]{display:none!important}
+/* the browser's own placeholder grey is under 4.5:1; the secondary ink holds 7:1 on every surface */
+::placeholder{color:var(--ink-2);opacity:1}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,12 +33,12 @@ img{max-width:100%}
      web view reports nothing, so it sets these two on <html> from UIKit instead. */
   --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
   --ground:#E9EEE6; --surface:#FBFCF9; --surface-2:#F1F5EE; --sunk:#DFE7DB;
-  --ink:#16241E; --ink-2:#4A5C53; --ink-3:#6E7F75;
+  --ink:#16241E; --ink-2:#3E4D45; --ink-3:#414C46;
   --line:#CFDACB; --line-strong:#1E3329;
-  --c-main:#2E5A48; --c-side:#8A5309; --c-fruit:#A2304C; --c-sweet:#57448A; --c-snack:#6B7A1F; --c-drink:#2B6B85;
+  --c-main:#2A5141; --c-side:#6A4007; --c-fruit:#84273E; --c-sweet:#503E7E; --c-snack:#444E14; --c-drink:#204E62;
   --scrim:rgba(8,16,13,.5); --shadow-1:0 1px 2px rgba(0,0,0,.25); --shadow-lift:0 4px 0 rgba(0,0,0,.06);
-  --accent:#2E5A48; --accent-fg:#FBFCF9; --accent-soft:#DCE8DF;
-  --warn:#8A5A06; --warn-soft:#F6E9CE; --hot:#B4460F; --hot-soft:#FDE3D0;
+  --accent:#2A5141; --accent-fg:#FBFCF9; --accent-soft:#DCE8DF;
+  --warn:#664204; --warn-soft:#F6E9CE; --hot:#7F310B; --hot-soft:#FDE3D0;
   --toast-bg:#1E3329; --toast-fg:#F4F8F3;
   --r-lg:20px; --r-md:12px; --r-sm:8px;
   --f-display:"Familjen Grotesk","Trebuchet MS",sans-serif;
@@ -46,23 +48,23 @@ img{max-width:100%}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
-    --ink:#E6EEE7; --ink-2:#A6BAAE; --ink-3:#7A8E84;
+    --ink:#E6EEE7; --ink-2:#AFC1B6; --ink-3:#B3BFB9;
     --line:#2B3E36; --line-strong:#5A8272;
-    --c-main:#79C8A2; --c-side:#E0A253; --c-fruit:#EA8299; --c-sweet:#A793DC; --c-snack:#C3CF6E; --c-drink:#7FC3DE;
+    --c-main:#81CBA8; --c-side:#E6B372; --c-fruit:#F1A9B9; --c-sweet:#C3B5E7; --c-snack:#C3CF6E; --c-drink:#85C6DF;
     --scrim:rgba(0,0,0,.62); --shadow-1:0 0 0 1px rgba(255,255,255,.14); --shadow-lift:0 4px 0 rgba(255,255,255,.08);
-    --accent:#79C8A2; --accent-fg:#0E1815; --accent-soft:#1F332A;
-    --warn:#E0A253; --warn-soft:#2C2415; --hot:#F2A26E; --hot-soft:#3A2114;
+    --accent:#81CBA8; --accent-fg:#0E1815; --accent-soft:#1F332A;
+    --warn:#E6B372; --warn-soft:#2C2415; --hot:#F4AD7F; --hot-soft:#3A2114;
     --toast-bg:#E6EEE7; --toast-fg:#0E1815;
   }
 }
 :root[data-theme="dark"]{
   --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
-  --ink:#E6EEE7; --ink-2:#A6BAAE; --ink-3:#7A8E84;
+  --ink:#E6EEE7; --ink-2:#AFC1B6; --ink-3:#B3BFB9;
   --line:#2B3E36; --line-strong:#5A8272;
-  --c-main:#79C8A2; --c-side:#E0A253; --c-fruit:#EA8299; --c-sweet:#A793DC; --c-snack:#C3CF6E; --c-drink:#7FC3DE;
+  --c-main:#81CBA8; --c-side:#E6B372; --c-fruit:#F1A9B9; --c-sweet:#C3B5E7; --c-snack:#C3CF6E; --c-drink:#85C6DF;
   --scrim:rgba(0,0,0,.62); --shadow-1:0 0 0 1px rgba(255,255,255,.14); --shadow-lift:0 4px 0 rgba(255,255,255,.08);
-  --accent:#79C8A2; --accent-fg:#0E1815; --accent-soft:#1F332A;
-  --warn:#E0A253; --warn-soft:#2C2415; --hot:#F2A26E; --hot-soft:#3A2114;
+  --accent:#81CBA8; --accent-fg:#0E1815; --accent-soft:#1F332A;
+  --warn:#E6B372; --warn-soft:#2C2415; --hot:#F4AD7F; --hot-soft:#3A2114;
   --toast-bg:#E6EEE7; --toast-fg:#0E1815;
 }
 *{box-sizing:border-box}
@@ -231,7 +233,7 @@ a.btn{text-decoration:none}
 
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
-input[type=text],input[type=email],input[type=time],input[type=search],input[type=url],select,textarea{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-md);
+input[type=text],input[type=email],input[type=time],input[type=search],input[type=url],select,textarea{background:var(--surface);border:1.5px solid var(--line-strong);border-radius:var(--r-md);
   padding:11px 12px;min-height:44px;width:100%}   /* the 16px above stands: under it iOS zooms */
 textarea{min-height:70px;resize:vertical}
 input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,input[type=search]:focus,input[type=url]:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none}
@@ -255,7 +257,7 @@ input[type=search]::-webkit-search-decoration,input[type=search]::-webkit-search
 .switch:first-of-type{border-top:0}
 .switch .t{font-size:14.5px}
 .switch .d{font-size:12.5px;color:var(--ink-3);line-height:1.4;margin-top:2px}
-.sw{flex:none;width:50px;height:30px;border-radius:999px;border:1.5px solid var(--line);background:var(--sunk);position:relative;transition:background .15s}
+.sw{flex:none;width:50px;height:30px;border-radius:999px;border:1.5px solid var(--line-strong);background:var(--sunk);position:relative;transition:background .15s}
 .sw::before{content:"";position:absolute;inset:-8px -12px}   /* a 44px hit area around a 30px pill */
 .sw::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:var(--surface);
   box-shadow:var(--shadow-1);transition:transform .15s ease}

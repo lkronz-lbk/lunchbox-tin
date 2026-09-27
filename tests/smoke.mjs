@@ -4296,6 +4296,8 @@ try {
     await later.route('**/api/billing', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: true, prices: { year: { amount: 2999, currency: 'usd', founding: false }, month: { amount: 399, currency: 'usd', founding: false } } }) }));
     await later.goto(BASE+'/'); await later.waitForTimeout(500);
     const shown = await later.evaluate(() => { const p = document.querySelector('#pricing'); const f = p.querySelector('[data-founding]'); return { text: p.innerText, founding: !!f && f.hidden }; });
+    const told = await later.evaluate(() => JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent)['@graph'].find(x => x['@type'] === 'WebApplication').offers.map(o => o.name + ' ' + o.price));
+    check('and tells search engines the same prices the page now shows', told.includes('Household plan, yearly 29.99') && told.includes('Household plan, monthly 3.99') && told.includes('Free 0'), told);
     check('the front page shows the price Stripe has now, and drops the founding line when that price is not marked founding',
       /\$29\.99/.test(shown.text) && /\$3\.99 a month/.test(shown.text) && !/\$19\.99|\$2\.99/.test(shown.text) && !/Founding price/.test(shown.text) && shown.founding, shown);
     await later.close();

@@ -22,14 +22,15 @@ function page(title, body, status = 200, headers = {}) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)} · Lunch Sorted</title>
 <meta name="color-scheme" content="light dark">
-<style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--ink:#16241E;--ink-2:#4A5C53;--accent:#2E5A48;--accent-fg:#FBFCF9}
-@media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--ink:#E6EEE7;--ink-2:#A6BAAE;--accent:#79C8A2;--accent-fg:#0E1815}}
+<style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--ink:#16241E;--ink-2:#3E4D45;--accent:#2A5141;--accent-fg:#FBFCF9}
+@media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--ink:#E6EEE7;--ink-2:#AFC1B6;--accent:#81CBA8;--accent-fg:#0E1815}}
 body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.5 Karla,"Helvetica Neue",sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px 26px;max-width:420px;width:100%}
 h1{font:700 26px/1.15 "Familjen Grotesk","Trebuchet MS",sans-serif;letter-spacing:-.02em;margin:0 0 10px;overflow-wrap:anywhere}
 p{margin:0 0 18px;color:var(--ink-2)}
 button{width:100%;min-height:48px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-fg);font:600 15px "Familjen Grotesk","Trebuchet MS",sans-serif;cursor:pointer}
-a{color:var(--accent)}</style></head><body><div class="card">${body}</div></body></html>`;
+a{color:var(--accent)}
+::placeholder{color:var(--ink-2);opacity:1}</style></head><body><div class="card">${body}</div></body></html>`;
   return new Response(html, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': PAGE_CSP, 'referrer-policy': 'no-referrer', ...headers } });
 }
 

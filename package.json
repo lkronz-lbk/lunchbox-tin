@@ -12,7 +12,8 @@
     "pretest": "node scripts/csp.mjs --check",
     "ios:sync": "npx cap sync ios",
     "ios:open": "npx cap open ios",
-    "shots": "node scripts/shots.mjs"
+    "shots": "node scripts/shots.mjs",
+    "contrast": "node scripts/contrast.mjs"
   },
   "devDependencies": {
     "@capacitor/app": "^7.1.2",

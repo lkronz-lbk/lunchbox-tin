@@ -127,15 +127,21 @@ sit beside a screenshot of the planner is wrong.
 | Ground (page) | #E9EEE6 | #0E1815 |
 | Surface (card) | #FBFCF9 | #17251F |
 | Ink (text) | #16241E | #E6EEE7 |
-| Ink, quieter | #4A5C53 / #6E7F75 (the site's third ink is #7B8C82) | #A6BAAE / #7A8E84 |
-| Line | #CFDACB | #2B3E36 |
-| Accent (the green; buttons, links) | #2E5A48 on #FBFCF9 | #79C8A2 on #0E1815 |
+| Ink, quieter | #3E4D45 / #414C46 | #AFC1B6 / #B3BFB9 |
+| Line (dividers) / Line, strong (field and switch edges) | #CFDACB / #1E3329 | #2B3E36 / #5A8272 |
+| Accent (the green; buttons, links) | #2A5141 on #FBFCF9 | #81CBA8 on #0E1815 |
 | Accent, soft | #DCE8DF | #1F332A |
-| Warn / hot | #8A5A06 / #B4460F | #E0A253 / #F2A26E |
+| Warn / hot | #664204 / #7F310B | #E6B372 / #F4AD7F |
 
-The six compartment colors, light then dark: main #2E5A48 / #79C8A2, side #8A5309 / #E0A253,
-fruit #A2304C / #EA8299, sweet #57448A / #A793DC, snack #6B7A1F / #C3CF6E, drink #2B6B85 /
-#7FC3DE. Corners are 20px, 12px and 8px. Fonts: **Familjen Grotesk** for headings (400 to 700),
+The six compartment colors, light then dark: main #2A5141 / #81CBA8, side #6A4007 / #E6B372,
+fruit #84273E / #F1A9B9, sweet #503E7E / #C3B5E7, snack #444E14 / #C3CF6E, drink #204E62 /
+#85C6DF.
+
+Every text color holds WCAG AAA against every surface it sits on: 7:1, or 4.5:1 for large text
+(24px, or 18.66px bold); the edge of a field or a switch holds 3:1. The quieter inks are nearly
+as dark as the ink because of that: hierarchy is size and weight, not paleness. A design that
+lightens a color for a softer look fails it. `npm run contrast` measures the site and the planner
+(2026-09-27; the colors before it were lighter, and the Canva kit needs the new ones). Corners are 20px, 12px and 8px. Fonts: **Familjen Grotesk** for headings (400 to 700),
 **Karla** for body (400 to 700), **IBM Plex Mono** for small labels and numbers (400 and 600); all
 three are on Google Fonts (the help page loads fewer weights, which is fine). The icons are in `public/icons/` and the marketing screenshots in `public/img/`
 (750 by 1624, with WebP twins).

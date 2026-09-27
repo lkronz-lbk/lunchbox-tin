@@ -443,7 +443,7 @@ the visual identity.
   question" (the feedback email with the build and phone filled in) and "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer).
 - **For search engines and assistants** — the home page carries Organization and WebApplication
-  JSON-LD (its prices typed, so they change with the founding price); `help.html` carries a
+  JSON-LD (its plan prices rewritten from Stripe by `price.js`, like the prices on the page); `help.html` carries a
   FAQPage whose answers are the page's own paragraphs word for word, with no price, and the smoke
   suite fails if the two drift apart: edit the page, then regenerate the block. `public/llms.txt`
   is the one-page summary for assistants; `public/404.html` is the page for any path not there.
@@ -565,8 +565,9 @@ out by deleting it in the commit that does it.
 - **Every price rise, both stores together:** a new Stripe price with no `founding` metadata,
   pointed at by `STRIPE_PRICE_YEAR`/`_MONTH`; in App Store Connect, schedule the change with
   **keep the current price for existing subscribers**, always, because the terms promise it;
-  then `node scripts/iap-shot.mjs <yearly> <monthly>` for a new review screenshot, and the two
-  prices typed into the home page's JSON-LD (`public/index.html`, above `</head>`). The plan
+  then `node scripts/iap-shot.mjs <yearly> <monthly>` for a new review screenshot, and the
+  prices typed in `public/index.html` (the pricing card and the JSON-LD above `</head>`), which
+  show only when `price.js` cannot reach Stripe. The plan
   so far: $19.99 for the first 100 paying households, $29.99 for the next 400, then $39.99
   from 500. Nothing counts to 100 by itself; watch `/admin`.
 

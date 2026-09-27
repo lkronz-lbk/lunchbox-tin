@@ -115,8 +115,8 @@ function page(title, body, status = 200) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <title>${esc(title)} · Lunch Sorted</title>
 <meta name="color-scheme" content="light dark">
-<style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--ink:#16241E;--ink-2:#4A5C53;--ink-3:#6E7F75;--accent:#2E5A48;--edge:#9BAE95}
-@media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--ink:#E6EEE7;--ink-2:#A6BAAE;--ink-3:#7A8E84;--accent:#79C8A2;--edge:#54705F}}
+<style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--ink:#16241E;--ink-2:#3E4D45;--ink-3:#414C46;--accent:#2A5141;--edge:#9BAE95}
+@media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--ink:#E6EEE7;--ink-2:#AFC1B6;--ink-3:#B3BFB9;--accent:#81CBA8;--edge:#54705F}}
 body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.5 Karla,"Helvetica Neue",sans-serif;padding:28px 18px 60px}
 .wrap{max-width:760px;margin:0 auto}
 h1{font:700 28px/1.1 "Familjen Grotesk","Trebuchet MS",sans-serif;letter-spacing:-.02em;margin:0 0 4px}
@@ -158,7 +158,8 @@ p{color:var(--ink-2)} a{color:var(--accent)}
 .pager button[aria-disabled="true"]{opacity:.6;cursor:default}
 details{font-size:13px;color:var(--ink-2)} summary{cursor:pointer;padding:12px 0;min-height:44px;box-sizing:border-box}
 pre{font-size:12px;white-space:pre-wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;margin:0}
-.note{font-size:13px;color:var(--ink-2)}</style></head><body><div class="wrap">${body}</div>${body.includes('data-table') ? `<script>${SCRIPT}</script>` : ''}</body></html>`;
+.note{font-size:13px;color:var(--ink-2)}
+::placeholder{color:var(--ink-2);opacity:1}</style></head><body><div class="wrap">${body}</div>${body.includes('data-table') ? `<script>${SCRIPT}</script>` : ''}</body></html>`;
   return new Response(html, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': PAGE_CSP, 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex' } });
 }
 
