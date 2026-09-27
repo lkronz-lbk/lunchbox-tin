@@ -642,7 +642,7 @@ mean the first chip below and the checkbox above it are now on opposite sides of
   `.more summary` — body font, 15px, `letter-spacing:0`, `text-transform:none`, `--ink` — but it
   is declared *before* it at identical specificity, so it loses all four. Every question in the
   help sheet therefore comes out as 10.5px uppercase mono in `--ink-3`: the "FIVE LUNCHES" style,
-  twenty of them stacked, at **3.6:1** in light where 10.5px body text wants 4.5:1. The fix is to
+  twenty of them stacked (the colors hold AAA since 2026-09-27; the size and case are the bug). The fix is to
   move `.faq summary` after `.more summary`, which restyles the whole sheet.
 
 - **`06-cook.png` does not fill its canvas.** `CROP_BOT = {'cook': 840}` in
@@ -659,14 +659,6 @@ mean the first chip below and the checkbox above it are now on opposite sides of
   bouncing to Mail and back with a code in their head. And *Wrong address? Try another* blanks
   `Account.linkSent` while `UI.obDraft` was already cleared on send, so the email field comes back
   empty and a one-character typo is retyped in full.
-
-- **The resting chip has no visible edge.** `.tg` is `1.5px solid var(--line)` on
-  `var(--surface)`: **1.40:1** in both themes, against a 3:1 minimum for a control's own
-  boundary — and `--surface` on `--ground` is 1.14:1, so the chip barely separates from the
-  page either. First run is four groups of them, so it is the first screen a parent reads and
-  the one where it matters most: "Cold only" beside "There's a microwave" can read as two
-  labels rather than a choice. Wants a `--line-mid` token that clears 3:1 in both `:root`
-  blocks, applied to `.tg` at rest — which touches every chip in the app, not just first run.
 
 - **"Welcome back" greets a parent who has never been here.** `viewObEmail()` keys
   `back` off `!S.onboardedAt`, which is true for a brand-new phone too, so tapping

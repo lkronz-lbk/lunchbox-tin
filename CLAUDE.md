@@ -115,8 +115,9 @@ Never again:
 - Design tokens live in the `:root` blocks of `public/app/index.html`; light and dark are both
   designed. No raw colors outside the token blocks. Tap targets are at least 44px.
 - Color contrast is WCAG AAA: text 7:1 (4.5:1 at 24px, or 18.66px bold) on every surface it can
-  sit on, in both themes; a field's or a switch's edge 3:1. `npm run contrast` after any change to
-  a color, an opacity or a new screen.
+  sit on, in both themes; a field's, a switch's or a chip's edge 3:1 (`--line-field`). Never show a
+  state by fading text or by color alone: shape, weight or a word. `npm run contrast` after any
+  change to a color, an opacity or a new screen.
 - Every entity carries `id`/`createdAt`/`updatedAt`; deletion is a `deletedAt` tombstone;
   event rows carry `at`/`by`. Imports and boot go through `normalizeAccount()`.
 - `dev` is the working branch; `main` deploys production; pull requests get previews.

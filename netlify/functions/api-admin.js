@@ -115,8 +115,8 @@ function page(title, body, status = 200) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <title>${esc(title)} · Lunch Sorted</title>
 <meta name="color-scheme" content="light dark">
-<style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--ink:#16241E;--ink-2:#3E4D45;--ink-3:#414C46;--accent:#2A5141;--edge:#9BAE95}
-@media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--ink:#E6EEE7;--ink-2:#AFC1B6;--ink-3:#B3BFB9;--accent:#81CBA8;--edge:#54705F}}
+<style>:root{--ground:#E9EEE6;--surface:#FBFCF9;--line:#CFDACB;--ink:#16241E;--ink-2:#3E4D45;--ink-3:#3E4D45;--accent:#2A5141;--edge:#6F8479}
+@media (prefers-color-scheme:dark){:root{--ground:#0E1815;--surface:#17251F;--line:#2B3E36;--ink:#E6EEE7;--ink-2:#AFC1B6;--ink-3:#AFC1B6;--accent:#81CBA8;--edge:#5A8272}}
 body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.5 Karla,"Helvetica Neue",sans-serif;padding:28px 18px 60px}
 .wrap{max-width:760px;margin:0 auto}
 h1{font:700 28px/1.1 "Familjen Grotesk","Trebuchet MS",sans-serif;letter-spacing:-.02em;margin:0 0 4px}

@@ -4301,6 +4301,18 @@ try {
     check('the front page shows the price Stripe has now, and drops the founding line when that price is not marked founding',
       /\$29\.99/.test(shown.text) && /\$3\.99 a month/.test(shown.text) && !/\$19\.99|\$2\.99/.test(shown.text) && !/Founding price/.test(shown.text) && shown.founding, shown);
     await later.close();
+    /* Stripe with no monthly price takes the monthly offer away; Stripe unreachable leaves the typed ones */
+    const offersWith = async (fulfill) => {
+      const pg = await ctx.newPage(); await pg.route('**/api/billing', fulfill);
+      await pg.goto(BASE+'/'); await pg.waitForTimeout(500);
+      const o = await pg.evaluate(() => JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent)['@graph'].find(x => x['@type'] === 'WebApplication').offers.map(o => o.name + ' ' + o.price));
+      await pg.close(); return o;
+    };
+    const noMonth = await offersWith(r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: true, prices: { year: { amount: 2999, currency: 'usd', founding: false }, month: null } }) }));
+    const down = await offersWith(r => r.fulfill({ status: 500, body: '' }));
+    check('with no monthly price the monthly offer goes, and with Stripe out of reach the typed prices stand',
+      noMonth.includes('Household plan, yearly 29.99') && !noMonth.some(x => /monthly/.test(x)) && noMonth.includes('Free 0')
+      && down.includes('Household plan, yearly 19.99') && down.includes('Household plan, monthly 2.99'), [noMonth, down]);
   }
   await site.goto(BASE+'/feedback.html'); await site.waitForTimeout(250);
   check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && !!f.querySelector('textarea[name="ideas"]') && f.querySelectorAll('input[name="want"]').length === 5 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));

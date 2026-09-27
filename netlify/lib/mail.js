@@ -31,7 +31,7 @@ export async function send(msg) {
    reminders, how to stop them */
 function foot(stopUrl) {
   const text = `\n\n— Lunch Sorted, from Lila Bloom Enterprises. Reply to this email and a person reads it.` + (stopUrl ? `\nStop these reminders: ${stopUrl}` : '');
-  const html = `<p style="color:#414C46;font-size:13px;margin-top:28px">— Lunch Sorted, from Lila Bloom Enterprises. Reply to this email and a person reads it.` + (stopUrl ? ` <a href="${esc(stopUrl)}" style="color:#414C46">Stop these reminders</a>.` : '') + `</p>`;
+  const html = `<p style="color:#3E4D45;font-size:13px;margin-top:28px">— Lunch Sorted, from Lila Bloom Enterprises. Reply to this email and a person reads it.` + (stopUrl ? ` <a href="${esc(stopUrl)}" style="color:#3E4D45">Stop these reminders</a>.` : '') + `</p>`;
   return { text, html };
 }
 const btn = (href, label) => `<p style="margin:22px 0"><a href="${esc(href)}" style="display:inline-block;background:#2A5141;color:#FBFCF9;text-decoration:none;font-weight:600;padding:12px 18px;border-radius:12px">${esc(label)}</a></p>`;
@@ -41,7 +41,7 @@ export async function sendMagicLink(to, link, code) {
     to,
     subject: 'Your Lunch Sorted sign-in link',
     text: `Tap to sign in to Lunch Sorted:\n\n${link}\n\nUsing the app from your home screen? Open it and type this code instead:\n\n${code}\n\nBoth work once and expire in 15 minutes. If you did not ask for this, ignore this email.` + foot().text,
-    html: `<p>Tap to sign in to Lunch Sorted:</p>${btn(link, 'Sign in to Lunch Sorted')}<p>Using the app from your home screen? Open it and type this code instead:</p><p style="font:600 22px ui-monospace,monospace;letter-spacing:.08em">${esc(code)}</p><p style="color:#414C46;font-size:13px">Both work once and expire in 15 minutes. If you did not ask for this, ignore this email.</p>` + foot().html
+    html: `<p>Tap to sign in to Lunch Sorted:</p>${btn(link, 'Sign in to Lunch Sorted')}<p>Using the app from your home screen? Open it and type this code instead:</p><p style="font:600 22px ui-monospace,monospace;letter-spacing:.08em">${esc(code)}</p><p style="color:#3E4D45;font-size:13px">Both work once and expire in 15 minutes. If you did not ask for this, ignore this email.</p>` + foot().html
   });
   return r.logged || r.captured ? { devLink: link, devCode: code } : {};
 }
@@ -89,7 +89,7 @@ export function sendTrialEnding(to, site, end, stopUrl, tz, price = '') {
     to,
     subject: `Your three weeks of everything end ${when}`,
     text: `Your three weeks of Lunch Sorted with everything on end on ${when}.\n\nThe lunches stay, and planning, the shopping list and the idea bank — and the two recipes that come with it — stay free for good. Writing in your own foods or bringing one in from a recipe page, kid's pick, the after-school review and the pantry pause unless you keep the Household plan; the lunchboxes and phones you already have stay as they are, you just can't add more.${price ? ` The Household plan is ${price}.` : ''}\n\nKeep everything: ${keep}\n\nNothing happens automatically. If you do nothing, the free planner carries on.` + foot(stopUrl).text,
-    html: `<p>Your three weeks of Lunch Sorted with everything on end on <b>${esc(when)}</b>.</p><p>The lunches stay, and planning, the shopping list and the idea bank — and the two recipes that come with it — stay free for good. Writing in your own foods or bringing one in from a recipe page, kid’s pick, the after-school review and the pantry pause unless you keep the Household plan; the lunchboxes and phones you already have stay as they are, you just can’t add more.${price ? ` The Household plan is ${esc(price)}.` : ''}</p>${btn(keep, 'Keep everything')}<p style="color:#414C46;font-size:13px">Nothing happens automatically. If you do nothing, the free planner carries on.</p>` + foot(stopUrl).html
+    html: `<p>Your three weeks of Lunch Sorted with everything on end on <b>${esc(when)}</b>.</p><p>The lunches stay, and planning, the shopping list and the idea bank — and the two recipes that come with it — stay free for good. Writing in your own foods or bringing one in from a recipe page, kid’s pick, the after-school review and the pantry pause unless you keep the Household plan; the lunchboxes and phones you already have stay as they are, you just can’t add more.${price ? ` The Household plan is ${esc(price)}.` : ''}</p>${btn(keep, 'Keep everything')}<p style="color:#3E4D45;font-size:13px">Nothing happens automatically. If you do nothing, the free planner carries on.</p>` + foot(stopUrl).html
   });
 }
 
@@ -99,7 +99,7 @@ export function sendTrialEnded(to, site, stopUrl, price = '') {
     to,
     subject: 'Your three weeks are up. The lunches stay.',
     text: `Your three weeks of everything on Lunch Sorted are up.\n\nPlanning the week, the shopping list and the idea bank — and the two recipes that come with it — are still free, and everything you added is still there. Your own foods, kid's pick, the after-school review and the pantry are waiting under the Household plan, along with adding lunchboxes and phones${price ? `: ${price}` : ''}.\n\nSwitch it back on: ${keep}\n\nThis is the last email about it.` + foot(stopUrl).text,
-    html: `<p>Your three weeks of everything on Lunch Sorted are up.</p><p>Planning the week, the shopping list and the idea bank — and the two recipes that come with it — are still free, and everything you added is still there. Your own foods, kid’s pick, the after-school review and the pantry are waiting under the Household plan, along with adding lunchboxes and phones${price ? `: ${esc(price)}` : ''}.</p>${btn(keep, 'Switch it back on')}<p style="color:#414C46;font-size:13px">This is the last email about it.</p>` + foot(stopUrl).html
+    html: `<p>Your three weeks of everything on Lunch Sorted are up.</p><p>Planning the week, the shopping list and the idea bank — and the two recipes that come with it — are still free, and everything you added is still there. Your own foods, kid’s pick, the after-school review and the pantry are waiting under the Household plan, along with adding lunchboxes and phones${price ? `: ${esc(price)}` : ''}.</p>${btn(keep, 'Switch it back on')}<p style="color:#3E4D45;font-size:13px">This is the last email about it.</p>` + foot(stopUrl).html
   });
 }
 

@@ -3,7 +3,7 @@
    runs and whenever it cannot. The founding line follows metadata founding = yes on the yearly price. */
 (function(){
   function fmt(p){
-    if(!p || !isFinite(p.amount)) return '';
+    if(!p || typeof p.amount !== 'number' || !isFinite(p.amount)) return '';
     try{ return new Intl.NumberFormat('en-US', {style:'currency', currency:(p.currency || 'usd').toUpperCase(), minimumFractionDigits: p.amount % 100 ? 2 : 0}).format(p.amount / 100); }
     catch(e){ return ''; }
   }
@@ -28,7 +28,7 @@
       if(!app || !Array.isArray(app.offers)) return;
       var set = function(name, p){
         var i = app.offers.findIndex(function(o){ return o.name === name; });
-        if(!p || !isFinite(p.amount)){ if(i > -1) app.offers.splice(i, 1); return; }
+        if(!p || typeof p.amount !== 'number' || !isFinite(p.amount)){ if(i > -1) app.offers.splice(i, 1); return; }
         var o = {'@type':'Offer', name:name, price:(p.amount / 100).toFixed(2), priceCurrency:(p.currency || 'usd').toUpperCase()};
         if(i > -1) app.offers[i] = o; else app.offers.push(o);
       };

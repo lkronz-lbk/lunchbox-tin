@@ -25,8 +25,8 @@
 :root{
   color-scheme:light dark;
   --ground:#E9EEE6; --surface:#FBFCF9; --surface-2:#F1F5EE; --sunk:#DFE7DB;
-  --ink:#16241E; --ink-2:#3E4D45; --ink-3:#414C46;
-  --line:#CFDACB; --line-strong:#1E3329;
+  --ink:#16241E; --ink-2:#3E4D45; --ink-3:#3E4D45;
+  --line:#CFDACB; --line-strong:#1E3329; --line-field:#6F8479;
   --c-main:#2A5141; --c-side:#6A4007; --c-fruit:#84273E; --c-sweet:#503E7E;
   --accent:#2A5141; --accent-fg:#FBFCF9; --accent-soft:#DCE8DF;
   --f-display:"Familjen Grotesk","Trebuchet MS",sans-serif;
@@ -36,8 +36,8 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
-    --ink:#E6EEE7; --ink-2:#AFC1B6; --ink-3:#B3BFB9;
-    --line:#2B3E36; --line-strong:#5A8272;
+    --ink:#E6EEE7; --ink-2:#AFC1B6; --ink-3:#AFC1B6;
+    --line:#2B3E36; --line-strong:#5A8272; --line-field:#5A8272;
     --c-main:#81CBA8; --c-side:#E6B372; --c-fruit:#F1A9B9; --c-sweet:#C3B5E7;
     --accent:#81CBA8; --accent-fg:#0E1815; --accent-soft:#1F332A;
   }
@@ -131,8 +131,8 @@ h2{font-family:var(--f-display);font-size:clamp(25px,4.2vw,32px);font-weight:700
 
 form.signup{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;max-width:520px}
 form.signup input[type=email]{flex:1 1 220px;min-height:48px;padding:0 15px;border-radius:13px;
-  border:1.6px solid var(--line-strong);background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
-form.signup input[type=email]:focus{border-color:var(--accent);outline:none}
+  border:1.6px solid var(--line-field);background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
+form.signup input[type=email]:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent);outline:none}
 .hp{position:absolute;left:-9999px}
 
 /* two plans, side by side; the paid one is lifted, the free one is not lesser */
@@ -152,7 +152,7 @@ form.signup input[type=email]:focus{border-color:var(--accent);outline:none}
 footer{border-top:1px solid var(--line);padding:30px 0 56px;color:var(--ink-3);font-size:14px}
 footer .row{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center}
 footer a{color:var(--ink-2);white-space:nowrap}
-::placeholder{color:var(--ink-2);opacity:1}
+::placeholder{color:var(--ink-2);opacity:1;font-style:italic}
 </style>
 <script src="/ga.js" defer></script>
 <script src="/price.js" defer></script>

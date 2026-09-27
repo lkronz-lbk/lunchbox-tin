@@ -21,7 +21,7 @@ body{margin:0}
 img{max-width:100%}
 [hidden]{display:none!important}
 /* the browser's own placeholder grey is under 4.5:1; the secondary ink holds 7:1 on every surface */
-::placeholder{color:var(--ink-2);opacity:1}
+::placeholder{color:var(--ink-2);opacity:1;font-style:italic}   /* italic, so an example never reads as a typed answer */
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,8 +33,8 @@ img{max-width:100%}
      web view reports nothing, so it sets these two on <html> from UIKit instead. */
   --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
   --ground:#E9EEE6; --surface:#FBFCF9; --surface-2:#F1F5EE; --sunk:#DFE7DB;
-  --ink:#16241E; --ink-2:#3E4D45; --ink-3:#414C46;
-  --line:#CFDACB; --line-strong:#1E3329;
+  --ink:#16241E; --ink-2:#3E4D45; --ink-3:#3E4D45;
+  --line:#CFDACB; --line-strong:#1E3329; --line-field:#6F8479; --kid-1:#2E5A48; --kid-2:#8A5309; --kid-3:#A2304C; --kid-4:#57448A;
   --c-main:#2A5141; --c-side:#6A4007; --c-fruit:#84273E; --c-sweet:#503E7E; --c-snack:#444E14; --c-drink:#204E62;
   --scrim:rgba(8,16,13,.5); --shadow-1:0 1px 2px rgba(0,0,0,.25); --shadow-lift:0 4px 0 rgba(0,0,0,.06);
   --accent:#2A5141; --accent-fg:#FBFCF9; --accent-soft:#DCE8DF;
@@ -48,8 +48,8 @@ img{max-width:100%}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
-    --ink:#E6EEE7; --ink-2:#AFC1B6; --ink-3:#B3BFB9;
-    --line:#2B3E36; --line-strong:#5A8272;
+    --ink:#E6EEE7; --ink-2:#AFC1B6; --ink-3:#AFC1B6;
+    --line:#2B3E36; --line-strong:#5A8272; --line-field:#5A8272; --kid-1:#79C8A2; --kid-2:#E0A253; --kid-3:#EA8299; --kid-4:#A793DC;
     --c-main:#81CBA8; --c-side:#E6B372; --c-fruit:#F1A9B9; --c-sweet:#C3B5E7; --c-snack:#C3CF6E; --c-drink:#85C6DF;
     --scrim:rgba(0,0,0,.62); --shadow-1:0 0 0 1px rgba(255,255,255,.14); --shadow-lift:0 4px 0 rgba(255,255,255,.08);
     --accent:#81CBA8; --accent-fg:#0E1815; --accent-soft:#1F332A;
@@ -59,8 +59,8 @@ img{max-width:100%}
 }
 :root[data-theme="dark"]{
   --ground:#0E1815; --surface:#17251F; --surface-2:#1E2F28; --sunk:#111C18;
-  --ink:#E6EEE7; --ink-2:#AFC1B6; --ink-3:#B3BFB9;
-  --line:#2B3E36; --line-strong:#5A8272;
+  --ink:#E6EEE7; --ink-2:#AFC1B6; --ink-3:#AFC1B6;
+  --line:#2B3E36; --line-strong:#5A8272; --line-field:#5A8272; --kid-1:#79C8A2; --kid-2:#E0A253; --kid-3:#EA8299; --kid-4:#A793DC;
   --c-main:#81CBA8; --c-side:#E6B372; --c-fruit:#F1A9B9; --c-sweet:#C3B5E7; --c-snack:#C3CF6E; --c-drink:#85C6DF;
   --scrim:rgba(0,0,0,.62); --shadow-1:0 0 0 1px rgba(255,255,255,.14); --shadow-lift:0 4px 0 rgba(255,255,255,.08);
   --accent:#81CBA8; --accent-fg:#0E1815; --accent-soft:#1F332A;
@@ -125,7 +125,6 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
   align-items:center;justify-content:center;flex:none}
 .tick svg{width:9px;height:9px;opacity:0}
 .tin.packed{border-color:var(--line);background:var(--line)}
-.tin.packed .cmp>*{opacity:.55}
 .packbox{gap:8px;font-weight:600}
 .packbox[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
 .packbox[aria-pressed="true"] .tick{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
@@ -143,7 +142,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .wrote-in .hint{margin:0;display:flex;align-items:center;gap:7px;color:var(--ink-2)}
 
 .daycard{display:flex;flex-direction:column;gap:9px}
-.daycard.past{opacity:.55}
+.daycard.past .tin{border-color:var(--line)}   /* a day gone says "gone" in its header; its text stays at full ink */
 .dayhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-left:2px}
 .dayname{font-family:var(--f-display);font-size:16px;font-weight:600;letter-spacing:-0.01em}
 .dayname em{font-family:var(--f-mono);font-style:normal;font-size:11px;font-weight:500;color:var(--ink-3);
@@ -188,7 +187,6 @@ a.btn{text-decoration:none}
 /* a compartment holding a food that has since come off the list: it keeps what it was
    given, so the parent packing tomorrow still knows what they planned, and says plainly
    that it will not be picked again */
-.cmp.offlist .nm{opacity:.72}
 .cmp .tr i.care.off{color:var(--warn);font-style:normal;text-transform:none;letter-spacing:.02em;font-weight:600}
 .item.arm .meta{color:var(--hot);letter-spacing:.02em}
 .item.arm{background:var(--hot-soft);box-shadow:inset 3px 0 0 var(--hot)}
@@ -229,26 +227,26 @@ a.btn{text-decoration:none}
 .x{flex:none;width:44px;height:44px;margin-right:-8px;border-radius:var(--r-sm);border:0;background:none;color:var(--ink-3);
   display:flex;align-items:center;justify-content:center}
 .qty{font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-2);flex:none}
-.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
 
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
-input[type=text],input[type=email],input[type=time],input[type=search],input[type=url],select,textarea{background:var(--surface);border:1.5px solid var(--line-strong);border-radius:var(--r-md);
+input[type=text],input[type=email],input[type=time],input[type=search],input[type=url],select,textarea{background:var(--surface);border:1.5px solid var(--line-field);border-radius:var(--r-md);
   padding:11px 12px;min-height:44px;width:100%}   /* the 16px above stands: under it iOS zooms */
 textarea{min-height:70px;resize:vertical}
-input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,input[type=search]:focus,input[type=url]:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none}
+input[type=text]:focus,input[type=email]:focus,input[type=time]:focus,input[type=search]:focus,input[type=url]:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent);outline:none}
 /* iOS gives a search field a capsule and its own tiny clear button, both well under
    44px and neither in this app's language */
 input[type=search]{-webkit-appearance:none;appearance:none}
 input[type=search]::-webkit-search-decoration,input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
-.btn:disabled{cursor:default;background:var(--surface-2);border-color:var(--line-strong);color:var(--ink-3);box-shadow:none}
+.btn:disabled{cursor:default;background:var(--surface-2);border-color:var(--line-field);border-style:dashed;color:var(--ink-3);box-shadow:none}
 .btn:disabled svg{opacity:.6}
 .item .nm,.item .meta,.kv span{overflow-wrap:anywhere}
 .toggles{display:flex;flex-wrap:wrap;gap:7px}
 /* a two-state pair is one switch, so both halves are one width: "US" beside "Metric"
    otherwise renders as a disc beside a capsule */
 .toggles.pair .tg{min-width:68px;justify-content:center}
-.tg{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:0 13px;min-height:44px;
+.tg{border:1.5px solid var(--line-field);background:var(--surface);border-radius:999px;padding:0 13px;min-height:44px;
   font-size:13.5px;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
 .tg[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
 .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin:0 -6px}
@@ -257,7 +255,7 @@ input[type=search]::-webkit-search-decoration,input[type=search]::-webkit-search
 .switch:first-of-type{border-top:0}
 .switch .t{font-size:14.5px}
 .switch .d{font-size:12.5px;color:var(--ink-3);line-height:1.4;margin-top:2px}
-.sw{flex:none;width:50px;height:30px;border-radius:999px;border:1.5px solid var(--line-strong);background:var(--sunk);position:relative;transition:background .15s}
+.sw{flex:none;width:50px;height:30px;border-radius:999px;border:1.5px solid var(--line-field);background:var(--sunk);position:relative;transition:background .15s}
 .sw::before{content:"";position:absolute;inset:-8px -12px}   /* a 44px hit area around a 30px pill */
 .sw::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:var(--surface);
   box-shadow:var(--shadow-1);transition:transform .15s ease}
@@ -288,6 +286,9 @@ nav.tabs button{flex:1;border:0;background:none;min-height:48px;display:flex;fle
 nav.tabs button span{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
 @media (max-width:359px){ nav.tabs button span{font-size:9px;letter-spacing:.04em} }
 nav.tabs button[aria-current="true"]{color:var(--accent)}
+/* at AAA the resting tabs are as dark as the current one, so the current one says so by weight and a bar, not by color alone */
+nav.tabs button[aria-current="true"] span{font-weight:700}
+nav.tabs button[aria-current="true"]::before{content:"";position:absolute;top:0;left:28%;right:28%;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
 nav.tabs button{position:relative}
 nav.tabs .due{position:absolute;top:8px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:var(--hot);border:2px solid var(--ground)}
 nav.tabs svg{width:21px;height:21px}
@@ -418,18 +419,19 @@ body.first-run #view{flex:1;display:flex;flex-direction:column;min-height:0}
 .kidmode h1{font-family:var(--f-display);font-size:clamp(28px,8vw,38px);font-weight:700;letter-spacing:-0.025em;
   line-height:1.08;margin:0;text-wrap:balance}
 .kidmode .hint{font-size:16px;color:var(--ink-2);margin:0}
-.dots{display:flex;gap:7px}
-/* the same two states as .daypips below, and read by the same child: ink for the
-   picks still to come, accent for the ones behind, both clear of 3:1 on the ground
-   in either theme (5.20 and 5.07 dark, 3.60 and 3.39 light). At .35 of a line colour
-   the picks still to come were 1.44:1 dark and 1.98:1 light. */
-.dots i{width:9px;height:9px;border-radius:50%;background:var(--ink-3);opacity:1;display:block}
-.dots i.on{background:var(--accent);opacity:1} .dots i.did{background:var(--accent);opacity:.7}
-.daypips{display:flex;gap:5px}
-/* the boxes still to come are ink, the ones behind are accent: two states a child
-   can tell apart, and both clear of 3:1 on the ground in either theme */
-.daypips i{width:15px;height:5px;border-radius:999px;background:var(--ink-3);opacity:1;display:block}
-.daypips i.on{background:var(--accent);opacity:1} .daypips i.did{background:var(--accent);opacity:.7}
+.dots{display:flex;align-items:center;gap:7px}
+/* the same states as .daypips below, read by the same child. The inks are all dark enough now
+   (AAA) that paleness cannot tell them apart, so shape does: a hollow ring for a pick still to
+   come, a filled dot for one behind, a bigger filled dot for this one. Each edge holds 3:1. */
+.dots i{width:9px;height:9px;border-radius:50%;box-sizing:border-box;border:1.5px solid var(--ink-3);background:transparent;display:block}
+.dots i.on{width:13px;height:13px;border-color:var(--accent);background:var(--accent)}
+.dots i.did{border-color:var(--accent);background:var(--accent)}
+.daypips{display:flex;align-items:center;gap:5px}
+/* the boxes still to come are an outline, the ones behind are filled: two states a child can
+   tell apart by shape, not only by green against grey, and this one longer */
+.daypips i{width:15px;height:6px;border-radius:999px;box-sizing:border-box;border:1.5px solid var(--ink-3);background:transparent;display:block}
+.daypips i.on,.daypips i.did{border-color:var(--accent);background:var(--accent)}
+.daypips i.on{width:24px}   /* this box: longer, as this pick's dot is bigger */
 .picks{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:minmax(0,1fr);gap:14px;flex:1;min-height:0}
 .pick{background:var(--surface);border:2.5px solid var(--line-strong);border-radius:24px;min-height:88px;overflow:hidden;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;gap:clamp(6px,1.4svh,14px);padding:20px 12px;padding:clamp(10px,2svh,20px) 12px;
@@ -786,7 +788,7 @@ var TAG_FIRST = ['protein','crunchy','soft','hearty','ice','heat'];
 var AISLE_SHORT = {produce:'Produce', deli:'Deli', bakery:'Bakery', dairy:'Dairy', drinks:'Drinks', pantry:'Pantry', snacks:'Snacks', frozen:'Frozen', other:'Your own'};
 var AISLE_LABEL = {produce:'From the produce aisle', deli:'From the deli', bakery:'From the bakery', dairy:'From the dairy aisle',
   drinks:'From the drinks aisle', pantry:'From the pantry aisle', snacks:'From the snack aisle', frozen:'From the freezer aisle', other:'Your own'};
-var KID_HUES = ['--c-main','--c-side','--c-fruit','--c-sweet'];
+var KID_HUES = ['--kid-1','--kid-2','--kid-3','--kid-4'];   /* a lunchbox's dot: non-text, so 3:1, and kept apart by lightness as well as hue */
 var DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 var DOWFULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

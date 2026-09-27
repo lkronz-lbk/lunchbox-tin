@@ -127,21 +127,25 @@ sit beside a screenshot of the planner is wrong.
 | Ground (page) | #E9EEE6 | #0E1815 |
 | Surface (card) | #FBFCF9 | #17251F |
 | Ink (text) | #16241E | #E6EEE7 |
-| Ink, quieter | #3E4D45 / #414C46 | #AFC1B6 / #B3BFB9 |
-| Line (dividers) / Line, strong (field and switch edges) | #CFDACB / #1E3329 | #2B3E36 / #5A8272 |
+| Ink, quieter (--ink-2 and --ink-3, now one color) | #3E4D45 | #AFC1B6 |
+| Line (dividers) / Line, strong (buttons, the tin) / Line, field (a field, a switch, a chip) | #CFDACB / #1E3329 / #6F8479 | #2B3E36 / #5A8272 / #5A8272 |
 | Accent (the green; buttons, links) | #2A5141 on #FBFCF9 | #81CBA8 on #0E1815 |
 | Accent, soft | #DCE8DF | #1F332A |
 | Warn / hot | #664204 / #7F310B | #E6B372 / #F4AD7F |
 
 The six compartment colors, light then dark: main #2A5141 / #81CBA8, side #6A4007 / #E6B372,
 fruit #84273E / #F1A9B9, sweet #503E7E / #C3B5E7, snack #444E14 / #C3CF6E, drink #204E62 /
-#85C6DF.
+#85C6DF. A lunchbox's dot is not text and keeps the lighter set, so two dots stay apart:
+#2E5A48, #8A5309, #A2304C, #57448A (dark #79C8A2, #E0A253, #EA8299, #A793DC).
 
 Every text color holds WCAG AAA against every surface it sits on: 7:1, or 4.5:1 for large text
-(24px, or 18.66px bold); the edge of a field or a switch holds 3:1. The quieter inks are nearly
-as dark as the ink because of that: hierarchy is size and weight, not paleness. A design that
+(24px, or 18.66px bold); the edge of a field, a switch or a chip holds 3:1. The quieter inks are
+nearly as dark as the ink because of that: hierarchy is size and weight, not paleness, and a
+state (this tab, this step, packed, gone) is said by shape, weight or a word, never by fading. A design that
 lightens a color for a softer look fails it. `npm run contrast` measures the site and the planner
-(2026-09-27; the colors before it were lighter, and the Canva kit needs the new ones). Corners are 20px, 12px and 8px. Fonts: **Familjen Grotesk** for headings (400 to 700),
+(2026-09-27; the colors before it were lighter, and the Canva kit needs the new ones).
+
+Corners are 20px, 12px and 8px. Fonts: **Familjen Grotesk** for headings (400 to 700),
 **Karla** for body (400 to 700), **IBM Plex Mono** for small labels and numbers (400 and 600); all
 three are on Google Fonts (the help page loads fewer weights, which is fine). The icons are in `public/icons/` and the marketing screenshots in `public/img/`
 (750 by 1624, with WebP twins).

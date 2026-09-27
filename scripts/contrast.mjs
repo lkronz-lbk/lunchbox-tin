@@ -11,11 +11,13 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve('public');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const TYPES = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.webp':'image/webp','.json':'application/json','.webmanifest':'application/manifest+json','.svg':'image/svg+xml'};
 const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(req.url.split('?')[0]); if(p.endsWith('/')) p += 'index.html';
+  let p; try { p = decodeURIComponent(req.url.split('?')[0]); } catch { res.writeHead(400); return res.end(); }
+  if(p.endsWith('/')) p += 'index.html';
   const f = path.join(ROOT, p);
   if(!f.startsWith(ROOT + path.sep) || !fs.existsSync(f) || fs.statSync(f).isDirectory()){ res.writeHead(404); return res.end(); }
   res.writeHead(200, {'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream'}); fs.createReadStream(f).pipe(res);
@@ -74,7 +76,7 @@ function measure(){
   }
   /* 1.4.11, which has no AAA: what marks out a control a parent must find (a field's edge, a
      switch's outline) holds 3:1 against what is around it */
-  for(const i of document.querySelectorAll('input:not([type=hidden]):not([type=radio]):not([type=checkbox]),textarea,select,.sw')){
+  for(const i of document.querySelectorAll('input:not([type=hidden]):not([type=radio]):not([type=checkbox]),textarea,select,.sw,.tg:not([aria-pressed="true"]),.choices label')){
     const r = i.getBoundingClientRect(); if(r.width < 1 || i.closest('[hidden],[aria-hidden="true"]')) continue;
     const cs = getComputedStyle(i); if(parseFloat(cs.borderTopWidth) < 1) continue;
     const {c: around} = behind(i.parentElement || i), edge = parse(cs.borderTopColor); if(!edge) continue;
@@ -94,7 +96,8 @@ for(const scheme of ['light', 'dark']){
   const ctx = await browser.newContext({ viewport:{width:390, height:844}, deviceScaleFactor:1, isMobile:true, hasTouch:true, colorScheme: scheme });
   await ctx.route(/googletagmanager|google-analytics/, r => r.fulfill({status:200, contentType:'text/javascript', body:''}));
   await ctx.addInitScript(() => {
-    const Real = Date, offset = new Real('2026-09-07T13:00:00Z').getTime() - Real.now();
+    let later = 0; try { later = Number(localStorage.getItem('contrast-days')) || 0; } catch(e){}
+    const Real = Date, offset = new Real('2026-09-07T13:00:00Z').getTime() + later * 86400000 - Real.now();
     function Fake(...a){ return a.length ? new Real(...a) : new Real(Real.now() + offset); }
     Fake.prototype = Real.prototype; Fake.now = () => Real.now() + offset; Fake.parse = Real.parse; Fake.UTC = Real.UTC;
     window.Date = Fake;
@@ -130,6 +133,11 @@ for(const scheme of ['light', 'dark']){
   await tap('[data-act="kidpick-on"]', 'kid pick on'); await tap('[data-act="box-done"]', 'done');
   await tap('[data-act="tab"][data-tab="pack"]', 'pack');
   if(await tap('[data-act="kid-start"]', 'kid pick')){ await check(page, scheme + ' app: the kid\'s pick'); await tap('[data-act="kid-exit"]', 'give it back'); }
+  /* the states paleness used to carry: a box packed, and, two days on, the days that have gone */
+  if(await tap('[data-act="tab"][data-tab="pack"]', 'pack') && await tap('[data-act="pack-all"]', 'packed')) await check(page, scheme + ' app: a packed box');
+  await page.evaluate(() => localStorage.setItem('contrast-days', '2')); await page.reload(); await wait(900);
+  await page.addStyleTag({ content: '#splash{display:none!important}' });
+  for(const t of ['pack', 'week']) if(await tap('[data-act="tab"][data-tab="'+t+'"]', t)) await check(page, scheme + ' app: ' + t + ', Wednesday, two days gone');
   /* the plan sheet opens only where billing is on, which this static server is not; its text uses the same tokens */
   await ctx.close();
 }
