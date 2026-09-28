@@ -8,7 +8,7 @@ import os
 
 OUT = 'store/screenshots'
 W, H = 1320, 2868
-GROUND, INK, INK2, LINE = (0xE9, 0xEE, 0xE6), (0x16, 0x24, 0x1E), (0x4A, 0x5C, 0x53), (0x1E, 0x33, 0x29)
+GROUND, INK, INK2, LINE = (0xE9, 0xEE, 0xE6), (0x16, 0x24, 0x1E), (0x3E, 0x4D, 0x45), (0x1E, 0x33, 0x29)
 HEAD = ImageFont.truetype('store/FamiljenGrotesk-Bold.ttf', 96)
 SUB = ImageFont.truetype('store/Karla-Medium.ttf', 46)
 
@@ -17,8 +17,8 @@ SHOTS = [
     ('pack',    '02-pack',    'Mornings: one box,\none check.',            'Today’s box, an ice-pack flag when it needs one, and the rest of the week coming up.'),
     ('kidpick', '03-kidpick', 'Hand them the phone.\nThey pick.',       'Tomorrow’s box, chosen from the week you already shopped for. A lunch they chose comes home emptier.'),
     ('shop',    '04-shop',    'The shopping list\nwrites itself.',      'Everything planned, grouped by aisle. Check off whatever you already have at home.'),
-    ('recipes', '05-recipes', 'Recipes that make\nsix lunches.',       'Two kid-tested ones come free. Scale the batch, switch between US measures and metric, and tick off what you already have.'),
-    ('cook',    '06-cook',    'Cook it one step\nat a time.',          'One step on the screen, with the amounts for just that step underneath it and a box to tick against each one as it goes in.'),
+    ('recipes', '05-recipes', 'Recipes that make\nsix lunches.',       'Two kid-tested ones come free. Scale the batch, switch between US measures and metric, and check off what you already have.'),
+    ('cook',    '06-cook',    'Cook it one step\nat a time.',          'One step on the screen, with the amounts for just that step underneath it and a box to check off for each one as it goes in.'),
     ('setup',   '07-rules',   'Your school’s rules,\nrespected.',       'Nut-free, cold-only, no ice pack, a short eating window. Foods are flagged, never silently dropped.'),
     ('foods',   '08-foods',   'Foods they’ll\nactually eat.',           'Start from what parents pack, add more from a long list of ideas, and tell it what came home. Next week’s draw learns.'),
 ]

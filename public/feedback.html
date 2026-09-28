@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;600;700&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
-:root{color-scheme:light dark;--ground:#E9EEE6;--ink:#16241E;--ink-2:#46584F;--ink-3:#78897F;--line:#CFDACB;--accent:#2E5A48}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ground:#0E1815;--ink:#E6EEE7;--ink-2:#A6BAAE;--ink-3:#7A8E84;--line:#2B3E36;--accent:#79C8A2}}
+:root{color-scheme:light dark;--ground:#E9EEE6;--ink:#16241E;--ink-2:#3E4D45;--ink-3:#3E4D45;--line:#CFDACB;--line-strong:#1E3329;--line-field:#6F8479;--accent:#2A5141;--accent-fg:#FBFCF9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ground:#0E1815;--ink:#E6EEE7;--ink-2:#AFC1B6;--ink-3:#AFC1B6;--line:#2B3E36;--line-strong:#5A8272;--line-field:#5A8272;--accent:#81CBA8;--accent-fg:#0E1815}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:"Karla","Helvetica Neue",sans-serif;font-size:16px;line-height:1.65}
 .wrap{max-width:660px;margin:0 auto;padding:48px 22px 80px}
@@ -26,14 +26,15 @@ a{color:var(--accent)}
 .back{display:inline-block;margin-top:34px;font-size:14px}
 strong{color:var(--ink)}
 label{display:block;font-weight:600;color:var(--ink);margin:18px 0 6px}
-input[type=email],input[type=text],textarea{width:100%;box-sizing:border-box;min-height:48px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);background:transparent;color:var(--ink);font:inherit}
+input[type=email],input[type=text],textarea{width:100%;box-sizing:border-box;min-height:48px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line-field);background:transparent;color:var(--ink);font:inherit}
 textarea{min-height:120px;resize:vertical}
-input:focus,textarea:focus{border-color:var(--accent);outline:none}
-.choices{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:0} .choices legend{display:block;font-weight:600;color:var(--ink);margin:18px 0 6px;padding:0;width:100%} .choices label{margin:0;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:1.5px solid var(--line);border-radius:999px;font-weight:400;cursor:pointer}
+input:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent);outline:none}
+.choices{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:0} .choices legend{display:block;font-weight:600;color:var(--ink);margin:18px 0 6px;padding:0;width:100%} .choices label{margin:0;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:1.5px solid var(--line-field);border-radius:999px;font-weight:400;cursor:pointer}
 .choices input{width:18px;height:18px;margin:0;accent-color:var(--accent);flex:none}
 .choices.stack{flex-direction:column;align-items:flex-start} .choices.stack label{border-radius:14px;padding:10px 14px;min-height:44px;text-align:left}
-.btn{display:inline-flex;align-items:center;min-height:48px;padding:0 22px;border-radius:14px;background:var(--accent);color:#FBFCF9;font-weight:600;border:0;font:inherit;font-weight:600;margin-top:22px;cursor:pointer}
+.btn{display:inline-flex;align-items:center;min-height:48px;padding:0 22px;border-radius:14px;background:var(--accent);color:var(--accent-fg);font-weight:600;border:0;font:inherit;font-weight:600;margin-top:22px;cursor:pointer}
 .hp{position:absolute;left:-9999px}
+::placeholder{color:var(--ink-2);opacity:1;font-style:italic}
 </style>
 </head>
 <body>

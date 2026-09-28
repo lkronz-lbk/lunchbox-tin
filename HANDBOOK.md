@@ -96,22 +96,18 @@ post. Liz corrected "tick" three times in the drafts of 2026-09-22 alone; it is 
 | mum, nappy, biscuit, crisps, sweets (as a category name) | mom, diaper, cookie, chips; the app's own category is "sweet", singular, and stays |
 | "at the weekend", "in hospital", "maths" | "on the weekend", "in the hospital", "math" |
 
-What still says "tick" today, for the one pull request that fixes it (intake row Q-004): under
-ten parent-visible strings in the planner (`public/app/index.html`, the pack list and the help
-sheet; the other sixty-odd matches are class names and code, which stay), five on the help page
-(`public/help.html`), one in the App Store description (`store/listing.md`), and six in the README.
-"The bin" and "millilitres" are in the help sheet and the help page, "cancelling" on the help page.
-"Morning review" survives in four emails, the README, and the planner's own paywall line. Until
-that lands, no new copy anywhere repeats any of them, and a post never says "tick". "Lunchbox" is
-one word everywhere and is the app's own word; it stays.
+Intake row Q-004 took all of these out of the planner, the help page, the terms, the emails, the
+store listing and the README. The code still says "tick" in about sixty class names and
+identifiers, which no parent sees, and they stay. The App Store description changes at the next
+version that can be edited. New copy never brings any of them back, and a post never says
+"tick". "Lunchbox" is one word everywhere and is the app's own word; it stays.
 
 ### Names and claims
 
 - The name is **Lunch Sorted**, two words; **the planner** for the app itself; the tabs are Pack,
   Week, Foods, Shop, Recipes and Account; **the kid's pick**; **the after-school review** for what
-  came home (the emails and the README still say "morning review": a fix waiting, not a second
-  name); **the Household plan**; **founding price** for today's price (never "forever": it is no
-  longer sold); **school rules** for the
+  came home (never "morning review", its old name); **the Household plan**; **founding price**
+  for today's price (never "forever": it is no longer sold); **school rules** for the
   flags; **Plan the week** and **Shuffle** as the app names them.
 - Never jargon, never an identifier, never "users". They are parents, households, kids, phones.
 - Every claim is one the app makes good on. Nothing is "healthy", and "balanced" only ever
@@ -131,15 +127,25 @@ sit beside a screenshot of the planner is wrong.
 | Ground (page) | #E9EEE6 | #0E1815 |
 | Surface (card) | #FBFCF9 | #17251F |
 | Ink (text) | #16241E | #E6EEE7 |
-| Ink, quieter | #4A5C53 / #6E7F75 (the site's third ink is #7B8C82) | #A6BAAE / #7A8E84 |
-| Line | #CFDACB | #2B3E36 |
-| Accent (the green; buttons, links) | #2E5A48 on #FBFCF9 | #79C8A2 on #0E1815 |
+| Ink, quieter (--ink-2 and --ink-3, now one color) | #3E4D45 | #AFC1B6 |
+| Line (dividers) / Line, strong (buttons, the tin) / Line, field (a field, a switch, a chip) | #CFDACB / #1E3329 / #6F8479 | #2B3E36 / #5A8272 / #5A8272 |
+| Accent (the green; buttons, links) | #2A5141 on #FBFCF9 | #81CBA8 on #0E1815 |
 | Accent, soft | #DCE8DF | #1F332A |
-| Warn / hot | #8A5A06 / #B4460F | #E0A253 / #F2A26E |
+| Warn / hot | #664204 / #7F310B | #E6B372 / #F4AD7F |
 
-The six compartment colors, light then dark: main #2E5A48 / #79C8A2, side #8A5309 / #E0A253,
-fruit #A2304C / #EA8299, sweet #57448A / #A793DC, snack #6B7A1F / #C3CF6E, drink #2B6B85 /
-#7FC3DE. Corners are 20px, 12px and 8px. Fonts: **Familjen Grotesk** for headings (400 to 700),
+The six compartment colors, light then dark: main #2A5141 / #81CBA8, side #6A4007 / #E6B372,
+fruit #84273E / #F1A9B9, sweet #503E7E / #C3B5E7, snack #444E14 / #C3CF6E, drink #204E62 /
+#85C6DF. A lunchbox's dot is not text and keeps the lighter set, so two dots stay apart:
+#2E5A48, #8A5309, #A2304C, #57448A (dark #79C8A2, #E0A253, #EA8299, #A793DC).
+
+Every text color holds WCAG AAA against every surface it sits on: 7:1, or 4.5:1 for large text
+(24px, or 18.66px bold); the edge of a field, a switch or a chip holds 3:1. The quieter inks are
+nearly as dark as the ink because of that: hierarchy is size and weight, not paleness, and a
+state (this tab, this step, packed, gone) is said by shape, weight or a word, never by fading. A design that
+lightens a color for a softer look fails it. `npm run contrast` measures the site and the planner
+(2026-09-27; the colors before it were lighter, and the Canva kit needs the new ones).
+
+Corners are 20px, 12px and 8px. Fonts: **Familjen Grotesk** for headings (400 to 700),
 **Karla** for body (400 to 700), **IBM Plex Mono** for small labels and numbers (400 and 600); all
 three are on Google Fonts (the help page loads fewer weights, which is fine). The icons are in `public/icons/` and the marketing screenshots in `public/img/`
 (750 by 1624, with WebP twins).
@@ -198,7 +204,7 @@ Four inlets, two inboxes, one queue.
 
 | Inlet | Where it lands | Notes |
 | --- | --- | --- |
-| The feedback form, `public/feedback.html` | Netlify Forms, notified to **forms@lunchsorted.app** | Email, what they were doing, what happened, would they keep it, ideas, and ticks against the planned list |
+| The feedback form, `public/feedback.html` | Netlify Forms, notified to **forms@lunchsorted.app** | Email, what they were doing, what happened, would they keep it, ideas, and checks against the planned list |
 | "Something is wrong" and "Ask a question" in the app's help sheet | **hello@lunchsorted.app** | The build and the phone are already in the body |
 | Replies to any email the app sends | **hello@lunchsorted.app** | Welcome, tester days 1, 3 and 6, trial reminders, sign-in links |
 | The private beta Facebook group | The group (the link is `BETA_GROUP` in `netlify/lib/mail.js`) | No API; read as a member, quote with the date, never a name |

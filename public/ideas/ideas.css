@@ -1,6 +1,6 @@
 /* The ideas pages: the help page's look, shared so a new article is one HTML file. */
-:root{color-scheme:light dark;--ground:#E9EEE6;--ink:#16241E;--ink-2:#46584F;--ink-3:#5F7067;--line:#CFDACB;--accent:#2E5A48}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ground:#0E1815;--ink:#E6EEE7;--ink-2:#A6BAAE;--ink-3:#7A8E84;--line:#2B3E36;--accent:#79C8A2}}
+:root{color-scheme:light dark;--ground:#E9EEE6;--ink:#16241E;--ink-2:#3E4D45;--ink-3:#3E4D45;--line:#CFDACB;--accent:#2A5141}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ground:#0E1815;--ink:#E6EEE7;--ink-2:#AFC1B6;--ink-3:#AFC1B6;--line:#2B3E36;--accent:#81CBA8}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:"Karla","Helvetica Neue",sans-serif;font-size:16px;line-height:1.65;overflow-wrap:break-word}
