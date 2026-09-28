@@ -349,10 +349,9 @@ forward).
       Where fonts.gstatic.com is unreachable, `LS_FONT_CACHE=<dir>` serves the brand faces
       from a cache (`fonts.css`, the woff2 files and a `map.txt` of "<url> <file>" lines)
       rather than letting the shot come out in the fallback face.
-- [ ] Reshoot `01-week.png` and `02-pack.png`: both were captured before the Babybel
-      rename and still carry the brand on the product page. `npm run dev`, then
-      `node scripts/store-shots.mjs` (it takes `LS_FONT_CACHE` too once it is given the
-      same block), then `scripts/store-compose.py`, which needs Pillow. There are eight
+- [x] Reshot on 2026-09-27 (no Babybel, the AAA colors); upload at the next editable version.
+      `node scripts/store-shots.mjs` serves `public/` itself and runs `scripts/store-compose.py`
+      (which needs Pillow); `node scripts/og.mjs` draws `public/img/og.png`. There are eight
       shots now — recipes and cook at 05/06, rules and foods moved to 07/08 — and
       `store/listing.md` lists all eight. A version already In Review cannot have its
       screenshots swapped without pulling the submission back, so upload at the next

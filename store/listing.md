@@ -128,13 +128,12 @@ the enrollment, so settle it before launch.
 
 ### Screenshots (6.9-inch, in this order)
 
-- [ ] Uploaded, regenerated after the last interface change
-      01-week and 02-pack were captured before the Babybel rename and still show it.
-      05-recipes and 06-cook still carry "tick" in their captions (fixed in
-      `scripts/store-compose.py`; they change when it next runs). 01-week should be taken
-      after kid's pick is on, so it shows Let Emma pick the week.
-      Reshoot and re-upload at the next editable moment: a version In Review cannot have
-      its screenshots swapped without pulling the submission back.
+- [x] Regenerated 2026-09-27 (`node scripts/store-shots.mjs`, `node scripts/iap-shot.mjs`):
+      the AAA colors, no Babybel, "check off" in the 05 and 06 captions.
+- [ ] Uploaded, with `store/iap-review.png` on both subscriptions. A version In Review cannot
+      have its screenshots swapped without pulling the submission back: upload at the next
+      editable moment. Still open from before: 01-week is taken before kid's pick is on, so
+      it does not show Let Emma pick the week.
 
 1. `01-week.png`: A week of lunches in about a minute.
 2. `02-pack.png`: Mornings: one box, one check.
@@ -330,8 +329,8 @@ The one worth a look:
 
 - [x] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated;
       signed in with them once and a week built, within a few days of submitting
-- [ ] Screenshots regenerated since the last interface change — 01-week and 02-pack
-      predate the Babybel rename, 05 and 06 say "tick"; see the note under Screenshots above
+- [ ] Screenshots uploaded: regenerated on 2026-09-27, waiting for an editable version; see
+      the note under Screenshots above
 - [x] Privacy policy URL loads and matches the App Privacy answers above — with one
       caveat: the Crash Data and Usage Data rows describe the day-one work that is on `dev`
       since 2026-09-22. Until `main` carries it the questionnaire stays at No for both, because
