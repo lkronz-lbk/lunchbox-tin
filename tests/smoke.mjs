@@ -2317,6 +2317,7 @@ try {
       return fetch('/api/household', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc, version: j.version }) }).then(r => r.status);
     }, marker);
     const merged = async marker => until(page, m => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === m && !f.deletedAt)), marker, 5500);   /* the merge measured up to 3.4s on a fast Mac; a CI runner is slower, and the toast is up for 6s */
+    const settled = () => until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.doc.updatedAt === JSON.parse(localStorage.getItem('lunchsorted')).updatedAt));
     const tapUndo = async () => { const up = await tapUndoOn(page, 'the toast is still up to tap Undo on'); if(up) await page.waitForTimeout(500); return up; };
 
     check('the other phone gets its change in first', await aheadOnServer('RaceOne') === 200);
@@ -2346,23 +2347,43 @@ try {
     check('and the compartment it was drawn into was never disturbed by any of it', back.inSlot, back);
     check('and Undo never says "Put back" over a food it did not restore', back.alive || !/Put back/.test(back.toast), back);
 
-    /* the photo Undo runs the same race */
-    await page.evaluate(id => {
-      const d = JSON.parse(localStorage.getItem('lunchsorted'));
-      const f = d.kids.filter(x => !x.deletedAt)[0].foods.find(x => x.id === id);
-      f.img = 'data:image/jpeg;base64,' + 'A'.repeat(600);
-      f.updatedAt = new Date(Date.now() + 1000).toISOString();   /* the boot pull merges by record stamp: this copy has to be the newer one */
-      localStorage.setItem('lunchsorted', JSON.stringify(d));
+    /* the photo Undo runs the same race. The photo arrives the way one taken on the other
+       phone would: on the server, then down to this phone by its pull. It used to be written
+       into localStorage under a page that still had the Undo's push due, stamped a second
+       ahead of the clock to win the boot pull's merge, and it failed now and then under load
+       (2026-09-25). Now this phone's own push lands first, so nothing on the page is left to
+       write over the seed, and the server copy is stamped just after every copy of the food,
+       so the pull keeps it. That stamp is "now" rather than ahead of it only because the
+       suite's clock never runs backwards (SUITE_START); a seed stamped after the photo
+       removal below would win the merge and hand Undo a photo that was never gone, which
+       the check before Undo is there to catch. */
+    check('this phone\u2019s own push has landed (photo)', await settled());
+    const seedPut = await page.evaluate(async id => {
+      const j = await fetch('/api/household').then(r => r.json());
+      const doc = JSON.parse(JSON.stringify(j.doc)), k = doc.kids.filter(x => !x.deletedAt)[0], f = k.foods.find(x => x.id === id);
+      const mine = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0].foods.find(x => x.id === id);
+      const after = t => t ? new Date(Date.parse(t) + 1).toISOString() : '';
+      const ts = [new Date().toISOString(), after(f.updatedAt), after(mine && mine.updatedAt)].sort().pop();
+      f.img = 'data:image/jpeg;base64,' + 'A'.repeat(600); f.updatedAt = ts;
+      return fetch('/api/household', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc, version: j.version }) }).then(r => r.status);
     }, slot.id);
+    check('the photo reaches the server', seedPut === 200, seedPut);
     await page.goto(BASE+'/app/'); await page.waitForLoadState('load');
     const seeded = await until(page, id => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0]; const f = k.foods.find(y => y.id === id); return !!(f && f.img); }, slot.id);
     check('the food carries a photo to remove', seeded, slot.id);
     if (!seeded) throw new Error('photo seed did not take; the rest of the block would click a sheet that never opens');
+    /* if waking stamped the document, its push goes out before the other phone's PUT, not during it */
+    check('this phone\u2019s own push has landed (after the photo)', await settled());
     check('the other phone gets in first again', await aheadOnServer('RaceTwo') === 200);
     await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(300);
     await page.click(`[data-act="food-photo"][data-id="${slot.id}"]`); await page.waitForTimeout(300);
     await page.click('[data-act="food-photo-clear"]'); await page.waitForTimeout(150);
     check('and their document merges in while the photo toast is up', await merged('RaceTwo'));
+    const gone = await page.evaluate(id => {
+      const f = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0].foods.find(y => y.id === id);
+      return { img: !!(f && f.img), updatedAt: f && f.updatedAt, now: new Date().toISOString() };
+    }, slot.id);
+    check('and the photo is still gone after it: the removal was the newer record, so Undo has something to undo', !gone.img, gone);
     await tapUndo();
     const pic = await page.evaluate(id => {
       const f = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0].foods.find(y => y.id === id);
@@ -2383,7 +2404,6 @@ try {
       if (a.what === 'recipe-live') return (j.doc.recipes || []).some(r => r.id === a.arg && !r.deletedAt);
       return false;
     }), {what, arg});
-    const settled = () => until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.doc.updatedAt === JSON.parse(localStorage.getItem('lunchsorted')).updatedAt));
     const undoUp = async re => (await page.$$eval('#toast [data-act="undo"]', a => a.length)) === 1 && re.test(await page.textContent('#toast'));
     const openSlot = async () => { await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250); await page.click(`[data-act="slot"][data-day="${slot.day}"][data-cat="${slot.cat}"]`); await page.waitForTimeout(300); };
     const writeIn = async name => { await openSlot(); await page.click('[data-act="write-in"]'); await until(page, () => !!document.getElementById('wiName')); await page.fill('#wiName', name); };
