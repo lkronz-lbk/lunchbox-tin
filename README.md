@@ -711,17 +711,6 @@ is: **Liz** for a dashboard, a form or a decision, **code** for a change here. S
 out by deleting it in the commit that does it.
 
 **Stripe, Netlify and the stores**
-- **Liz: Netlify's Production `STRIPE_PRICE_LIFETIME`** names a price that Stripe's live mode
-  does not have (the function log, 2026-09-30: `billing: prices No such price`). Until `main`
-  reads the prices one at a time, that blanks all of them in production: the site shows its
-  typed fallback, the web plan sheet has no price, the trial emails name none, and the iPhone
-  plan sheet lacks the founding line that the review screenshot shows; after it, only the log
-  still says so, every time the prices are read. Clear its Production value (forever is off
-  sale, and no production household ever bought it through Stripe; the forever households are
-  beta codes), then trigger a deploy of `main`, since functions read variables at deploy time.
-  `curl -s https://lunchsorted.app/api/billing` should then show the yearly and monthly prices,
-  the yearly with `"founding":true`. Pointing it at the live $79 price instead would put
-  "Cost: $79, once" on every beta household's Subscription pane.
 - **Liz: Netlify's `dev-server` context** (Preview Server & Agent Runners) still points
   `STRIPE_PRICE_YEAR`/`_MONTH` at the old test prices, now archived, so a checkout there fails,
   and **Branch deploys** (staging) still has the old yearly one ($29 a year on staging's
