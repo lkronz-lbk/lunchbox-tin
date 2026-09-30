@@ -3507,73 +3507,100 @@ try {
        RESEND_API_KEY into the authorization header, a line break before the key or inside it made
        fetch refuse the request in words that quote the header, and the sign-in function, the welcome
        and both reminder jobs log those words. The build refuses anything but the key alone. A running
-       function cannot, as that would stop every sign-in link: it drops a space or a line break around
-       the key, and refuses one inside it, which can never work, before fetch sees it. The fake keys
-       are short, so nothing mistakes them for real ones */
+       function cannot, as that would stop every sign-in link: it drops whitespace around the key, and
+       refuses before fetch sees it only what fetch could never send. The fake keys are short, so
+       nothing mistakes them for real ones */
     const mailLib = await import('../netlify/lib/mail.js');
     const { inspect, format } = await import('node:util');
     const KEY = 're_Qx7_Zk42', hidden = (s) => !/Qx7|Zk42/.test(String(s)), shown = (e) => e ? [e.message, e.stack, inspect(e)].join('\n') : '';
-    const told = (env, key) => { const was = { e: process.env.SITE_ENV, k: process.env.RESEND_API_KEY }; process.env.SITE_ENV = env; process.env.RESEND_API_KEY = key;
-      try { return mailLib.resendKey() === key ? null : 'changed'; } catch (e) { return String(e.message); } finally { putEnv('SITE_ENV', was.e); putEnv('RESEND_API_KEY', was.k); } };
-    const pasted = [['production', KEY + '\n'], ['staging', KEY + '\r\n'], ['production', '\n' + KEY], ['production', 're_Qx7\n_Zk42'], ['preview', KEY + ' '], ['production', '"' + KEY + '"'], ['production', 'Bearer ' + KEY]].map(([env, key]) => told(env, key));
-    check('a Resend key pasted with a line break, a space or anything else, wherever it falls, is refused in any context, in words that hold no key; the key alone, underscores and all, is not',
-      pasted.every(m => !!m && /^RESEND_API_KEY must be/.test(m) && hidden(m)) && told('production', KEY) === null && told('staging', 're_Qx7Zk42') === null, pasted);
+    const told = (key) => { const was = process.env.RESEND_API_KEY; process.env.RESEND_API_KEY = key;
+      try { return mailLib.resendKey() === key ? null : 'changed'; } catch (e) { return String(e.message); } finally { putEnv('RESEND_API_KEY', was); } };
+    const pasted = [KEY + '\n', KEY + '\r\n', '\n' + KEY, 're_Qx7\n_Zk42', KEY + ' ', ' \n', '"' + KEY + '"', 'Bearer ' + KEY].map(told);
+    check('a Resend key pasted with a line break, a space or anything else, wherever it falls, is refused in words that hold no key; the key alone, underscores and all, is not',
+      pasted.every(m => !!m && /^RESEND_API_KEY must be/.test(m) && hidden(m)) && told(KEY) === null && told('re_Qx7Zk42') === null, pasted);
     const { spawnSync } = await import('node:child_process');
-    const build = (key) => spawnSync(process.execPath, [path.join(ROOT, '..', 'scripts', 'migrate.mjs')], { env: { SITE_ENV: 'production', RESEND_API_KEY: key }, encoding: 'utf8', timeout: 30000 });
-    const refused = build(KEY + '\n'), built = build(KEY);
-    check('and the build refuses the deploy over it, loudly, naming the variable and not the key; the key alone builds',
-      refused.status === 1 && /deploy refused: RESEND_API_KEY must be/.test(refused.stderr) && hidden(refused.stdout + refused.stderr) && built.status === 0 && /no database URL, skipping/.test(built.stdout),
-      { refused: [refused.status, refused.stderr], built: [built.status, built.stdout, built.stderr] });
+    const build = (env) => spawnSync(process.execPath, [path.join(ROOT, '..', 'scripts', 'migrate.mjs')], { env: { SITE_ENV: 'production', ...env }, encoding: 'utf8', timeout: 30000 });
+    const refused = build({ RESEND_API_KEY: KEY + '\n' }), built = build({ RESEND_API_KEY: KEY }), both = build({ RESEND_API_KEY: KEY + '\n', STRIPE_SECRET_KEY: 'sk_live_Pasted42\n' });
+    check('and the build refuses the deploy over it, loudly, naming the variable and not the key, and names both at once when Stripe\'s is bad too; the key alone builds',
+      refused.status === 1 && /deploy refused: RESEND_API_KEY must be/.test(refused.stderr) && hidden(refused.stdout + refused.stderr) && built.status === 0 && /no database URL, skipping/.test(built.stdout) &&
+      both.status === 1 && /deploy refused: STRIPE_SECRET_KEY must be/.test(both.stderr) && /deploy refused: RESEND_API_KEY must be/.test(both.stderr) && hidden(both.stderr) && !both.stderr.includes('Pasted42'),
+      { refused: [refused.status, refused.stderr], built: [built.status, built.stdout, built.stderr], both: [both.status, both.stderr] });
     /* send() goes past the capture only while __LS_MAIL is away, and __LS_RESEND_FETCH takes its
-       request. Every send reads the key and the hook and hands the request over before its first
-       await, so all three go back at once, before anything else in this process can see them */
+       request. Each send here reads the key and the hook and hands the request over before its first
+       await, so all three go back at once, before anything else in this process can see them. What
+       this process writes to its console while the sends run is kept, and echoed: no line of it may
+       hold the key, whichever console method it came through */
     const msg = { to: 'resend-check@example.com', subject: 'x', text: 'x', html: '<p>x</p>' };
     const sending = (key, hook) => { const was = { m: globalThis.__LS_MAIL, k: process.env.RESEND_API_KEY, h: globalThis.__LS_RESEND_FETCH };
       globalThis.__LS_MAIL = null; process.env.RESEND_API_KEY = key; globalThis.__LS_RESEND_FETCH = hook;
       try { return mailLib.send(msg).then(() => null, e => e); } finally { globalThis.__LS_MAIL = was.m; putEnv('RESEND_API_KEY', was.k); globalThis.__LS_RESEND_FETCH = was.h; } };
+    const logged = [], watching = async (work) => { const was = {};
+      for (const m of ['log', 'info', 'warn', 'error', 'debug']) { was[m] = console[m]; console[m] = (...a) => { logged.push(format(...a)); was[m].apply(console, a); }; }
+      try { return await work(); } finally { Object.assign(console, was); } };
     const heard = [], answer = (url, init) => { heard.push(init.headers.authorization); return Promise.resolve(new Response('{"id":"sent"}', { status: 200 })); };
-    const around = await Promise.all([KEY + '\n', '\n' + KEY, ' ' + KEY + '\r\n'].map(k => sending(k, answer)));
+    const refusal = (url, init) => { heard.push(init.headers.authorization); return Promise.resolve(new Response('{"statusCode":403,"message":"API key is invalid","name":"validation_error"}', { status: 403 })); };
+    const around = await watching(() => Promise.all([KEY + '\n', '\n' + KEY, ' ' + KEY + '\r\n'].map(k => sending(k, answer))));
     check('but a running function sends with the key alone when a line break or a space only sits around it, since refusing there would stop every sign-in link',
       around.every(e => e === null) && heard.length === 3 && heard.every(h => h === 'Bearer ' + KEY), { around: around.map(e => e && e.message), heard });
-    const inside = await sending('re_Qx7\n_Zk42', answer);
-    check('and one inside the key, which can never work, is refused before fetch sees it, in words that hold no key',
-      !!inside && /^RESEND_API_KEY has a space or a line break inside it/.test(inside.message) && hidden(shown(inside)) && heard.length === 3, inside && inside.message);
+    const zeroWidth = String.fromCharCode(0x200b);   /* invisible, not whitespace to trim(), and more than a header can carry: a copy from a web page can hold one */
+    const never = await watching(() => Promise.all(['re_Qx7\n_Zk42', 're_Qx7\r_Zk42', zeroWidth + KEY, ' \r\n'].map(k => sending(k, answer))));
+    check('and a key fetch could never send, with a line break or a character no header can carry left in it, or nothing once trimmed, is refused before fetch sees it, in words that hold no key',
+      never.every(e => !!e && /^RESEND_API_KEY (has a line break or a character no request can carry in it|holds only spaces or line breaks), so nothing was sent/.test(e.message) && hidden(shown(e))) && heard.length === 3,
+      never.map(e => e && e.message));
+    const spaced = await watching(() => sending('re_Qx7 _Zk42', refusal));
+    check('while anything else a header can carry, a space inside the key say, goes to Resend as it is, and is refused there in Resend\'s own words',
+      !!spaced && /^Resend 403: /.test(spaced.message) && heard.length === 4 && heard[3] === 'Bearer re_Qx7 _Zk42', { spaced: spaced && spaced.message, heard });
     /* the key itself is whole from here on: the hook spoils the header on its way into the real fetch,
        as a line break pasted before the key would, and points it at a port fetch never opens, so
        nothing leaves the machine */
     const spoil = (url, init) => fetch('http://127.0.0.1:9/', { ...init, headers: { ...init.headers, authorization: init.headers.authorization.replace('Bearer ', 'Bearer \n') } });
     const theirs = await spoil('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + KEY } }).then(() => null, e => e);
-    check('fetch\'s own refusal of that header quotes the Resend key, as it does Stripe\'s', shown(theirs).includes('Zk42'), theirs && theirs.message);
+    check('the premise, as for Stripe: fetch\'s own refusal of a line break before the key quotes the key whole, so without send()\'s catch the lines below would hold it',
+      shown(theirs).includes('Zk42'), theirs && theirs.message);
     const broken = (url, init) => Promise.resolve(new Response(new ReadableStream({ start(c) { c.error(new TypeError('cut off: ' + init.headers.authorization)); } }), { status: 502 }));   /* an error answer that breaks off, in the worst words */
-    const refusal = () => Promise.resolve(new Response('{"statusCode":403,"message":"API key is invalid","name":"validation_error"}', { status: 403 }));
-    const hang = (url, init) => new Promise((_, reject) => init.signal ? init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }) : reject(new Error('no time limit: ' + init.headers.authorization)));
-    const t0 = Date.now(), slow = sending(KEY, hang);
-    const [none, cut, words] = await Promise.all([sending(KEY, spoil), sending(KEY, broken), sending(KEY, refusal)]);
-    const late = await slow, waited = Date.now() - t0;
+    const echoing = (url, init) => Promise.resolve(new Response('{"message":"invalid: ' + init.headers.authorization + ' in https://lunchsorted.app/api/auth/verify?t=Tok3nQx7&b=1, code ABCD-EF23"} ' + 'x'.repeat(2000), { status: 422 }));   /* an error answer that quotes what it was sent, at length */
+    const hang = (url, init) => new Promise((_, reject) => init.signal   /* the real four-second timer, then the worst words */
+      ? init.signal.addEventListener('abort', () => reject(new DOMException('gave up on ' + init.headers.authorization, 'TimeoutError')), { once: true })
+      : reject(new Error('no time limit: ' + init.headers.authorization)));
+    const t0 = Date.now();
+    const [none, cut, words, echoed, late] = await watching(async () => {
+      const slow = sending(KEY, hang);
+      return [...await Promise.all([sending(KEY, spoil), sending(KEY, broken), sending(KEY, refusal), sending(KEY, echoing)]), await slow];
+    });
+    const waited = Date.now() - t0;
     check('but what send() throws in its place names no part of it, in its message, its stack or anything it carries, whether no answer came, an error answer broke off, or the four seconds ran out',
       !!none && /^No answer from Resend \(/.test(none.message) && !!late && late.message === none.message && waited >= 3900 && waited < 10000 &&
       !!cut && /^Resend answered with an error, but the answer could not be read/.test(cut.message) && [none, cut, late].every(e => hidden(shown(e)) && !/Bearer/.test(shown(e)) && e.cause === undefined),
       { none: none && none.message, cut: cut && cut.message, late: late && late.message, waited });
-    check('and Resend\'s own words about a refusal still come through, since they never quote the key',
+    /* a guard, not a proof: the answer is the test's own. Resend's error answers never quote a key
+       (resend.com/docs/api-reference/errors), so its words are kept for the log */
+    check('and Resend\'s own words about a refusal still come through',
       !!words && words.message === 'Resend 403: {"statusCode":403,"message":"API key is invalid","name":"validation_error"}', words && words.message);
+    check('cut short, and with anything shaped like a key, a sign-in link\'s token or a sign-in code blanked, should an answer ever quote what it was sent',
+      !!echoed && /^Resend 422: \{"message":"invalid: Bearer re_/.test(echoed.message) && echoed.message.length <= 'Resend 422: '.length + 300 && hidden(shown(echoed)) && !echoed.message.includes('ABCD-EF23'),
+      echoed && echoed.message);
     /* and through the sign-in function, whose last catch logs the whole error, stack and all: a link
        that cannot be sent fails the request, and a welcome that cannot be sent never fails the sign-in.
-       Called straight, with no client address, so this machine's sign-in allowance is not spent; the
-       two addresses leave no row behind, as the numbers page counts every one */
+       Unlike the sends above, the capture, the key and the hook stay away across two whole handler
+       calls and their database waits; the page is signed out and idle, so nothing else sends mail
+       meanwhile. Called straight, with no client address, so this machine's sign-in allowance is not
+       spent; the two addresses leave no row behind, as the numbers page counts every one */
     const post = (p, body) => authHandler(new Request('http://localhost' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }), {});
     const asked = await (await post('/api/auth/request', { email: 'resend-welcome@example.com' })).json();   /* its link is captured as usual */
-    const logged = [], ce = console.error, was = { m: globalThis.__LS_MAIL, k: process.env.RESEND_API_KEY, h: globalThis.__LS_RESEND_FETCH };
+    const was = { m: globalThis.__LS_MAIL, k: process.env.RESEND_API_KEY, h: globalThis.__LS_RESEND_FETCH };
     let link = null, signedIn = null;
-    console.error = (...a) => { logged.push(format(...a)); };
-    globalThis.__LS_MAIL = null; process.env.RESEND_API_KEY = KEY; globalThis.__LS_RESEND_FETCH = spoil;
-    try {
-      link = await post('/api/auth/request', { email: 'resend-link@example.com' });
-      signedIn = await post('/api/auth/verify', { token: new URL(asked.devLink).searchParams.get('t'), kind: 'native' });
-    } finally { console.error = ce; globalThis.__LS_MAIL = was.m; putEnv('RESEND_API_KEY', was.k); globalThis.__LS_RESEND_FETCH = was.h; }
+    await watching(async () => {
+      globalThis.__LS_MAIL = null; process.env.RESEND_API_KEY = KEY; globalThis.__LS_RESEND_FETCH = spoil;
+      try {
+        link = await post('/api/auth/request', { email: 'resend-link@example.com' });
+        signedIn = await post('/api/auth/verify', { token: new URL(asked.devLink).searchParams.get('t'), kind: 'native' });
+      } finally { globalThis.__LS_MAIL = was.m; putEnv('RESEND_API_KEY', was.k); globalThis.__LS_RESEND_FETCH = was.h; }
+    });
     await db.query(`DELETE FROM users WHERE email LIKE 'resend-%@example.com'`); await db.query(`DELETE FROM magic_links WHERE email LIKE 'resend-%@example.com'`); await db.query(`DELETE FROM rate_events WHERE key LIKE 'link:resend-%@example.com'`);
-    check('and a sign-in link that cannot be sent fails the request, a welcome that cannot be sent still signs in, and neither log line holds the key',
-      !!link && link.status === 500 && !!signedIn && signedIn.status === 200 && logged.some(l => /^api-auth Error: No answer from Resend/.test(l)) && logged.some(l => /^welcome email No answer from Resend/.test(l)) && logged.every(l => hidden(l) && !/Bearer/.test(l)),
+    check('and a sign-in link that cannot be sent fails the request, while a welcome that cannot be sent still signs in, each logged in our own words',
+      !!link && link.status === 500 && !!signedIn && signedIn.status === 200 && logged.some(l => /^api-auth Error: No answer from Resend/.test(l)) && logged.some(l => /^welcome email No answer from Resend/.test(l)),
       { link: link && link.status, signedIn: signedIn && signedIn.status, logged });
+    check('and nothing this process wrote to its console while the sends ran holds the key, whichever console method it came through', logged.length >= 2 && logged.every(l => hidden(l)), logged);
   }
   const WH = 'whsec_test_secret';
   const sign = (body, t = Math.floor(Date.now() / 1000), secret = WH) => `t=${t},v1=${crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;

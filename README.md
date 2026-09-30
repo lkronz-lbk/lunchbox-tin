@@ -761,14 +761,18 @@ out by deleting it in the commit that does it.
   lifted and nothing for sale on the web or in the iPhone app. This item comes out only after a
   production deploy that uses the new value has gone through, which its build log shows with
   `migrate:` lines where a refusal says `deploy refused:`.
-- **Liz, before `main` takes the Resend key check: production's `RESEND_API_KEY`** must be
-  the key alone, with the Builds scope as well as Functions, as `STRIPE_SECRET_KEY` now is. A
-  space or a line break pasted around it sends mail today, and a running function still would,
-  but main's deploy is refused over it (the live one stays up and keeps sending). Nobody can
-  read the key to check, and Resend never shows a key twice, so settling it means a new key in
-  Resend with the old one's permission, pasted into production, and the old key deleted only
-  after `main` has deployed with the new one. If one value serves every context with the
-  Builds scope, the check's own deploy preview and dev's next deploy have already tried it.
+- **Liz: `RESEND_API_KEY`, the key alone in every context, before `main` takes the Resend key
+  check.** Each value is `re_` then letters, digits and underscores, with nothing pasted around
+  it, and the variable needs the Builds scope as well as Functions: without it the build never
+  sees the key and the check does nothing. With it, anything more refuses the deploy, even a
+  space or a line break after the key, which sends mail today; the last good deploy stays live
+  with the key it was built with, and keeps sending. Nobody could read the keys, so each
+  context's next deploy is the first time the pattern meets its key: this check's deploy
+  preview, then dev's, then main's. Resend never shows a key twice, so a refused key means a new
+  one with the old one's permission, and the old one deleted only after a deploy with the new
+  value has gone through (`migrate:` lines in its build log, where a refusal says `deploy
+  refused:`); if a new key is refused too, the pattern in `resendKey()` is what to fix.
+  Production's key belongs to Production alone: a deploy preview runs any branch's code.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
   Store"; change it the same day (to the store link once it is live).
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
@@ -993,11 +997,15 @@ writes the same one.
   emails; without a key, production refuses and a deploy with `DEV_LINKS=1` (or the test
   suite) returns the link and code to the caller instead. The key must be the key alone, `re_`
   then letters, digits and underscores: the build refuses the deploy over anything more, naming
-  the variable, never the value, so give it the Builds scope as well as Functions. A running
-  function cannot refuse it without stopping every sign-in link, so it drops a space or a line
-  break around the key and refuses only one inside it, which could never work. A send that gets
-  no answer in four seconds, or an error answer it cannot read, is logged in fixed words, never
-  fetch's own, which can quote the authorization header, key and all. `SITE_ENV` is set per context in the Netlify UI (and in `netlify.toml` for the build).
+  the variable, never the value, as long as the variable has the Builds scope as well as
+  Functions (without it the build never sees the key). A running function cannot refuse the key
+  without stopping every sign-in link, so it drops whitespace around it and refuses only what
+  fetch could never send: nothing left, a line break still in it, or a character no header can
+  carry. Anything else goes to Resend, whose refusal is logged in its own words
+  (`Resend 403: …`), cut to 300 letters, with anything shaped like a key, a sign-in link's token
+  or a sign-in code blanked. A send that gets no answer (the network failed, or four seconds
+  passed), or an error answer it cannot read, is logged in fixed words, never fetch's own, which
+  can quote the authorization header, key and all. `SITE_ENV` is set per context in the Netlify UI (and in `netlify.toml` for the build).
   `REVIEW_EMAIL` and `REVIEW_CODE` (production only, for App Review): that one address signs
   in with that standing code and is sent no email; eight or more letters and digits, and
   nothing else about it is special.
