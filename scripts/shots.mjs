@@ -50,7 +50,7 @@ if (FONTS) {
    left after a Thursday. The app reads the clock in a dozen places; pin it once. */
 await ctx.addInitScript(() => {
   const Real = Date;
-  const offset = new Real('2026-09-07T13:00:00Z').getTime() - Real.now();
+  const offset = new Real('2026-09-14T13:00:00Z').getTime() - Real.now();   /* a Monday, and not Labor Day */
   function Fake(...a){ return a.length ? new Real(...a) : new Real(Real.now() + offset); }
   Fake.prototype = Real.prototype;
   Fake.now = () => Real.now() + offset;
@@ -137,7 +137,7 @@ await p.click('#sheetClose'); await wait(400);
 /* and into Monday's main compartment, which is the box the pack shot is of */
 await p.click('[data-act="tab"][data-tab="week"]'); await wait(400);
 await toEmma();
-await p.click('[data-act="slot"][data-day="2026-09-07"][data-cat="main"]'); await wait(500);
+await p.click('[data-act="slot"][data-day="2026-09-14"][data-cat="main"]'); await wait(500);
 const pickSalad = await p.evaluate(() => {
   const hit = [...document.querySelectorAll('[data-act="pick"]')].find(b => /Mediterranean quinoa salad/.test(b.textContent));
   if (hit) hit.click();

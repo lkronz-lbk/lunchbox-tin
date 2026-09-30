@@ -19,7 +19,7 @@ const ctx = await browser.newContext({ viewport:{width:375,height:812}, deviceSc
 /* a Monday morning, the way scripts/shots.mjs pins it: shot on a Thursday night, day 1 would be two lunches and "Tomorrow" */
 await ctx.addInitScript(() => {
   const Real = Date;
-  const offset = new Real('2026-09-07T13:00:00Z').getTime() - Real.now();
+  const offset = new Real('2026-09-14T13:00:00Z').getTime() - Real.now();   /* a Monday, and not Labor Day */
   function Fake(...a){ return a.length ? new Real(...a) : new Real(Real.now() + offset); }
   Fake.prototype = Real.prototype;
   Fake.now = () => Real.now() + offset;
@@ -68,7 +68,7 @@ if (await page.$('[data-act="kid-start"]')) {
 }
 
 /* day 6: the morning after a packed box */
-await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);
+await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; const y = new Date(); y.setDate(y.getDate() - 3); y.setHours(0,0,0,0);   /* Friday's box, a school day, not Sunday's */
   const iso = y.getFullYear()+'-'+String(y.getMonth()+1).padStart(2,'0')+'-'+String(y.getDate()).padStart(2,'0');
   const slots = {}; for (const c of ['main','side','fruit','sweet']) { const f = k.foods.find(x => x.c === c && !x.deletedAt); if (f) slots[c] = f.id; }
   k.past = [{d: iso, dow: y.getDay(), slots, lock: {}, kidPick: {}}]; k.packed = k.packed || {}; k.packed[iso] = {main:{at:new Date().toISOString(), by:null}};

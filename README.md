@@ -49,13 +49,21 @@ throwing app script cannot leave it up forever. From there:
   is shown locked when all of them are. Week's header is one line — the title, the arrow to next
   week, Plan the week — and each day's header carries its lock and its Shuffle, two 44px icons.
   **No lunch** (`day.off`, one flag per day, stamped like any change to the day so it syncs and
-  merges by the day's own stamp): "No lunch today" beside the box title on Pack and under each
-  day's tin on Week takes the day off — no box to pack, nothing on the list, never asked about,
-  never picked, no reminder — leaving its foods in place, and the line that replaces the tin
-  ("No lunch today. Nothing to pack, nothing on the list.") carries **Put it back**; the toast
-  offers Undo. A day that has gone gets no button and cannot be taken off; a packed box gets no
-  button; a caretaker gets neither. Coming up says "no lunch" for such a day, and a re-plan keeps
-  the flag. A day that has gone (its header says "· home") is one line on Week, the main and a count with
+  merges by the day's own stamp): "No lunch today" (tomorrow, or the day's name — `relWord`)
+  beside the box title on Pack and at the end of each day's chip row on Week takes the day off —
+  no box to pack, nothing on the list, never asked about (the archive keeps the flag), never
+  picked, no reminder — leaving its foods in place, and the line that replaces the tin ("No lunch
+  today. Nothing to pack, nothing on the list.", on `--ground` so it reads as a state, not a card)
+  carries **Put it back**; the toast ("No lunch today — nothing to pack, nothing to buy") offers
+  Undo. A box already marked Packed comes off with the day (its ticks are un-ticked, and Undo
+  ticks them back). A day that has gone gets no button, cannot be taken off and, if it was off,
+  stays off with no gone line or sheet; a caretaker sees the state and no button. Coming up and a
+  folded second box say "no lunch" for such a day; Week's count is of lunches, not days; a re-plan
+  keeps the flag and leaves the day's foods as they are (no draw, no rule count); a week whose
+  remaining days are all off is done, on Shop as on Pack. Two phones: the newer stamp wins the
+  day whole, so a No lunch on one phone gives way to a later edit of that day on the other
+  (Plan the week there re-stamps every day ahead), and a No lunch discards the other phone's
+  older swap of that day. A day that has gone (its header says "· home") is one line on Week, the main and a count with
   how the box went beside it in three words (`reviewShort`: all eaten, 2 came home, 3 of 4 eaten,
   nothing counted, not answered), and opens a read-only sheet showing the box as it was packed — every
   compartment it had, even one switched off since. The day lock refuses a gone day and a day with
@@ -886,9 +894,10 @@ writes the same one.
   plan, the foods in it and the checks (no rules, allergens, history or addresses), cannot
   push (the server refuses, and the app says "Only a parent can change the plan"), and
   their checks stay on their phone. Nothing is drawn for a caretaker only to refuse: every
-  control on their screens is one in `HELPER_OK`, and the smoke suite walks their five tabs to
-  say so — Plan the week, Shuffle, the locks, the picks, No lunch, the settings, the star and
-  the pantry check are not there, not blocked.
+  control on their screens is one in `HELPER_OK`, and the smoke suite walks their six tabs, the
+  two Account pages and the Lunchboxes sheet to say so — Plan the week, Shuffle, the locks, the
+  picks, No lunch, Ideas, the photos, Remove, the backup, Clear the plans, Add a lunchbox, the
+  settings, the star and the pantry check are not there, not blocked.
 - **Leaving** a household leaves the lunches with it: the phone starts fresh in its own
   empty household. Being removed signs that person's phones out; whatever is on their phone
   stays there. **Delete my account and data** — the only irreversible control, gated on

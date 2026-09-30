@@ -32,12 +32,14 @@ const ctx = await browser.newContext({ viewport:{width:440,height:956}, deviceSc
    dozen places; pin it to a Monday once, the way scripts/shots.mjs does. */
 await ctx.addInitScript(() => {
   const Real = Date;
-  const offset = new Real('2026-09-07T13:00:00Z').getTime() - Real.now();
+  const offset = new Real('2026-09-14T13:00:00Z').getTime() - Real.now();   /* a Monday, and not Labor Day */
   function Fake(...a){ return a.length ? new Real(...a) : new Real(Real.now() + offset); }
   Fake.prototype = Real.prototype;
   Fake.now = () => Real.now() + offset;
   Fake.parse = Real.parse; Fake.UTC = Real.UTC;
   window.Date = Fake;
+  /* the pictures are of a phone, where the list can be sent; headless Chromium has no share sheet */
+  Object.defineProperty(navigator, 'share', { value: () => Promise.resolve(), configurable: true });
 });
 const page = await ctx.newPage();
 page.on('pageerror', e => console.error('page error:', e.message));
@@ -51,6 +53,12 @@ await page.fill('#obName', 'Emma');
 await page.click('[data-act="ob-go"]'); await wait(900);
 if(await page.$('[data-act="ob-later"]')) { await page.click('[data-act="ob-later"]'); await wait(400); }
 
+/* the kid's say goes on first: Week then carries "Let Emma pick the week", half of what that screen sells */
+await page.click('[data-act="tab"][data-tab="week"]'); await wait(400);
+await page.click('[data-act="box-settings"]'); await wait(400);
+await page.click('[data-act="kidpick-on"]'); await wait(300);
+await page.click('[data-act="box-done"]'); await wait(300);
+
 /* 1 · the week */
 await page.click('[data-act="tab"][data-tab="week"]'); await wait(400);
 await page.evaluate(() => window.scrollTo(0, 0));
@@ -58,7 +66,6 @@ await shot('week');
 
 /* 2 · the lunchbox settings: the kid gets a say, and the school rules are in view */
 await page.click('[data-act="box-settings"]'); await wait(400);
-await page.click('[data-act="kidpick-on"]'); await wait(300);
 await page.evaluate(() => { const h = [...document.querySelectorAll('#view *')].find(e => e.children.length === 0 && /^school rules$/i.test(e.textContent.trim())); if (h) window.scrollTo(0, h.getBoundingClientRect().top + window.scrollY - 10); });
 await wait(300);
 await shot('setup');

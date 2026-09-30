@@ -228,6 +228,10 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
   a.kids[0].eaten['2026-09-01'] = {main:{foodId:'f1', r:'none', at:t1, by:'mem_a'}}; b.kids[0].eaten['2026-09-01'] = {side:{foodId:'f2', r:'left', at:t2, by:'mem_b'}};
   a.kids[0].settings = {days:[1,2,3,4,5], review:false, homeAt:'17:30', updatedAt:t2}; b.kids[0].settings = {days:[1,2,3,4,5], review:true, homeAt:'15:00', updatedAt:t1};
   m = M.merge(a, b);
+  a = clone(); b = clone();
+  a.kids[0].week = { id:'wk_2', kidId:'kid_1', start:'2026-09-07', createdAt:t1, updatedAt:t2, days:[{ d:'2026-09-09', dow:3, slots:{main:'f1'}, lock:{}, kidPick:{}, over:{}, off:true, updatedAt:t2 }] };
+  b.kids[0].week = { id:'wk_2', kidId:'kid_1', start:'2026-09-07', createdAt:t1, updatedAt:t1, days:[{ d:'2026-09-09', dow:3, slots:{main:'f1'}, lock:{}, kidPick:{}, over:{}, updatedAt:t1 }] };
+  check('merge: a day taken off on this phone stays off on the other, by the day\'s own stamp', M.merge(a, b, '2026-09-01').kids[0].week.days[0].off === true && M.merge(b, a, '2026-09-01').kids[0].week.days[0].off === true);
   check('merge: a Didn’t get to it answer travels like any other, and the newer what-came-home settings win', m.kids[0].eaten['2026-09-01'].main.r === 'none' && m.kids[0].eaten['2026-09-01'].side.r === 'left' && m.kids[0].settings.review === false && m.kids[0].settings.homeAt === '17:30');
   {
     const wk = (stamp) => ({ id:'wk_1', kidId:'kid_1', start:'2026-09-07', createdAt:t1, updatedAt:stamp, days:[
@@ -778,11 +782,14 @@ try {
     const shopBefore = await page.$$eval('#view .item.shopline', a => a.length);
     await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
     const wasPacked = !!(await page.$('[data-act="pack-all"][aria-pressed="true"]'));
-    check('a packed box offers no No lunch', !wasPacked || (await page.$$eval('[data-act="no-lunch"]', a => a.length)) === 0);
-    if (wasPacked) { await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300); }   /* un-tick: the button is for a box still to pack */
-    check('Pack offers No lunch today beside the box', (await page.$$eval('[data-act="no-lunch"]', a => a.map(b => b.textContent.trim()))).join('|') === 'No lunch today', await page.$$eval('[data-act="no-lunch"]', a => a.map(b => b.textContent.trim())));
+    if (!wasPacked) { await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300); }   /* the snow-day call comes after the box was ticked */
+    check('Pack offers No lunch today beside the box, packed or not', (await page.$$eval('[data-act="no-lunch"]', a => a.map(b => b.textContent.trim()))).join('|') === 'No lunch today', await page.$$eval('[data-act="no-lunch"]', a => a.map(b => b.textContent.trim())));
     await page.click('[data-act="no-lunch"]'); await page.waitForTimeout(350);
-    check('and the day comes off: no tin, one line that says so, Put it back, a toast with Undo', (await page.$$eval('#view .tin', a => a.length)) === 0 && /No lunch today\. Nothing to pack, nothing on the list\./.test(await page.textContent('#view')) && (await page.$eval('[data-act="no-lunch"]', b => b.textContent.trim())) === 'Put it back' && /No lunch today — off the list/.test(await page.textContent('#toast')) && !!(await page.$('#toast [data-act="undo"]')));
+    check('and the day comes off: no tin, one line that says so, Put it back, a toast with Undo, and the ticks come off with it', (await page.$$eval('#view .tin', a => a.length)) === 0 && /No lunch today\. Nothing to pack, nothing on the list\./.test(await page.textContent('#view')) && (await page.$eval('[data-act="no-lunch"]', b => b.textContent.trim())) === 'Put it back' && /No lunch today — nothing to pack, nothing to buy/.test(await page.textContent('#toast')) && !!(await page.$('#toast [data-act="undo"]')) && await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const d = k.week.days.find(x => x.off); const row = k.packed[d.d] || {}; return Object.keys(row).length > 0 && Object.values(row).every(e => e.off === true); }));
+    await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
+    check('Undo puts the day back with its ticks', (await page.$$eval('#view .tin', a => a.length)) === 1 && (await page.getAttribute('[data-act="pack-all"]', 'aria-pressed')) === 'true' && await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.some(x => x.off)));
+    await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300);   /* un-tick for the rest of the walk */
+    await page.click('[data-act="no-lunch"]'); await page.waitForTimeout(350);
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
     check('the shopping list drops that day\'s foods', (await page.$$eval('#view .item.shopline', a => a.length)) < shopBefore, [shopBefore, await page.$$eval('#view .item.shopline', a => a.length)]);
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
@@ -793,18 +800,25 @@ try {
     await page.evaluate(() => window.__pinHour(9));
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200); await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
     await page.click('[data-act="no-lunch"]'); await page.waitForTimeout(350);
-    check('Put it back brings the box back, and says so', (await page.$$eval('#view .tin', a => a.length)) === 1 && /lunch is back/.test(await page.textContent('#toast')) && await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.some(d => d.off)));
+    check('Put it back brings the box back, and says so in the same word', (await page.$$eval('#view .tin', a => a.length)) === 1 && /Today’s lunch is back/.test(await page.textContent('#toast')) && await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.some(d => d.off)));
     /* a later day, from Week: Coming up says so, and the kid's pick skips it */
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
     const laterDay = await page.evaluate(() => { const cs = [...document.querySelectorAll('.daycard:not(.past)')]; const c = cs.find(d => !/Today/.test(d.querySelector('.dayhead').textContent)); return c ? c.querySelector('[data-act="no-lunch"]').getAttribute('data-day') : null; });
     check('every day still ahead offers No lunch on Week, and a day that has gone does not', !!laterDay && (await page.$$eval('.daycard.past [data-act="no-lunch"]', a => a.length)) === 0);
     await page.click('[data-act="no-lunch"][data-day="' + laterDay + '"]'); await page.waitForTimeout(350);
     await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
-    check('Coming up says no lunch for that day', await page.evaluate(d => { const rows = [...document.querySelectorAll('#view .list .item')]; return rows.some(r => /no lunch/.test(r.textContent) && !/Today/.test(r.textContent)); }, laterDay));
+    check('Coming up says no lunch for that day, and the kid\'s pick skips it', await page.evaluate(d => { const name = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(d + 'T00:00:00').getDay()]; const rows = [...document.querySelectorAll('#view .list .item')]; const row = rows.find(r => r.querySelector('.nm') && r.querySelector('.nm').textContent.indexOf(name) === 0); return !!row && /no lunch/.test(row.textContent) && !row.querySelector('[data-act="kid-start"]'); }, laterDay));
+    /* a re-plan leaves the day off, its foods as they were */
+    const offFoods = await page.evaluate(d => JSON.stringify(JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.find(x => x.d === d).slots), laterDay);
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200);
+    await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(400); await goShuffle(page);
+    check('Plan the week keeps the day off, and leaves its foods as they were for Put it back', await page.evaluate(({ d, was }) => { const day = JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.find(x => x.d === d); return !!day && day.off === true && JSON.stringify(day.slots) === was; }, { d: laterDay, was: offFoods }));
+    await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
     await page.click('[data-act="no-lunch"][data-day="' + laterDay + '"]'); await page.waitForTimeout(350);
     check('and Put it back on Week restores it', await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const day = k.week.days.find(x => x.d === d); return !!day && !day.off; }, laterDay) && (await page.$$eval('.daycard:not(.past) .tin', a => a.length)) >= 2);
     if (wasPacked) { await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300); await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300); }   /* leave the box as it was found */
+    await page.evaluate(() => window.__pinHour(9));
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   }
 
@@ -1761,6 +1775,7 @@ try {
   check("the morning after, it asks how the box went", (await page.$$eval('.review', a => a.length)) === 1);
   /* on Week that day has gone: one line, no lock, no shuffle, and a read-only sheet behind it */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
+  check('a day that has gone offers no No lunch', (await page.$$eval('.daycard.past [data-act="no-lunch"]', a => a.length)) === 0 && (await page.$$eval('.daycard.past', a => a.length)) >= 1);
   check('a day that has gone has no lock and no shuffle, only its line, which says it is not answered yet', (await page.$$eval('.daycard.past [data-act="day-lock"], .daycard.past [data-act="shuffle-day"], .daycard.past .cmp', a => a.length)) === 0 && (await page.$$eval('.daycard.past [data-act="gone-open"]', a => a.length)) >= 1 && (await page.$eval('.daycard.past .gone-line .qty', e => e.textContent)) === 'not answered');
   check('and the page does not scroll sideways for it', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   const goneLabel = await page.getAttribute('.daycard.past [data-act="gone-open"] >> nth=0', 'aria-label');
@@ -2954,11 +2969,14 @@ try {
   {
     const HELPER_OK = new Function('return [' + (APP_SRC.match(/var HELPER_OK = \[([\s\S]*?)\];/) || [, ''])[1] + ']')();
     const drawn = {};
-    for (const tab of ['pack', 'week', 'shop', 'recipes', 'setup']) {
+    const sweep = async (where) => { const acts = await p3.$$eval('body [data-act]', a => a.filter(e => !e.closest('#toast') && e.checkVisibility()).map(e => e.getAttribute('data-act'))); acts.forEach(x => { if (!HELPER_OK.includes(x)) drawn[x] = where; }); };
+    for (const tab of ['pack', 'week', 'foods', 'shop', 'recipes', 'setup']) {
       await p3.click(`[data-act="tab"][data-tab="${tab}"]`); await p3.waitForTimeout(300);
-      const acts = await p3.$$eval('body [data-act]', a => a.filter(e => !e.closest('#sheet') && !e.closest('#toast') && e.checkVisibility()).map(e => e.getAttribute('data-act')));
-      acts.forEach(x => { if (!HELPER_OK.includes(x)) drawn[x] = tab; });
+      await sweep(tab);
     }
+    for (const pane of ['account', 'household']) { await openPane(p3, pane); await sweep('pane:' + pane); await p3.click('[data-act="pane-done"]'); await p3.waitForTimeout(200); }
+    await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
+    if (await p3.$('[data-act="kidsheet"]')) { await p3.click('[data-act="kidsheet"]'); await p3.waitForTimeout(300); await sweep('sheet:lunchboxes'); await backdropTap(p3); await p3.waitForTimeout(300); }
     check('nothing is drawn for a caretaker only to refuse: every control they can see is one they may use', Object.keys(drawn).length === 0, drawn);
     await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
   }
