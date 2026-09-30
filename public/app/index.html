@@ -502,8 +502,8 @@ ul.steping{list-style:none;margin:0;padding:0;background:var(--surface);border:1
 ul.steping li+li .item{border-top:1px solid var(--line)}
 ul.steping .item .nm{font-family:var(--f-mono);font-size:14.5px;font-variant-numeric:tabular-nums}
 .cookstep:focus{outline:none}
-/* a title takes the cursor when its sheet or its page opens and presses nothing, so it wears no ring; nor does focus handed back to a parent who is not moving by Tab (focusQuietly) */
-#sheetTitle:focus,.view-title:focus,.noring:focus-visible{outline:none}
+/* a heading takes the cursor when its sheet or its page opens, or when there is nothing else to go back to, and presses nothing, so it wears no ring; nor does focus handed back to a parent who is not using the keyboard (focusQuietly) */
+#sheetTitle:focus,#view h2:focus,#view h3:focus,.noring:focus-visible{outline:none}
 .btn.sm.step{min-width:44px;padding:0 10px;font-size:17px}
 /* a label a screen reader reads and a sighted parent does not need, because the
    placeholder beside it says the same thing */
@@ -1990,9 +1990,9 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    v26 is a sheet taking the cursor as it opens and giving it back as it closes, and Packed no
    longer moving the page under the thumb: a fix, nothing a parent would call new, so it carries
    v25's note forward rather than spend the banner on itself. seenAs names v25: a phone that read
-   the walk-through at v25 is left alone, and one that never opened v25 still hears it. That is
-   the one hop seenAs allows. The build after v26 writes a note of its own, or says nothing
-   (text:''), and drops seenAs.
+   the walk-through at v25, or was set up on v25, is left alone, and one that never opened v25
+   still hears it. That is the one hop seenAs allows. The build after v26 writes a note of its
+   own, or says nothing (text:''), and drops seenAs.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
 var WHATS_NEW = {build:'lunchsorted-v26', seenAs:'lunchsorted-v25', text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
@@ -2051,7 +2051,7 @@ function closePane(){
   var was = UI.pane, y = UI.paneScroll || 0;
   UI.pane = ''; render(); window.scrollTo(0, y);
   var row = document.querySelector('#view .item[data-pane="'+was+'"]') || document.querySelector('#who [data-act="box-settings"]');
-  if(row) row.focus({preventScroll:true});   /* focus() scrolls by default, which would fight the restore above */
+  if(row) focusQuietly(row);   /* under a thumb without scrolling, which would fight the restore above */
 }
 /* Put focus back on the row that was just tapped. render() replaces the whole view, so
    the button that was pressed is gone and focus falls to the body — on VoiceOver that is
@@ -2059,13 +2059,13 @@ function closePane(){
    does twenty times in a row. Every attribute that picks the row out is matched on its
    value rather than built into the selector: a food’s name is a parent’s own words and
    may carry a quote, and nothing here has to be sanitized on the way in.
-   preventScroll for the same reason as closePane above. */
+   focusQuietly for the same reason as closePane above. */
 function focusBack(root, act, attrs){
   var rows = root ? [].slice.call(root.querySelectorAll('[data-act="'+act+'"]')) : [];
   var row = rows.filter(function(r){
     return Object.keys(attrs).every(function(k){ return r.getAttribute(k) === attrs[k]; });
   })[0];
-  if(row) row.focus({preventScroll:true});
+  if(row) focusQuietly(row);
 }
 /* where a bug report says the parent was */
 function paneLabel(){ return UI.pane && PANES[UI.pane] ? (UI.pane === 'box' ? 'lunchbox settings' : PANES[UI.pane].toLowerCase()) : UI.tab; }
@@ -3640,12 +3640,14 @@ var sheetState = null;
    Coming out, it goes back to the control whose tap opened the sheet — found again by what
    it carries, since render() has usually rebuilt it by then — unless whoever closed the
    sheet has already put the cursor somewhere. A sheet closed for another in the same tap
-   hands its way back on to that one. With nothing to go back to it goes to the page's own
-   title: the opener went with what the sheet changed, or nobody tapped for the sheet (the
-   emailed link, a refused invite). Whatever was tapped last did not open that one, and
-   may be a button waiting for its second tap.
+   hands its way back on to that one. A tap counts only while its own handler runs, so a
+   sheet that opens later (the emailed link, a refused invite) goes back to whatever had the
+   cursor when it opened. With nothing to go back to (nothing had it, or the opener went
+   with what the sheet changed) it goes to the first heading in the view. Never onto a
+   button waiting for its second tap, or onto Delete once DELETE has been typed: one Enter
+   would finish it.
    preventScroll throughout, as in closePane. */
-var lastAct = null, sheetFrom = null, sheetGoing = false, tabbing = false;
+var lastAct = null, sheetFrom = null, sheetGoing = false, keyboarding = false;
 function dataOf(el){
   var at = {};
   [].forEach.call(el.attributes, function(a){ if(a.name.indexOf('data-') === 0) at[a.name] = a.value; });
@@ -3673,16 +3675,21 @@ function focusFind(m){
   var twins = focusTwins(m);
   return twins[m.nth] || twins[0] || null;
 }
-/* A ring is for a parent moving by keyboard. The browser's own guess is wrong twice on a
-   phone: the keyboard's Done key counts as a key, and Safari leaves the field focused when
-   a button is tapped, so a compartment wore a ring after every write-in. Focus a sheet hands
-   back is ringed only if Tab has been pressed since the last touch. */
+/* The focus a sheet, a tick, Packed or a page's Done hands back goes through here. A ring
+   is for a parent using the keyboard, and the browser's own guess is wrong on a phone: the
+   keyboard's Done key counts as a key, and Safari leaves a field focused when a button is
+   tapped, so whatever a script focuses next is ringed. So the ring shows only for a parent
+   who has used the keyboard since the last touch (the keydown listener), and only for them
+   is the page scrolled to what has the cursor: under a thumb it stays exactly where it was. */
 function focusQuietly(el){
-  el.focus({preventScroll:true});
-  if(tabbing) return;
+  el.focus({preventScroll:!keyboarding});
+  if(keyboarding || document.activeElement !== el) return;
   el.classList.add('noring');
   el.addEventListener('blur', function(){ el.classList.remove('noring'); }, {once:true});
 }
+/* a sheet's own field takes the cursor once the sheet has slid in, unless the sheet has gone
+   again by then: a field in a closed sheet would take back what sheetGone has just placed */
+function focusFieldSoon(id){ setTimeout(function(){ var el = document.getElementById(id); if(el && sheetEl.classList.contains('open')) el.focus(); }, 220); }
 function openSheet(title, html, state){
   var was = sheetEl.classList.contains('open'), other = !was || titleEl.textContent !== title;
   /* both read before the body is replaced, while a control in the last sheet still counts as
@@ -3711,9 +3718,11 @@ function sheetGone(){
   var m = sheetFrom, a = document.activeElement, el = null; sheetFrom = null;
   if(a && a !== document.body && !sheetEl.contains(a)) return;   /* whoever closed the sheet has placed the cursor */
   if(!UI.kid){                                                   /* nothing behind the child's screen takes it */
-    /* not onto a button waiting for its second tap: no tap that opens a sheet leaves one armed,
-       so this sheet came by itself, and "Tap again" is one Enter from done */
-    el = (UI.armed ? null : focusFind(m)) || document.querySelector('#view .view-title');
+    /* not onto a button waiting for its second tap, nor onto Delete once DELETE is typed: no tap
+       that opens a sheet leaves either behind, so this sheet came by itself, and one Enter
+       would finish what the parent had only started. Else the first heading in the view: the
+       morning question on Pack, the page's title elsewhere. */
+    el = ((UI.armed || deleteArmed()) ? null : focusFind(m)) || document.querySelector('#view h2, #view h3');
   }
   if(!el){ if(a && a !== document.body) a.blur(); return; }     /* not left inside a sheet that has gone */
   if(el.tabIndex < 0 && !el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');   /* a title can take the cursor once asked to */
@@ -5025,7 +5034,7 @@ function writeInSheet(kidId, dayStr, cat){
     + '<button class="btn primary wide" data-act="write-save" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'">'
     + (cur ? 'Save it' : 'Put it in')+'</button>';
   openSheet(l.full+' \u00b7 '+c.label, h);
-  setTimeout(function(){ var el = document.getElementById('wiName'); if(el) el.focus(); }, 220);
+  focusFieldSoon('wiName');
 }
 /* Which lunchboxes an added food lands in. One lunchbox: no question asked.
    Several: all of them until the parent says otherwise, because the same food
@@ -5299,7 +5308,7 @@ function addOwnSheet(pre){
     + '<button class="btn primary wide" id="nfSave" data-act="save-own" style="white-space:normal;height:auto;min-height:48px;padding:10px 16px">'+esc(addOwnLabel())+'</button>'
     + ((pre.recipe && !pre.recipeId) ? '<button class="btn ghost wide" data-act="recipe-import">Read a different one</button>' : '');
   openSheet(pre.recipeId ? 'Add it to the list' : pre.recipe ? 'Check it over' : 'Add your own', h);
-  setTimeout(function(){ var el = document.getElementById('nfName'); if(el && !pre.n) el.focus(); }, 220);
+  if(!pre.n) focusFieldSoon('nfName');
 }
 
 /* ======================================================= importing a recipe
@@ -5485,7 +5494,7 @@ function recipeReview(rec){
     + (tf || gated() ? '' : '<button class="btn wide" data-act="recipe-save" data-then="food">Keep it, and add the food</button>')
     + '<button class="btn ghost wide" data-act="recipe-import">Read a different one</button></div>';
   openSheet('Check it over', h);
-  if(!name) setTimeout(function(){ var el = document.getElementById('rsName'); if(el) el.focus(); }, 220);
+  if(!name) focusFieldSoon('rsName');
 }
 /* the food this recipe would make, with everything the app can work out filled in */
 function recipeToFood(r){
@@ -5778,7 +5787,7 @@ function addKidSheet(){
     + '<input type="text" id="nkName" placeholder="Sam" autocomplete="off" maxlength="40"></div>'
     + '<button class="btn primary wide" data-act="save-kid">Add lunchbox</button>';
   openSheet('Add a lunchbox', h);
-  setTimeout(function(){ var el = document.getElementById('nkName'); if(el) el.focus(); }, 220);
+  focusFieldSoon('nkName');
 }
 function importSheet(){
   var h = '<p class="hint" style="margin:0">Paste what you copied on the other phone. This <b>replaces</b> '
@@ -5955,7 +5964,7 @@ document.addEventListener('click', function(ev){
     render();
     if(act!=='eat-skip' && doneE) toast('Noted');
     /* the answer given, focus goes to the next card if one opened, else to Change on the line this one became */
-    if(doneE){ var nx = document.querySelector('#view [data-act="eat-all"]') || document.querySelector('#view [data-act="eat-change"][data-kid="'+ek.id+'"]'); if(nx) nx.focus({preventScroll:true}); }
+    if(doneE){ var nx = document.querySelector('#view [data-act="eat-all"]') || document.querySelector('#view [data-act="eat-change"][data-kid="'+ek.id+'"]'); if(nx) focusQuietly(nx); }
     else focusBack(document.getElementById('view'), act, {'data-kid':ek.id, 'data-day':ed.d, 'data-cat':el.getAttribute('data-cat') || '', 'data-r':el.getAttribute('data-r') || ''});
     return;
   }
@@ -6255,7 +6264,7 @@ document.addEventListener('click', function(ev){
     if(!was && FOLD_SECOND && stackedPack() && kids()[0] !== k7) UI.boxOpen[k7.id] = false;   /* packed: the second box folds back to its line */
     touch(k7); save(); render();
     var pb = document.querySelector('[data-act="pack-all"][data-kid="'+k7.id+'"]') || document.querySelector('[data-act="box-open"][data-kid="'+k7.id+'"]');   /* folded: focus lands on the line the box became */
-    if(pb) pb.focus({preventScroll:true});         /* the page stays where the thumb left it, as after every other tap */
+    if(pb) focusQuietly(pb);                       /* the page stays where the thumb left it, as after every other tap */
     if(was){
       var prev = JSON.parse(JSON.stringify(row)), kid7Id = k7.id;
       /* ids and a day string, never the records: a sync inside the toast rebuilds them all */
@@ -7011,11 +7020,11 @@ document.addEventListener('click', function(ev){
   }
   if(act==='box-open'){
     var bo = el.getAttribute('data-kid'); UI.boxOpen[bo] = true; render();
-    var pbo = document.querySelector('[data-act="pack-all"][data-kid="'+bo+'"]'); if(pbo) pbo.focus({preventScroll:true});   /* the line is gone; the box's own control takes the focus */
+    var pbo = document.querySelector('[data-act="pack-all"][data-kid="'+bo+'"]'); if(pbo) focusQuietly(pbo);   /* the line is gone; the box's own control takes the focus */
     return;
   }
   if(act==='gone-open'){ goneSheet(el.getAttribute('data-kid'), el.getAttribute('data-day')); return; }
-  if(act==='star-ok'){ try{ localStorage.setItem(STAR_SEEN_KEY, '1'); }catch(e){} render(); var st1 = document.querySelector('#view .star'); if(st1) st1.focus({preventScroll:true}); return; }
+  if(act==='star-ok'){ try{ localStorage.setItem(STAR_SEEN_KEY, '1'); }catch(e){} render(); var st1 = document.querySelector('#view .star'); if(st1) focusQuietly(st1); return; }
   if(act==='day-lock'){
     var kD = kidById(el.getAttribute('data-kid')), dD = kD && findWeekDay(kD, el.getAttribute('data-day'));
     if(!kD || !dD) return;
@@ -7059,14 +7068,24 @@ document.addEventListener('change', function(ev){
   }
 });
 document.addEventListener('keydown', function(ev){
-  if(ev.key === 'Tab') tabbing = true;          /* someone is moving by keyboard: see focusQuietly */
+  /* A held Enter repeats. On a button that would press Done and then whatever the cursor went
+     back to, or arm "Tap again" and confirm it before anyone could read it. One press, one tap. */
+  if(ev.key === 'Enter' && ev.repeat && ev.target && ev.target.closest && ev.target.closest('button')){ ev.preventDefault(); return; }
+  /* The keyboard is in use: Tab anywhere, or any key pressed outside a text field (typing, and
+     the phone keyboard's own Done key, land in the field). See focusQuietly: a ring it held back
+     shows again at once. */
+  var kt = ev.target && ev.target.tagName || '';
+  if(ev.key === 'Tab' || !/^(INPUT|TEXTAREA|SELECT)$/.test(kt)){
+    keyboarding = true;
+    if(document.activeElement && document.activeElement.classList) document.activeElement.classList.remove('noring');
+  }
   if(ev.key !== 'Enter') return;
   var id = ev.target && ev.target.id;
   if(id === 'signinEmail'){ ev.preventDefault(); var b = document.querySelector('[data-act="signin-request"]'); if(b) b.click(); }
   if(id === 'signinCode'){ ev.preventDefault(); var c = document.querySelector('[data-act="signin-code"]'); if(c) c.click(); }
   if(id === 'wiName'){ ev.preventDefault(); var w = document.querySelector('[data-act="write-save"]'); if(w) w.click(); }
 });
-document.addEventListener('pointerdown', function(){ tabbing = false; }, true);   /* a touch or a click: not moving by keyboard any more */
+document.addEventListener('pointerdown', function(){ keyboarding = false; }, true);   /* a touch or a click: not on the keyboard any more */
 document.addEventListener('input', function(ev){
   if(!S) return;
   var kid = activeKid();
