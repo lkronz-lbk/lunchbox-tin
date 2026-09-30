@@ -488,12 +488,13 @@ forward).
 - [x] Neon project with `production` and `staging` branches; `NETLIFY_DATABASE_URL` and
       `STAGING_DATABASE_URL` scoped to their contexts.
 - [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set.
-- [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price stays only so past purchases are recognized; a webhook endpoint per mode,
+- [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price is best left out of the variables (Billing, below); a webhook endpoint per mode,
       keys, secrets and price ids scoped per context (Billing, below).
 - [ ] Confirm HTTPS covers `www.lunchsorted.app` as well as the apex.
-- [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
+- [x] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
       `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
       function responses instead, every app open becomes a function call (remove that rule).
+      It shows the function's own, on staging and in production (2026-09-30).
 - [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form. The
       feedback form's notifications reach forms@lunchsorted.app (seen 2026-09-19 to 21); the
       waitlist form posts through the same Netlify Forms but has not been sent a test of its own.
@@ -743,8 +744,10 @@ out by deleting it in the commit that does it.
 
 **Stripe, Netlify and the stores**
 - **Liz: Netlify's `dev-server` context** (Preview Server & Agent Runners) still points
-  `STRIPE_PRICE_YEAR`/`_MONTH` at the old test prices, now archived, so a checkout there fails.
-  Set them to the new test prices; every other context, local `dev` included, is done.
+  `STRIPE_PRICE_YEAR`/`_MONTH` at the old test prices, now archived, so a checkout there fails,
+  and **Branch deploys** (staging) still has the old yearly one ($29 a year on staging's
+  `/api/billing`, with no founding mark). Set them to the new test prices, as Deploy Previews
+  and local `dev` have them; the new yearly, $19.99, carries the mark.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
@@ -992,7 +995,11 @@ signed by Apple (App Store, below). Each platform sells it one way only, and a p
 paid on either side works on every phone and browser in the household.
 Prices are Stripe's on the web and Apple's in the iPhone app, kept the same by hand. The site
 (`public/price.js`), the plan sheet and the trial emails all read Stripe's through
-`GET /api/billing`; no price is typed into them, only a fallback in the site's HTML. The launch
+`GET /api/billing`; no price is typed into them, only a fallback in the site's HTML. Each price
+is read on its own: one Stripe cannot give drops only its own line, and the function log names
+its variable (`billing: prices STRIPE_PRICE_LIFETIME price_…: No such price`); without the yearly
+one there are no prices at all, and the site's fallback shows. An archived price still reads,
+so it still shows, though Stripe will not sell it. The launch
 price is a **founding price**, $19.99 a year or $2.99 a month: the yearly Stripe price carries
 the metadata `founding = yes`, which puts "Founding price: yours for as long as you stay
 subscribed" on the site, both plan sheets and the emails. Raising it is a new Stripe price
@@ -1126,7 +1133,8 @@ the idea bank stays free so a free list is never stuck with what it has.
   still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
   "Manage billing", or "Manage in the App Store" for a plan Apple bills (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan
-  sheet with its prices (on the web read from Stripe, cached an hour; in the iPhone app read
+  sheet with its prices (on the web read from Stripe, cached an hour, or a minute while one of
+  them will not read; in the iPhone app read
   from the App Store, beside Restore purchases; never typed into the app);
   signed out it offers sign-in first, and remembers what you were doing so the sheet, or
   the lunchbox, comes back after the sign-in or the payment. The server refuses an invite
@@ -1148,8 +1156,10 @@ the idea bank stays free so a free list is never stuck with what it has.
   `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
-  button when set, and `STRIPE_PRICE_LIFETIME`, optional now, only so a forever bought before it
-  was withdrawn is still recognized. `STRIPE_TAX=0` turns
+  button when set, and `STRIPE_PRICE_LIFETIME`, best left unset now that forever is off sale: all
+  it does is quote that price on the Subscription pane of a household that bought forever through
+  Stripe, matched by id (a free forever is never priced), and production has none; a refund goes
+  by the plan, not the price. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
   A request that gets no answer, or an answer that cannot be read, is logged in fixed words, never
   fetch's own, which can quote the authorization header, key and all.

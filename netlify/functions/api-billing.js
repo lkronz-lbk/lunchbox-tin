@@ -178,8 +178,10 @@ export default async function handler(req, context) {
     if (req.method === 'GET' && !action) {
       if (!billingEnabled()) return json({ enabled: false }, 200, { 'cache-control': 'public, max-age=300' });
       let p = null; try { p = await priceInfo(); } catch (e) { console.error('billing: prices', e.message); }
-      /* without prices the gates still stand and the button says "Yearly plan"; ask again soon */
-      return json({ enabled: true, prices: p, since: process.env.BILLING_SINCE || null }, 200, { 'cache-control': p ? 'public, max-age=3600' : 'public, max-age=60' });
+      /* without prices the gates still stand and the button says "Yearly plan"; with one of them
+         missing the others still show. Either way, ask again soon */
+      const whole = !!p && Object.entries(prices()).every(([k, id]) => !id || p[k]);
+      return json({ enabled: true, prices: p, since: process.env.BILLING_SINCE || null }, 200, { 'cache-control': whole ? 'public, max-age=3600' : 'public, max-age=60' });
     }
 
     if (req.method === 'POST' && action === 'webhook') {

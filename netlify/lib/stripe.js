@@ -24,8 +24,10 @@ export function stripeKey() {
   return key;
 }
 export function prices() {
-  /* yearly is required; monthly is optional and appears when set. Forever is no longer sold: its
-     price is read only so a forever purchase already made is still recognised and refundable */
+  /* yearly is required; monthly is optional and appears when set. Forever is no longer sold, and
+     its id is best left unset: all it does is quote that price on the plan line of a household that
+     bought forever through Stripe (the app matches the id; a free forever is never priced), and
+     production has none. A refund goes by the plan, not the price. */
   return { year: process.env.STRIPE_PRICE_YEAR || '', lifetime: process.env.STRIPE_PRICE_LIFETIME || '', month: process.env.STRIPE_PRICE_MONTH || '' };
 }
 /* read on every household request, so a key stripeKey() refuses (the wrong context, or more than
@@ -74,19 +76,31 @@ export async function stripe(method, path, params, idempotencyKey) {
   return data;
 }
 
-/* what the two plans cost, from Stripe, remembered per function instance for an hour
-   so the price is set in one place (the dashboard) and never typed into the app */
+/* what the plans cost, from Stripe, remembered per function instance for an hour so the price is
+   set in one place (the dashboard) and never typed into the app. Each price is asked for on its
+   own: one Stripe cannot give (an id this mode does not have, as production's forever one on
+   2026-09-30) drops only its own line, and the log names its variable. The yearly price is the
+   plan, so without it there is no answer at all. Only a whole answer is remembered; one with a
+   price missing is asked for again next time, as no answer always was. */
 let priceCache = { at: 0, value: null };
 export async function priceInfo() {
   if (priceCache.value && Date.now() - priceCache.at < 3600 * 1000) return priceCache.value;
-  const p = prices();
-  const [year, lifetime, month] = await Promise.all([stripe('GET', `/prices/${p.year}`), p.lifetime ? stripe('GET', `/prices/${p.lifetime}`) : null, p.month ? stripe('GET', `/prices/${p.month}`) : null]);
+  const p = prices(), names = ['year', 'lifetime', 'month'];
+  const got = await Promise.allSettled(names.map(n => n === 'year' || p[n] ? stripe('GET', `/prices/${p[n]}`) : null));
   /* the id travels so the app can say which of these the household is actually on. founding is set
      in Stripe, as metadata founding = yes on the price: the early price, kept by whoever buys it for
      as long as they stay. A new price made without it ends the founding line everywhere at once. */
   const one = (x) => ({ id: x.id, amount: x.unit_amount, currency: x.currency, interval: x.recurring ? x.recurring.interval : null, founding: /^(yes|true|1)$/i.test((x.metadata && x.metadata.founding) || '') });
-  priceCache = { at: Date.now(), value: { year: one(year), lifetime: lifetime ? one(lifetime) : null, month: month ? one(month) : null } };
-  return priceCache.value;
+  const value = {}, missing = [];
+  names.forEach((n, i) => {
+    const r = got[i];
+    value[n] = r.status === 'fulfilled' && r.value ? one(r.value) : null;
+    if (r.status === 'rejected') missing.push(`STRIPE_PRICE_${n.toUpperCase()} ${p[n]}: ${(r.reason && r.reason.message) || r.reason}`);
+  });
+  if (!value.year) throw new Error(missing.join('; ') || 'no yearly price');   /* the caller logs it */
+  for (const m of missing) console.error('billing: prices', m);
+  if (!missing.length) priceCache = { at: Date.now(), value };
+  return value;
 }
 export function forgetPrices() { priceCache = { at: 0, value: null }; }
 
