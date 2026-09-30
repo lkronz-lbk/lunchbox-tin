@@ -784,6 +784,97 @@ try {
       await page.reload(); await page.waitForTimeout(600);
       check('and once dismissed it stays gone', !/New: /.test(await page.textContent('#view')) && await page.evaluate((b) => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
     }
+    /* An OK on any other message is that message's alone. It used to mark the build seen too, so a
+       note that message had pushed off the banner was gone for good: the beta switching on, or an
+       invite that had lapsed, on the first open after an update, and the parent never heard what
+       changed. A lapsed invite needs nobody signed in: any code the server does not hold is one,
+       and this one is shaped like a real code (43 base64url characters), so a check on the shape
+       still lets it by. The OK waits for the boot's last redraw, billing's, which would take the
+       cursor away again. */
+    const noSuchInvite = 'no-such-invite-'.padEnd(43, 'x');
+    {
+      await page.evaluate(() => { localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'); localStorage.removeItem('lunchsorted-billing'); });
+      await page.goto(BASE + '/app/?join=' + noSuchInvite); await page.waitForLoadState('load');
+      const lapsed = await until(page, () => /expired or was already used/.test(document.getElementById('view').textContent)
+        && document.querySelectorAll('.banner [data-act="notice-dismiss"]').length === 1 && !!localStorage.getItem('lunchsorted-billing'));
+      check('a lapsed invite, opened on the first open after an update, takes the banner with an OK', lapsed);
+      if (lapsed) { await page.click('.banner [data-act="notice-dismiss"]'); await page.waitForTimeout(250); }
+      check('and its OK clears that message alone, leaving the build unseen',
+        lapsed && !/expired or was already used/.test(await page.textContent('#view')) && await page.evaluate(() => localStorage.getItem('lunchsorted-seen') === 'lunchsorted-v0'));
+      if (!NOTE_TEXT) {
+        check('with no note to give back, nothing takes its place', lapsed && !/New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0);
+      } else {
+        /* noring is focusQuietly()'s mark, and what keeps the ring off under a thumb; the button's
+           description is the note, so a screen reader landing on Show me hears what it would show */
+        const back = lapsed && await page.evaluate(() => { const sm = document.querySelectorAll('[data-act="whats-new"]'), d = sm[0] && document.getElementById(sm[0].getAttribute('aria-describedby') || '');
+          return sm.length === 1 && document.activeElement === sm[0] && sm[0].classList.contains('noring') && !!d && d.parentElement === sm[0].parentElement && d.textContent.trim().length > 0; });
+        check('the note it held back comes straight back, the cursor on a Show me that a screen reader hears with the note, and no ring round it', back);
+        if (back) { await page.click('[data-act="whats-new"]'); await sheetDone(page); await page.waitForTimeout(300); }
+        check('and reading the walk-through is still what marks the build seen',
+          back && !/New: /.test(await page.textContent('#view')) && await page.evaluate(b => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
+      }
+    }
+    /* Whether an open owes the note is settled at boot, and a phone that starts over owes nothing: the
+       note leaves the banner, an OK does not bring it back, and a household set up afterwards is
+       marked as having seen it, as a phone new to the app is at boot. Two ways to start over, on a
+       phone of its own: Erase everything, and a save that breaks the first draw. The break is the
+       test's own: the first draw into #view throws, once. */
+    {
+      const cx = await phone(); const px = await cx.newPage(); px.on('pageerror', e => errors.push(String(e.message)));
+      await cx.addInitScript(() => {
+        if (!sessionStorage.getItem('smoke-break-draw')) return;
+        sessionStorage.removeItem('smoke-break-draw');
+        const own = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+        let armed = true;
+        Object.defineProperty(Element.prototype, 'innerHTML', { configurable: true, get(){ return own.get.call(this); },
+          set(v){ if (armed && this.id === 'view') { armed = false; throw new Error('smoke: a draw that breaks'); } own.set.call(this, v); } });
+      });
+      const setUp = async () => {
+        if (!(await until(px, () => !!document.querySelector('#obName'), null, 5000))) return false;
+        await px.fill('#obName', 'Nia'); await px.click('[data-act="ob-go"]');
+        if (!(await until(px, () => !!document.querySelector('[data-act="ob-later"]'), null, 5000))) return false;
+        await px.click('[data-act="ob-later"]'); return until(px, () => !document.querySelector('.ob'), null, 5000);
+      };
+      const tapOK = async () => { const up = await until(px, () => document.querySelectorAll('.banner [data-act="notice-dismiss"]').length === 1, null, 5000);
+        if (up) { await px.click('.banner [data-act="notice-dismiss"]'); await px.waitForTimeout(250); } return up; };
+      const noNote = async () => (await px.$$eval('[data-act="whats-new"]', a => a.length)) === 0;
+      const seenIs = b => px.evaluate(b => localStorage.getItem('lunchsorted-seen') === b, b);
+      const erase = async () => {
+        await openPane(px, 'account');
+        if (!(await until(px, () => !!document.querySelector('[data-act="clear-all"]'), null, 5000))) return false;
+        await px.click('[data-act="clear-all"]'); await px.waitForTimeout(150); await px.click('[data-act="clear-all"]'); await px.waitForTimeout(300);
+        return px.evaluate(() => !!document.querySelector('.ob'));
+      };
+      await px.goto(BASE + '/app/'); const first = await setUp();
+      /* an open that owes the note, with the note itself on the banner: Erase everything, then set up again */
+      await px.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
+      await px.reload(); await px.waitForTimeout(600);
+      const wiped = first && (NOTE_TEXT ? (await px.$$eval('[data-act="whats-new"]', a => a.length)) === 1 : true) && await erase();
+      check('Erase everything with the note up takes the note off too: the questions screen shows none', wiped && await noNote());
+      const again = wiped && await setUp();
+      await px.reload(); await px.waitForTimeout(600);
+      check('and the household set up afterwards is marked as having seen it, so the next open shows none either', again && await noNote() && await seenIs(APP_BUILD));
+      /* an open that owes the note, a lapsed invite's message over it, then Erase everything and set up again */
+      await px.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
+      await px.goto(BASE + '/app/?join=' + noSuchInvite); await px.waitForLoadState('load');
+      const held = again && await until(px, () => /expired or was already used/.test(document.getElementById('view').textContent));
+      const erased = held && await erase() && await px.evaluate(() => /expired or was already used/.test(document.getElementById('view').textContent));
+      const okErased = erased && await setUp() && await tapOK();
+      check('a phone erased and set up again is owed no note: the OK on a message from before brings none over the new household', okErased && await noNote());
+      /* a save that breaks the first draw */
+      await px.evaluate(() => { localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'); sessionStorage.setItem('smoke-break-draw', '1'); });
+      await px.reload(); await px.waitForTimeout(600);
+      const fresh = await px.evaluate(() => /could not be shown/.test(document.getElementById('view').textContent) && !!document.querySelector('.ob')
+        && Object.keys(localStorage).some(k => k.startsWith('lunchsorted-backup-')));
+      check('a save that breaks the first draw becomes a fresh start that keeps a copy and says so', fresh);
+      /* had no copy been kept, the old household would open again next time, and it is still owed the note */
+      check('and the break itself marks nothing seen', fresh && await seenIs('lunchsorted-v0'));
+      const setFresh = fresh && await setUp();
+      check('setting the fresh household up is what marks the build seen', setFresh && await seenIs(APP_BUILD));
+      const okFresh = setFresh && await tapOK();
+      check('so its OK then brings no note over the new week', okFresh && await noNote());
+      await cx.close();
+    }
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
     /* the tick states: crossed off is ruled through, already-in-hand is not, and a
