@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { neon } from '@neondatabase/serverless';
+import { neon, NeonDbError } from '@neondatabase/serverless';
 
 /* One tagged-template query function. Neon in production; the test suite
    injects an in-process Postgres through the global hook. Call as
    sql`SELECT ...` or, for a statement built as a string, sql(text). */
-let _client;
+let _client, _clientFor;
 /* Which deploy this is. SITE_ENV is set per context in the Netlify UI; the values in
    netlify.toml reach the build only, never a running function, so Netlify's own CONTEXT
    is the fallback, and a branch deploy can never mistake itself for production. */
@@ -12,20 +12,61 @@ const CONTEXTS = { production: 'production', 'branch-deploy': 'staging', 'deploy
 export function siteEnv() {
   return process.env.SITE_ENV || CONTEXTS[process.env.CONTEXT] || 'production';
 }
-export function databaseUrl() {
-  /* production uses the site database; every other context must be given its own,
-     so a branch deploy or a preview can never read or migrate production data */
-  const env = siteEnv();
-  if (env === 'production') return process.env.NETLIFY_DATABASE_URL || process.env.NETLIFY_DB_URL || '';
-  return process.env.STAGING_DATABASE_URL || process.env.DEV_DB_URL || '';
+/* The variable that holds this deploy's database, and the address in it. Production uses the site
+   database; every other context must be given its own, so a branch deploy or a preview can never
+   read or migrate production data.
+   The address alone: postgres:// or postgresql://, then letters, digits and punctuation, with no
+   space, quote or line break. Anything pasted with it (the DATABASE_URL= line or the psql command
+   Neon's Connect dialog offers, quotes, a line break inside it, a space in the host) makes the
+   driver throw words that quote it whole, password and all, and every function logs what it throws.
+   So it is refused here in words that name the variable and never what it holds, and the build
+   (scripts/migrate.mjs) refuses the deploy over it, the last good one staying live. A space or a
+   line break around it is only dropped: the driver takes the address anyway. */
+function database() {
+  const names = siteEnv() === 'production' ? ['NETLIFY_DATABASE_URL', 'NETLIFY_DB_URL'] : ['STAGING_DATABASE_URL', 'DEV_DB_URL'];
+  const name = names.find(n => process.env[n]) || names[0];
+  const url = (process.env[name] || '').trim();
+  if (process.env[name] && !url) throw new Error(`${name} holds only spaces or line breaks; paste the connection string alone`);
+  if (url && (!/^postgres(ql)?:\/\/[\x21-\x7e]+$/.test(url) || /["'`]/.test(url))) throw new Error(`${name} must be postgres:// or postgresql://, then letters, digits and punctuation only, with no space, quote or line break; look for a DATABASE_URL=, a psql command or quotes pasted with it`);
+  return { name, url };
 }
+export function databaseUrl() { return database().url; }
+
+/* What the driver says about a connection can still quote the address, password and all: when it
+   cannot read one the shape above lets by (a port past 65535, a stray %), and when fetch will not
+   send it. So nothing the driver says leaves here: it is rethrown in fixed words of our own, without
+   its message, its stack or itself as a cause. A query the database refused (a unique violation,
+   say) is the database's own answer, and callers read its code, so it comes through as it is,
+   unless its words hold the password. */
+const LEFT_OUT = "the driver's own words are left out, as they can quote the address, password and all";
+function told(e, secrets) {
+  if (e instanceof NeonDbError && !e.sourceError && /^[0-9A-Z]{5}$/.test(e.code || '')) {
+    if (!secrets.some(s => [e.message, ...Object.values(e)].some(v => typeof v === 'string' && v.includes(s)))) return e;
+    return Object.assign(new Error('The database refused a query in words that hold the password, so they are left out'), { code: e.code });
+  }
+  if (e && e.sourceError) return new Error(`No answer from the database (${LEFT_OUT})`);
+  const status = e instanceof NeonDbError && /^Server error \(HTTP status (\d{3})\)/.exec(e.message);
+  return new Error(`The database answered${status ? ' ' + status[1] : ''}, but not with a result (${LEFT_OUT})`);
+}
+/* the password as the address carries it, and as the database reads it */
+function secretsOf(url) {
+  let p = '';
+  try { p = new URL(url).password; } catch { /* the driver read it, so this cannot fail */ }
+  if (!p) return [];
+  try { return [p, decodeURIComponent(p)]; } catch { return [p]; }
+}
+
 export function sql() {
   if (globalThis.__LS_SQL) return globalThis.__LS_SQL;
-  if (!_client) {
-    const url = databaseUrl();
-    if (!url) throw new Error(siteEnv() === 'production' ? 'No database URL configured' : 'This deploy context has no database of its own (set STAGING_DATABASE_URL)');
-    const client = neon(url);
-    _client = (strings, ...vals) => typeof strings === 'string' ? client.query(strings) : client(strings, ...vals);
+  const { name, url } = database();
+  if (!url) throw new Error(siteEnv() === 'production' ? 'No database URL configured' : 'This deploy context has no database of its own (set STAGING_DATABASE_URL)');
+  if (!_client || _clientFor !== url) {
+    let client;
+    try { client = neon(url); } catch { throw new Error(`${name} could not be read as a database address (${LEFT_OUT})`); }
+    const secrets = secretsOf(url);
+    /* the driver's query runs again each time it is awaited; this one runs once */
+    _client = (strings, ...vals) => (typeof strings === 'string' ? client.query(strings) : client(strings, ...vals)).then(undefined, e => { throw told(e, secrets); });
+    _clientFor = url;
   }
   return _client;
 }

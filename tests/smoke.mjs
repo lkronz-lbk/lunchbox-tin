@@ -3420,6 +3420,109 @@ try {
   await page.evaluate(raw => localStorage.setItem('lunchsorted', raw), goodDoc);
   await page.goto(BASE+'/app/'); await page.waitForTimeout(500);
 
+  /* ------------------------------------------------- the database address */
+  {
+    /* the same leak as the two keys', for the database (security review of the Resend key fix,
+       2026-09-30): the driver's error about an address it cannot read, or cannot send, quotes it
+       whole, password and all, and every function logs what it throws. The build refuses an address
+       pasted with more than the address, a running function too, and what the driver says about a
+       connection never leaves db.js. The addresses here are made up, with a short password, and
+       whatever would go out goes to a port fetch never opens */
+    const dbLib = await import('../netlify/lib/db.js');
+    const { neon, neonConfig, NeonDbError } = await import('@neondatabase/serverless');
+    const { inspect, format } = await import('node:util');
+    const PW = 'Dq7Wm42', hidden = (s) => !/Dq7|Wm42|made-up/.test(String(s)), shown = (e) => e ? [e.message, e.stack, inspect(e)].join('\n') : '';
+    const ALONE = `postgresql://owner:${PW}@ep-made-up-1.example.invalid/lunch?sslmode=require&channel_binding=require`;
+    const pasted = [`DATABASE_URL='${ALONE}'`, `psql '${ALONE}'`, `'${ALONE}'`, `"${ALONE}"`, ALONE.replace('@', '\n@'), ALONE.replace('made-up-1', 'made-up 1'),
+      String.fromCharCode(0x200b) + ALONE, ALONE.replace('postgresql:', 'https:'), ' \r\n'];   /* Neon's .env line, its psql command, quotes, a line break inside, a space in the host, an invisible letter from a web page, not an address, nothing */
+    const unread = [ALONE.replace('.invalid/', '.invalid:99999/'), ALONE.replace(PW, PW + '%zz')];   /* the shape lets these by; the driver cannot read them */
+    const VARS = ['SITE_ENV', 'NETLIFY_DATABASE_URL', 'NETLIFY_DB_URL', 'STAGING_DATABASE_URL', 'DEV_DB_URL'];
+    /* until the block ends the driver goes nowhere but the port fetch never opens, so a query that
+       ran later than it should would still stay on this machine */
+    const endpoint = neonConfig.fetchEndpoint; neonConfig.fetchEndpoint = 'http://127.0.0.1:9/';
+    /* the environment, the suite's own database and the driver's fetch are read before the first
+       await, by databaseUrl(), sql() and a handler alike, so each goes back at once, before anything
+       else in this process can see them */
+    const using = (vars, work, fetchFn) => {
+      const was = { v: VARS.map(k => process.env[k]), s: globalThis.__LS_SQL, fn: neonConfig.fetchFunction };
+      for (const k of VARS) delete process.env[k];
+      Object.assign(process.env, vars); delete globalThis.__LS_SQL; neonConfig.fetchFunction = fetchFn;
+      try { return work(); }
+      finally { VARS.forEach((k, i) => { if (was.v[i] === undefined) delete process.env[k]; else process.env[k] = was.v[i]; }); globalThis.__LS_SQL = was.s; neonConfig.fetchFunction = was.fn; }
+    };
+    const told = (vars) => using(vars, () => { try { return { url: dbLib.databaseUrl() }; } catch (e) { return { refused: String(e.message) }; } });
+    const refusals = pasted.map(v => told({ SITE_ENV: 'preview', STAGING_DATABASE_URL: v }));
+    const named = [told({ SITE_ENV: 'production', NETLIFY_DATABASE_URL: pasted[1] }), told({ SITE_ENV: 'production', NETLIFY_DB_URL: pasted[2] }), told({ SITE_ENV: 'staging', DEV_DB_URL: pasted[0] })];
+    const taken = [told({ SITE_ENV: 'preview', STAGING_DATABASE_URL: ALONE }), told({ SITE_ENV: 'staging', STAGING_DATABASE_URL: '\n ' + ALONE + '\r\n' }), told({ SITE_ENV: 'production', NETLIFY_DATABASE_URL: ALONE.replace('postgresql:', 'postgres:') }), told({ SITE_ENV: 'production', STAGING_DATABASE_URL: ALONE })];
+    check('a database address pasted with more than the address is refused in any context, in words that name the variable and hold nothing of it; the address alone, or with a space or a line break around it, is taken',
+      refusals.every(r => r.refused && /^STAGING_DATABASE_URL (must be postgres:\/\/ or postgresql:\/\/|holds only spaces or line breaks)/.test(r.refused) && hidden(r.refused)) &&
+      /^NETLIFY_DATABASE_URL must be/.test(named[0].refused) && /^NETLIFY_DB_URL must be/.test(named[1].refused) && /^DEV_DB_URL must be/.test(named[2].refused) && named.every(r => hidden(r.refused)) &&
+      taken[0].url === ALONE && taken[1].url === ALONE && taken[2].url === ALONE.replace('postgresql:', 'postgres:') && taken[3].url === '',
+      { refusals, named, taken: taken.map(t => t.refused || (t.url === '' ? 'none' : 'taken')) });
+
+    /* the premise, with the driver on its own: its words about the address quote it whole */
+    const driverSays = (url, fetchFn) => using({}, () => { try { return neon(url)`SELECT 1`.then(() => null, e => e); } catch (e) { return Promise.resolve(e); } }, fetchFn);
+    const theirs = await Promise.all([...pasted.slice(0, 7), ...unread].map(u => driverSays(u)));   /* not the last two: it names no part of an address that is not one, or of nothing */
+    check('the premise, as the security review found: the driver\'s own error quotes the address, password and all, whether it cannot read it or fetch will not send it',
+      theirs.every(e => !!e && shown(e).includes(PW)) && /is not a valid URL/.test(theirs[0].message) && /invalid header value/.test(theirs[4].message), theirs.map(e => e && e.message.slice(0, 60)));
+
+    /* what leaves db.js. The hook spoils the address on its way into the real fetch, as a line break
+       pasted inside it would, and answers, or breaks off, in the worst words it can */
+    const spoil = (url, init) => fetch(url, { ...init, headers: { ...init.headers, 'Neon-Connection-String': init.headers['Neon-Connection-String'].replace('@', '\n@') } });
+    const answer = (status, body) => () => Promise.resolve(new Response(body, { status }));
+    const unique = JSON.stringify({ message: 'duplicate key value violates unique constraint "entitlements_apple_original_transaction_id_key"', code: '23505', severity: 'ERROR', detail: 'Key (apple_original_transaction_id)=(2000000000000400) already exists.', constraint: 'entitlements_apple_original_transaction_id_key' });
+    const one = JSON.stringify({ fields: [{ name: 'n', dataTypeID: 23 }], rows: [['1']], command: 'SELECT', rowCount: 1 });
+    const viaSql = (url, fetchFn, text) => using({ SITE_ENV: 'preview', STAGING_DATABASE_URL: url }, () => {
+      try { const q = dbLib.sql(); return (text ? q('SELECT 1 AS n') : q`SELECT ${1}::int AS n`).then(rows => ({ rows }), e => ({ e })); } catch (e) { return Promise.resolve({ e }); }
+    }, fetchFn);
+    const logged = [], watching = async (work) => { const was = {};
+      for (const m of ['log', 'info', 'warn', 'error', 'debug']) { was[m] = console[m]; console[m] = (...a) => { logged.push(format(...a)); was[m].apply(console, a); }; }
+      try { return await work(); } finally { Object.assign(console, was); } };
+    const anon = () => new Request('http://localhost/api/apple/link', { method: 'POST', headers: { authorization: 'Bearer ' + 'a'.repeat(24), 'content-type': 'application/json' }, body: '{}' });
+    const [unreadable, spoiled, closed, refusedQuery, echoed, down, junk, fine, fineText, appleAnswer] = await watching(() => Promise.all([
+      viaSql(unread[0]), viaSql(ALONE, spoil), viaSql(ALONE),
+      viaSql(ALONE, answer(400, unique)), viaSql(ALONE, answer(400, JSON.stringify({ message: 'no such endpoint in ' + ALONE, code: 'XX000' }))),
+      viaSql(ALONE, answer(503, 'upstream said ' + ALONE)), viaSql(ALONE, answer(200, 'not json: ' + ALONE)),
+      viaSql(ALONE, answer(200, one)), viaSql(ALONE, answer(200, one), true),
+      /* and through api-apple, which had no last catch: anyone can send a bearer token of the right shape, and the first thing it meets is a query */
+      using({ SITE_ENV: 'preview', STAGING_DATABASE_URL: ALONE }, () => appleHandler(anon()), spoil).then(async r => ({ status: r.status, body: await r.json() }))]));
+    const ours = [unreadable, spoiled, closed, echoed, down, junk].map(r => r.e);
+    check('but what leaves db.js holds none of it, in its message, its stack or anything it carries, whether the driver could not read the address, fetch would not send it, nothing answered, or an answer quoted it',
+      ours.every(e => !!e && hidden(shown(e)) && e.cause === undefined && !(e instanceof NeonDbError) && !/unique|duplicate/i.test(e.message)) &&
+      /^STAGING_DATABASE_URL could not be read as a database address \(/.test(unreadable.e.message) && /^No answer from the database \(/.test(spoiled.e.message) && /^No answer from the database \(/.test(closed.e.message) &&
+      /^The database refused a query in words that hold the password/.test(echoed.e.message) && echoed.e.code === 'XX000' &&
+      /^The database answered 503, but not with a result \(/.test(down.e.message) && /^The database answered, but not with a result \(/.test(junk.e.message),
+      ours.map(e => e && e.message));
+    check('while a query the database refused comes through in its own words, with the code api-apple reads, and a result comes back as before',
+      refusedQuery.e instanceof NeonDbError && refusedQuery.e.code === '23505' && /^duplicate key value violates unique constraint/.test(refusedQuery.e.message) &&
+      JSON.stringify(fine.rows) === '[{"n":1}]' && JSON.stringify(fineText.rows) === '[{"n":1}]', { refused: refusedQuery.e && refusedQuery.e.message, fine, fineText });
+    check('and api-apple, reached anonymously while the database cannot be, answers 500 in its own words and logs ours',
+      appleAnswer.status === 500 && appleAnswer.body.error === 'Something went wrong on our side' && logged.some(l => /^api-apple Error: No answer from the database \(/.test(l)), { appleAnswer, logged });
+    check('and nothing this process wrote to its console meanwhile holds the address, whichever console method it came through', logged.length >= 1 && logged.every(l => hidden(l)), logged);
+    neonConfig.fetchEndpoint = endpoint;
+
+    /* the build, spawned with its environment spelled out, so nothing of this machine's reaches it.
+       Past the check it would go to Neon, so a preload points the driver at the port fetch never
+       opens, and spoils the address on its way, as a line break pasted inside it would */
+    const { spawnSync } = await import('node:child_process');
+    const preload = 'data:text/javascript,' + encodeURIComponent(`import { neonConfig } from ${JSON.stringify(import.meta.resolve('@neondatabase/serverless'))};
+      neonConfig.fetchEndpoint = 'http://127.0.0.1:9/';
+      neonConfig.fetchFunction = (url, init) => fetch(url, { ...init, headers: { ...init.headers, 'Neon-Connection-String': init.headers['Neon-Connection-String'].replace('@', '\\n@') } });`);
+    const build = (env) => spawnSync(process.execPath, ['--import', preload, path.join(ROOT, '..', 'scripts', 'migrate.mjs')], { env, encoding: 'utf8', timeout: 30000 });
+    const out = (r) => r.stdout + r.stderr;
+    const refused = build({ SITE_ENV: 'preview', STAGING_DATABASE_URL: pasted[1] }), prod = build({ SITE_ENV: 'production', NETLIFY_DATABASE_URL: pasted[0] }),
+      both = build({ SITE_ENV: 'preview', STAGING_DATABASE_URL: pasted[4], STRIPE_SECRET_KEY: 'sk_test_Pasted42\n' }),
+      cannot = build({ SITE_ENV: 'preview', STAGING_DATABASE_URL: unread[1] }), alone = build({ SITE_ENV: 'preview', STAGING_DATABASE_URL: '\n' + ALONE + '\n' });
+    check('and the build refuses the deploy over it, loudly, naming the variable and not the address, and names the Stripe key too when both are bad',
+      refused.status === 1 && /deploy refused: STAGING_DATABASE_URL must be/.test(refused.stderr) && prod.status === 1 && /deploy refused: NETLIFY_DATABASE_URL must be/.test(prod.stderr) &&
+      both.status === 1 && /deploy refused: STRIPE_SECRET_KEY must be/.test(both.stderr) && /deploy refused: STAGING_DATABASE_URL must be/.test(both.stderr) && !out(both).includes('Pasted42') &&
+      [refused, prod, both].every(r => hidden(out(r)) && !/migrate:/.test(r.stdout)),
+      { refused: [refused.status, out(refused)], prod: [prod.status, out(prod)], both: [both.status, out(both)] });
+    check('while an address it lets by, alone or with a line break around it, goes on to the database, and the build tells what the driver said in fixed words, never its own',
+      cannot.status === 1 && /migrate failed: STAGING_DATABASE_URL could not be read as a database address/.test(cannot.stderr) && alone.status === 1 && /migrate failed: No answer from the database/.test(alone.stderr) &&
+      [cannot, alone].every(r => hidden(out(r)) && !/deploy refused/.test(r.stderr)), { cannot: [cannot.status, out(cannot)], alone: [alone.status, out(alone)] });
+  }
+
   /* ------------------------------------------------------------ billing */
   const bcfgOff = await page.evaluate(() => fetch('/api/billing').then(r => r.json()));
   check('with no Stripe in the deploy nothing is gated', bcfgOff.enabled === false);

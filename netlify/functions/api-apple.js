@@ -77,7 +77,19 @@ async function body(req) {
   try { return JSON.parse(raw); } catch { return undefined; }
 }
 
+/* the last catch every other function has: anything thrown on the way (the database unreachable,
+   say) is logged here, and the phone or Apple is told only that something went wrong. Neither
+   finishes on a 500: the phone keeps the purchase for StoreKit to hand back at the next launch,
+   and Apple sends the notification again */
 export default async function handler(req) {
+  try { return await route(req); }
+  catch (e) {
+    console.error('api-apple', e);
+    return fail('Something went wrong on our side', 500);
+  }
+}
+
+async function route(req) {
   const action = new URL(req.url).pathname.replace(/\/$/, '').split('/').pop();
   if (req.method !== 'POST' || !['link', 'notify'].includes(action)) return fail('Not found', 404);
 
