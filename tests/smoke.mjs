@@ -3716,9 +3716,10 @@ try {
     const theirs = await spoil('https://api.stripe.com/v1/prices/price_year', { method: 'GET', headers: { authorization: 'Bearer ' + KEY } }).then(() => null, e => e);
     const hook = globalThis.__LS_STRIPE_FETCH, was = { k: process.env.STRIPE_SECRET_KEY, y: process.env.STRIPE_PRICE_YEAR };
     globalThis.__LS_STRIPE_FETCH = spoil; process.env.STRIPE_SECRET_KEY = KEY; process.env.STRIPE_PRICE_YEAR = 'price_year'; stripeLib.forgetPrices();
-    /* all four read the key and hand the request to fetch before their first await, so the key and
-       the hook go back at once, before a request from the open page can see either. The cancel is the
-       one a deleted account or a join makes, and it logs its own failure */
+    /* all four read the key and hand their first request to fetch before their first await, so the key
+       and the hook go back at once, before a request from the open page can see either. The cancel is the
+       one a deleted account or a join makes: its read-back after the failed DELETE comes later, with the
+       hook and key back, so it reaches the ordinary stub, hears 'active', and logs its own failure */
     const direct = stripeLib.stripe('GET', '/prices/price_year').then(() => null, e => e), viaPrices = stripeLib.priceInfo().then(() => null, e => e), cancel = stripeLib.cancelSubscription('sub_spoiled'),
       broken = stripeLib.stripe('POST', '/prices/unread', {}).then(() => null, e => e);
     globalThis.__LS_STRIPE_FETCH = hook; putEnv('STRIPE_SECRET_KEY', was.k); putEnv('STRIPE_PRICE_YEAR', was.y);
@@ -4184,16 +4185,109 @@ try {
     const again = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, already: j.already }))));
     check('claiming twice is fine and says so', again.status === 200 && again.already === true, again);
     await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', stripe_subscription_id = 'sub_beta_x' WHERE household_id = ${patState.household.id}`);
+    const payingCalls = stripeCalls.length;
     const paying = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, paying: j.paying }))));
-    check('a household paying for the plan is refused the beta, so its card is not charged for nothing', paying.status === 409 && paying.paying === true && (await entPat()).plan === 'household', paying);
+    check('a household paying for the plan is refused the beta, so its card is not charged for nothing, and its subscription is left alone',
+      paying.status === 409 && paying.paying === true && (await entPat()).plan === 'household' && !stripeCalls.slice(payingCalls).some(c => c.path.startsWith('/v1/subscriptions/')), paying);
+    /* its first charge failed when the three weeks ended: the row reads ended while Stripe goes on retrying the card, so
+       the claim goes through and cancels that subscription before forever is written over it. Left running, a retry that
+       went through would bill a free forever every year, with nothing on the row to find it by. The claim asks Stripe
+       first, since the row can be behind it, and Stripe here is a stub that remembers what it cancelled: a first charge
+       being retried, a plan paid for, one long ended, one it has no record of, no answer at all, an answer that says no
+       state (a page that is not JSON, null, or a bare string), a cancel it refuses, a cancel whose answer is lost on the way back, and a
+       checkout that lands on the row while the claim waits on Stripe.
+       The throttles are not what these check, so each claim starts this parent's hourly counts again: its five claims,
+       and the twenty billing requests the checkouts further down need, keep their room */
+    const claimNow = async () => {
+      await db.query(`DELETE FROM rate_events WHERE key IN ('beta:${patState.me.userId}', 'billing:${patState.me.userId}')`);
+      return pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, paying: j.paying === true }))));
+    };
+    const lapsedOn = sub => db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', stripe_subscription_id = '${sub}' WHERE household_id = ${patState.household.id}`);
+    const rowNow = async () => (await db.query(`SELECT plan, source, status, stripe_subscription_id AS sub FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
+    const isForever = r => r.plan === 'lifetime' && r.source === 'code' && r.status === 'active' && r.sub === null;
+    /* a claim, what it asked Stripe about subscriptions, and the row after it */
+    const asked = async () => { const from = stripeCalls.length, { status, paying } = await claimNow();
+      return { status, paying, calls: stripeCalls.slice(from).filter(c => c.path.startsWith('/v1/subscriptions/')).map(c => c.method + ' ' + c.path.split('/').pop()), row: await rowNow() }; };
+    const stripeStub = globalThis.__LS_STRIPE_FETCH, ended = new Set();
+    const answer = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
+    globalThis.__LS_STRIPE_FETCH = async (url, init) => {
+      const path = new URL(url).pathname, id = path.replace(/^\/v1\/subscriptions\//, '');
+      if (!/^sub_(x|paid|gone|unknown|down|odd|null|str|stuck|cut|race)$/.test(id)) return stripeStub(url, init);
+      stripeCalls.push({ method: init.method, path });
+      if (id === 'sub_down') throw new TypeError('fetch failed');
+      if (id === 'sub_unknown' || (ended.has(id) && init.method === 'DELETE')) return answer({ error: { type: 'invalid_request_error', code: 'resource_missing', message: `No such subscription: '${id}'` } }, 404);
+      if (id === 'sub_odd') return new Response('<html>a proxy page, not Stripe</html>', { status: 200 });
+      if (id === 'sub_null') return new Response('null', { status: 200 });
+      if (id === 'sub_str') return new Response('"canceled"', { status: 200 });   /* a state, but not a subscription with one */
+      if (init.method === 'GET') return answer(id === 'sub_paid' ? { id, object: 'subscription', status: 'active' }
+        : id === 'sub_gone' || ended.has(id) ? { id, object: 'subscription', status: 'canceled' }
+        : { id, object: 'subscription', status: 'past_due', trial_end: 1790000000, items: { data: [{ current_period_start: 1790000000 }] } });   /* the first charge, when the free weeks ended */
+      if (id === 'sub_stuck') return answer({ error: { type: 'api_error', message: 'stub: not now' } }, 500);
+      if (id === 'sub_race') await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', stripe_subscription_id = 'sub_new' WHERE household_id = ${patState.household.id}`);
+      ended.add(id);
+      return id === 'sub_cut' ? { ok: true, status: 200, text: () => Promise.reject(new Error('connection reset')) } : answer({ id, object: 'subscription', status: 'canceled' });
+    };
+    try {
+      /* the other parent paid before, so the card behind the portal is theirs */
+      const [payer] = (await db.query(`INSERT INTO users (email) VALUES ('payer@example.com') RETURNING id`)).rows;
+      await lapsedOn('sub_x'); await db.query(`UPDATE entitlements SET paid_by = ${payer.id} WHERE household_id = ${patState.household.id}`);
+      const retrying = await asked();
+      check('a household whose first charge failed gets the beta, and the subscription Stripe is still retrying is cancelled first',
+        retrying.status === 200 && JSON.stringify(retrying.calls) === JSON.stringify(['GET sub_x', 'DELETE sub_x']) && isForever(retrying.row), retrying);
+      const payerNow = (await db.query(`SELECT paid_by FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0].paid_by;
+      check('and whoever claims is not made the payer: the card and its invoices stay the other parent\'s', retrying.status === 200 && payerNow === payer.id, { status: retrying.status, payerNow, payer: payer.id });
+      await db.query(`DELETE FROM users WHERE id = ${payer.id}`);   /* the numbers page counts every person */
+      await lapsedOn('sub_paid');
+      const paid = await asked();
+      check('one Stripe says is paid for, its news not yet on the row, is refused like any paying household, and left running',
+        paid.status === 409 && paid.paying && JSON.stringify(paid.calls) === JSON.stringify(['GET sub_paid']) && paid.row.status === 'canceled' && paid.row.sub === 'sub_paid', paid);
+      await lapsedOn('sub_down');
+      const down = await asked();
+      await lapsedOn('sub_odd');
+      const odd = await asked();
+      await lapsedOn('sub_null');
+      const nothing = await asked();
+      await lapsedOn('sub_str');
+      const bare = await asked();
+      await lapsedOn('sub_stuck');
+      const stuck = await asked();
+      check('if Stripe cannot be reached, answers without saying what state it is in, or will not cancel it, the claim waits, with the subscription still on the row',
+        down.status === 503 && JSON.stringify(down.calls) === JSON.stringify(['GET sub_down']) && down.row.plan === 'free' && down.row.sub === 'sub_down'
+        && odd.status === 503 && JSON.stringify(odd.calls) === JSON.stringify(['GET sub_odd']) && odd.row.plan === 'free' && odd.row.sub === 'sub_odd'
+        && nothing.status === 503 && JSON.stringify(nothing.calls) === JSON.stringify(['GET sub_null']) && nothing.row.plan === 'free' && nothing.row.sub === 'sub_null'
+        && bare.status === 503 && JSON.stringify(bare.calls) === JSON.stringify(['GET sub_str']) && bare.row.plan === 'free' && bare.row.sub === 'sub_str'
+        && stuck.status === 503 && JSON.stringify(stuck.calls) === JSON.stringify(['GET sub_stuck', 'DELETE sub_stuck', 'GET sub_stuck']) && stuck.row.plan === 'free' && stuck.row.sub === 'sub_stuck',
+        { down, odd, nothing, bare, stuck });
+      await lapsedOn('sub_gone');
+      const gone = await asked();
+      await lapsedOn('sub_unknown');
+      const unknown = await asked();
+      await lapsedOn('sub_cut');
+      const cut = await asked();
+      check('one Stripe ended long ago, or has no record of, is left as it is, and one cancelled with its answer lost is read back: none holds the claim up',
+        gone.status === 200 && JSON.stringify(gone.calls) === JSON.stringify(['GET sub_gone']) && isForever(gone.row)
+        && unknown.status === 200 && JSON.stringify(unknown.calls) === JSON.stringify(['GET sub_unknown']) && isForever(unknown.row)
+        && cut.status === 200 && JSON.stringify(cut.calls) === JSON.stringify(['GET sub_cut', 'DELETE sub_cut', 'GET sub_cut']) && isForever(cut.row),
+        { gone, unknown, cut });
+      const secondFrom = stripeCalls.length, cancelledBefore = await stripeLib.cancelSubscription('sub_x');
+      const secondCalls = stripeCalls.slice(secondFrom).map(c => c.method + ' ' + c.path.split('/').pop()), refused = await stripeLib.cancelSubscription('sub_stuck');
+      check('cancelling one Stripe cancelled before counts as done on its no-such-subscription answer alone, and one it will not cancel does not',
+        cancelledBefore === true && JSON.stringify(secondCalls) === JSON.stringify(['DELETE sub_x']) && refused === false, { cancelledBefore, secondCalls, refused });
+      await lapsedOn('sub_race');
+      const race = await asked();
+      const raceAgain = await claimNow();
+      check('a checkout that lands while the claim waits on Stripe is not written over: the claim waits, and its next go is refused as paying',
+        race.status === 503 && race.row.plan === 'household' && race.row.status === 'active' && race.row.sub === 'sub_new' && raceAgain.status === 409 && raceAgain.paying, { race, raceAgain });
+    } finally { globalThis.__LS_STRIPE_FETCH = stripeStub; }
     await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL WHERE household_id = ${patState.household.id}`);
     process.env.BETA_CAP = '1';
     const fullPage = await (await fetch(NODE_BASE + '/beta')).text();
     check('at the cap the page says the beta is full and takes an email for the list', /beta is full/.test(fullPage) && /name="waitlist"/.test(fullPage) && /value="beta-full"/.test(fullPage) && /action="\/on-the-list\.html"/.test(fullPage) && !/Join the beta/.test(fullPage));
-    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'none' WHERE household_id = ${patState.household.id}`);
+    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', stripe_subscription_id = 'sub_full' WHERE household_id = ${patState.household.id}`);
     process.env.BETA_CAP = '0';                                   /* closed: nobody else gets in, whatever the count */
+    const fullCalls = stripeCalls.length;
     const full = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, full: j.full }))));
-    check('and a claim past the cap is refused', full.status === 409 && full.full === true, full);
+    check('and a claim past the cap is refused, before Stripe is asked about the subscription on its row', full.status === 409 && full.full === true && !stripeCalls.slice(fullCalls).some(c => c.path.startsWith('/v1/subscriptions/')), full);
     /* a tester's first sign-in gets the beta welcome, not the three-weeks one: the flag rides on the link and the code */
     {
       const rq = await (await fetch(NODE_BASE + '/api/auth/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'betawelcome@example.com', beta: true }) })).json();
@@ -4479,10 +4573,11 @@ try {
   check('and the delete warning still calls it the forever purchase', (await pb.$$eval('#view li', a => a.map(l => l.textContent))).includes('The forever purchase, which does not come back'),
     await pb.$$eval('#view li', a => a.map(l => l.textContent)));
   /* the beta link opened by a household that bought forever: the claim says it already has it, and the
-     beta's banner, "yours, free forever", is not for a plan that was paid for. The suite has spent Pat's
-     five claims an hour already, and this one would take the last of the twenty billing requests an hour
-     that backing out of Stripe needs further down, so both counters start again here. The banner used to
-     arrive with the pull that follows the toast, so the view is watched for two seconds after it */
+     beta's banner, "yours, free forever", is not for a plan that was paid for. Pat's claims (five an hour)
+     and billing requests (twenty) are throttled, and backing out of Stripe needs its share of the twenty
+     further down, so both counters start again here rather than lean on how many the blocks above spent.
+     The banner used to arrive with the pull that follows the toast, so the view is watched for two
+     seconds after it */
   await db.query(`DELETE FROM rate_events WHERE key IN ('beta:${patState.me.userId}', 'billing:${patState.me.userId}')`);
   await pb.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pb.waitForLoadState('load');
   const boughtClaim = await until(pb, () => /already yours/.test(document.querySelector('#toast').textContent));
@@ -4501,9 +4596,84 @@ try {
   check('a partial refund changes nothing', (await ent()).plan === 'lifetime');
   await hook({ id: 'evt_refund', type: 'charge.refunded', created: t0 + 9, data: { object: { id: 'ch_1', object: 'charge', customer: 'cus_pat', refunded: true } } });
   check('a forever purchase refunded in full is undone', (await ent()).plan === 'free' && (await ent()).status === 'canceled');
+  /* the beta's forever charged nothing but keeps the Stripe customer of anything bought before, so a charge of that
+     customer refunded in full later is an earlier one (support giving back what a forgotten subscription took) */
+  await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_price_id = NULL WHERE household_id = ${patState.household.id}`);
+  const betaRefund = await hook({ id: 'evt_refund_beta', type: 'charge.refunded', created: t0 + 9.1, data: { object: { id: 'ch_2', object: 'charge', customer: 'cus_pat', refunded: true } } });
+  check('but a full refund of an earlier charge cannot end a forever nobody paid for', betaRefund.status === 200 && (await ent()).plan === 'lifetime' && (await ent()).source === 'code' && (await ent()).status === 'active' && (await ent()).cust === 'cus_pat', await ent());
+  {
+    /* a yearly checkout left open in a tab while the beta was claimed, and paid after: it would charge a free forever every year */
+    await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL, stripe_price_id = NULL WHERE household_id = ${patState.household.id}`);
+    const before = stripeCalls.length;
+    const late = await hook({ id: 'evt_forever_clash', type: 'checkout.session.completed', created: t0 + 9.15, data: { object: { id: 'cs_forever_clash', mode: 'subscription', payment_status: 'paid', amount_total: 1999, customer: 'cus_pat', subscription: 'sub_late', invoice: 'in_clash', client_reference_id: String(patState.household.id), metadata: { plan: 'year' } } } });
+    const calls = stripeCalls.slice(before);
+    check('a yearly checkout paid after the beta was claimed is cancelled and refunded, and the forever stays as it was',
+      late.status === 200 && calls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_late') && calls.some(c => c.path === '/v1/refunds' && c.params.payment_intent === 'pi_clash')
+      && (await ent()).plan === 'lifetime' && (await ent()).source === 'code' && (await ent()).sub === null, [calls.map(c => c.method + ' ' + c.path), await ent()]);
+    /* one bought inside the three weeks took nothing at checkout; undone three days on (webhooks failing that long), its first
+       charge may have been taken since, which nothing here gives back: the log asks for it to be looked at */
+    const said = [], ce = console.error; console.error = (...a) => { said.push(a.map(String).join(' ')); ce.apply(console, a); };
+    let lateTrial;
+    try { lateTrial = await hook({ id: 'evt_late_trial', type: 'checkout.session.completed', created: t0 + 9.155, data: { object: { id: 'cs_late_trial', created: Math.floor(Date.now() / 1000) - 3 * 86400, mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_pat', subscription: 'sub_late_trial', client_reference_id: String(patState.household.id), metadata: { plan: 'year', charge_later: '1' } } } }); }
+    finally { console.error = ce; }
+    check('one bought inside the three weeks and undone days later is cancelled, and the log asks for its first charge to be checked by hand',
+      lateTrial.status === 200 && said.some(l => /^billing: CHECK BY HAND for a first charge on sub_late_trial/.test(l)) && (await ent()).plan === 'lifetime' && (await ent()).source === 'code', { said, row: await ent() });
+  }
+  {
+    /* the claim writing forever while a checkout's webhook waits on Stripe for the new subscription, after the webhook read the
+       row and before it writes. With Stripe's stamp behind our clock the webhook's write is the older one and misses; with it
+       ahead, the write would land on the forever. Either way the checkout is undone, and the forever stands */
+    const stub = globalThis.__LS_STRIPE_FETCH;
+    const overtaken = async (sub, claimedAt, created) => {
+      await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', stripe_subscription_id = NULL WHERE household_id = ${patState.household.id}`);
+      globalThis.__LS_STRIPE_FETCH = async (url, init) => {
+        if (init.method === 'GET' && new URL(url).pathname === '/v1/subscriptions/' + sub)
+          await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL, event_at = to_timestamp(${claimedAt}) WHERE household_id = ${patState.household.id}`);
+        return stub(url, init);
+      };
+      const before = stripeCalls.length;
+      let status;
+      try { status = (await hook({ id: 'evt_' + sub, type: 'checkout.session.completed', created, data: { object: { id: 'cs_' + sub, mode: 'subscription', payment_status: 'paid', amount_total: 1999, customer: 'cus_pat', subscription: sub, invoice: 'in_clash', client_reference_id: String(patState.household.id), metadata: { plan: 'year' } } } })).status; }
+      finally { globalThis.__LS_STRIPE_FETCH = stub; }
+      const calls = stripeCalls.slice(before);
+      return { status, undone: calls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/' + sub) && calls.some(c => c.path === '/v1/refunds'), row: await ent() };
+    };
+    const behind = await overtaken('sub_behind', t0 + 9.17, t0 + 9.16), ahead = await overtaken('sub_ahead', t0 + 9.18, t0 + 9.19);
+    check('a checkout whose webhook the claim overtakes is cancelled and refunded, whichever clock is ahead, and the forever stands',
+      [behind, ahead].every(r => r.status === 200 && r.undone && r.row.plan === 'lifetime' && r.row.source === 'code' && r.row.sub === null), { behind, ahead });
+    /* and a subscription's own event, the claim writing forever between its read of the row and its write, Stripe's stamp ahead */
+    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', stripe_subscription_id = NULL WHERE household_id = ${patState.household.id}`);
+    const realSql = globalThis.__LS_SQL; let claimed = false;
+    globalThis.__LS_SQL = async (strings, ...vals) => {
+      const rows = await realSql(strings, ...vals);
+      if (!claimed && typeof strings !== 'string' && strings.join('?').startsWith('SELECT plan, status, source, current_period_end, stripe_subscription_id FROM entitlements WHERE household_id =')) {
+        claimed = true;
+        await realSql(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL, event_at = to_timestamp(${t0 + 9.185}) WHERE household_id = ${patState.household.id}`);
+      }
+      return rows;
+    };
+    let subOvertaken;
+    try { subOvertaken = await hook(subEv('evt_sub_overtaken', 'customer.subscription.updated', t0 + 9.19, { id: 'sub_overtaken' })); }
+    finally { globalThis.__LS_SQL = realSql; }
+    check('and a subscription event the claim overtakes does not land on the forever either',
+      claimed && subOvertaken.status === 200 && (await ent()).plan === 'lifetime' && (await ent()).source === 'code' && (await ent()).sub === null, { claimed, row: await ent() });
+    /* an App Store forever past its end, Apple's word missed (a sandbox one lasts a day), holds nothing: the website sells the
+       plan again, and a yearly checkout paid for it is a sale like any other, not undone */
+    await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'apple', status = 'active', current_period_end = now() - interval '5 days', stripe_subscription_id = NULL, event_at = to_timestamp(${t0 + 9.19}) WHERE household_id = ${patState.household.id}`);
+    const soldFrom = stripeCalls.length;
+    const sold = await hook({ id: 'evt_after_sandbox', type: 'checkout.session.completed', created: t0 + 9.195, data: { object: { id: 'cs_after_sandbox', mode: 'subscription', payment_status: 'paid', amount_total: 1999, customer: 'cus_pat', subscription: 'sub_after_sandbox', invoice: 'in_clash', client_reference_id: String(patState.household.id), metadata: { plan: 'year' } } } });
+    const soldCalls = stripeCalls.slice(soldFrom).map(c => c.method + ' ' + c.path);
+    check('a lapsed App Store forever holds nothing: a yearly checkout paid over it is a sale, not undone',
+      sold.status === 200 && !soldCalls.some(c => c.startsWith('DELETE') || c.endsWith('/refunds')) && (await ent()).plan === 'household' && (await ent()).source === 'stripe' && (await ent()).sub === 'sub_after_sandbox',
+      { soldCalls, row: await ent() });
+    await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'apple', status = 'active', current_period_end = now() - interval '5 days', stripe_subscription_id = NULL, event_at = to_timestamp(${t0 + 9.196}) WHERE household_id = ${patState.household.id}`);
+    const lapsedEvent = await hook(subEv('evt_after_sandbox_sub', 'customer.subscription.updated', t0 + 9.197, { id: 'sub_after_sandbox' }));
+    check('and so does a subscription\'s own event over one: it is applied, not skipped as forever',
+      lapsedEvent.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'stripe' && (await ent()).sub === 'sub_after_sandbox', await ent());
+  }
   /* one household, two ways to pay: Stripe's clock and Apple's cannot be compared, so a Stripe
      delivery late enough to pass the ordering check must still not undo a plan paid to Apple */
-  await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.annual' WHERE household_id=${patState.household.id}`);
+  await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', current_period_end=NULL, stripe_subscription_id=NULL, event_at=to_timestamp(${t0 + 9}), apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.annual' WHERE household_id=${patState.household.id}`);
   const lateStripe = await hook(subEv('evt_apple_1', 'customer.subscription.deleted', t0 + 9.2, { status: 'canceled' }));
   check('a late Stripe delivery cannot undo a plan the household pays Apple for', lateStripe.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'apple' && (await ent()).status === 'active', await ent());
   {
@@ -4572,8 +4742,9 @@ try {
   check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
   {
     /* that row carries forever's price id, as a sale's does, so the id alone cannot tell a code from a purchase.
-       Its checkout left a Stripe customer, and Manage billing stays for it: a subscription Stripe was still
-       retrying when the beta was claimed can go on charging, and nothing else in the app reaches it */
+       Its checkout left a Stripe customer, and Manage billing stays for it. It was kept for a subscription Stripe
+       was still retrying when the beta was claimed; the claim cancels that one now, and whether the button goes
+       for a forever nobody paid for is the app's own change, with a build of its own */
     const [{ stripe_price_id: codePrice }] = (await db.query(`SELECT stripe_price_id FROM entitlements WHERE household_id = ${patState.household.id}`)).rows;
     await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
     const codeRows = await planRows(['Your plan: Household, free forever']);
@@ -4707,8 +4878,11 @@ try {
     await db.query(`DELETE FROM users WHERE email LIKE 'filler%@example.com'`);
     process.env.ADMIN_EMAILS = admins;
   }
+  /* the tester's code charged nothing either, so a charge of the same customer refunded in full is an earlier one */
   await hook({ id: 'evt_refund_t', type: 'charge.refunded', created: t0 + 9.6, data: { object: { id: 'ch_t', object: 'charge', customer: 'cus_pat', refunded: true } } });
-  check('undoing it clears the tester mark too', (await ent()).plan === 'free' && (await ent()).source === 'none', await ent());
+  check('and a refund cannot end the tester\'s forever, nor take the mark off', (await ent()).plan === 'lifetime' && (await ent()).source === 'code' && (await ent()).status === 'active', await ent());
+  /* back by hand, then, to the household with no plan that a refund used to leave, for the App Store's checks */
+  await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL, cancel_at_period_end = false, stripe_subscription_id = NULL, stripe_price_id = NULL WHERE household_id = ${patState.household.id}`);
   /* ------------------------------------------------ the App Store */
   {
     const fx = (n) => fs.readFileSync(path.join(ROOT, '..', 'tests', 'fixtures', 'apple', n));
