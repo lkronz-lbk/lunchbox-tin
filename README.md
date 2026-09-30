@@ -6,7 +6,8 @@ page, and an installable offline web app. No build step, no framework, no server
 - **Landing page** — `public/index.html`
 - **The app** — `public/app/index.html` (one self-contained file: markup, styles, logic)
 - **PWA** — `public/app/manifest.webmanifest`, `public/app/sw.js`, icons in `public/icons/`
-- **Deploy** — Netlify, publish directory `public`, no build command
+- **Deploy** — Netlify, publish directory `public`; the one build command, `node scripts/migrate.mjs`,
+  checks the keys and the database address, then applies any new migration
 
 ## Running it locally
 
@@ -539,9 +540,9 @@ UI per context (`production`, `staging`, `preview`), and the code falls back to 
 deploy context. That is the seam that
 matters: production reads its own database and its live Stripe key, and neither can reach
 a branch deploy or a pull request preview. The build refuses a Stripe key scoped to the
-wrong context, and a Stripe or Resend key pasted with anything more than the key, as long as
-the variable has the Builds scope: a build cannot check a key it cannot see, and it names the
-keys it could.
+wrong context, and a Stripe or Resend key or a database address pasted with anything more
+than itself, as long as the variable has the Builds scope: a build cannot check a variable it
+cannot see, and it names the keys it could.
 
 **Netlify setup, once:** Site configuration → Build & deploy → Branches and deploy
 contexts → add `dev` as a branch deploy, and leave Deploy Previews on.
@@ -756,15 +757,19 @@ out by deleting it in the commit that does it.
   (`databaseUrl()` in `netlify/lib/db.js`), `NETLIFY_DATABASE_URL` in production and
   `STAGING_DATABASE_URL` everywhere else must be `postgresql://…` as Neon's Connect dialog gives
   it, never its `DATABASE_URL=` line or its `psql` command, and without quotes; anything more
-  refuses the deploy, and the last good one stays live. Nobody has read either value, so each
-  context's next deploy is the first time the check meets it: the check's deploy preview, then
-  dev's, then main's. Staging is a Neon branch of production, and a branch starts with its
-  parent's passwords, so staging's may still be production's. Resetting it on the staging branch
-  alone (Neon Console, the staging branch, Roles, Reset password), pasting the new string alone
-  into `STAGING_DATABASE_URL` and retrying dev's last deploy makes a staging address worth
-  nothing against production, and settles that value too; until the retry, staging cannot reach
-  its database. This item comes out once main's first deploy with the check has gone through
-  (`migrate:` lines in its build log, where a refusal says `deploy refused:`).
+  refuses the deploy (`deploy refused: STAGING_DATABASE_URL must be …`), and the last good one
+  stays live. Nobody has read any of the values, so each context's next deploy is the first time
+  the check meets its value: the check's deploy preview, then dev's, then main's. Past the check
+  a deploy can still fail, as `migrate failed:` in the database's words or ours: an address the
+  driver cannot read, no answer, or a refusal such as a wrong password. Staging is a Neon branch
+  of production, and a branch starts with its parent's passwords, so staging's may still be
+  production's. Resetting it on the staging branch alone (Neon Console, the staging branch,
+  Roles, Reset password) makes a staging address worth nothing against production. Then paste
+  the new string alone into every context's `STAGING_DATABASE_URL` (Branch deploys and Deploy
+  Previews at least) and retry dev's last deploy: until a value is replaced, each build that reads
+  it fails with `migrate failed: password authentication failed …`, and a deploy already live
+  with the old string cannot reach the database until it is rebuilt. This item comes out once
+  main's first deploy with the check has gone through (`migrate:` lines in its build log).
 - **Liz: `STRIPE_SECRET_KEY`, one value per context, each the secret key alone.** Production
   takes the live secret key, with the Builds scope as well as Functions: the standard
   `sk_live_…` (a restricted `rk_live_…` passes the build but fails at the first call it has no
@@ -1031,16 +1036,19 @@ writes the same one.
   nothing else about it is special.
   `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each as the
   build command; every statement is idempotent, so a half-applied file is harmless.
-  Each database variable must hold the connection string alone: `postgres://` or
-  `postgresql://`, then letters, digits and punctuation, with no space, quote or line break
-  (one around it is dropped). Anything more, such as the `DATABASE_URL=` line or the `psql`
-  command Neon's Connect dialog offers, refuses the deploy at the build, naming the variable,
-  never the value, and a running function refuses it too: the driver's error about it quotes
-  it whole, password and all, and every function logs what it throws. For the same reason
-  `sql()` never passes on the driver's own words about a connection (an address it cannot
-  read, no answer, an answer that is not a result): each is logged in fixed words. A query the
-  database refused, a unique violation say, comes through in its own words and with its code,
-  unless they hold the password.
+  Each database variable (`NETLIFY_DATABASE_URL`, or the older `NETLIFY_DB_URL` when it is
+  unset; `STAGING_DATABASE_URL`, or `DEV_DB_URL`) must hold the connection string alone:
+  `postgres://` or `postgresql://`, then letters, digits and punctuation, with no space, quote or
+  line break. Whitespace around it is dropped, and a value of nothing but whitespace is refused,
+  not skipped. Anything more, such as the `DATABASE_URL=` line or the `psql` command Neon's
+  Connect dialog offers, refuses the deploy at the build (`deploy refused:`), naming the
+  variable, never the value, and a running function refuses it too: the driver's error about it
+  quotes it whole, password and all, and every function logs what it throws. For the same
+  reason `sql()` passes on only what the database said with a Postgres error code (a unique
+  violation, a wrong password), in its own words and with its code, unless they hold the
+  password; anything else the driver says (an address it cannot read, no answer, an answer that
+  is not a result) is logged in fixed words. At the build, either fails the deploy as
+  `migrate failed:`.
   Housekeeping (`sweep()` in `netlify/lib/db.js`: expired links, sessions and invites,
   rate-limit rows past a day, error reports past thirty days) rides along with about one
   throttled call in twenty-five, and runs once a day in production after the trial emails.

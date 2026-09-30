@@ -41,12 +41,25 @@ export function databaseUrl() { return database().url; }
 const LEFT_OUT = "the driver's own words are left out, as they can quote the address, password and all";
 function told(e, secrets) {
   if (e instanceof NeonDbError && !e.sourceError && /^[0-9A-Z]{5}$/.test(e.code || '')) {
-    if (!secrets.some(s => [e.message, ...Object.values(e)].some(v => typeof v === 'string' && v.includes(s)))) return e;
+    if (!holds(e, secrets)) return e;
     return Object.assign(new Error('The database refused a query in words that hold the password, so they are left out'), { code: e.code });
   }
   if (e && e.sourceError) return new Error(`No answer from the database (${LEFT_OUT})`);
-  const status = e instanceof NeonDbError && /^Server error \(HTTP status (\d{3})\)/.exec(e.message);
-  return new Error(`The database answered${status ? ' ' + status[1] : ''}, but not with a result (${LEFT_OUT})`);
+  /* a NeonDbError with no fetch error behind it is the driver's word on an answer it could not use */
+  if (e instanceof NeonDbError) {
+    const status = /^Server error \(HTTP status (\d{3})\)/.exec(e.message);
+    return new Error(`The database answered${status ? ' ' + status[1] : ''}, but not with a result (${LEFT_OUT})`);
+  }
+  /* anything else failed before the query went (a value it could not send) or after (an answer it could not read) */
+  return new Error(`A query could not be sent to the database, or its answer could not be read (${LEFT_OUT})`);
+}
+/* whether a refusal's words hold the password, in any field and whatever the field's shape, and in
+   either case, as a percent escape can come back in the other; anything that cannot be read as
+   words is taken to hold it */
+function holds(e, secrets) {
+  let words;
+  try { words = `${e.message}\n${JSON.stringify(Object.values(e))}`.toLowerCase(); } catch { return true; }
+  return secrets.some(s => words.includes(s.toLowerCase()) || words.includes(JSON.stringify(s).slice(1, -1).toLowerCase()));
 }
 /* the password as the address carries it, and as the database reads it */
 function secretsOf(url) {

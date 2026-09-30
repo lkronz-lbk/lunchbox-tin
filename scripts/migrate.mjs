@@ -47,9 +47,10 @@ if (process.argv[1] && process.argv[1].endsWith('migrate.mjs')) {
   if (!databaseUrl()) { console.log('migrate: this context has no database URL, skipping'); process.exit(0); }
   /* through sql(), so what the driver says about the connection reaches the build log in fixed
      words, never its own, which can quote the address; a migration the database refused is told
-     in the database's own words */
+     in the database's own words, with its code and where in the statement it stopped. The file is
+     the one after the last "applied" line */
   let n;
   try { n = await migrate(sql(), console.log); }
-  catch (e) { console.error('migrate failed:', e.message); process.exit(1); }
+  catch (e) { console.error('migrate failed:', e.message + (e.code ? ` (code ${e.code}${e.position ? `, position ${e.position}` : ''})` : '')); process.exit(1); }
   console.log(`migrate: ${n} applied`);
 }

@@ -78,9 +78,9 @@ async function body(req) {
 }
 
 /* the last catch every other function has: anything thrown on the way (the database unreachable,
-   say) is logged here, and the phone or Apple is told only that something went wrong. Neither
-   finishes on a 500: the phone keeps the purchase for StoreKit to hand back at the next launch,
-   and Apple sends the notification again */
+   say) is logged here, and the phone or Apple is told only that something went wrong. As when a
+   throw got away, the phone leaves the purchase unfinished (it finishes one only on 200, 400 or
+   409), and Apple sends the notification again (it resends on anything but a success) */
 export default async function handler(req) {
   try { return await route(req); }
   catch (e) {
