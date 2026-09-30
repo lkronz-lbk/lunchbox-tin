@@ -773,6 +773,40 @@ try {
     check('and every day of the plan keeps its own stamp through the reload', await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.every(d => typeof d.updatedAt === 'string' && d.updatedAt.length > 10)));
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   }
+  {
+    /* No lunch today: a field trip, a sick day. The day comes off Pack and Shop, is never asked about, and Put it back undoes it. */
+    const shopBefore = await page.$$eval('#view .item.shopline', a => a.length);
+    await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+    const wasPacked = !!(await page.$('[data-act="pack-all"][aria-pressed="true"]'));
+    check('a packed box offers no No lunch', !wasPacked || (await page.$$eval('[data-act="no-lunch"]', a => a.length)) === 0);
+    if (wasPacked) { await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300); }   /* un-tick: the button is for a box still to pack */
+    check('Pack offers No lunch today beside the box', (await page.$$eval('[data-act="no-lunch"]', a => a.map(b => b.textContent.trim()))).join('|') === 'No lunch today', await page.$$eval('[data-act="no-lunch"]', a => a.map(b => b.textContent.trim())));
+    await page.click('[data-act="no-lunch"]'); await page.waitForTimeout(350);
+    check('and the day comes off: no tin, one line that says so, Put it back, a toast with Undo', (await page.$$eval('#view .tin', a => a.length)) === 0 && /No lunch today\. Nothing to pack, nothing on the list\./.test(await page.textContent('#view')) && (await page.$eval('[data-act="no-lunch"]', b => b.textContent.trim())) === 'Put it back' && /No lunch today — off the list/.test(await page.textContent('#toast')) && !!(await page.$('#toast [data-act="undo"]')));
+    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
+    check('the shopping list drops that day\'s foods', (await page.$$eval('#view .item.shopline', a => a.length)) < shopBefore, [shopBefore, await page.$$eval('#view .item.shopline', a => a.length)]);
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
+    check('and Week shows the day as one line with no lock, no shuffle and no tin', await page.evaluate(() => { const c = [...document.querySelectorAll('.daycard')].find(d => /Today/.test(d.textContent)); return !!c && !c.querySelector('.tin') && !c.querySelector('[data-act="day-lock"]') && !c.querySelector('[data-act="shuffle-day"]') && /No lunch today/.test(c.textContent) && !!c.querySelector('[data-act="no-lunch"]'); }));
+    await page.evaluate(() => window.__pinHour(16));
+    await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+    check('at four nothing asks about a day with no lunch, and there is no dot', (await page.$$eval('.review, .card.fold', a => a.length)) === 0 && !(await page.$('nav.tabs .due')));
+    await page.evaluate(() => window.__pinHour(9));
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200); await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+    await page.click('[data-act="no-lunch"]'); await page.waitForTimeout(350);
+    check('Put it back brings the box back, and says so', (await page.$$eval('#view .tin', a => a.length)) === 1 && /lunch is back/.test(await page.textContent('#toast')) && await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.some(d => d.off)));
+    /* a later day, from Week: Coming up says so, and the kid's pick skips it */
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
+    const laterDay = await page.evaluate(() => { const cs = [...document.querySelectorAll('.daycard:not(.past)')]; const c = cs.find(d => !/Today/.test(d.querySelector('.dayhead').textContent)); return c ? c.querySelector('[data-act="no-lunch"]').getAttribute('data-day') : null; });
+    check('every day still ahead offers No lunch on Week, and a day that has gone does not', !!laterDay && (await page.$$eval('.daycard.past [data-act="no-lunch"]', a => a.length)) === 0);
+    await page.click('[data-act="no-lunch"][data-day="' + laterDay + '"]'); await page.waitForTimeout(350);
+    await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+    check('Coming up says no lunch for that day', await page.evaluate(d => { const rows = [...document.querySelectorAll('#view .list .item')]; return rows.some(r => /no lunch/.test(r.textContent) && !/Today/.test(r.textContent)); }, laterDay));
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
+    await page.click('[data-act="no-lunch"][data-day="' + laterDay + '"]'); await page.waitForTimeout(350);
+    check('and Put it back on Week restores it', await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const day = k.week.days.find(x => x.d === d); return !!day && !day.off; }, laterDay) && (await page.$$eval('.daycard:not(.past) .tin', a => a.length)) >= 2);
+    if (wasPacked) { await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300); await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300); }   /* leave the box as it was found */
+    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
+  }
 
   /* ------------------------------------------------------- writing one in
      One compartment, one day, a name the parent typed: on no list, never drawn,
@@ -2150,7 +2184,7 @@ try {
     localStorage.setItem('lunchsorted', JSON.stringify(d));
   });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
-  const gone = await page.evaluate(() => ({ sub: document.querySelector('.view-title').previousElementSibling.textContent,   /* the header, not the review card */
+  const gone = await page.evaluate(() => ({ sub: (t => (t.previousElementSibling || t.parentElement.previousElementSibling).textContent)(document.querySelector('.view-title')),   /* the header, not the review card; the title sits in a row with No lunch */
     last: JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.map(x => x.d).sort().pop(),
     all: JSON.parse(localStorage.getItem('lunchsorted')).kids.map(k => (k.deletedAt ? 'x' : '') + (k.week ? k.week.days.map(x => x.d).join(' ') : '-')) }));
   check('"Already packed" shows the last day of the old plan', gone.sub.includes('Already packed') &&
@@ -2917,6 +2951,17 @@ try {
   check("a helper's push is refused", helperPut === 403, helperPut);
   await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
   check('and a helper sees no Shuffle button and no swap cue, only the week', (await p3.$$eval('[data-act="plan-kid"],[data-act="shuffle-day"],.cmp .swap', a => a.length)) === 0 && (await p3.$$eval('.cmp', a => a.length)) > 0);
+  {
+    const HELPER_OK = new Function('return [' + (APP_SRC.match(/var HELPER_OK = \[([\s\S]*?)\];/) || [, ''])[1] + ']')();
+    const drawn = {};
+    for (const tab of ['pack', 'week', 'shop', 'recipes', 'setup']) {
+      await p3.click(`[data-act="tab"][data-tab="${tab}"]`); await p3.waitForTimeout(300);
+      const acts = await p3.$$eval('body [data-act]', a => a.filter(e => !e.closest('#sheet') && !e.closest('#toast') && e.checkVisibility()).map(e => e.getAttribute('data-act')));
+      acts.forEach(x => { if (!HELPER_OK.includes(x)) drawn[x] = tab; });
+    }
+    check('nothing is drawn for a caretaker only to refuse: every control they can see is one they may use', Object.keys(drawn).length === 0, drawn);
+    await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
+  }
   await p3.click('.daycard:not(.past) .cmp >> nth=0'); await p3.waitForTimeout(200);
   check('and a compartment is not a button for a caretaker: nothing is drawn only to refuse', (await p3.$$eval('.cmp[data-act], .cmp button', a => a.length)) === 0 && (await p3.$$eval('.daycard:not(.past) .cmp', a => a.every(c => c.tagName === 'DIV' && !c.getAttribute('aria-label')))), await p3.$$eval('.daycard:not(.past) .cmp', a => a.map(c => c.tagName + (c.getAttribute('aria-label') || ''))));
   {

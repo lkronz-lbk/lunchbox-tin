@@ -48,7 +48,14 @@ throwing app script cannot leave it up forever. From there:
   food in it at once, so the Sunday loop is lock the days that worked, then Plan the week; a day
   is shown locked when all of them are. Week's header is one line — the title, the arrow to next
   week, Plan the week — and each day's header carries its lock and its Shuffle, two 44px icons.
-  A day that has gone (its header says "· home") is one line on Week, the main and a count with
+  **No lunch** (`day.off`, one flag per day, stamped like any change to the day so it syncs and
+  merges by the day's own stamp): "No lunch today" beside the box title on Pack and under each
+  day's tin on Week takes the day off — no box to pack, nothing on the list, never asked about,
+  never picked, no reminder — leaving its foods in place, and the line that replaces the tin
+  ("No lunch today. Nothing to pack, nothing on the list.") carries **Put it back**; the toast
+  offers Undo. A day that has gone gets no button and cannot be taken off; a packed box gets no
+  button; a caretaker gets neither. Coming up says "no lunch" for such a day, and a re-plan keeps
+  the flag. A day that has gone (its header says "· home") is one line on Week, the main and a count with
   how the box went beside it in three words (`reviewShort`: all eaten, 2 came home, 3 of 4 eaten,
   nothing counted, not answered), and opens a read-only sheet showing the box as it was packed — every
   compartment it had, even one switched off since. The day lock refuses a gone day and a day with
@@ -878,7 +885,10 @@ writes the same one.
   household when it joins, and keeps the member it already was. A helper receives only the
   plan, the foods in it and the checks (no rules, allergens, history or addresses), cannot
   push (the server refuses, and the app says "Only a parent can change the plan"), and
-  their checks stay on their phone.
+  their checks stay on their phone. Nothing is drawn for a caretaker only to refuse: every
+  control on their screens is one in `HELPER_OK`, and the smoke suite walks their five tabs to
+  say so — Plan the week, Shuffle, the locks, the picks, No lunch, the settings, the star and
+  the pantry check are not there, not blocked.
 - **Leaving** a household leaves the lunches with it: the phone starts fresh in its own
   empty household. Being removed signs that person's phones out; whatever is on their phone
   stays there. **Delete my account and data** — the only irreversible control, gated on
