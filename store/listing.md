@@ -231,8 +231,9 @@ on the same screen; that address gets no email and its code stands until you cha
 variable. Sign in once yourself with it first, answer the three questions and build a week, so
 the reviewer lands on a planned household rather than an empty one. Nothing else about that
 account is special: it gets the same three weeks of everything as any new household, so do this
-within a few days of submitting, and if review drags past the three weeks the reviewer will see
-the free tier with the plan's pieces locked, which is also fine.
+within a few days of submitting. If review drags past the three weeks, lengthen them in Neon
+(the household is 23): `UPDATE households SET trial_extra_days = trial_extra_days + 7 WHERE id = 23`.
+Left alone, the reviewer sees the free tier with the plan's pieces locked, which is also fine.
 
 **Notes** (paste)
 

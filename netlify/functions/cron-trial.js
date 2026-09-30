@@ -15,12 +15,12 @@ export async function run(now = Date.now(), siteOverride = '') {
   if (!billingEnabled()) return out;
   const site = siteOverride || siteUrl(null);
   const q = sql();
-  /* candidates: rows young enough to be in either window, or every row while the billing
+  /* candidates: rows young enough to be in either window (days added by hand widen a household's own), or every row while the billing
      floor is recent enough that an old household's three weeks are still running */
   const since = stampOrNull(process.env.BILLING_SINCE);
   const rows = since && now - since.getTime() < 25 * DAY
     ? await q`SELECT h.id, h.created_at, h.trial_extra_days, h.doc->>'createdAt' AS doc_created, h.doc->>'tz' AS tz, e.plan, e.status FROM households h LEFT JOIN entitlements e ON e.household_id = h.id ORDER BY h.id LIMIT 5000`
-    : await q`SELECT h.id, h.created_at, h.trial_extra_days, h.doc->>'createdAt' AS doc_created, h.doc->>'tz' AS tz, e.plan, e.status FROM households h LEFT JOIN entitlements e ON e.household_id = h.id WHERE h.created_at > now() - interval '40 days' ORDER BY h.id LIMIT 5000`;
+    : await q`SELECT h.id, h.created_at, h.trial_extra_days, h.doc->>'createdAt' AS doc_created, h.doc->>'tz' AS tz, e.plan, e.status FROM households h LEFT JOIN entitlements e ON e.household_id = h.id WHERE h.created_at > now() - (40 + h.trial_extra_days) * interval '1 day' ORDER BY h.id LIMIT 5000`;
   let sent = 0, price = null;
   for (const h of rows) {
     if (sent >= PER_RUN) break;

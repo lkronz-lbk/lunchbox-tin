@@ -3,4 +3,9 @@
 -- end is the household's birthday plus 21 days plus these. Nothing in the app or the API writes
 -- it; only the owner of the database does, with
 --   UPDATE households SET trial_extra_days = trial_extra_days + 7 WHERE id = <household>
+-- It never touches the entitlement: it lengthens the free weeks, it is not a plan. What it does
+-- not reach: a reminder email already sent is not sent again for the new end (notices keeps one
+-- of each kind a household), and a web plan already bought inside the trial keeps the first
+-- charge date Stripe was given (change the subscription's trial_end in Stripe by hand if the
+-- extra days should be free there too). Lowering it ends the trial at the new, earlier end.
 ALTER TABLE households ADD COLUMN IF NOT EXISTS trial_extra_days INT NOT NULL DEFAULT 0 CHECK (trial_extra_days BETWEEN 0 AND 365);

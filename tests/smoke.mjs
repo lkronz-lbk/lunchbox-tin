@@ -3406,14 +3406,14 @@ try {
   {
     /* days added by hand in the database lengthen the three weeks, on the server and on the phone alike */
     const hid = patState.household.id;
-    await db.query(`UPDATE households SET trial_extra_days = 14 WHERE id = ${hid}`);
+    await db.query(`UPDATE households SET trial_extra_days = 30 WHERE id = ${hid}`);
     const inviteExtended = await pb.evaluate(() => fetch('/api/household/invite', {method:'POST', headers:{'content-type':'application/json'}, body:'{}'}).then(r => r.status));
     const st = await pb.evaluate(() => fetch('/api/household').then(r => r.json()));
     await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
     await openPane(pb, 'household');
     const invites = await pb.$$eval('[data-act="invite"], [data-act="invite-helper"]', a => a.length);
     check('days added to a household\'s trial by hand reopen it: the server allows the invite and the app offers both invites again',
-      inviteExtended === 200 && st.household.trialExtraDays === 14 && invites === 2, [inviteExtended, st.household && st.household.trialExtraDays, invites]);
+      inviteExtended === 200 && st.household.trialExtraDays === 30 && invites === 2, [inviteExtended, st.household && st.household.trialExtraDays, invites]);
     await db.query(`UPDATE households SET trial_extra_days = 0 WHERE id = ${hid}`);
     await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
   }
