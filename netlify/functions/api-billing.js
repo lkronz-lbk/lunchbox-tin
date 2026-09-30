@@ -15,7 +15,7 @@ import { chargeLaterUntil } from '../lib/trial.js';
    POST /api/billing/webhook            -> Stripe, signed                                              */
 
 const PLANS = { year: 'household', lifetime: 'lifetime' };
-const HANDLED = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded',
+const HANDLED = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.expired',
   'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted', 'charge.refunded']);
 
 async function membership(userId) {
@@ -54,11 +54,24 @@ async function applyEvent(ev) {
   const obj = ev.data && ev.data.object;
   if (!obj) return 'skipped';
 
+  if (ev.type === 'checkout.session.expired') {
+    /* the session is gone at Stripe: its mark goes too, so nobody is told someone is paying */
+    const hid = await household(obj.client_reference_id || (obj.metadata && obj.metadata.household_id));
+    if (!hid) return 'no household';
+    for (const k of await recentKeys(`checkout:${hid}:`, 1800)) if (k.split(':').slice(3).join(':') === obj.id) await unmark(k);
+    return 'closed';
+  }
   if (ev.type === 'checkout.session.completed' || ev.type === 'checkout.session.async_payment_succeeded') {
     if (obj.payment_status !== 'paid' && obj.payment_status !== 'no_payment_required') return 'unpaid';   /* a bank debit still clearing: the succeeded event follows */
     const hid = await household(obj.client_reference_id || (obj.metadata && obj.metadata.household_id));
     if (!hid) return 'no household';
-    await unmark(`checkout:${hid}:`);                     /* paid: the household's checkout is no longer open */
+    /* paid: any other checkout still open for the household is closed at Stripe, so two parents who
+       tapped within the same second cannot both pay; then the household's marks are cleared */
+    for (const k of await recentKeys(`checkout:${hid}:`, 1800)) {
+      const sid = k.split(':').slice(3).join(':');
+      if (sid && sid !== obj.id) { try { await stripe('POST', `/checkout/sessions/${sid}/expire`, {}); } catch (e) { console.error('billing: could not close the other checkout', sid, e.message); } }
+    }
+    await unmark(`checkout:${hid}:`);
     const cust = idOf(obj.customer);
     const paidBy = Number(obj.metadata && obj.metadata.user_id) || null;
     const plan = PLANS[obj.metadata && obj.metadata.plan] || (obj.mode === 'payment' ? 'lifetime' : 'household');
@@ -192,7 +205,7 @@ export default async function handler(req, context) {
       return json({ received: true });
     }
 
-    if (req.method !== 'POST' || !['checkout', 'portal', 'beta'].includes(action)) return fail('Not found', 404);
+    if (req.method !== 'POST' || !['checkout', 'portal', 'beta', 'close'].includes(action)) return fail('Not found', 404);
     if (action !== 'beta' && !billingEnabled()) return fail('Billing is not switched on here', 503);
     const user = await currentUser(req);
     if (!user) return fail('Not signed in', 401);
@@ -219,6 +232,18 @@ export default async function handler(req, context) {
     }
     const site = siteUrl(req);
 
+    /* backing out of Stripe: the caller's own open checkout is closed at once, so the other parent
+       is not told someone is paying for the half hour the session would otherwise live */
+    if (action === 'close') {
+      const mine = (await recentKeys(`checkout:${h.id}:`, 1800)).filter(k => k.split(':')[2] === String(user.id));
+      for (const k of mine) {
+        const sid = k.split(':').slice(3).join(':');
+        if (sid) { try { await stripe('POST', `/checkout/sessions/${sid}/expire`, {}); } catch (e) { console.error('billing: could not close the checkout', sid, e.message); } }
+        await unmark(k);
+      }
+      return json({ closed: mine.length });
+    }
+
     if (action === 'checkout') {
       const body = await req.json().catch(() => ({}));
       /* forever is no longer sold; an app open since it was asks, and is told so */
@@ -239,7 +264,7 @@ export default async function handler(req, context) {
          subscription cancelling the other with no refund. Another member's checkout, still open, is
          refused; this member's own is closed at Stripe and replaced, so backing out and trying again works. */
       const open = await recentKeys(`checkout:${h.id}:`, 1800);
-      if (open.some(k => k.split(':')[2] !== String(user.id))) return fail('Someone in your household is paying right now; the plan switches on when they finish', 409, { open: true });
+      if (open.some(k => k.split(':')[2] !== String(user.id))) return fail('The other parent is paying right now \u2014 the plan switches on when they finish', 409, { open: true });
       for (const k of open) {
         const sid = k.split(':').slice(3).join(':');
         if (sid) { try { await stripe('POST', `/checkout/sessions/${sid}/expire`, {}); } catch (e) { console.error('billing: could not close the earlier checkout', sid, e.message); } }

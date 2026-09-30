@@ -132,7 +132,8 @@ throwing app script cannot leave it up forever. From there:
   Plan the week says how many compartments had to differ.
 - **Plan ahead** — one more week (`kid.next`), reached by the Next button beside the week's date, drawn and
   shuffled like this one, listed on Shop under *Next week*, and rolled into `kid.week` the moment this
-  week has gone. Pack and the kid's pick read only this week; the question about what came home
+  week has gone and its Monday is the one a fresh plan would start on (a week planned two Mondays
+  out on a weekend waits its turn; `rollover`, run at boot, on every pull and on every render). Pack and the kid's pick read only this week; the question about what came home
   reads this week and the archive (`kid.past`). Merged and normalised like the first week.
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes. A dish
   goes on the list as what you buy for it (`buy` on the food: turkey and cheese pinwheels are
@@ -292,7 +293,9 @@ throwing app script cannot leave it up forever. From there:
   custom foods get a picture too. Five bank foods were renamed in v25 (Goldfish crackers,
   Babybel cheese round, Jello cup, the two Sunbutter dishes); a household seeded before then
   keeps the old names, and `BANK_ALIAS` answers to them, so the idea bank shows them ticked,
-  the shopping list knows what they are made of, and none is treated as one of the parent's own. A household that packs the night before (Account →
+  the shopping list knows what they are made of, none is treated as one of the parent's own,
+  un-ticking the idea takes the old-named food off, and a seed never adds the new name beside
+  the old. A household that packs the night before (Account →
   Lunchboxes → **When do you pack?**) sees tomorrow's box from 3pm.
 - **Did they eat it?** — once the box is home on a pack day, or the morning after, the Pack view
   asks about that box: "All eaten" first, one tap at the top of the card, then ate it / some /
@@ -347,17 +350,32 @@ throwing app script cannot leave it up forever. From there:
   after it, so Sunday is planning night and "Next ›" never means two Mondays out; a week that
   was planned two Mondays out waits its turn (`rollover` moves `kid.next` into `kid.week` only
   once its Monday is the one a fresh plan would start on, and archives the stale week
-  meanwhile). Changing the pack days follows into the weeks already planned, for the days
-  still ahead: a day switched on is drawn into each planned week where it lands (`packDayChange`,
-  each compartment as a single re-draw against that box), a day switched off leaves it, a day
-  that has gone stays as it was, and the toast says which ("Wednesday added to the week",
-  "Wednesday taken off the week — the box that has gone stays"). The shopping list likewise skips days already gone. The after-school review only asks about a
+  meanwhile). On such a weekend Week draws no arrow until the coming week is planned, and Plan
+  next week refuses a plan that has gone by ("Plan this week first"), so "next week" is one
+  Monday on every tab; Pack's banner says what Shop says — "This week's boxes are done. Plan
+  next week" — on Saturday and Sunday, and "from an earlier week" from Monday. Week's empty card
+  is the one plan button under its title, not three. Shop's Plan next week settles the week per
+  lunchbox. Changing the pack days follows
+  into the weeks already planned, for the days still ahead: a day switched on is drawn into each
+  planned week where it lands (`packDayChange`, each compartment as a single re-draw against
+  that box), a day switched off leaves it, a day that has gone or is already in the bag stays as
+  it was, and the toast names the week it means ("Wednesday added to next week", "Wednesday taken
+  off next week — this week's box stays as packed", "Wednesday is on from next week"; the box's
+  name first when there are two; nothing said of a plan that has gone by) with Undo, which puts
+  the day and its locks, picks and write-ins back. A day the pack days no longer hold
+  is dropped from a plan on every load and merge unless it has gone (`normKid`, and `packDays` in
+  the merge for the days ahead), so a day switched off on one phone never comes back from the
+  other phone's older copy; and an in-place re-plan keeps a gone day whose weekday is no longer
+  a pack day, as packed. On the weekend every tab says the same thing of the old plan: "No plan
+  for this week yet" (Pack still shows its last box under "Already packed", for the question). The shopping list likewise skips days already gone. The after-school review only asks about a
   day the plan already existed on, or that had something checked into the bag.
 - **Lunchbox settings** — the gear beside the lunchbox name on Week, Pack, Shop and Foods:
   lunchboxes, name, pack days, per-lunchbox school rules (cold-only, no ice pack, short
   eating time, no chocolate or candy), allergen exclusions (including seeds & sesame), a
-  free-text avoid list that matches whole words, singular or plural ("ham" keeps ham out and
-  lets graham crackers in; "pea" peas, not peaches — `onAvoidList`), the kid's say. Optional **snack** and **drink** compartments per
+  free-text avoid list that matches whole words as typed, with an s, es or ies on the end ("ham"
+  keeps ham out and lets graham crackers in; "pea" peas, not peaches; "cherry" cherries; "nuts"
+  does not reach "peanut", so a parent who typed part of a word writes each one out — the v25
+  note says so; `onAvoidList`), the kid's say. Optional **snack** and **drink** compartments per
   lunchbox: switching one on seeds a few foods and fills the current week, so the tin never
   grows an empty cell.
 - **Account** — the sixth tab is a short list of rows, each opening its own page over the
@@ -379,7 +397,9 @@ in another browser) has nothing to ask about and signs out on one.
   asked for is kept on the phone (`lunchsorted-after`: the plan sheet's reason — a lunchbox, an
   invite, a food, a recipe, a write-in, the pantry, the question, the kid's pick, the plan) and
   the parent lands back there whether they arrive by the emailed link or type the code
-  (`resumeAfter`). The open page is `UI.pane`, which never reaches the
+  (`resumeAfter`; the question and the kid's pick land on Pack, where they live, whichever page
+  asked; a household still without the plan lands on that page with the plan sheet over it, and
+  "keep" lands on the Subscription page with the sheet over it until the plan is paid). The open page is `UI.pane`, which never reaches the
   account document, so a tap is never read as a change; `paneOK()` is the single test for
   whether a pane may be on screen and the render asks it too, because a pane is opened by a
   link from an email and by the return from Stripe as well as by a tap.
@@ -601,10 +621,15 @@ free to amend**: while `dev` sits above the tag production is serving, more work
 work on the same unreleased build, and it does not bump. A *shipped* build is the opposite —
 bump it, always, or the cache-first service worker keeps serving the old shell. A phone left
 open when a new build's worker takes control (skipWaiting + claim) reloads itself the first
-moment nothing is in hand — no sheet open, nothing being typed, the kid's screen closed, nothing
-armed — so the window in which one build runs against another's shell is seconds, not a day
+moment nothing is in hand — no sheet open, nothing being typed, the kid's screen closed, no
+Account page open, nothing armed for a second tap, no code being waited for, no Undo on screen
+(`body.inhand`, set by every render), no toast up, and no touch, key or scroll for fifteen
+seconds; the reload keeps the tab, the page and the scroll position (`sessionStorage`
+`lunchsorted-reload`) and says "Updated" — so the window in which one build runs against
+another's shell is minutes, not a day
 (the `controllerchange` listener in the third script block; the very first worker is not a new
-build). Do not read the
+build, an Undo still on screen counts as in hand, and a save still in its 120ms wait is written
+on `pagehide` before the page goes). Do not read the
 first rule as license to skip the second. Nothing enforces either: `npm run csp` compares
 `APP_BUILD`, `VERSION` and `WHATS_NEW.build` to each other, and cannot tell that the app changed
 and the tag did not.
@@ -944,11 +969,16 @@ the idea bank stays free so a free list is never stuck with what it has.
   already has the plan is not sold it again (409), nor is one paying through the App Store,
   which is told where it is managed. One checkout at a time for a household: each opened
   session is marked in `rate_events` (`checkout:<household>:<user>:<session>`, half an hour, the
-  session's own life); another member asking while one is open is refused (409, `open: true`,
-  "Someone in your household is paying right now"), so two parents cannot both pay on the last
+  session's own life — a `checkout.session.expired` event clears it early); another member
+  asking while one is open is refused (409, `open: true`, "The other parent is paying right now —
+  the plan switches on when they finish", and the app closes the sheet onto the Subscription
+  page, which shows the plan when it lands), so two parents cannot both pay on the last
   day and leave one subscription cancelling the other with no refund; the same member asking
   again has their earlier session expired at Stripe and replaced, so backing out of Stripe and
-  trying again works, and a completed checkout clears the mark. The web only: a checkout asked
+  trying again works; backing out (`?paid=0`) also closes the caller's own checkout at once
+  (`POST /api/billing/close`), so the other parent is not held for the half hour, and a
+  completed checkout closes any other session still open for the household before clearing the
+  marks, so two taps within the same second cannot both pay. The web only: a checkout asked
   for with `client: 'ios'` is refused (403), and the iPhone app never opens Stripe at all, to buy
   or to manage.
 - **Webhook** (`POST /api/billing/webhook`, signature checked against the raw body, five

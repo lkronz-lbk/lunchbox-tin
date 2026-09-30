@@ -239,10 +239,11 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
     a.kids[0].week.days[0].slots.main = 'a_mon'; a.kids[0].week.days[0].updatedAt = t2;      /* this phone changed Monday, later */
     b.kids[0].week.days[1].slots.main = 'b_tue'; b.kids[0].week.days[1].updatedAt = t3;      /* the other phone changed Tuesday, later still */
     b.kids[0].week.days[0].slots.main = 'b_mon'; b.kids[0].week.days[0].updatedAt = t1;      /* and Monday, earlier */
+    a.kids[0].week.days[2].slots.main = 'a_wed'; b.kids[0].week.days[2].slots.main = 'b_wed';   /* Wednesday, unstamped on both: the newer week's copy */
     m = M.merge(a, b, '2026-09-01');
     const days = Object.fromEntries(m.kids[0].week.days.map(d => [d.d, d.slots.main]));
     check('merge: two parents changing different days both win, day by day, by the day\'s own stamp', days['2026-09-07'] === 'a_mon' && days['2026-09-08'] === 'b_tue', days);
-    check('merge: a day with no stamp of its own goes by its week\'s, and a tie goes to this phone', days['2026-09-09'] === 'f1' && (() => { const x = clone(), y = clone(); x.kids[0].week = wk(t2); y.kids[0].week = wk(t2); x.kids[0].week.days[2].slots.main = 'x'; y.kids[0].week.days[2].slots.main = 'y'; return M.merge(x, y, '2026-09-01').kids[0].week.days[2].slots.main === 'x'; })(), days);
+    check('merge: a day with no stamp of its own goes by its week\'s, and a tie goes to this phone', days['2026-09-09'] === 'b_wed' && (() => { const x = clone(), y = clone(); x.kids[0].week = wk(t2); y.kids[0].week = wk(t2); x.kids[0].week.days[2].slots.main = 'x'; y.kids[0].week.days[2].slots.main = 'y'; return M.merge(x, y, '2026-09-01').kids[0].week.days[2].slots.main === 'x'; })(), days);
   }
   /* recipes belong to the household, so they merge like members and lunchboxes do */
   a = clone(); b = clone();
@@ -734,8 +735,10 @@ try {
     await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
     const weekNow = await page.evaluate(() => ({ title: document.querySelector('.view-title').textContent, empty: !!document.querySelector('.empty'), gone: document.querySelectorAll('.daycard.past').length, banner: [...document.querySelectorAll('.banner')].map(b => b.textContent).join(' | ') }));
-    const comingMonday = await page.evaluate(() => { const t = new Date(); t.setHours(0,0,0,0); const ws = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7)); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ws.getMonth()] + ' ' + ws.getDate(); });
-    check('with a plan whose every day has gone by, Week is the coming week, unplanned, with no day from the old plan and no "earlier week" banner', weekNow.title === 'Week of ' + comingMonday && weekNow.empty && weekNow.gone === 0 && !/earlier week/.test(weekNow.banner), weekNow);
+    const comingMonday = await page.evaluate(() => { const t = new Date(); t.setHours(0,0,0,0); const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; let ws = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7));
+      const ahead = k.settings.days.filter(dw => new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + ((dw + 6) % 7)) >= t).length; if (ahead < 2) ws = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 7);   /* the week a fresh plan anchors to */
+      return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ws.getMonth()] + ' ' + ws.getDate(); });
+    check('with a plan whose every day has gone by, Week is the coming week, unplanned, with no day from the old plan, no "earlier week" banner, one plan button under the title and no arrow to a week after', weekNow.title === 'Week of ' + comingMonday && weekNow.empty && weekNow.gone === 0 && !/earlier week/.test(weekNow.banner) && (await page.$$eval('#view [data-act="plan-kid"]', a => a.length)) === 2 && !(await page.$('[data-act="week-ahead"]')), weekNow);
     await page.evaluate(s => localStorage.setItem('lunchsorted', s), savedDoc);
     await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
     /* a week planned two weeks out on that weekend waits for its turn rather than becoming this week */
@@ -755,11 +758,19 @@ try {
     await page.click('[data-act="day"][data-d="' + dayOff + '"]'); await page.waitForTimeout(400);
     const afterOn = await page.evaluate(dw => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const day = k.week.days.find(x => x.dow === dw); const t = new Date(); t.setHours(0,0,0,0); const iso = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
       return { n: k.week.days.length, has: !!day, ahead: !day || day.d >= iso, filled: !!day && !!k.foods.find(f => f.id === day.slots.main), sorted: k.week.days.every((x, i, a) => !i || a[i-1].d < x.d) }; }, dayOff);
-    check('switching a pack day on draws that day into the week, in its place, and says so', (afterOn.ahead ? afterOn.has && afterOn.filled && afterOn.n === daysBefore + 1 && afterOn.sorted : afterOn.n === daysBefore) && /added to the week|has gone/.test(await page.textContent('#toast')), [afterOn, await page.textContent('#toast')]);
+    check('switching a pack day on draws that day into the week, in its place, and says so', (afterOn.ahead ? afterOn.has && afterOn.filled && afterOn.n === daysBefore + 1 && afterOn.sorted : afterOn.n === daysBefore) && /added to the week|is on from next week/.test(await page.textContent('#toast')) && !!(await page.$('#toast [data-act="undo"]')), [afterOn, await page.textContent('#toast')]);
     await page.click('[data-act="day"][data-d="' + dayOff + '"]'); await page.waitForTimeout(400);
     const afterOff = await page.evaluate(dw => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return { n: k.week.days.length, has: !!k.week.days.find(x => x.dow === dw), on: k.settings.days.indexOf(dw) > -1 }; }, dayOff);
     check('and switching it off takes it out again', !afterOff.on && afterOff.n === daysBefore && !afterOff.has, [afterOff, await page.textContent('#toast')]);
     await page.click('[data-act="box-done"]'); await page.waitForTimeout(200);
+    /* the other phone's older copy still carries the day: it is dropped when the plan is read back, unless it has gone */
+    await page.evaluate(dw => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; const t = new Date(); t.setHours(0,0,0,0);
+      const ws = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7)); const day = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + ((dw + 6) % 7));
+      const iso = day.getFullYear()+'-'+String(day.getMonth()+1).padStart(2,'0')+'-'+String(day.getDate()).padStart(2,'0');
+      k.week.days.push({ d: iso, dow: dw, slots: {}, lock: {}, kidPick: {}, over: {} }); k.week.days.sort((a, b) => a.d < b.d ? -1 : 1); localStorage.setItem('lunchsorted', JSON.stringify(d)); }, dayOff);
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    check('a day the pack days no longer hold is dropped when the plan is read back, so it never comes back from an older copy', await page.evaluate(({ dw, n }) => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return !k.week.days.some(x => x.dow === dw) && k.week.days.length === n; }, { dw: dayOff, n: daysBefore }));
+    check('and every day of the plan keeps its own stamp through the reload', await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.every(d => typeof d.updatedAt === 'string' && d.updatedAt.length > 10)));
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   }
 
@@ -1706,7 +1717,8 @@ try {
     const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
     k.week.days[0].d = iso(y); k.week.days[0].dow = y.getDay();   /* pretend the first box was yesterday */
     const t = new Date(); t.setHours(0,0,0,0); const ws = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7)); k.week.start = iso(ws);
-    k.week.days.push(Object.assign(JSON.parse(JSON.stringify(k.week.days[0])), { d: iso(t), dow: t.getDay() }));   /* and today's box, so the week is still this week and Week shows yesterday as a day that has gone */
+    k.week.days.push(Object.assign(JSON.parse(JSON.stringify(k.week.days[0])), { d: iso(t), dow: t.getDay(), lock: {}, kidPick: {}, over: {} }));   /* and today's box, unlocked, so the week is still this week and Week shows yesterday as a day that has gone */
+    if (k.settings.days.indexOf(t.getDay()) < 0) k.settings.days.push(t.getDay());   /* today is a pack day, or the day would be dropped as one the pack days no longer hold */
     const c = new Date(); c.setDate(c.getDate() - 3); k.week.createdAt = c.toISOString();   /* and that the plan existed then */
     localStorage.setItem('lunchsorted', JSON.stringify(d));
   });
@@ -2034,6 +2046,9 @@ try {
   /* a bank food a household still carries under its old name is the bank's food: ticked in the idea bank, not "one of your own" */
   await page.click('[data-act="ideas"]'); await page.waitForTimeout(400);
   check('a food kept under the bank\'s old name is ticked in the idea bank under its new one', await page.$eval('[data-act="add-idea"][data-name="Cheddar fish crackers"]', b => b.getAttribute('aria-pressed') === 'true' && b.classList.contains('ticked')));
+  await page.click('[data-act="add-idea"][data-name="Cheddar fish crackers"]'); await page.waitForTimeout(300);   /* the first tap arms, the second takes it off */
+  await page.click('[data-act="add-idea"][data-name="Cheddar fish crackers"]'); await page.waitForTimeout(300);
+  check('and un-ticking it takes the old-named food off, since it is the same food', await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const f = k.foods.find(x => x.n === 'Goldfish crackers'); return !!f && !!f.deletedAt; }) && (await page.$eval('[data-act="add-idea"][data-name="Cheddar fish crackers"]', b => b.getAttribute('aria-pressed') === 'false')));
   await page.click('#sheetClose'); await page.waitForTimeout(300);
   await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; k.foods = k.foods.filter(f => !/^test_/.test(f.id)); k.settings.avoidText = ''; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
@@ -3188,6 +3203,7 @@ try {
   const resumed = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /second lunchbox/i.test(document.querySelector('#sheetBody').textContent));
   check('after signing in, the plan sheet comes back on its own for the lunchbox they were adding', resumed);
   await sheetDone(pb); await pb.waitForTimeout(300);
+  await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);   /* the sheet opened over the Lunchbox page they were on; the rows are one tap away */
   check('signed in and free, the Subscription row says Not on', /Subscription\s*Not on/.test(await pb.textContent('#view')));
   await openPane(pb, 'plan');
   check('and the Subscription page offers the plan with no billing to manage', /Your plan\s*Free/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) >= 1);
@@ -3407,7 +3423,10 @@ try {
   globalThis.__LS_SQL = async (strings, ...vals) => { if (blow && typeof strings !== 'string' && strings.join('').includes('INSERT INTO entitlements')) { blow = false; throw new Error('neon blinked'); } return realSql(strings, ...vals); };
   const blinked = await hook(completed);
   globalThis.__LS_SQL = realSql;
+  await db.query(`INSERT INTO rate_events (key) VALUES ('checkout:${patState.household.id}:999999:cs_other_open')`);   /* another checkout still open for the household when this one is paid */
+  stripeCalls.length = 0;
   const ok = await hook(completed);
+  check('a paid checkout closes any other still open for the household and clears the marks', stripeCalls.some(c => c.path === '/v1/checkout/sessions/cs_other_open/expire') && (await db.query(`SELECT count(*)::int AS n FROM rate_events WHERE key LIKE 'checkout:${patState.household.id}:%'`)).rows[0].n === 0);
   check('a delivery that failed mid-apply is retried by Stripe and applied the second time', blinked.status === 500 && ok.status === 200 && !ok.body.duplicate && (await ent()).plan === 'household', [blinked.status, ok.body]);
   check('a signed checkout.session.completed makes the household paid, with the renewal date from the subscription itself', (await ent()).status === 'active' && (await ent()).cust === 'cus_pat' && (await ent()).sub === 'sub_pat' && new Date((await ent()).pe).toISOString() === '2027-01-15T08:00:00.000Z' && stripeCalls.some(c => c.method === 'GET' && c.path === '/v1/subscriptions/sub_pat'), await ent());
   const paidKinds = async (h) => (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${h} AND kind = 'paid'`)).rows[0].n;
@@ -3944,11 +3963,15 @@ try {
     const patId = (await db.query(`SELECT id FROM users WHERE email = 'pat@example.com'`)).rows[0].id;
     await db.query(`INSERT INTO rate_events (key) VALUES ('checkout:${patState.household.id}:${patId}:cs_test_1')`);
     const otherCheckout = await pa.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json().then(j => ({status: r.status, body: j}))));
-    check('while one parent\'s checkout is open, the other parent\'s is refused, and told why', otherCheckout.status === 409 && otherCheckout.body.open === true && /paying right now/.test(otherCheckout.body.error), otherCheckout);
+    check('while one parent\'s checkout is open, the other parent\'s is refused, and told why', otherCheckout.status === 409 && otherCheckout.body.open === true && /The other parent is paying right now/.test(otherCheckout.body.error), otherCheckout);
     stripeCalls.length = 0;
     const patAgain = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
     const marks = (await db.query(`SELECT key FROM rate_events WHERE key LIKE 'checkout:${patState.household.id}:%'`)).rows.map(r => r.key);
     check('the same parent trying again closes the earlier checkout at Stripe, gets a fresh one, and one open checkout is on record', patAgain === 200 && stripeCalls.some(c => c.path === '/v1/checkout/sessions/cs_test_1/expire') && stripeCalls.some(c => c.path === '/v1/checkout/sessions') && marks.length === 1, [patAgain, stripeCalls.map(c => c.path), marks]);
+    stripeCalls.length = 0;
+    const closed = await pb.evaluate(() => fetch('/api/billing/close', {method:'POST', headers:{'content-type':'application/json'}, body:'{}'}).then(r => r.json().then(j => ({status: r.status, body: j}))));
+    const marksAfter = (await db.query(`SELECT key FROM rate_events WHERE key LIKE 'checkout:${patState.household.id}:%'`)).rows.length;
+    check('backing out of Stripe closes the parent\'s own checkout at once, so nobody is told someone is paying', closed.status === 200 && closed.body.closed === 1 && marksAfter === 0 && stripeCalls.some(c => c.path === '/v1/checkout/sessions/cs_test_1/expire'), [closed, marksAfter]);
     await db.query(`DELETE FROM rate_events WHERE key LIKE 'checkout:${patState.household.id}:%'`);
     await db.query(`UPDATE entitlements SET plan = '${entRow.plan}', source = '${entRow.source}', status = '${entRow.status}', stripe_subscription_id = ${entRow.stripe_subscription_id ? "'" + entRow.stripe_subscription_id + "'" : 'NULL'} WHERE household_id = ${patState.household.id}`);
   }
@@ -4643,8 +4666,12 @@ try {
     await page.waitForTimeout(2200);
     check('a new build taking control waits while a sheet is open', await page.evaluate(() => window.__stillHere === 1 && !!document.querySelector('.sheet.open')));
     await sheetDone(page);
-    const reloaded = await until(page, () => window.__stillHere !== 1, undefined, 6000);
-    check('and reloads the page the moment the sheet is put away, with the lunches still there', reloaded && (await page.$$eval('.tin', a => a.length)) > 0);
+    await page.waitForTimeout(2200);
+    check('and while the parent is still moving about', await page.evaluate(() => window.__stillHere === 1));
+    /* fifteen quiet seconds are more than the suite can spare: the quiet window is the page's own setting */
+    await page.evaluate(() => { document.getElementById('toast').classList.remove('show'); window.__LS_QUIET_MS = 100; });
+    const reloaded = await until(page, () => window.__stillHere !== 1, undefined, 20000);
+    check('and reloads the page once nothing has been touched for a while, back on the same tab with the lunches still there and a word about it', reloaded && (await page.$$eval('.tin', a => a.length)) > 0 && await until(page, () => /Updated/.test(document.querySelector('#toast').textContent), undefined, 4000));
   }
 
   /* --------------------------------------------------------- the website */

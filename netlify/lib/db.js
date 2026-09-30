@@ -85,7 +85,7 @@ export async function recentKeys(prefix, windowSeconds) {
   return rows.map(r => r.key);
 }
 export async function mark(key) { await sql()`INSERT INTO rate_events (key) VALUES (${key})`; }
-export async function unmark(prefix) { await sql()`DELETE FROM rate_events WHERE key LIKE ${prefix + '%'}`; }
+export async function unmark(prefix) { await sql()`DELETE FROM rate_events WHERE key LIKE ${prefix + '%'} AND at > now() - interval '1 hour'`; }   /* older marks are invisible already; the window keeps the delete on the (at) index under any collation */
 
 /* sliding-window throttle backed by the database */
 export async function throttled(key, limit, windowSeconds) {
