@@ -714,7 +714,12 @@ so App Store Connect has to follow in the same sitting:
       its own. No phone had read a v25 note, so v25 carries no `seenAs`. The next build that
       changes the app is v26: the sheet focus fixes, which carry v25's note forward with
       `seenAs:'lunchsorted-v25'`. That is the one hop `seenAs` allows, so the build after v26
-      writes a note of its own or says nothing, and drops `seenAs` either way.
+      writes a note of its own or says nothing, and drops `seenAs` either way. v27 carries it once more even so:
+      Subscription, its caption on the Account tab and the delete warning stop calling the
+      beta's free forever a purchase, and the beta link stops telling a household that bought
+      forever that it is free, a fix, and a phone that skipped v25 and v26 still has to hear
+      about the avoid list. `seenAs` still names v25, so a phone that read the note on v26, or
+      was set up on v26, sees it again; a `seenAs` naming both builds would end that.
 - [x] **Migrations `0009_milestones_errors` and `0010_trial_extra_days`** applied themselves on
       the `main` deploy (the build command runs `scripts/migrate.mjs`): 0009 backfills
       `signed_up` exactly and `paid` approximately, and was applied on the staging branch as
@@ -1111,7 +1116,11 @@ the idea bank stays free so a free list is never stuck with what it has.
   Switching on…). The page behind it names the plan, what it costs — matched from the price
   id the entitlement carries, so a monthly household is not quoted the yearly price — the
   date it renews or ends, and a card saying how to stop it, which differs for a parent who
-  cannot open the portal. Straight after checkout it says only that it is switching on and
+  cannot open the portal. Forever is priced, and "Paid once", only where Stripe or the App
+  Store took the money (`source`); the beta's, from the link or a 100%-off code, reads
+  "Household, free forever" and nothing else, since a code's row can carry forever's price id
+  too, and the delete warning calls it the forever plan, not the forever purchase. Straight
+  after checkout it says only that it is switching on and
   the plan is switching on, because the webhook has not landed and every other row would
   still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
   "Manage billing", or "Manage in the App Store" for a plan Apple bills (the main button when a

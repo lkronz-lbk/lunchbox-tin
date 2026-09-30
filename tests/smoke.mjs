@@ -406,7 +406,7 @@ try {
       await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
       await page.reload(); await page.waitForTimeout(600);
       const onQuestions = await page.evaluate(t => !!document.querySelector('.ob')
-        && !!t && !document.getElementById('view').textContent.includes(t)
+        && (!t || !document.getElementById('view').textContent.includes(t))   /* a build with no note has no text to keep off */
         && !document.querySelector('[data-act="whats-new"]'), NOTE_TEXT);
       await page.click('[data-act="ob-signin"]'); await page.waitForTimeout(300);
       const onSignIn = await page.evaluate(() => !!document.querySelector('.ob')
@@ -3756,6 +3756,15 @@ try {
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
   await until(pb, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1));
   const patState = await pb.evaluate(() => fetch('/api/household').then(r => r.json()));
+  /* Subscription's rows as "label: value", read until they are the ones wanted or 15 seconds go by */
+  const planRows = async want => {
+    let rows = [];
+    for (const end = Date.now() + 15000; Date.now() < end; await pb.waitForTimeout(250)) {
+      rows = await pb.$$eval('#view .kv', a => a.map(r => Array.from(r.children).map(c => c.textContent.trim()).join(': ')));
+      if (JSON.stringify(rows) === JSON.stringify(want)) break;
+    }
+    return rows;
+  };
   /* ---- the beta link: free forever for the first BETA_CAP households, switched on from the app once signed in */
   {
     const entPat = async () => (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
@@ -3775,6 +3784,15 @@ try {
     await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(250);
     check('on Foods too', !!(await pb.$('.betabar')));
     check('the beta page counts it', /1 spot left/.test(await (await fetch(NODE_BASE + '/beta')).text()));
+    /* nobody paid for it: no price, though Stripe has one for forever (as staging's does), and no word of buying it */
+    await openPane(pb, 'plan');
+    const betaRows = await planRows(['Your plan: Household, free forever']);
+    const lifePrice = await pb.evaluate(() => { try { return JSON.parse(localStorage.getItem('lunchsorted-billing')).prices.lifetime.amount; } catch (e) { return null; } });
+    check('a beta household\'s Subscription says free forever, with no cost line and nothing about buying it, though Stripe has a forever price',
+      lifePrice === 7900 && JSON.stringify(betaRows) === JSON.stringify(['Your plan: Household, free forever']), { lifePrice, betaRows });
+    await openPane(pb, 'account');
+    const betaGone = await pb.$$eval('#view li', a => a.map(l => l.textContent));
+    check('and the delete warning calls it the forever plan, not a purchase', betaGone.includes('The forever plan, which does not come back') && !betaGone.some(l => /purchase|paid/i.test(l)), betaGone);
     const again = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, already: j.already }))));
     check('claiming twice is fine and says so', again.status === 200 && again.already === true, again);
     await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', stripe_subscription_id = 'sub_beta_x' WHERE household_id = ${patState.household.id}`);
@@ -4064,6 +4082,12 @@ try {
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
   const forever = await until(pb, () => /Household, forever/.test(document.querySelector('#view').textContent));
   check('Subscription says forever and offers no upgrade', forever && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
+  const boughtRows = await planRows(['Your plan: Household, forever', 'Cost: $79, once', 'Bought: Paid once, never renews']);
+  check('and forever bought through Stripe keeps its words: what it cost, and that it was paid once',
+    JSON.stringify(boughtRows) === JSON.stringify(['Your plan: Household, forever', 'Cost: $79, once', 'Bought: Paid once, never renews']), boughtRows);
+  await openPane(pb, 'account');
+  check('and the delete warning still calls it the forever purchase', (await pb.$$eval('#view li', a => a.map(l => l.textContent))).includes('The forever purchase, which does not come back'),
+    await pb.$$eval('#view li', a => a.map(l => l.textContent)));
   /* a yearly household that buys forever stops its subscription so nobody pays twice */
   await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_old', event_at=NULL WHERE household_id=${patState.household.id}`);
   stripeCalls.length = 0;
@@ -4142,6 +4166,14 @@ try {
   /* a beta tester: forever, on a 100%-off code, nothing charged; the admin page lists them by email */
   await hook({ id: 'evt_tester', type: 'checkout.session.completed', created: t0 + 9.5, data: { object: { id: 'cs_test_t', mode: 'payment', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
   check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
+  {
+    /* that row carries forever's price id, as a sale's does, so the id alone cannot tell a code from a purchase */
+    const [{ stripe_price_id: codePrice }] = (await db.query(`SELECT stripe_price_id FROM entitlements WHERE household_id = ${patState.household.id}`)).rows;
+    await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
+    const codeRows = await planRows(['Your plan: Household, free forever']);
+    check('and Subscription quotes it no price and says nothing of buying it, though the row carries forever\'s price id',
+      codePrice === 'price_life' && JSON.stringify(codeRows) === JSON.stringify(['Your plan: Household, free forever']), { codePrice, codeRows });
+  }
   {
     const { testers, standard } = (await adminStats()).roster;
     /* the backfill in migration 0005 runs once, against a database that is empty in this

@@ -738,7 +738,7 @@ window.LSMerge = (function(){
 (function(){
 "use strict";
 
-var APP_BUILD = 'lunchsorted-v26';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v27';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 
 /* ---- when the planner's own code breaks, it tells our server and nothing else: what the
    error said, where in this file, which build, and which browser; never a lunch, a food or a
@@ -1566,6 +1566,9 @@ function paid(){
   /* an App Store plan more than three days past its end is over, as the server also decides, even if Apple's word never came */
   return !(e.source === 'apple' && e.currentPeriodEnd && Date.parse(e.currentPeriodEnd) + 3 * 86400000 < Date.now());
 }
+/* forever that nobody paid for: the beta link or a 100%-off code (source 'code'), or one given by hand
+   ('comp'). Only Stripe and the App Store take money, so only their forever is called bought, or priced */
+function foreverGiven(){ var e = Account.entitlement; return paid() && e.plan === 'lifetime' && e.source !== 'stripe' && e.source !== 'apple'; }
 function billingOn(){ return !!(Account.billing && Account.billing.enabled) && !isHelper(); }
 /* a plan the household once had and has no longer: cancelled, refunded, lapsed, or a first charge
    that failed. Its words are its own; "your three weeks are up" is for a household that never bought */
@@ -1993,9 +1996,18 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    the walk-through at v25, or was set up on v25, is left alone, and one that never opened v25
    still hears it. That is the one hop seenAs allows. The build after v26 writes a note of its
    own, or says nothing (text:''), and drops seenAs.
+   v27 stops calling the beta's free forever a purchase: Subscription had quoted it forever's
+   price and "Paid once", the Account tab's caption said only Forever, the delete warning
+   called it the forever purchase, and opening the beta link again told a household that had
+   bought forever that it was free. A fix, nothing a parent would call new, so it carries v25's
+   note once more, which the line above did not plan: a phone that skipped v25 and v26 still
+   has to hear that the avoid list matches whole words. seenAs holds one build and names v25,
+   where most phones read it, so a phone that read it on v26, or was set up on v26, is shown it
+   again. A seenAs that named both would end that, at the price of changing csp.mjs and the
+   smoke checks that read it.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v26', seenAs:'lunchsorted-v25', text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
+var WHATS_NEW = {build:'lunchsorted-v27', seenAs:'lunchsorted-v25', text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
   steps:[
     ['Check your avoid list', 'Under Anything else in the lunchbox settings, a word now has to be the whole word: \u201cham\u201d keeps ham out and lets graham crackers in. It no longer catches a longer word it sits inside \u2014 \u201cmelon\u201d misses watermelon, \u201cnut\u201d misses walnut \u2014 so write each of those out.'],
     ['Lock what worked', 'Shuffle all is now Plan the week; Shuffle day is the crossed arrows beside each day. Every day on Week has a lock: tap it and Plan the week leaves that day alone. The lock on a compartment\u2019s sheet holds one compartment, and shows on the tin. A food you pick by hand is locked where you put it, and the message says so.'],
@@ -4745,7 +4757,7 @@ function paneAccount(){
       +  (owner
           ? '<li>Every lunchbox, food, plan, photo and answer, from our servers and from this phone</li>'
             + (others.length ? '<li>'+esc(andList(others))+'’s sign-in to this household — whatever is already on their phone stays on it</li>' : '')
-            + (paid() ? '<li>'+(Account.entitlement.source === 'apple' ? 'The Household plan here. Apple\u2019s billing is not: cancel it first '+(iapOn() ? 'in Subscription \u2192 Manage in the App Store' : 'on your iPhone, in Settings \u2192 your name \u2192 Subscriptions')+', or Apple keeps charging' : Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The plan, which stops at once')+'</li>' : '')
+            + (paid() ? '<li>'+(Account.entitlement.source === 'apple' ? 'The Household plan here. Apple\u2019s billing is not: cancel it first '+(iapOn() ? 'in Subscription \u2192 Manage in the App Store' : 'on your iPhone, in Settings \u2192 your name \u2192 Subscriptions')+', or Apple keeps charging' : foreverGiven() ? 'The forever plan, which does not come back' : Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The plan, which stops at once')+'</li>' : '')
           : '<li>Your place in this household, and the lunches from this phone</li>')
       +  '</ul>'
       +  (owner ? '' : '<p class="hint" style="margin:0">The household and its lunches stay'+(others.length ? ' with '+esc(andList(others)) : '')+'. To keep your place and only clear this phone, sign out instead.</p>')
@@ -4810,11 +4822,13 @@ function panePlan(){
     return '<div class="card stack" style="gap:10px"><h3>Thank you</h3>'
       +  '<p class="hint" style="margin:0">Switching the Household plan on now — it takes a few seconds.</p></div>';
   }
+  var given = foreverGiven();
   var h = '<div class="card stack" style="gap:12px">'
-    +  '<div class="kv"><span>Your plan</span><span>'+esc(lapsing ? 'Household — payment failed' : paid() ? (e.plan === 'lifetime' ? 'Household, forever' : 'Household') : trialing() ? 'Household, free trial' : 'Free')+'</span></div>';
+    +  '<div class="kv"><span>Your plan</span><span>'+esc(lapsing ? 'Household — payment failed' : given ? 'Household, free forever' : paid() ? (e.plan === 'lifetime' ? 'Household, forever' : 'Household') : trialing() ? 'Household, free trial' : 'Free')+'</span></div>';
   var cost = planCost();
   if(cost) h += '<div class="kv"><span>Cost</span><span>'+esc(cost)+'</span></div>';
-  h += '<div class="kv"><span>'
+  /* free forever was not bought and never renews, so the line above is the whole answer */
+  if(!given) h += '<div class="kv"><span>'
     +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : firstChargeAhead() ? 'First charged' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
     +  '</span><span>'
     +  esc(paid() ? (e.plan === 'lifetime' ? 'Paid once, never renews' : d || 'Yearly')
@@ -4823,10 +4837,10 @@ function panePlan(){
   var apple = e.source === 'apple';
   if(lapsing && apple) h += '<p class="hint" style="margin:0;color:var(--warn)">Apple could not take the last payment. '+(iapOn() ? 'Tap Manage in the App Store to update how you pay' : 'Update how you pay in iPhone Settings \u2192 your name \u2192 Subscriptions')+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
   else if(lapsing) h += '<p class="hint" style="margin:0;color:var(--warn)">The last payment did not go through. '+(e.portal ? 'Update the card in Manage billing'+(native() ? ' at lunchsorted.app' : '') : 'Whoever paid can update the card in Manage billing'+(native() ? ' at lunchsorted.app' : ''))+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
-  h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
-    +  (paid() ? '' : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
+  var btns = (paid() ? '' : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
     +  (apple ? (iapOn() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="iap-manage">Manage in the App Store</button>' : '')
-        : e.portal && !native() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '')+'</div></div>';
+        : e.portal && !native() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '');
+  h += (btns ? '<div class="row" style="gap:8px;flex-wrap:wrap">'+btns+'</div>' : '')+'</div>';   /* an empty row would still take the card's gap, under a lone line */
   /* what free looks like, said once, in the two places a parent is about to meet it */
   var freeAgain = 'one lunchbox, the week, the shopping list, the pack list and the idea bank stay free. What you have added stays.';
   if(trialing()){
@@ -4859,7 +4873,8 @@ function planCost(){
   /* a household whose three weeks are over is not waiting for a trial to end */
   if(!paid()) return trialing() && pr.year && !native() ? money(pr.year)+' a year, '+(chargeLater() ? 'from '+fmtDay(chargeLater()) : 'from the day you buy') : '';
   if(e.source === 'apple') return 'Through the App Store';            /* Apple's price is Apple's to say; the website's may differ */
-  if(e.plan === 'lifetime') return pr.lifetime ? money(pr.lifetime)+', once' : '';
+  /* forever is priced only for a household that paid that price: a 100%-off code carries the forever price's id too */
+  if(e.plan === 'lifetime') return !foreverGiven() && pr.lifetime && pr.lifetime.id && pr.lifetime.id === e.price ? money(pr.lifetime)+', once' : '';
   var k = ['year','month'].filter(function(n){ return pr[n] && pr[n].id && pr[n].id === e.price; })[0];
   /* a household on an earlier price (the founding one, after a rise) is quoted nothing rather than someone else's */
   return k ? money(pr[k])+' a '+k+(firstChargeAhead() ? ', from '+fmtDay(firstChargeAhead()) : '') : '';
