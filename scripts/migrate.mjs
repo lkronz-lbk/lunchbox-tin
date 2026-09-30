@@ -31,7 +31,8 @@ function splitStatements(body) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith('migrate.mjs')) {
-  /* a Stripe key scoped to the wrong context fails the deploy here, loudly, rather than at the first checkout */
+  /* a Stripe key scoped to the wrong context, or pasted with more than the key, fails the deploy here,
+     loudly, rather than at the first checkout; the message names the variable, never the key */
   const { stripeKey } = await import('../netlify/lib/stripe.js');
   try { stripeKey(); } catch (e) { console.error('deploy refused:', e.message); process.exit(1); }
   const { databaseUrl } = await import('../netlify/lib/db.js');
