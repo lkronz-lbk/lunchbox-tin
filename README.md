@@ -751,12 +751,16 @@ out by deleting it in the commit that does it.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
 - **Liz: `STRIPE_SECRET_KEY`, one value per context, each the secret key alone.** Production
-  takes the live secret key (`sk_live_…`, or `rk_live_…` for a restricted key; never the
-  publishable `pk_live_…`), with the Builds scope as well as Functions. Branch deploys and Deploy
-  Previews take the test secret key (`sk_test_…`). Anything else refuses the deploy, and the
-  last good one stays live with the key it was built with. So if the live key is rolled, the
-  old one stays valid until a production deploy has succeeded with the new value, or live
-  billing stops. This item comes out only after that production deploy has gone through.
+  takes the live secret key, with the Builds scope as well as Functions: the standard
+  `sk_live_…` (a restricted `rk_live_…` passes the build but fails at the first call it has no
+  permission for), never the publishable `pk_live_…`. Every other context takes the test secret
+  key (`sk_test_…` or `rk_test_…`). Anything else refuses the deploy, and the last good one stays
+  live with the key it was built with. So if the live key is rolled, the old one stays valid
+  until a production deploy has succeeded with the new value, or live billing stops. Clearing
+  the variable is no way out: with no key the deploy goes out with billing off, every gate
+  lifted and nothing for sale on the web or in the iPhone app. This item comes out only after a
+  production deploy that uses the new value has gone through, which its build log shows with
+  `migrate:` lines where a refusal says `deploy refused:`.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
   Store"; change it the same day (to the store link once it is live).
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
