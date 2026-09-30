@@ -125,8 +125,8 @@ async function applyEvent(ev) {
   if (/^customer\.subscription\.(created|updated|deleted)$/.test(ev.type)) {
     const hid = await householdFor(obj);
     if (!hid) return 'no household';
-    const [cur] = await q`SELECT plan, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
-    if (cur && cur.plan === 'lifetime') return 'lifetime kept';        /* a subscription winding down after a lifetime purchase changes nothing */
+    const [cur] = await q`SELECT plan, status, source, current_period_end, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
+    if (foreverHeld(cur)) return 'lifetime kept';                     /* a subscription winding down after a lifetime purchase changes nothing */
     if (cur && cur.stripe_subscription_id && cur.stripe_subscription_id !== obj.id) return 'other subscription';   /* an older one of the same customer */
     const status = ev.type === 'customer.subscription.deleted' ? 'canceled' : subscriptionStatus(obj);
     const price = obj.items && obj.items.data && obj.items.data[0] && obj.items.data[0].price && obj.items.data[0].price.id;
@@ -174,7 +174,7 @@ async function fullyOff(obj) {
 async function undoCheckout(obj, subId, held) {
   const ended = await cancelSubscription(subId), refunded = await refundCheckout(obj, held);
   if (!ended) console.error('billing: CANCEL BY HAND', subId, 'paid while', held);
-  return `${ended ? 'canceled' : 'CANCEL BY HAND'}, ${!refunded ? 'REFUND BY HAND' : obj.amount_total ? 'refunded' : 'nothing charged'}: ${held}`;
+  return `${ended ? 'canceled' : 'CANCEL BY HAND'}, ${!refunded ? 'REFUND BY HAND' : obj.amount_total ? 'refunded' : 'nothing charged at checkout'}: ${held}`;
 }
 
 /* gives back what a checkout charged, through the invoice it paid; older Stripe accounts name the
@@ -247,7 +247,7 @@ export default async function handler(req, context) {
       const body = await req.json().catch(() => ({}));
       if (await throttled('beta:' + user.id, 5, 3600)) return fail('Too many tries in an hour; try again shortly', 429);
       if (!codeMatches(body.code)) return fail('That beta link is not right', 404);
-      if (h.plan === 'lifetime' && h.status === 'active' && !(h.source === 'apple' && lapsed(h.current_period_end))) return json({ ok: true, already: true });
+      if (foreverHeld(h)) return json({ ok: true, already: true });
       if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
       /* a household paying for the Household plan is a customer, not a tester: the card would go on being charged */
       if (h.stripe_subscription_id && (h.status === 'active' || h.status === 'past_due')) return fail('This household already has the Household plan', 409, { paying: true });
@@ -261,12 +261,13 @@ export default async function handler(req, context) {
          no record of, is left; anything else is cancelled first. If Stripe cannot say, the claim waits */
       const sub = h.stripe_subscription_id;
       if (sub) {
-        let atStripe = null;
+        let atStripe = null, noRecord = false;
         try { atStripe = await stripe('GET', `/subscriptions/${sub}`); }
-        catch (e) { if (e.status !== 404) { console.error('billing: beta could not read', sub, e.message); return fail('Try again in a moment', 503); } }
+        catch (e) { if (e.status !== 404) { console.error('billing: beta could not read', sub, e.message); return fail('Try again in a moment', 503); } noRecord = true; }
         /* an answer that does not say which of Stripe's states it is in is no answer: nothing is cancelled on a guess */
-        if (atStripe && !STRIPE_STATES.includes(atStripe.status)) { console.error('billing: beta could not read', sub, 'no state in the answer'); return fail('Try again in a moment', 503); }
-        if (atStripe && atStripe.status !== 'canceled' && atStripe.status !== 'incomplete_expired') {
+        const state = atStripe && typeof atStripe === 'object' ? atStripe.status : atStripe;
+        if (!noRecord && !STRIPE_STATES.includes(state)) { console.error('billing: beta could not read', sub, 'state:', String(state).slice(0, 40)); return fail('Try again in a moment', 503); }
+        if (!noRecord && state !== 'canceled' && state !== 'incomplete_expired') {
           if (subscriptionStatus(atStripe) !== 'canceled') return fail('This household already has the Household plan', 409, { paying: true });
           if (!(await cancelSubscription(sub))) { console.log(`billing: beta household=${h.id} waits: ${sub} could not be cancelled`); return fail('Try again in a moment', 503); }
         }

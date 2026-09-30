@@ -4052,8 +4052,9 @@ try {
        the claim goes through and cancels that subscription before forever is written over it. Left running, a retry that
        went through would bill a free forever every year, with nothing on the row to find it by. The claim asks Stripe
        first, since the row can be behind it, and Stripe here is a stub that remembers what it cancelled: a first charge
-       being retried, a plan paid for, one long ended, no answer at all, a cancel it refuses, a cancel whose answer is
-       lost on the way back, and a checkout that lands on the row while the claim waits on Stripe.
+       being retried, a plan paid for, one long ended, one it has no record of, no answer at all, an answer that says no
+       state (a page that is not JSON, or null), a cancel it refuses, a cancel whose answer is lost on the way back, and a
+       checkout that lands on the row while the claim waits on Stripe.
        The throttles are not what these check, so each claim starts this parent's hourly counts again: its five claims,
        and the twenty billing requests the checkouts further down need, keep their room */
     const claimNow = async () => {
@@ -4070,11 +4071,12 @@ try {
     const answer = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
     globalThis.__LS_STRIPE_FETCH = async (url, init) => {
       const path = new URL(url).pathname, id = path.replace(/^\/v1\/subscriptions\//, '');
-      if (!/^sub_(x|paid|gone|unknown|down|odd|stuck|cut|race)$/.test(id)) return stripeStub(url, init);
+      if (!/^sub_(x|paid|gone|unknown|down|odd|null|stuck|cut|race)$/.test(id)) return stripeStub(url, init);
       stripeCalls.push({ method: init.method, path });
       if (id === 'sub_down') throw new TypeError('fetch failed');
       if (id === 'sub_unknown' || (ended.has(id) && init.method === 'DELETE')) return answer({ error: { type: 'invalid_request_error', code: 'resource_missing', message: `No such subscription: '${id}'` } }, 404);
       if (id === 'sub_odd') return new Response('<html>a proxy page, not Stripe</html>', { status: 200 });
+      if (id === 'sub_null') return new Response('null', { status: 200 });
       if (init.method === 'GET') return answer(id === 'sub_paid' ? { id, object: 'subscription', status: 'active' }
         : id === 'sub_gone' || ended.has(id) ? { id, object: 'subscription', status: 'canceled' }
         : { id, object: 'subscription', status: 'past_due', trial_end: 1790000000, items: { data: [{ current_period_start: 1790000000 }] } });   /* the first charge, when the free weeks ended */
@@ -4101,13 +4103,16 @@ try {
       const down = await asked();
       await lapsedOn('sub_odd');
       const odd = await asked();
+      await lapsedOn('sub_null');
+      const nothing = await asked();
       await lapsedOn('sub_stuck');
       const stuck = await asked();
       check('if Stripe cannot be reached, answers without saying what state it is in, or will not cancel it, the claim waits, with the subscription still on the row',
         down.status === 503 && JSON.stringify(down.calls) === JSON.stringify(['GET sub_down']) && down.row.plan === 'free' && down.row.sub === 'sub_down'
         && odd.status === 503 && JSON.stringify(odd.calls) === JSON.stringify(['GET sub_odd']) && odd.row.plan === 'free' && odd.row.sub === 'sub_odd'
+        && nothing.status === 503 && JSON.stringify(nothing.calls) === JSON.stringify(['GET sub_null']) && nothing.row.plan === 'free' && nothing.row.sub === 'sub_null'
         && stuck.status === 503 && JSON.stringify(stuck.calls) === JSON.stringify(['GET sub_stuck', 'DELETE sub_stuck', 'GET sub_stuck']) && stuck.row.plan === 'free' && stuck.row.sub === 'sub_stuck',
-        { down, odd, stuck });
+        { down, odd, nothing, stuck });
       await lapsedOn('sub_gone');
       const gone = await asked();
       await lapsedOn('sub_unknown');
@@ -4488,7 +4493,7 @@ try {
     const realSql = globalThis.__LS_SQL; let claimed = false;
     globalThis.__LS_SQL = async (strings, ...vals) => {
       const rows = await realSql(strings, ...vals);
-      if (!claimed && typeof strings !== 'string' && strings.join('?').startsWith('SELECT plan, stripe_subscription_id FROM entitlements WHERE household_id =')) {
+      if (!claimed && typeof strings !== 'string' && strings.join('?').startsWith('SELECT plan, status, source, current_period_end, stripe_subscription_id FROM entitlements WHERE household_id =')) {
         claimed = true;
         await realSql(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL, event_at = to_timestamp(${t0 + 9.185}) WHERE household_id = ${patState.household.id}`);
       }
@@ -4499,10 +4504,19 @@ try {
     finally { globalThis.__LS_SQL = realSql; }
     check('and a subscription event the claim overtakes does not land on the forever either',
       claimed && subOvertaken.status === 200 && (await ent()).plan === 'lifetime' && (await ent()).source === 'code' && (await ent()).sub === null, { claimed, row: await ent() });
+    /* an App Store forever past its end, Apple's word missed (a sandbox one lasts a day), holds nothing: the website sells the
+       plan again, and a yearly checkout paid for it is a sale like any other, not undone */
+    await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'apple', status = 'active', current_period_end = now() - interval '5 days', stripe_subscription_id = NULL WHERE household_id = ${patState.household.id}`);
+    const soldFrom = stripeCalls.length;
+    const sold = await hook({ id: 'evt_after_sandbox', type: 'checkout.session.completed', created: t0 + 9.195, data: { object: { id: 'cs_after_sandbox', mode: 'subscription', payment_status: 'paid', amount_total: 1999, customer: 'cus_pat', subscription: 'sub_after_sandbox', client_reference_id: String(patState.household.id), metadata: { plan: 'year' } } } });
+    const soldCalls = stripeCalls.slice(soldFrom).map(c => c.method + ' ' + c.path);
+    check('a lapsed App Store forever holds nothing: a yearly checkout paid over it is a sale, not undone',
+      sold.status === 200 && !soldCalls.some(c => c.startsWith('DELETE') || c.endsWith('/refunds')) && (await ent()).plan === 'household' && (await ent()).source === 'stripe' && (await ent()).sub === 'sub_after_sandbox',
+      { soldCalls, row: await ent() });
   }
   /* one household, two ways to pay: Stripe's clock and Apple's cannot be compared, so a Stripe
      delivery late enough to pass the ordering check must still not undo a plan paid to Apple */
-  await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.annual' WHERE household_id=${patState.household.id}`);
+  await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', current_period_end=NULL, stripe_subscription_id=NULL, event_at=to_timestamp(${t0 + 9}), apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.annual' WHERE household_id=${patState.household.id}`);
   const lateStripe = await hook(subEv('evt_apple_1', 'customer.subscription.deleted', t0 + 9.2, { status: 'canceled' }));
   check('a late Stripe delivery cannot undo a plan the household pays Apple for', lateStripe.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'apple' && (await ent()).status === 'active', await ent());
   {

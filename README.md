@@ -645,10 +645,11 @@ ended while Stripe goes on retrying the card, and a retry that went through afte
 bill the forever every year. One Stripe says is paid for, or a renewal it is retrying, is
 refused as a paying household is; one that has ended, or that Stripe has no record of (taken on
 trust), is left; anything else is cancelled first. If Stripe cannot be reached, cannot be
-asked from that context (no key, or one the build refuses), or does not say what state the
-subscription is in, the claim waits (503) and the app offers another go. The forever is written
-only while the row still carries the subscription the claim read, so a checkout that lands
-meanwhile wins, and one the claim overtakes is cancelled and refunded (Billing, the webhook).
+asked from that context (no key, or one the build refuses), does not say what state the
+subscription is in, or will not cancel it, the claim waits (503) and the app offers another
+go. The forever is written only while the row still carries the subscription the claim read,
+so a checkout that lands meanwhile wins, and one the claim overtakes is cancelled and refunded
+(Billing, the webhook).
 Whoever claims is not made the payer, whose card the portal shows. A household that checks out
 with a 100%-off Stripe code (TESTER) is written the same way and kept so through later Stripe
 events, a refund of an earlier charge among them; `/admin` lists them under
@@ -816,7 +817,8 @@ out by deleting it in the commit that does it.
   refunded. What it still reaches there: the invoices of anything bought before; the open
   invoice a failed first charge leaves, which Stripe stops collecting when the subscription is
   cancelled but does not void; and a subscription an earlier checkout replaced, or a checkout
-  paid onto the forever, if cancelling it failed (the log says CANCEL BY HAND). Taking it away
+  paid onto the forever, if cancelling it failed (the log says "could not cancel" for the one,
+  CANCEL BY HAND for the other). Taking it away
   is an app change with a build of its own: the portal button in
   `panePlan()` (`!foreverGiven()`), the comment beside it, and the smoke check "and
   Subscription quotes it no price".
