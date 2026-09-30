@@ -128,12 +128,12 @@ the enrollment, so settle it before launch.
 
 ### Screenshots (6.9-inch, in this order)
 
-- [x] Regenerated 2026-09-27 (`node scripts/store-shots.mjs`, `node scripts/iap-shot.mjs`):
-      the AAA colors, no Babybel, "check off" in the 05 and 06 captions.
+- [x] Regenerated 2026-09-30 (`node scripts/store-shots.mjs`, `node scripts/iap-shot.mjs`),
+      pinned to Monday September 14: Phase A's screens, and 01-week taken with the kid's say
+      on, so it shows Let Emma pick the week.
 - [ ] Uploaded, with `store/iap-review.png` on both subscriptions. A version In Review cannot
       have its screenshots swapped without pulling the submission back: upload at the next
-      editable moment. Still open from before: 01-week is taken before kid's pick is on, so
-      it does not show Let Emma pick the week.
+      editable moment.
 
 1. `01-week.png`: A week of lunches in about a minute.
 2. `02-pack.png`: Mornings: one box, one check.
@@ -158,9 +158,10 @@ video for version 1.
 
 ## App Privacy (the questionnaire)
 
-- [x] Answered and published, at the answers the live app earns: Crash Data and Usage Data
-      below stay **No** in App Store Connect until `main` carries the day-one work, then are
-      entered in the same sitting as that deploy (README.md, "When the day-one work moves to main")
+- [ ] Crash Data and Usage Data below are owed now: `main` carries the day-one work since
+      2026-09-30 (v25), so enter both before 1.0 (7) is submitted, or at once if it already has
+      been (README.md, "When the day-one work moves to main"). Everything else was answered and
+      published earlier.
 
 Answer **Yes, we collect data from this app**, then:
 
@@ -241,13 +242,18 @@ Left alone, the reviewer sees the free tier with the plan's pieces locked, which
 >
 > How to test: open the app, tap "Already signed up? Sign in", enter the review email, tap "Email me the link", then type the code in the "code from the email" field on that same screen (the review account is sent no email; the code is standing). You land on a planned week. Week: Plan the week plans it again; beside each day, the lock holds that day and the crossed arrows shuffle it; tap a compartment (the small swap arrows) to change it, and the lock on that sheet holds just that one. Shop: the list is what to buy, by aisle; Send hands it to Notes, Reminders or a text. Pack: one Packed check per box; No lunch today beside the box takes a day off and Put it back restores it; "Let … pick" opens the kid's-pick screen (it is switched on for this account; the switch is "They pick their box each day" under the sliders icon beside the lunchbox name, labelled Lunchbox settings). The sliders icon beside the lunchbox name, labelled Lunchbox settings: school rules, allergens, a second lunchbox, the kid's say. Account tab: sign-in, the plan, the other parent's invite. Turning the kid's say on may ask for notification permission; allow or deny, either is fine.
 >
-> Payments: in the iPhone app the Household plan is sold only through in-app purchase: an auto-renewing subscription, yearly or monthly, in the group "Household". Account tab → Subscription → "Keep the Household plan" (or "Get the Household plan") opens the sheet with both at the App Store's prices, and Restore purchases, Terms of use and Privacy beside them. A parent on a computer or an Android phone can buy the same plan on our website instead, through Stripe; the iPhone app honours a plan bought there, under guideline 3.1.3(b), because the same plan is available in the app as an in-app purchase. The iPhone app never offers a web checkout. The review account is inside its free three weeks, so everything is on, and the purchase sheet is still reachable from Subscription; purchases in review go through the sandbox. This is a US-only listing.
+> Payments: in the iPhone app the Household plan is sold only through in-app purchase: an auto-renewing subscription, yearly or monthly, in the group "Household". Account tab → Subscription → "Keep the Household plan" (or "Get the Household plan") opens the sheet with both at the App Store's prices, and Restore purchases, Terms of use and Privacy beside them. A parent on a computer or an Android phone can buy the same plan on our website instead, through Stripe; the iPhone app honors a plan bought there, under guideline 3.1.3(b), because the same plan is available in the app as an in-app purchase. The iPhone app never offers a web checkout. The review account is inside its free three weeks, so everything is on, and the purchase sheet is still reachable from Subscription; purchases in review go through the sandbox. This is a US-only listing.
 >
 > Recipes: two recipes are built in, from the USDA's Recipes for Healthy Kids cookbook (Food and Nutrition Administration, fna.usda.gov). They are US government works in the public domain; each is shown with a source line and a link to the original. Everything else on the Recipes tab is imported by the parent from a page or text they chose, stored on their own household and not published by us. Recipes tab → Import a recipe, if you want to see that path.
 >
 > Offline: the app works without a network once opened once; airplane mode shows the same week.
 >
 > The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, in-app purchase (StoreKit 2), and the URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
+
+**Reply to the 2.1(b) rejection of 1.0 (6)** (paste into the Resolution Center, and add as the
+last paragraph of the Notes for 1.0 (7))
+
+> The purchase failure you saw on iPad in 1.0 (6) is fixed in build 1.0 (7). This is an iPhone app, and on iPad it runs in a window of its own; the app now tells the App Store which window to show the payment sheet in, so buying the yearly or the monthly plan brings the sheet up as it does on iPhone.
 
 ## Everything else in that sidebar: leave it alone
 
@@ -330,14 +336,12 @@ The one worth a look:
 
 - [x] `REVIEW_EMAIL` and `REVIEW_CODE` set in Netlify's Production scope, the code generated;
       signed in with them once and a week built, within a few days of submitting
-- [ ] Screenshots uploaded: regenerated on 2026-09-27, waiting for an editable version; see
+- [ ] Screenshots uploaded: regenerated on 2026-09-30, waiting for an editable version; see
       the note under Screenshots above
-- [x] Privacy policy URL loads and matches the App Privacy answers above — with one
-      caveat: the Crash Data and Usage Data rows describe the day-one work that is on `dev`
-      since 2026-09-22. Until `main` carries it the questionnaire stays at No for both, because
-      the live app collects neither; the moment `main` carries that work, enter them in the
-      same sitting as the deploy. The checklist is in README.md, "When the day-one work moves
-      to main"
+- [ ] Privacy policy URL loads and matches the App Privacy answers above — once the Crash
+      Data and Usage Data rows are entered: `main` carries the day-one work since 2026-09-30
+      (v25), the live app now collects both, and the questionnaire still says No until they
+      are. The checklist is in README.md, "When the day-one work moves to main"
 - [x] Build attached to the version. Export compliance asks nothing: the build carries
       `ITSAppUsesNonExemptEncryption = NO`
 - [x] Version **1.0** in App Store Connect, matching `MARKETING_VERSION` in the Xcode

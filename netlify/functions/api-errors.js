@@ -1,4 +1,4 @@
-import { sql, fail, sweep, clientIp, ipKey, siteUrl } from '../lib/db.js';
+import { sql, fail, clientIp, ipKey, siteUrl } from '../lib/db.js';
 import { sameOrigin } from '../lib/auth.js';
 
 /* The planner reports its own breakages here: what the error said, where in the code, which
@@ -12,11 +12,16 @@ import { sameOrigin } from '../lib/auth.js';
    always 204: a report is best-effort, and an error about an error helps nobody. */
 const KINDS = new Set(['error', 'rejection']);
 const BUILD = /^lunchsorted-v\d{1,5}$/;
-const EMAIL = /[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+/g;
+/* an address, not a stack frame: Safari and Firefox write a frame as name@https://…, so what
+   follows the @ may hold no slash and no colon, or every iPhone's stack would be kept as [email] */
+const EMAIL = /[^\s@<>]+@[^\s@<>\/:]+\.[^\s@<>\/:]+/g;
 const LINK_TAIL = /(https?:\/\/[^\s)?#]*)[?#][^\s):]*/g;       /* keeps the :line:column a stack frame puts after the address */
 const ROWS_AN_HOUR = 1000, EACH_AN_HOUR = 20;
+/* cut before the two patterns run and again after: they are slow on a long run with no space in
+   it, and the User-Agent arrives outside the 8 KB the body is held to */
 const clean = (v, n, lines) => String(v == null ? '' : v)
   .replace(lines ? /[^\S\n]+/g : /\s+/g, ' ')
+  .slice(0, n * 4)
   .replace(LINK_TAIL, '$1')
   .replace(EMAIL, '[email]')
   .slice(0, n).trim();
@@ -48,12 +53,13 @@ export default async function handler(req, context) {
     const message = clean(b.message, 300) || '(no message)';
     const place = clean(b.place, 200) || null;
     const stack = clean(b.stack, 2000, true) || null;
-    const agent = clean(req.headers.get('user-agent'), 200) || null;
+    const agent = clean(String(req.headers.get('user-agent') || '').slice(0, 2000), 200) || null;
     /* One statement: the row is written only under the hourly cap for everyone and the hourly
        count for this address, the throttle row is written only then (so a flood past the cap grows
        nothing), and the stack rides on the first copy of a distinct error an hour, since a broken
-       deploy throws the same thing on every phone and the numbers page counts, never reads, it. */
-    if (Math.random() < 0.04) await sweep();
+       deploy throws the same thing on every phone and the numbers page counts, never reads, it.
+       No housekeeping here: the sweep rides every push, sign-in and billing call already, and a
+       flood of reports should cost one statement each, not five deletes. */
     await sql()`
       WITH cap AS (SELECT count(*) < ${ROWS_AN_HOUR} AS ok FROM app_errors WHERE at > now() - interval '1 hour'),
            mine AS (SELECT count(*) < ${EACH_AN_HOUR} AS ok FROM rate_events WHERE key = ${key} AND at > now() - interval '1 hour'),

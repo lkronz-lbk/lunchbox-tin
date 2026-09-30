@@ -29,7 +29,7 @@ What the shell adds, and where:
   purchase. (1.0 (4) was rejected for Stripe in an in-app browser view; 1.0 (5) for
   honouring it with no in-app purchase.) `AppLauncher`, `/back.html` and the
   `appStateChange` return path are left over from that and unused by the page; take
-  them out with the next native change. The `Browser` plugin stays, for the help and
+  them out with the native change after 1.0 (7). The `Browser` plugin stays, for the help and
   recipe pages only.
 - **Icon and launch screen.** `App/App/Assets.xcassets`: the 1024 icon from
   `public/icons`, and a light and a dark launch image on the app's ground colours.

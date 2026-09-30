@@ -232,6 +232,16 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
   a.kids[0].week = { id:'wk_2', kidId:'kid_1', start:'2026-09-07', createdAt:t1, updatedAt:t2, days:[{ d:'2026-09-09', dow:3, slots:{main:'f1'}, lock:{}, kidPick:{}, over:{}, off:true, updatedAt:t2 }] };
   b.kids[0].week = { id:'wk_2', kidId:'kid_1', start:'2026-09-07', createdAt:t1, updatedAt:t1, days:[{ d:'2026-09-09', dow:3, slots:{main:'f1'}, lock:{}, kidPick:{}, over:{}, updatedAt:t1 }] };
   check('merge: a day taken off on this phone stays off on the other, by the day\'s own stamp', M.merge(a, b, '2026-09-01').kids[0].week.days[0].off === true && M.merge(b, a, '2026-09-01').kids[0].week.days[0].off === true);
+  /* a phone still on the last build knows no day stamps: it strips the flag and the stamp and pushes the
+     week back under the same week stamp, which is later than the day's own. The stamped day is the later word. */
+  a = clone(); b = clone();
+  a.kids[0].week = { id:'wk_2', kidId:'kid_1', start:'2026-09-07', createdAt:t1, updatedAt:'2026-09-02T10:00:00.004Z', days:[{ d:'2026-09-09', dow:3, slots:{main:'f1'}, lock:{}, kidPick:{}, over:{}, off:true, updatedAt:t2 }, { d:'2026-09-10', dow:4, slots:{main:'f1'}, lock:{}, kidPick:{}, over:{} }] };
+  b.kids[0].week = { id:'wk_2', kidId:'kid_1', start:'2026-09-07', createdAt:t1, updatedAt:'2026-09-02T10:00:00.004Z', days:[{ d:'2026-09-09', dow:3, slots:{main:'f1'}, lock:{}, kidPick:{}, over:{} }, { d:'2026-09-10', dow:4, slots:{main:'f2'}, lock:{}, kidPick:{}, over:{} }] };
+  {
+    const ab = M.merge(a, b, '2026-09-01').kids[0].week.days, ba = M.merge(b, a, '2026-09-01').kids[0].week.days;
+    check('merge: with the weeks level, a day carrying its own stamp beats the copy an older build stripped of it, on either phone', ab[0].off === true && ba[0].off === true, [ab[0], ba[0]]);
+    check('merge: and a day neither copy stamped still goes to the local one', ab[1].slots.main === 'f1' && ba[1].slots.main === 'f2', [ab[1], ba[1]]);
+  }
   check('merge: a Didn’t get to it answer travels like any other, and the newer what-came-home settings win', m.kids[0].eaten['2026-09-01'].main.r === 'none' && m.kids[0].eaten['2026-09-01'].side.r === 'left' && m.kids[0].settings.review === false && m.kids[0].settings.homeAt === '17:30');
   {
     const wk = (stamp) => ({ id:'wk_1', kidId:'kid_1', start:'2026-09-07', createdAt:t1, updatedAt:stamp, days:[
@@ -786,8 +796,10 @@ try {
     check('Pack offers No lunch today beside the box, packed or not', (await page.$$eval('[data-act="no-lunch"]', a => a.map(b => b.textContent.trim()))).join('|') === 'No lunch today', await page.$$eval('[data-act="no-lunch"]', a => a.map(b => b.textContent.trim())));
     await page.click('[data-act="no-lunch"]'); await page.waitForTimeout(350);
     check('and the day comes off: no tin, one line that says so, Put it back, a toast with Undo, and the ticks come off with it', (await page.$$eval('#view .tin', a => a.length)) === 0 && /No lunch today\. Nothing to pack, nothing on the list\./.test(await page.textContent('#view')) && (await page.$eval('[data-act="no-lunch"]', b => b.textContent.trim())) === 'Put it back' && /No lunch today — nothing to pack, nothing to buy/.test(await page.textContent('#toast')) && !!(await page.$('#toast [data-act="undo"]')) && await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const d = k.week.days.find(x => x.off); const row = k.packed[d.d] || {}; return Object.keys(row).length > 0 && Object.values(row).every(e => e.off === true); }));
+    const offRow = await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const d = k.week.days.find(x => x.off); return { d: d.d, at: Object.values(k.packed[d.d]).map(e => e.at).sort().pop() }; });
     await page.click('#toast [data-act="undo"]'); await page.waitForTimeout(350);
     check('Undo puts the day back with its ticks', (await page.$$eval('#view .tin', a => a.length)) === 1 && (await page.getAttribute('[data-act="pack-all"]', 'aria-pressed')) === 'true' && await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.some(x => x.off)));
+    check('and the ticks come back stamped later than the un-ticks, so the next sync cannot take them off again', await page.evaluate(o => { const row = JSON.parse(localStorage.getItem('lunchsorted')).kids[0].packed[o.d] || {}; const es = Object.values(row); return es.length > 0 && es.every(e => !e.off && e.at > o.at); }, offRow), offRow);
     await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300);   /* un-tick for the rest of the walk */
     await page.click('[data-act="no-lunch"]'); await page.waitForTimeout(350);
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
@@ -807,16 +819,36 @@ try {
     check('every day still ahead offers No lunch on Week, and a day that has gone does not', !!laterDay && (await page.$$eval('.daycard.past [data-act="no-lunch"]', a => a.length)) === 0);
     await page.click('[data-act="no-lunch"][data-day="' + laterDay + '"]'); await page.waitForTimeout(350);
     await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
-    check('Coming up says no lunch for that day, and the kid\'s pick skips it', await page.evaluate(d => { const name = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(d + 'T00:00:00').getDay()]; const rows = [...document.querySelectorAll('#view .list .item')]; const row = rows.find(r => r.querySelector('.nm') && r.querySelector('.nm').textContent.indexOf(name) === 0); return !!row && /no lunch/.test(row.textContent) && !row.querySelector('[data-act="kid-start"]'); }, laterDay));
+    check('Coming up says no lunch for that day', await page.evaluate(d => { const name = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(d + 'T00:00:00').getDay()]; const rows = [...document.querySelectorAll('#view .list .item')]; const row = rows.find(r => r.querySelector('.nm') && r.querySelector('.nm').textContent.indexOf(name) === 0); return !!row && /no lunch/.test(row.textContent); }, laterDay));
+    {
+      /* the kid's pick goes to the next box still to pack: with today's in the bag that would be
+         tomorrow's, and tomorrow has no lunch, so the button sits on the day after instead */
+      await page.waitForTimeout(250);
+      await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].settings.kidPick = true; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+      await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+      await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+      if (!(await page.$('[data-act="pack-all"][aria-pressed="true"]'))) { await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300); }
+      const picks = await page.evaluate(d => { const name = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(d + 'T00:00:00').getDay()]; const rows = [...document.querySelectorAll('#view .list .item')].filter(r => r.querySelector('.nm')); const day = r => r.querySelector('.nm').textContent.trim().split(/\s/)[0]; return { off: name, with: rows.filter(r => r.querySelector('.pickwrap')).map(day), all: rows.map(day) }; }, laterDay);
+      check('the kid\'s pick skips a day with no lunch: the button sits on the next box that has one', picks.with.length === 1 && picks.with[0] !== picks.off && picks.all.indexOf(picks.with[0]) > picks.all.indexOf(picks.off), picks);
+      await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300);   /* un-tick again for the rest of the walk */
+      await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].settings.kidPick = false; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+      await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+      await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+    }
     /* a re-plan leaves the day off, its foods as they were */
     const offFoods = await page.evaluate(d => JSON.stringify(JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.find(x => x.d === d).slots), laterDay);
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200);
     await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(400); await goShuffle(page);
     check('Plan the week keeps the day off, and leaves its foods as they were for Put it back', await page.evaluate(({ d, was }) => { const day = JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.find(x => x.d === d); return !!day && day.off === true && JSON.stringify(day.slots) === was; }, { d: laterDay, was: offFoods }));
-    await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+    /* a rule switched on while the day was off takes its food out, and a day off takes no draw, so
+       nothing refills it: the gap is filled when the day comes back, as the plan would have */
+    await page.waitForTimeout(250);
+    await page.evaluate(d => { const doc = JSON.parse(localStorage.getItem('lunchsorted')); doc.kids[0].week.days.find(x => x.d === d).slots.main = null; localStorage.setItem('lunchsorted', JSON.stringify(doc)); }, laterDay);
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
     await page.click('[data-act="no-lunch"][data-day="' + laterDay + '"]'); await page.waitForTimeout(350);
     check('and Put it back on Week restores it', await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const day = k.week.days.find(x => x.d === d); return !!day && !day.off; }, laterDay) && (await page.$$eval('.daycard:not(.past) .tin', a => a.length)) >= 2);
+    check('with a compartment a rule had emptied while it was off filled again, not left at Nothing picked', await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const day = k.week.days.find(x => x.d === d); return !!day.slots.main && k.foods.some(f => f.id === day.slots.main && !f.deletedAt); }, laterDay));
     if (wasPacked) { await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300); await page.click('[data-act="pack-all"]'); await page.waitForTimeout(300); }   /* leave the box as it was found */
     await page.evaluate(() => window.__pinHour(9));
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
@@ -2552,6 +2584,16 @@ try {
     const serverStrip = await fetch(NODE_BASE + '/api/errors', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'rejection', message: 'smoke: the server cuts links too, see http://x.test/app/?beta=B-1', stack: 'at x (http://x.test/app/?join=ABC#f:1:1)', build: 'lunchsorted-v0' }) });
     const stripped = (await db.query("SELECT message, stack FROM app_errors WHERE build = 'lunchsorted-v0'")).rows[0];
     check('and the server cuts them again whatever the phone sent', serverStrip.status === 204 && !!stripped && stripped.message === 'smoke: the server cuts links too, see http://x.test/app/' && stripped.stack === 'at x (http://x.test/app/:1:1)', stripped);
+    /* Safari and Firefox write a frame as name@address: on a real domain that is shaped like an email, and must not be blanked as one */
+    const iphone = await fetch(NODE_BASE + '/api/errors', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'error', message: 'smoke: an iPhone stack, and a note to pat@example.com', stack: 'render@https://lunchsorted.app/app/:4321:17\nglobal code@https://lunchsorted.app/app/:7000:3\nsent by pat@example.com', build: 'lunchsorted-v1' }) });
+    const frames = (await db.query("SELECT message, stack FROM app_errors WHERE build = 'lunchsorted-v1'")).rows[0];
+    check('an iPhone’s stack keeps its frames, and an address beside them is still blanked', iphone.status === 204 && !!frames && frames.message === 'smoke: an iPhone stack, and a note to [email]' && frames.stack === 'render@https://lunchsorted.app/app/:4321:17\nglobal code@https://lunchsorted.app/app/:7000:3\nsent by [email]', frames);
+    /* the User-Agent arrives outside the 8 KB the body is held to: a very long one is cut before it is read, not after.
+       Straight to the handler: Node's own server would turn a header this long away before the function saw it */
+    const t0ua = Date.now();
+    const longAgent = await errorsHandler(new Request('http://127.0.0.1/api/errors', { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'a'.repeat(60000) }, body: JSON.stringify({ kind: 'error', message: 'smoke: a very long browser name', build: 'lunchsorted-v2' }) }), { ip: '127.0.0.1' });
+    const agentRow = (await db.query("SELECT agent FROM app_errors WHERE build = 'lunchsorted-v2'")).rows[0];
+    check('a browser name of sixty thousand letters is cut to two hundred without a second spent on it', longAgent.status === 204 && !!agentRow && agentRow.agent.length === 200 && Date.now() - t0ua < 1000, [longAgent.status, agentRow && agentRow.agent.length, Date.now() - t0ua]);
     const crossOrigin = await fetch(NODE_BASE + '/api/errors', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example' }, body: '{}' });
     const crossSite = await fetch(NODE_BASE + '/api/errors', { method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' }, body: '{}' });
     check('a report from another site is refused before it is read', crossOrigin.status === 403 && crossSite.status === 403, [crossOrigin.status, crossSite.status]);
@@ -2639,6 +2681,20 @@ try {
   check('Sam kept the member he already was', await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return d.members.filter(m => !m.deletedAt).length === 2 && d.members.some(m => m.id === localStorage.getItem('lunchsorted-device')); }));
   const notOwner = await p2.evaluate(id => fetch('/api/household/remove', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({userId:id})}).then(r => r.status), srv.me.userId);
   check('only the owner can remove someone', notOwner === 403, notOwner);
+  {
+    /* someone who is removed, or leaves, takes their invites with them: a link they made while they
+       were in the household must not be their way back in afterwards */
+    const { createInvite, consumeInvite, findOrCreateUser } = await import('../netlify/lib/auth.js');
+    const kim = await findOrCreateUser('kim@example.com');
+    await db.query("INSERT INTO household_members (household_id, user_id, role, member_id) VALUES ($1, $2, 'adult', 'mem_kimsmoke')", [srv.household.id, kim.id]);
+    const kept = await createInvite(srv.household.id, kim.id, 'adult');
+    const peekLive = await fetch(NODE_BASE + '/api/household/invite?code=' + kept);
+    await db.query('DELETE FROM household_members WHERE household_id = $1 AND user_id = $2', [srv.household.id, kim.id]);   /* what Remove and Leave both do */
+    const peekGone = await fetch(NODE_BASE + '/api/household/invite?code=' + kept);
+    const usedGone = await consumeInvite(kept, kim.id);
+    check('an invite is good only while whoever made it is still in the household', peekLive.status === 200 && peekGone.status === 410 && usedGone === null, [peekLive.status, peekGone.status, usedGone]);
+    await db.query('DELETE FROM users WHERE id = $1', [kim.id]);   /* and the invite goes with her */
+  }
 
   /* an edit on each phone reaches the other; an un-tick holds */
   await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
@@ -2975,9 +3031,57 @@ try {
       await sweep(tab);
     }
     for (const pane of ['account', 'household']) { await openPane(p3, pane); await sweep('pane:' + pane); await p3.click('[data-act="pane-done"]'); await p3.waitForTimeout(200); }
-    await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
-    if (await p3.$('[data-act="kidsheet"]')) { await p3.click('[data-act="kidsheet"]'); await p3.waitForTimeout(300); await sweep('sheet:lunchboxes'); await backdropTap(p3); await p3.waitForTimeout(300); }
-    check('nothing is drawn for a caretaker only to refuse: every control they can see is one they may use', Object.keys(drawn).length === 0, drawn);
+    /* the Lunchboxes sheet: with two lunchboxes its button is on Account, the box pages carrying the folder tabs instead */
+    const sheetTab = (await p3.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).length)) > 1 ? 'setup' : 'week';
+    await p3.click(`[data-act="tab"][data-tab="${sheetTab}"]`); await p3.waitForTimeout(250);
+    const sheetThere = !!(await p3.$('[data-act="kidsheet"]'));
+    if (sheetThere) { await p3.click('[data-act="kidsheet"]'); await p3.waitForTimeout(300); await sweep('sheet:lunchboxes'); await backdropTap(p3); await p3.waitForTimeout(300); }
+    check('nothing is drawn for a caretaker only to refuse: every control they can see is one they may use', Object.keys(drawn).length === 0 && sheetThere, [drawn, sheetThere]);
+    {
+      /* two states the household on this phone is not in, reached by changing the server's answer on its way in; the
+         phone's own copy is put back after. First, a food a parent wrote and then took off while it is still in a box:
+         a caretaker sees it under Taken off, with no Put back to refuse them. */
+      await p3.waitForTimeout(250);
+      const snap3 = await p3.evaluate(() => localStorage.getItem('lunchsorted'));
+      await p3.route('**/api/household', async route => {
+        if (route.request().method() !== 'GET') return route.continue();
+        const resp = await route.fetch(); const j = await resp.json(); const at = new Date().toISOString();
+        if (j && j.doc && Array.isArray(j.doc.kids)) j.doc.kids.forEach((k, i) => k.foods.push({ id: 'food_smoketaken' + i, kidId: k.id, n: 'Smoke pickle plate', c: 'side', t: [], a: 'other', al: [], buy: null, once: false, recipeId: null, img: null, createdAt: at, updatedAt: at, deletedAt: at }));
+        return route.fulfill({ response: resp, json: j });
+      });
+      await p3.reload(); await p3.waitForLoadState('load');
+      await p3.click('[data-act="tab"][data-tab="foods"]');
+      const takenShown = await until(p3, () => /Taken off/.test(document.querySelector('#view').textContent) && /Smoke pickle plate/.test(document.querySelector('#view').textContent));
+      check('a food taken off is listed for a caretaker with no Put back', takenShown && (await p3.$$eval('[data-act="food-back"]', a => a.length)) === 0, [takenShown, (await p3.textContent('#view')).replace(/\s+/g, ' ').slice(-200)]);
+      await p3.unroute('**/api/household');
+      /* then the same walk with nothing planned. A caretaker is sent only the foods in the boxes, so an unplanned household
+         reaches them as lunchboxes with no foods at all: every empty page has to stand without a button they cannot
+         use, or a word telling them to add foods. */
+      await p3.route('**/api/household', async route => {
+        if (route.request().method() !== 'GET') return route.continue();
+        const resp = await route.fetch(); const j = await resp.json();
+        if (j && j.doc && Array.isArray(j.doc.kids)) j.doc.kids.forEach(k => { k.week = null; k.next = null; k.foods = []; });
+        return route.fulfill({ response: resp, json: j });
+      });
+      await p3.waitForTimeout(250);
+      await p3.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids.forEach(k => { k.week = null; k.next = null; k.foods = []; }); localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+      await p3.reload(); await p3.waitForLoadState('load');
+      await until(p3, () => /Nothing planned yet/.test(document.querySelector('#view').textContent));   /* the pull has answered: the page knows whose phone this is */
+      const bare = {}; let words = '';
+      for (const tab of ['pack', 'week', 'foods', 'shop']) {
+        await p3.click(`[data-act="tab"][data-tab="${tab}"]`); await p3.waitForTimeout(300);
+        const acts = await p3.$$eval('body [data-act]', a => a.filter(e => !e.closest('#toast') && e.checkVisibility()).map(e => e.getAttribute('data-act')));
+        acts.forEach(x => { if (!HELPER_OK.includes(x)) bare[x] = tab; });
+        words += ' ' + tab + ': ' + (await p3.textContent('#view'));
+      }
+      check('and with nothing planned, every empty page stands without a button a caretaker cannot use or a word telling them to add foods',
+        Object.keys(bare).length === 0 && !/Add foods|Add a few things|Fill the list|idea bank|no foods yet/i.test(words) && /Nothing planned yet/.test(words), [bare, words.replace(/\s+/g, ' ').slice(0, 400)]);
+      await p3.unroute('**/api/household');
+      await p3.waitForTimeout(250);
+      await p3.evaluate(s => localStorage.setItem('lunchsorted', s), snap3);
+      await p3.reload(); await p3.waitForLoadState('load');
+      await until(p3, () => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return !!document.querySelector('#view .tin, #view .daycard') && d.kids.some(k => k.week && k.week.days.length && (k.foods || []).length) && !d.kids.some(k => (k.foods || []).some(f => /Smoke pickle plate/.test(f.n))); });
+    }
     await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
   }
   await p3.click('.daycard:not(.past) .cmp >> nth=0'); await p3.waitForTimeout(200);
@@ -3940,7 +4044,8 @@ try {
     {
       /* the App Store refuses the purchase (App Review's iPad, 1.0 (6)): the parent is told plainly, and
          Apple's own reason waits in the bug report rather than on screen */
-      await pn.evaluate(() => { window.__sk.fail = 'unknown(StoreKitError)'; });
+      /* the reason is long, and a character outside plain ASCII straddles the cut: kept whole it would split, the mail link would throw, and Help would not open */
+      await pn.evaluate(() => { window.__sk.fail = 'unknown(StoreKitError) ' + 'x'.repeat(136) + '😀 and more'; });
       await pn.click('#sheetBody [data-act="iap-buy"][data-product="app.lunchsorted.household.annual"]');
       const failed = await until(pn, () => /did not go through/.test(document.getElementById('toast').textContent));
       const buttonsBack = await pn.$$eval('#sheetBody [data-act="iap-buy"]', a => a.length === 2 && a.every(b => !b.disabled && /a (year|month)$/.test(b.textContent)));
@@ -3963,6 +4068,12 @@ try {
     check('buying the yearly plan hands Apple the household\'s token, and the purchase is finished only once the server has it', skSeen.purchases.length === 1 && skSeen.purchases[0].id === 'app.lunchsorted.household.annual' && skSeen.purchases[0].token === token && skSeen.finished[0] === '2000000000000700' && (await row()).source === 'apple' && (await row()).plan === 'household', [skSeen, await row()]);
     check('and nothing was opened in a browser, and no Stripe checkout was made', skSeen.launched.length === 0 && stripeCalls.slice(stripeBefore).filter(c => c.path === '/v1/checkout/sessions').length === 0, stripeCalls.slice(stripeBefore).map(c => c.path));
     await until(pn, () => /Welcome to the Household plan/.test(document.querySelector('#toast').textContent));
+    {
+      await pn.click('[data-act="help"]'); await pn.waitForTimeout(300);
+      const mailAfter = decodeURIComponent(await pn.$eval('#sheetBody a[data-feedback]', a => a.getAttribute('href')));
+      check('and a purchase that goes through takes the App Store\'s earlier reason back out of the bug report', !/Last App Store error/.test(mailAfter), mailAfter.slice(-160));
+      await pn.click('#sheetClose'); await pn.waitForTimeout(250);
+    }
     await openPane(pn, 'plan');
     await until(pn, () => !!document.querySelector('#view [data-act="iap-manage"]'));
     const paneN = await pn.textContent('#view');

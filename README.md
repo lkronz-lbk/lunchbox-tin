@@ -54,16 +54,25 @@ throwing app script cannot leave it up forever. From there:
   no box to pack, nothing on the list, never asked about (the archive keeps the flag), never
   picked, no reminder — leaving its foods in place, and the line that replaces the tin ("No lunch
   today. Nothing to pack, nothing on the list.", on `--ground` so it reads as a state, not a card)
-  carries **Put it back**; the toast ("No lunch today — nothing to pack, nothing to buy") offers
-  Undo. A box already marked Packed comes off with the day (its ticks are un-ticked, and Undo
-  ticks them back). A day that has gone gets no button, cannot be taken off and, if it was off,
+  carries **Put it back**; the toast ("No lunch today — nothing to pack, nothing to buy", and with
+  two lunchboxes "No lunch today for Emma — …", since the other box is still there to pack and
+  to buy for) offers Undo. A box already marked Packed comes off with the day (its checks are
+  un-ticked, and Undo puts them back under fresh stamps, as Packed's own Undo does, so a sync
+  inside the toast cannot take them off again). A day that has gone gets no button, cannot be taken off and, if it was off,
   stays off with no gone line or sheet; a caretaker sees the state and no button. Coming up and a
   folded second box say "no lunch" for such a day; Week's count is of lunches, not days; a re-plan
-  keeps the flag and leaves the day's foods as they are (no draw, no rule count); a week whose
-  remaining days are all off is done, on Shop as on Pack. Two phones: the newer stamp wins the
+  keeps the flag and leaves the day's foods as they are (no draw, no rule count), and Shuffle for
+  both lunchboxes leaves the box that is off alone. A rule switched on while a day is off still
+  takes a food that breaks it out of that day, and a compartment switched on adds an empty one;
+  a day off takes no draw, so **Put it back** fills whatever is empty, as the plan would
+  (`refillDay`). A week whose remaining days are all off is done on Shop (`weekDone`); Pack shows
+  the No lunch line. Two phones: the newer stamp wins the
   day whole, so a No lunch on one phone gives way to a later edit of that day on the other
   (Plan the week there re-stamps every day ahead), and a No lunch discards the other phone's
-  older swap of that day. A day that has gone (its header says "· home") is one line on Week, the main and a count with
+  older swap of that day; and a No lunch the other phone first hears of after the day has gone
+  is not applied there (the local copy keeps a gone day), so that phone still asks about the box
+  and the two copies of that day never agree.
+  A day that has gone (its header says "· home") is one line on Week, the main and a count with
   how the box went beside it in three words (`reviewShort`: all eaten, 2 came home, 3 of 4 eaten,
   nothing counted, not answered), and opens a read-only sheet showing the box as it was packed — every
   compartment it had, even one switched off since. The day lock refuses a gone day and a day with
@@ -474,7 +483,8 @@ forward).
       Where fonts.gstatic.com is unreachable, `LS_FONT_CACHE=<dir>` serves the brand faces
       from a cache (`fonts.css`, the woff2 files and a `map.txt` of "<url> <file>" lines)
       rather than letting the shot come out in the fallback face.
-- [x] Reshot on 2026-09-27 (no Babybel, the AAA colors); upload at the next editable version.
+- [x] Reshot on 2026-09-30 (Phase A's screens, pinned to Monday September 14, and 01-week with
+      the kid's say on, so it shows Let Emma pick the week); upload at the next editable version.
       `node scripts/store-shots.mjs` serves `public/` itself and runs `scripts/store-compose.py`
       (which needs Pillow); `node scripts/og.mjs` draws `public/img/og.png`. There are eight
       shots now — recipes and cook at 05/06, rules and foods moved to 07/08 — and
@@ -564,7 +574,9 @@ the visual identity.
    sheet and a Home Screen widget.
 
 - **Help** — the ? at the top of every tab opens a sheet: the short answers, "Ask a
-  question" (the feedback email with the build and phone filled in) and "More answers", which
+  question" (the feedback email with the build and phone filled in — and, in the iPhone app, the
+  App Store's own reason for the last purchase it refused, which is never shown on screen) and
+  "More answers", which
   is `public/help.html`, the longer FAQ on the site (linked from the site footer). Opened from
   **Contact support** on the Account tab the two mail buttons come first, above the answers;
   from the ? the answers come first. The sheet and the page say the same things in the same
@@ -651,34 +663,41 @@ and the tag did not.
 
 ### When the day-one work moves to main
 
-Pull request #16 (the six milestones, the error reports, **The funnel** and **Broken screens**
-on `/admin`, `HANDBOOK.md`) landed on `dev` on 2026-09-22 with no build bump, because `dev`'s
-v24 had not shipped. It changes what the app collects, so the deploy to `main` and App Store
-Connect have to move in the same sitting:
+It moved on 2026-09-30. Pull request #16 (the six milestones, the error reports, **The funnel**
+and **Broken screens** on `/admin`, `HANDBOOK.md`) had waited on `dev` since 2026-09-22, and went
+to `main` as v25 in one deploy with Phase A of the UX plan, the trial extension and pull request
+#36 (the iPad payment sheet), after App Review rejected 1.0 (6). It changed what the app collects,
+so App Store Connect has to follow in the same sitting:
 
-- [ ] **Not during an App Review.** The iOS shell loads the live site, so the reviewer sees
-      whatever `main` serves. Land it between submissions, or enter the label below first and
-      deploy straight after.
-- [ ] **App Privacy in App Store Connect.** Diagnostics → Crash Data: Yes, not linked, not
+- [ ] **App Privacy in App Store Connect** (Liz). Diagnostics → Crash Data: Yes, not linked, not
       tracking, App Functionality. Usage Data → Product Interaction: Yes, linked, not tracking,
       Analytics. The answers and the notes behind them are in `store/listing.md` under App
       Privacy; the label then reads "Data Linked to You: Contact Info, User Content,
-      Identifiers, Purchases, Usage Data" and "Data Not Linked to You: Diagnostics". Until
-      `main` carries this work the questionnaire stays at its live answers (no Crash Data, no
-      Usage Data), because the live app collects neither.
-- [ ] **The description**, at the next version that can be edited: "nothing leaves your phone
-      until you choose to sign in" becomes "your lunches never leave your phone until you
-      choose to sign in" (`store/listing.md`, Description). The privacy page already says it.
-- [x] **The build.** `main` took v24 first (App Store purchase, no note), so `dev` was brought
-      level with it as v25 on 2026-09-25. v25 carries the note `dev` had written as v24's; no
-      phone has read it, since main's v24 said nothing, so there is no `seenAs`.
-- [ ] **Migration `0009_milestones_errors`** applies itself on the `main` deploy (the build command runs
-      `scripts/migrate.mjs`): it backfills `signed_up` exactly and `paid` approximately, and
-      was applied on the staging branch as `0006_milestones_errors`; under its new number it runs there once more and changes nothing, since every statement in it is `IF NOT EXISTS` or `ON CONFLICT DO NOTHING`.
-- [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' https://lunchsorted.app/api/errors`
-      answers 404 to a GET, `/admin` shows The funnel and Broken screens, and the privacy page's
-      "Last updated" names the day of that deploy (set it in the deploy commit: the live page
-      does not yet describe error reports or the six dates). The Ops routine checks the site and the error
+      Identifiers, Purchases, Usage Data" and "Data Not Linked to You: Diagnostics". `main`
+      carries this work since 2026-09-30 (v25): enter both before 1.0 (7) is submitted, or at
+      once if it already has been.
+- [ ] **The description** (Liz), at the next version that can be edited: paste the whole block
+      from `store/listing.md` (Description). "Nothing leaves your phone until you choose to sign
+      in" became "your lunches never leave your phone until you choose to sign in", and three
+      other lines have changed since it was first entered. The privacy page already says it.
+- [ ] **The screenshots and the review notes** (Liz), in the same sitting: the eight in
+      `store/screenshots/` and `store/iap-review.png` on both subscriptions, all reshot on
+      2026-09-30, and the Notes block from `store/listing.md` pasted again, because the notes
+      entered for 1.0 (6) describe v24's controls ("shuffle the week", "the gear").
+- [x] **The build.** `main` went from v24 (no note) to v25 on 2026-09-30: Phase A with its own
+      note, and PR #36, which had tagged v25 on its branch with no note and was never served on
+      its own. No phone had read a v25 note, so there is no `seenAs`. The next build that
+      changes the app is v26.
+- [x] **Migrations `0009_milestones_errors` and `0010_trial_extra_days`** applied themselves on
+      the `main` deploy (the build command runs `scripts/migrate.mjs`): 0009 backfills
+      `signed_up` exactly and `paid` approximately, and was applied on the staging branch as
+      `0006_milestones_errors`; under its new number it ran there once more and changed nothing,
+      since every statement in it is `IF NOT EXISTS` or `ON CONFLICT DO NOTHING`.
+- [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://example.com' https://lunchsorted.app/api/errors`
+      answers 403 (a post from another site is refused, and writes nothing; before the function
+      existed the same request answered 404, as a GET still does), the privacy page's "Last
+      updated" names the day of the deploy, and `/admin` shows The funnel and Broken screens
+      (Liz's to look at: it needs her sign-in). The Ops routine checks the site and the error
       table from the next weekday morning.
 
 Two calls Liz made on 2026-09-22, so nobody reopens them: error reports go out signed out too
@@ -696,8 +715,8 @@ out by deleting it in the commit that does it.
   Set them to the new test prices; every other context, local `dev` included, is done.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
-- **After App Review answers:** `public/llms.txt` says "An iPhone app is in review"; change it the
-  same day (to the store link once it is live).
+- **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
+  Store"; change it the same day (to the store link once it is live).
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
   (`store/listing.md`, After approval).
 - **Every price rise, both stores together:** a new Stripe price with no `founding` metadata,
@@ -712,8 +731,10 @@ out by deleting it in the commit that does it.
 **Decisions waiting**
 - **Liz: the beta link** still gives the first `BETA_CAP` households the plan free forever.
   Keep it as the testers' thanks, or close it (`BETA_CAP=0`) now that forever is off sale.
-- **Liz: the new terms and privacy wording** (September 2026): whether the change
-  needs announcing to the beta households before launch.
+- **Liz: the new terms and privacy wording** (September 2026) went live with v25 on
+  2026-09-30, unannounced: whether the beta households should be told. The terms' own date
+  moved to that day too, for one renamed feature ("the question about what came home") and a
+  Help link, because the page says its date moves when it changes; nothing material did.
 
 **Code**
 - **The numbers page after a price rise.** `api-admin.js` counts monthly against yearly by the
@@ -731,7 +752,8 @@ out by deleting it in the commit that does it.
   the server, for the free period that fits, rounded down to Apple's lengths (3 days, 1 week,
   2 weeks). It needs an In-App Purchase key from App Store Connect, a signing endpoint, the
   plugin passing the offer to `purchase`, a new build and review.
-- **Take the web checkout out of the shell** with the next native change: `@capacitor/app-launcher`,
+- **Take the web checkout out of the shell** with the native change after 1.0 (7) (PR #36, the
+  iPad fix, was one and touched nothing else): `@capacitor/app-launcher`,
   `public/back.html` and its CSP block, the `appStateChange` listener, the `client: 'ios'`
   return-URL branches in `api-billing.js` (the portal's back.html return and the log tag), and
   the back.html checks in `tests/smoke.mjs`. Keep the 403 that refuses a checkout asked for by
@@ -765,16 +787,10 @@ need GDPR's terms. The in-app purchases need nothing more.
 
 ### Backlog (ideas to revisit, not scheduled)
 
-**Held until after the first App Store review.** These findings from the v24 reviews are
-deliberately unfixed: each one changes what a screen looks like, and the review is running
-against the build as it stands. Take them together once it clears.
-
-One of the same class has since landed on `dev` and is *not* held: `--line-strong` in the two
-dark blocks went to `#5A8272`, so the empty box on a list clears 3:1, and the kid's-pick dots
-were taken off a .35 opacity in both themes. It is on `dev` rather than in this list because
-`dev` does not deploy — the build under review comes from `main`, which has not moved. It does
-mean the first chip below and the checkbox above it are now on opposite sides of the same
-3:1 line, so whatever ships them to `main` has to ship both.
+**Held while `main` was frozen for App Review.** These findings from the v24 reviews were
+left unfixed because each one changes what a screen looks like, and the review was running
+against the build as it stood. `main` moved on 2026-09-30 (v25), so they are free to take — the
+one on the sign-in screen once 1.0 (7) is answered, since that is where the reviewer lands.
 
 - **`06-cook.png` does not fill its canvas.** `CROP_BOT = {'cook': 840}` in
   `scripts/store-compose.py` ends the phone frame ~500px above the bottom edge where every other
@@ -882,13 +898,16 @@ writes the same one.
   stamps (an uncheck is a row marked `off`, so it travels too; a review row's stamp is its
   latest answer), a plan merges day by day — each day by its own `updatedAt` where it has one
   (`touchDay`: every writer stamps the day it touched, so two parents changing different days
-  both win) and by its week's where it does not — except that a day already gone keeps the
+  both win) and by its week's where it does not; with the two weeks level, a day that carries
+  its own stamp beats a copy that does not, because a phone still on v24 strips the day stamps
+  and the day's newer fields with them — except that a day already gone keeps the
   plan that existed on it, lists come out in a fixed order so both phones compute the same
   document, and the local copy wins ties. The test suite runs the block on its own. A push
   that fails is retried three times with growing waits, then waits for the next change;
   returning to the app pulls if the last sync is more than thirty seconds old.
 - **Members**: owner, parent (adult), helper. An invite (`POST /api/household/invite`) is a
-  link that works once, for a week; opening it lands at the top of the Account tab with the sign-in
+  link that works once, for a week, and only while whoever made it is still in the household
+  (someone who is removed, or leaves, takes their links with them); opening it lands at the top of the Account tab with the sign-in
   card and the inviter's name. A phone that already has lunches brings them into the
   household when it joins, and keeps the member it already was. A helper receives only the
   plan, the foods in it and the checks (no rules, allergens, history or addresses), cannot
@@ -896,8 +915,11 @@ writes the same one.
   their checks stay on their phone. Nothing is drawn for a caretaker only to refuse: every
   control on their screens is one in `HELPER_OK`, and the smoke suite walks their six tabs, the
   two Account pages and the Lunchboxes sheet to say so — Plan the week, Shuffle, the locks, the
-  picks, No lunch, Ideas, the photos, Remove, the backup, Clear the plans, Add a lunchbox, the
-  settings, the star and the pantry check are not there, not blocked.
+  picks, No lunch, Ideas, the photos, Remove, Put back, the backup, Clear the plans, Add a
+  lunchbox, the settings, the star and the pantry check are not there, not blocked. A household
+  with nothing planned reaches a caretaker as lunchboxes with no foods at all (they are sent
+  only the foods in the boxes), so its empty pages say "Nothing planned yet" and offer nothing
+  to add; the suite walks that state too, and a food taken off while it is still in a box.
 - **Leaving** a household leaves the lunches with it: the phone starts fresh in its own
   empty household. Being removed signs that person's phones out; whatever is on their phone
   stays there. **Delete my account and data** — the only irreversible control, gated on
@@ -1109,7 +1131,9 @@ the idea bank stays free so a free list is never stuck with what it has.
   because a page opened from an invite or the beta link carries its code in the address the
   browser stamps on each frame, and the server cuts it again. The server refuses a post from
   another site, adds the browser's user-agent string and the time, blanks anything shaped like
-  an email address, and writes the row in one statement that also enforces twenty an hour from
+  an email address (a Safari or Firefox stack frame, written name@address, is not one and is
+  kept), cuts every field before and after it reads it (the user-agent arrives outside the 8 KB
+  the body is held to), and writes the row in one statement that also enforces twenty an hour from
   one address (a /64 counts as one on IPv6) and a thousand an hour in all, keeping the stack only
   on the first copy of a distinct error each hour. The sweep drops rows past thirty days. `/admin`
   lists the week's thirty commonest under **Broken screens**; the stacks are in `app_errors`.
