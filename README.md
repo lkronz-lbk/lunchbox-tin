@@ -639,8 +639,13 @@ planned list as check boxes. "No more of these" is honored.
 button into the app with the code from `BETA_CODE` (Netlify env, per context). The app keeps the
 code on the phone until a parent is signed in, then `POST /api/billing/beta` switches the
 household to forever for good, refused once `BETA_CAP` (default 25; 0 closes it) households
-carry `source = 'code'`. A household that checks out with a 100%-off Stripe code (TESTER) is
-written the same way and kept so through later Stripe events; `/admin` lists them under
+carry `source = 'code'`. A subscription still on the row is cancelled at Stripe first: a first
+charge that failed when the three weeks ended leaves the row reading ended while Stripe goes on
+retrying the card, and a retry that went through afterwards would bill the forever every year.
+Stripe answering that it has no such subscription counts as cancelled; if it cannot say either
+way, the claim waits (503) and the app offers another go. A household that checks out with a
+100%-off Stripe code (TESTER) is written the same way and kept so through later Stripe events,
+a refund of an earlier charge among them; `/admin` lists them under
 "Beta testers", a row a person rather than a row a household, beside the "Standard users"
 roster of everyone else.
 
@@ -799,6 +804,11 @@ out by deleting it in the commit that does it.
 **Decisions waiting**
 - **Liz: the beta link** still gives the first `BETA_CAP` households the plan free forever.
   Keep it as the testers' thanks, or close it (`BETA_CAP=0`) now that forever is off sale.
+- **Liz: Manage billing on a forever nobody paid for.** The UX review wanted it gone from the
+  beta's Subscription page. It stayed while a beta claim could leave a subscription charging; a
+  claim cancels that now. Taking it away is an app change with a build of its own: the portal
+  button in `panePlan()` (`!foreverGiven()`), the comment beside it, and the smoke check "and
+  Subscription quotes it no price".
 - **Liz: the new terms and privacy wording** (September 2026) went live with v25 on
   2026-09-30, unannounced: whether the beta households should be told. The terms' own date
   moved to that day too, for one renamed feature ("the question about what came home") and a
@@ -1127,8 +1137,10 @@ the idea bank stays free so a free list is never stuck with what it has.
   lifetime purchase is never lowered by a subscription ending; buying forever on top of a
   yearly plan stops the yearly plan at its period end; a fresh yearly checkout replaces an
   unpaid one; a forever purchase refunded in full is undone (a yearly refund is paired with
-  canceling the subscription in the dashboard). Deleting the account, or an owner folding
-  their household into another, cancels its subscription first.
+  canceling the subscription in the dashboard), but only one bought through Stripe
+  (`source = 'stripe'`): the beta's forever and a 100%-off code's charged nothing, so a charge of
+  the same customer refunded later is an earlier one, and they stay. Deleting the account, or
+  an owner folding their household into another, cancels its subscription first.
 - **Portal** (`POST /api/billing/portal`) opens Stripe's customer portal for the card,
   invoices and cancellation, and comes back to `/app/?portal=1`; the iPhone app never opens it. It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
@@ -1174,9 +1186,10 @@ the idea bank stays free so a free list is never stuck with what it has.
   price and its renewal date (Liz, 2026-09-30), dated Renews even inside the three weeks, since
   "First charged" and "Cancel before DATE" are a sale's alone. Manage billing stays on the web, for the
   owner or whoever paid, wherever the
-  row has a Stripe customer, the beta's included: a claim does not yet cancel a subscription
-  Stripe is still retrying (a first charge that failed), which can go on charging, and nothing
-  else in the app reaches it (the iPhone app never opens Stripe at all). Straight
+  row has a Stripe customer, the beta's included (the iPhone app never opens Stripe at all). It
+  was kept for a subscription Stripe was still retrying when the beta was claimed; a claim now
+  cancels that first, so whether a forever nobody paid for keeps it is Liz's call (Decisions
+  waiting). Straight
   after checkout it says only that the plan is switching on, because the webhook has not
   landed and every other row would
   still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
@@ -1208,7 +1221,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   button when set, and `STRIPE_PRICE_LIFETIME`, best left unset now that forever is off sale: all
   it does is quote that price on the Subscription pane of a household that bought forever through
   Stripe, matched by id (a free forever is never priced), and production has none; a refund goes
-  by the plan, not the price. `STRIPE_TAX=0` turns
+  by the plan and where it was bought, not the price. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
   A request that gets no answer, or an answer that cannot be read, is logged in fixed words, never
   fetch's own, which can quote the authorization header, key and all.

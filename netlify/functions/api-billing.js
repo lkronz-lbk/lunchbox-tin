@@ -126,12 +126,16 @@ async function applyEvent(ev) {
 
   if (ev.type === 'charge.refunded') {
     /* a forever purchase refunded in full is a forever purchase undone; a yearly refund is
-       paired with cancelling the subscription in the dashboard, which arrives as its own event */
+       paired with cancelling the subscription in the dashboard, which arrives as its own event.
+       Only a forever bought through Stripe took money. The beta's, or a 100%-off code's, charged
+       nothing, but keeps the customer of anything bought before, so a charge of that customer
+       refunded now is an earlier one, and the forever stays */
     if (!obj.refunded) return 'partial';
     const hid = await householdFor(obj);
     if (!hid) return 'no household';
-    const [cur] = await q`SELECT plan FROM entitlements WHERE household_id = ${hid}`;
+    const [cur] = await q`SELECT plan, source FROM entitlements WHERE household_id = ${hid}`;
     if (!cur || cur.plan !== 'lifetime') return 'not lifetime';
+    if (cur.source !== 'stripe') return 'not a Stripe sale';
     const ok = await write(hid, at, { plan: 'free', source: 'none', status: 'canceled', customer: idOf(obj.customer), subscription: null, price: null });
     return ok ? 'applied' : 'stale';
   }
@@ -227,6 +231,14 @@ export default async function handler(req, context) {
       if (h.stripe_subscription_id && (h.status === 'active' || h.status === 'past_due')) return fail('This household already has the Household plan', 409, { paying: true });
       /* two claims in the same instant can both pass this count and land at cap + 1: fine for a hand-shared link and a cap of 25 */
       if (await betaCount() >= betaCap()) return fail('The beta is full', 409, { full: true });
+      /* a subscription still on the row can still charge: a first charge that failed when the three
+         weeks ended reads as ended here while Stripe goes on retrying the card, and a retry that went
+         through after the claim would bill the forever every year, with nothing left on the row to
+         find it by. So it is cancelled first; if Stripe cannot say it is, the claim waits for another go */
+      if (!(await cancelSubscription(h.stripe_subscription_id))) {
+        console.log(`billing: beta household=${h.id} waits: ${h.stripe_subscription_id} could not be cancelled`);
+        return fail('Try again in a moment', 503);
+      }
       const ok = await write(h.id, new Date().toISOString(), { plan: 'lifetime', source: 'code', status: 'active', customer: h.stripe_customer_id || null, subscription: null, price: null, paidBy: user.id });
       console.log(`billing: beta household=${h.id} ${ok ? 'on' : 'stale'}`);
       if (!ok) return fail('Try again in a moment', 503);                /* a Stripe event stamped ahead of our clock: the code stays on the phone */
