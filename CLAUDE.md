@@ -124,6 +124,13 @@ Never again:
   event rows carry `at`/`by`. Imports and boot go through `normalizeAccount()`.
 - `dev` is the working branch; `main` deploys production; pull requests get previews.
   Merging to `main` is Liz's call.
+- One thread owns releases (Liz, 2026-09-30): the Claude Desktop session titled "Release owner"
+  alone merges pull requests and pushes `dev` or `main`. Every other thread, the phone's
+  included, builds on its own branch from `origin/dev`, runs `npm test` and the reviewers,
+  pushes the branch, opens a pull request into `dev` and leaves it unmerged; it does not bump
+  `APP_BUILD`, `VERSION` or `WHATS_NEW` (the release owner sets the build and its note), and it
+  claims a migration number before writing one. If that session is gone, ask Liz which thread
+  owns releases before merging anything.
 
 ## Mandatory review before deploy
 
