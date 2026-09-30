@@ -94,10 +94,10 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         Task {
             do {
                 guard let product = try await Product.products(for: [id]).first else {
-                    call.reject("That plan is not in the App Store")
+                    call.reject("That plan is not in the App Store", "productMissing")
                     return
                 }
-                switch try await product.purchase(options: [.appAccountToken(token)]) {
+                switch try await self.buy(product, token: token) {
                 case .success(let result):
                     if let out = await hand(result, event: false) {
                         call.resolve(out.merging(["status": "purchased"]) { _, new in new })
@@ -113,9 +113,25 @@ public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                     call.resolve(["status": "cancelled"])
                 }
             } catch {
-                call.reject("The purchase did not go through", nil, error)
+                call.reject("The purchase did not go through", String(describing: error), error)
             }
         }
+    }
+
+    /// Apple's payment sheet is shown over this app's own window. Without saying which, StoreKit has
+    /// to guess, and on an iPad (where this iPhone app runs in a window of its own) it can fail to
+    /// find one and refuse the purchase: App Review saw exactly that on an iPad Air, 1.0 (6).
+    @MainActor
+    private func buy(_ product: Product, token: UUID) async throws -> Product.PurchaseResult {
+        let options: Set<Product.PurchaseOption> = [.appAccountToken(token)]
+        let controller = bridge?.viewController
+        if #available(iOS 18.2, *), let controller = controller {
+            return try await product.purchase(confirmIn: controller, options: options)
+        }
+        if #available(iOS 17.0, *), let scene = controller?.view.window?.windowScene {
+            return try await product.purchase(confirmIn: scene, options: options)
+        }
+        return try await product.purchase(options: options)
     }
 
     /// Restore Purchases: asks the App Store for this Apple ID's purchases, then hands the page each

@@ -1676,7 +1676,7 @@ function renderSyncLine(){
 
 var S = null;                          /* the account document */
 var DEVICE = {memberId:null};          /* device-local, not part of the account */
-var APP_BUILD = 'lunchsorted-v24';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v25';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 /* one sentence shown once, on the first open after an update, to a phone that already had the app;
    npm run csp refuses a build whose note names an older build, so every release writes its own ('' for none) */
 /* The banner is for something a parent gained or lost, not for a screen that moved.
@@ -1693,7 +1693,7 @@ var APP_BUILD = 'lunchsorted-v24';     /* the same tag as VERSION in sw.js; npm 
    would recognise as new, and v22's Recipes note had already had its run. Not the carry-forward
    the paragraph above describes — that is for a release that skips a note, not one with none. */
 /* v24 says nothing: App Store purchase in the iPhone shell, which no parent has yet; the web is unchanged. */
-var WHATS_NEW = {build:'lunchsorted-v24', text:'', steps:[]};
+var WHATS_NEW = {build:'lunchsorted-v25', text:'', steps:[]};
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
 function whatsNew(){
@@ -3930,7 +3930,7 @@ function feedbackMail(kind){
     'Kid\u2019s pick: '+kids().map(function(k){ return k.settings.kidPick ? (k.settings.kidPickMode === 'boxes' ? 'whole box' : 'each part') : 'off'; }).join(', '),
     'Came from: '+(UI.lastTab || 'the start')+' \u00b7 plan: '+planLabel()+' \u00b7 zone: '+(S.tz || '?'),
     'Storage: '+(Store.ok ? 'ok' : 'blocked')+' \u00b7 online: '+(navigator.onLine ? 'yes' : 'no')
-  ]);
+  ].concat(IAP.lastError ? ['Last App Store error: '+IAP.lastError] : []));
   return 'mailto:hello@lunchsorted.app?subject='+encodeURIComponent(kind === 'question' ? 'Lunch Sorted: a question' : 'Lunch Sorted: something wrong')+'&body='+encodeURIComponent(lines.join('\n'));
 }
 
@@ -5495,7 +5495,11 @@ document.addEventListener('click', function(ev){
         toast('Paid \u2014 it can take a minute to show up here');
         setTimeout(function(){ Sync.pull().then(render).catch(function(){}); }, 6000);
       });
-    }).catch(function(){ done(); toast('The purchase did not go through. Try again in a moment'); });
+    }).catch(function(e){
+      /* the App Store's own reason goes in a bug report (feedbackMail), never on screen */
+      IAP.lastError = String((e && (e.code || e.message)) || 'unknown').slice(0, 160);
+      done(); toast('The purchase did not go through. Try again in a moment');
+    });
     return;
   }
   if(act==='iap-restore'){

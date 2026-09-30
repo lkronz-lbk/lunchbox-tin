@@ -2772,7 +2772,7 @@ try {
           { id: 'app.lunchsorted.household.annual', displayName: 'Household, yearly', displayPrice: '$34.99', kind: 'subscription', period: 'year' },
           { id: 'app.lunchsorted.household.month', displayName: 'Household, monthly', displayPrice: '$3.99', kind: 'subscription', period: 'month' },
           { id: 'app.lunchsorted.household.forever', displayName: 'Household, forever', displayPrice: '$89.99', kind: 'forever' }] }),
-        purchase: async o => { window.__sk.purchases.push(o); return window.__sk.next || { status: 'cancelled' }; },
+        purchase: async o => { window.__sk.purchases.push(o); if (window.__sk.fail) { const e = new Error('The purchase did not go through'); e.code = window.__sk.fail; throw e; } return window.__sk.next || { status: 'cancelled' }; },
         restore: async () => ({ transactions: [] }),
         finish: async o => { window.__sk.finished.push(o.transactionId); return { finished: true }; },
         manage: async () => { window.__sk.managed++; },
@@ -2798,10 +2798,27 @@ try {
     };
     const { c: ctxN, pg: pn } = await iphone(true);
     await openPlanSheet(pn);
-    await until(pn, () => document.querySelectorAll('#sheetBody [data-act="iap-buy"]').length === 3);
+    await until(pn, () => document.querySelectorAll('#sheetBody [data-act="iap-buy"]').length === 2);
     const sheet = await pn.textContent('#sheetBody');
     check('on the iPhone the plan sheet sells through the App Store, at Apple\'s own prices, with no Stripe button and no forever even if the App Store still lists one', /\$34\.99 a year/.test(sheet) && /\$3\.99 a month/.test(sheet) && !/forever|\$89\.99/i.test(sheet) && !/\$19\.99/.test(sheet) && (await pn.$$eval('#sheetBody [data-act="buy"]', a => a.length)) === 0, sheet.replace(/\s+/g, ' ').slice(0, 300));
     check('and it offers Restore purchases, Terms of use and Privacy, says the plans renew, and promises no refund Apple would have to give', (await pn.$$eval('#sheetBody [data-act="iap-restore"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/terms.html"], #sheetBody a[href="/terms.html"]', a => a.length)) === 1 && (await pn.$$eval('#sheetBody [data-url="/privacy.html"], #sheetBody a[href="/privacy.html"]', a => a.length)) === 1 && !/14 days/.test(sheet) && /Renews each year or month until you cancel/.test(sheet) && /Apple Account/.test(sheet));
+    {
+      /* the App Store refuses the purchase (App Review's iPad, 1.0 (6)): the parent is told plainly, and
+         Apple's own reason waits in the bug report rather than on screen */
+      await pn.evaluate(() => { window.__sk.fail = 'unknown(StoreKitError)'; });
+      await pn.click('#sheetBody [data-act="iap-buy"][data-product="app.lunchsorted.household.annual"]');
+      const failed = await until(pn, () => /did not go through/.test(document.getElementById('toast').textContent));
+      const buttonsBack = await pn.$$eval('#sheetBody [data-act="iap-buy"]', a => a.length === 2 && a.every(b => !b.disabled && /a (year|month)$/.test(b.textContent)));
+      await pn.evaluate(() => { window.__sk.fail = null; window.__sk.purchases = []; });
+      await pn.click('#sheetClose'); await pn.waitForTimeout(250);
+      await pn.click('[data-act="help"]'); await pn.waitForTimeout(300);
+      const mail = decodeURIComponent(await pn.$eval('#sheetBody a[data-feedback]', a => a.getAttribute('href')));
+      check('a purchase the App Store refuses says so in plain words, puts the buttons back, and keeps Apple\'s reason for a bug report',
+        failed && buttonsBack && /Last App Store error: unknown\(StoreKitError\)/.test(mail) && !/StoreKitError/.test(await pn.textContent('#toast')), [failed, buttonsBack, mail.slice(-200)]);
+      await pn.click('#sheetClose'); await pn.waitForTimeout(250);
+      await openPlanSheet(pn);
+      await until(pn, () => document.querySelectorAll('#sheetBody [data-act="iap-buy"]').length === 2);
+    }
     const bought = txn({ originalTransactionId: '2000000000000700', transactionId: '2000000000000700' });
     await pn.evaluate(n => { window.__sk.next = n; }, { status: 'purchased', jws: jws(bought), transactionId: '2000000000000700', productId: bought.productId });
     const stripeBefore = stripeCalls.length;
