@@ -62,7 +62,8 @@ export function ipKey(ip) {
   return ip ? createHash('sha256').update(String(ip)).digest('hex').slice(0, 24) : '';
 }
 
-/* housekeeping that rides along with the throttle: nothing personal outlives its use */
+/* housekeeping that rides along with the throttle, and runs once a day with the trial job in
+   production: nothing personal outlives its use */
 export async function sweep() {
   const q = sql();
   await q`DELETE FROM rate_events WHERE at < now() - interval '1 day'`;
@@ -71,6 +72,19 @@ export async function sweep() {
   await q`DELETE FROM invites WHERE expires_at < now() - interval '30 days' OR used_at < now() - interval '30 days'`;
   await q`DELETE FROM app_errors WHERE at < now() - interval '30 days'`;
 }
+
+/* The error table's ceiling: api-errors.js writes a report only under it and /admin says when it
+   is reached, so no flood can fill the database. The Neon plan holds 512 MB, and a full database
+   refuses sign-ins, syncs and payments. A row at its largest (every field in three-byte letters,
+   which the 8 KB body allows, and a stack on each, as every message in a flood can differ) takes
+   about 10 KB with its TOAST and index: ten thousand measured 99 MB, and 35 MB in plain ASCII.
+   Past it every report is dropped, a real breakage's too, until rows pass thirty days or someone
+   deletes some; reports arriving together can each see room for one more, so it can be passed by
+   the few in flight. The count at the ceiling, measured on Postgres 18 (PGlite): under a
+   millisecond either way the planner takes it, an index-only scan of about 30 index pages once
+   autovacuum has set the visibility map, or the heap (1,000 pages of ASCII rows, 2,500 of the
+   largest) before, all in memory during a flood. */
+export const ERRORS_KEPT = 10000;
 
 /* one row a household a moment, the first time only: the funnel the numbers page reads.
    A count is never worth a failed request, so a refused write is logged and swallowed. */

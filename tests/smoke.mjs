@@ -37,8 +37,8 @@ const { default: billingHandler } = await import('../netlify/functions/api-billi
 const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
 const { default: betaHandler } = await import('../netlify/functions/beta.js');
 const { default: recipeHandler } = await import('../netlify/functions/api-recipe.js');
-const { default: errorsHandler, ipBucket, ROWS_IN_ALL } = await import('../netlify/functions/api-errors.js');
-const { ipKey } = await import('../netlify/lib/db.js');
+const { default: errorsHandler, ipBucket, ROWS_AN_HOUR, EACH_AN_HOUR } = await import('../netlify/functions/api-errors.js');
+const { ipKey, ERRORS_KEPT } = await import('../netlify/lib/db.js');
 const { default: appleHandler } = await import('../netlify/functions/api-apple.js');
 const appleLib = await import('../netlify/lib/apple.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
@@ -2603,23 +2603,59 @@ try {
     check('the error endpoint answers nothing to a GET and refuses junk', errGet.status === 404 && errJunk.status === 400, [errGet.status, errJunk.status]);
     /* a flood from more addresses than the hourly caps can see stops at the table's ceiling, not the database's. The
        filler is two hours old and each report comes from a fresh address, so only the ceiling can turn one away */
-    const had = (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n;
-    await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '2 hours', 'lunchsorted-v3', 'error', 'smoke: filler ' || g FROM generate_series(1, $1::int) g`, [ROWS_IN_ALL - had - 1]);
     const flood = (message, ip) => errorsHandler(new Request('http://127.0.0.1/api/errors', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'error', message, build: 'lunchsorted-v3' }) }), { ip });
+    const marks = async ip => (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', ['err:' + ipKey(ipBucket(ip))])).rows[0].n;
+    const had = (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n;
+    await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '2 hours', 'lunchsorted-v3', 'error', 'smoke: filler ' || g FROM generate_series(1, $1::int) g`, [ERRORS_KEPT - had - 1]);
     const lastRoom = await flood('smoke: the last report there is room for', '203.0.113.7');
     const atCeiling = (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n;
-    check('the report that brings the error table to its ceiling is kept', lastRoom.status === 204 && atCeiling === ROWS_IN_ALL, [lastRoom.status, atCeiling, ROWS_IN_ALL]);
+    check('the report that brings the error table to its ceiling is kept', lastRoom.status === 204 && atCeiling === ERRORS_KEPT, [lastRoom.status, atCeiling, ERRORS_KEPT]);
     const pastIt = await flood('smoke: one past the ceiling', '203.0.113.8');
     const past = (await db.query("SELECT count(*)::int AS n, count(*) FILTER (WHERE message = 'smoke: one past the ceiling')::int AS it FROM app_errors")).rows[0];
-    const pastTicks = (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', ['err:' + ipKey(ipBucket('203.0.113.8'))])).rows[0].n;
+    const pastTicks = await marks('203.0.113.8');
     check('past the ceiling a report is still answered 204 and grows nothing, not even the throttle',
-      pastIt.status === 204 && past.n === ROWS_IN_ALL && past.it === 0 && pastTicks === 0, [pastIt.status, past, pastTicks]);
+      pastIt.status === 204 && past.n === ERRORS_KEPT && past.it === 0 && pastTicks === 0, [pastIt.status, past, pastTicks]);
+    /* a week after a flood its rows are off this week's list, and without this line the page would read as a quiet week */
+    const fullAdmin = await page.evaluate(() => fetch('/api/admin').then(r => r.text()));
+    check('and the numbers page says the table is full and when room comes back',
+      /The table is full, so new reports are being dropped/.test(fullAdmin) && /room comes back[^<]*from about [A-Z][a-z]{2} \d{1,2}, \d{4}/.test(fullAdmin), fullAdmin.match(/Broken screens this week[\s\S]{0,500}/)?.[0]);
     await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* everyone's hourly cap: filled to one short with rows from five minutes ago, the next report is kept and one more from a fresh address is not */
+    const inHour = async () => (await db.query("SELECT count(*)::int AS n FROM app_errors WHERE at > now() - interval '1 hour'")).rows[0].n;
+    await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '5 minutes', 'lunchsorted-v3', 'error', 'smoke: this hour ' || g FROM generate_series(1, $1::int) g`, [ROWS_AN_HOUR - (await inHour()) - 1]);
+    const hourLast = await flood('smoke: the last report this hour has room for', '203.0.113.9');
+    const hourFull = await inHour();
+    await flood('smoke: one past the hour', '203.0.113.10');
+    const hourPast = (await db.query("SELECT count(*)::int AS n FROM app_errors WHERE message = 'smoke: one past the hour'")).rows[0].n;
+    check('everyone\'s hourly cap keeps the report that reaches it, and one past it from a fresh address writes nothing',
+      hourLast.status === 204 && hourFull === ROWS_AN_HOUR && hourPast === 0 && (await marks('203.0.113.10')) === 0, [hourFull, ROWS_AN_HOUR, hourPast]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* one address's hourly cap, with everyone's far off */
+    for (let i = 1; i <= EACH_AN_HOUR + 1; i++) await flood('smoke: from one address, ' + i, '203.0.113.11');
+    const fromOne = (await db.query("SELECT count(*)::int AS n FROM app_errors WHERE message LIKE 'smoke: from one address, %'")).rows[0].n;
+    check('one address\'s hourly cap keeps what it allows and writes nothing for the report after',
+      fromOne === EACH_AN_HOUR && (await marks('203.0.113.11')) === EACH_AN_HOUR, [fromOne, EACH_AN_HOUR]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* a cut through an emoji leaves half of one, which UTF-8 cannot write: what goes to the database has the half made U+FFFD.
+       PGlite would store the half as U+FFFD itself, so the check reads the values handed to the driver, not the row */
+    const realSql = globalThis.__LS_SQL; let sent = null;
+    globalThis.__LS_SQL = async (strings, ...vals) => { if (typeof strings !== 'string' && strings.join('').includes('INSERT INTO app_errors')) sent = vals; return realSql(strings, ...vals); };
+    try { await flood('x'.repeat(299) + '\u{1F34E}', '203.0.113.12'); } finally { globalThis.__LS_SQL = realSql; }
+    const halfEmoji = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    check('a message cut through an emoji reaches the database with no half of one in it',
+      !!sent && sent.includes('x'.repeat(299) + '\uFFFD') && !sent.some(v => typeof v === 'string' && halfEmoji.test(v)), sent && sent.filter(v => typeof v === 'string').map(v => JSON.stringify(v.slice(-2))));
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* commonest first: a message seen twice outranks a later one seen once */
+    await db.query(`INSERT INTO app_errors (at, build, kind, message) VALUES (now() - interval '20 minutes', 'lunchsorted-v3', 'error', 'smoke: seen on two phones'), (now() - interval '20 minutes', 'lunchsorted-v3', 'error', 'smoke: seen on two phones'), (now(), 'lunchsorted-v3', 'error', 'smoke: seen once, later')`);
     const anonAdmin = await fetch(NODE_BASE + '/api/admin');
     const adminPage = await page.evaluate(() => fetch('/api/admin').then(r => r.text().then(t => ({ status: r.status, text: t, csp: r.headers.get('content-security-policy') }))));
     check('the numbers page asks a stranger to sign in, and shows the person in ADMIN_EMAILS real counts',
       anonAdmin.status === 401 && adminPage.status === 200 && /by the numbers/i.test(adminPage.text) && /households/.test(adminPage.text) && /default-src 'none'/.test(adminPage.csp), [anonAdmin.status, adminPage.status]);
     check('the numbers page lists the week\'s broken screens', /Broken screens/.test(adminPage.text) && /a synthetic break/.test(adminPage.text));
+    const twice = adminPage.text.indexOf('smoke: seen on two phones'), once = adminPage.text.indexOf('smoke: seen once, later');
+    check('the commonest is listed first, and the page says how full the table is without calling it full',
+      twice > -1 && once > twice && new RegExp('holds \\d[\\d,]* of the ' + ERRORS_KEPT.toLocaleString('en-US') + ' it keeps').test(adminPage.text) && !/The table is full/.test(adminPage.text), [twice, once]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
     check('and shows the funnel, with this household signed up and planned', /The funnel/.test(adminPage.text) && /Planned a week<\/td><td>1 \/ 1/.test(adminPage.text) && /Signed up<\/td><td>1 \/ 1/.test(adminPage.text), adminPage.text.match(/The funnel[\s\S]{0,600}/)?.[0]);
     /* the one script that sorts the rosters is allowed by its own hash and nothing else */
     const inline = adminPage.text.match(/<script>([\s\S]*?)<\/script>/g) || [];

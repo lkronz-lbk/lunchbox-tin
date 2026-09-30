@@ -1,4 +1,4 @@
-import { sql, siteUrl, siteEnv } from '../lib/db.js';
+import { sql, siteUrl, siteEnv, sweep } from '../lib/db.js';
 import { billingEnabled, priceInfo } from '../lib/stripe.js';
 import { trialEnd, stampOrNull } from '../lib/trial.js';
 import { sendTrialEnding, sendTrialEnded, priceWords } from '../lib/mail.js';
@@ -71,6 +71,10 @@ export default async function handler(req) {
   if (siteEnv() !== 'production') return new Response('not here', { status: 404 });
   const body = await req.json().catch(() => null);
   if (!body || !body.next_run) return new Response('not found', { status: 404 });
+  /* the housekeeping that otherwise rides one throttled call in twenty-five, on a clock too, so old
+     rows go (and a full error table reopens) however quiet the app is; on its own, so neither the
+     sweep nor the emails can cost the other its day */
+  try { await sweep(); } catch (e) { console.error('cron-trial: sweep', e.message); }
   try { await run(); return new Response('ok'); }
   catch (e) { console.error('cron-trial', e); return new Response('failed', { status: 500 }); }
 }

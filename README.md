@@ -1134,15 +1134,20 @@ the idea bank stays free so a free list is never stuck with what it has.
   another site, adds the browser's user-agent string and the time, blanks anything shaped like
   an email address (a Safari or Firefox stack frame, written name@address, is not one and is
   kept), cuts every field before and after it reads it (the user-agent arrives outside the 8 KB
-  the body is held to), and writes the row in one statement that also enforces twenty an hour from
-  one address (a /64 counts as one on IPv6), two hundred an hour in all and ten thousand rows in
-  the table, keeping the stack only on the first copy of a distinct error each hour. The ten
-  thousand keeps a flood from filling the database (512 MB on the Neon plan, and a full one refuses
-  every household's sync): that many rows measured 35 MB in plain text and 99 MB at the worst,
-  every field in three-byte letters, which the 8 KB body allows. Past it a report is answered as
-  usual and nothing is written, not even the throttle's mark, until rows go: the sweep drops rows
-  past thirty days, and deleting a flood's rows by hand makes room at once. `/admin`
-  lists the week's thirty commonest under **Broken screens**; the stacks are in `app_errors`.
+  the body is held to) and makes half an emoji left by a cut U+FFFD, and writes the row in one
+  statement that also enforces twenty an hour from one address (a /64 counts as one on IPv6), two
+  hundred an hour in all and ten thousand rows in the table, give or take the few that arrive at the
+  same moment, keeping the stack only on the first copy of a distinct error each hour. The hour's
+  two hundred are first come, first kept, so a flood from ten addresses can spend them, and a count
+  on `/admin` is a floor. The ten thousand keeps a flood from filling the database (512 MB on the
+  Neon plan, and a full one refuses sign-ins, syncs and payments): that many rows measured 35 MB in
+  plain text and 99 MB at the worst, every field in three-byte letters, which the 8 KB body allows.
+  Past it a report is answered as usual and nothing is written, not even the throttle's mark, for
+  any build, a real breakage's too, until rows go: the sweep drops rows past thirty days (it rides
+  about one throttled call in twenty-five, and runs daily in production with the trial emails), and
+  deleting a flood's rows by hand makes room at once. `/admin` lists the week's thirty commonest
+  under **Broken screens**, says how full the table is, and says when it is full and from when room
+  comes back; the stacks are in `app_errors`.
 - **The numbers**, at `/admin`, for the emails in `ADMIN_EMAILS` (comma-separated) and nobody
   else: households, on trial, lapsed, paying by plan, sign-ins, reminder emails sent, invites.
   Counts from the database; a stranger is asked to sign in, a signed-in parent who is not
