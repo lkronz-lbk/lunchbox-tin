@@ -3422,9 +3422,9 @@ try {
   const bcfgOff = await page.evaluate(() => fetch('/api/billing').then(r => r.json()));
   check('with no Stripe in the deploy nothing is gated', bcfgOff.enabled === false);
   /* the key guard: a live key can never serve a branch, a test key can never serve production */
+  const putEnv = (k, v) => { if (v === undefined) delete process.env[k]; else process.env[k] = v; };   /* unset goes back unset, not as 'undefined' */
   const said = (env, key) => { const was = { e: process.env.SITE_ENV, k: process.env.STRIPE_SECRET_KEY }; process.env.SITE_ENV = env; process.env.STRIPE_SECRET_KEY = key;
-    try { stripeLib.stripeKey(); return null; } catch (e) { return String(e.message); }
-    finally { process.env.SITE_ENV = was.e; if (was.k === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = was.k; } };
+    try { stripeLib.stripeKey(); return null; } catch (e) { return String(e.message); } finally { putEnv('SITE_ENV', was.e); putEnv('STRIPE_SECRET_KEY', was.k); } };
   const guard = (env, key) => said(env, key) !== null;
   {
     const { siteEnv } = await import('../netlify/lib/db.js');
@@ -3447,25 +3447,23 @@ try {
   }
   check('a test key in production, or a live key anywhere else, refuses to start', guard('production', 'sk_test_x') && guard('staging', 'sk_live_x') && !guard('production', 'sk_live_x') && !guard('staging', 'sk_test_x'));
   {
-    /* a key pasted with a line break, before it, after it or inside it, is not a key: refused in every
-       context, so the build fails and billing stays off. In the authorization header a line break
+    /* a key pasted with a line break or a space, before it, after it or inside it, is not a key:
+       refused in every context, so the build fails and the last good deploy stays live, and a
+       function handed one anyway takes billing as off. In the authorization header a line break
        makes fetch refuse the request in words that quote the header, key and all, and every caller
        logs those words (security review, 2026-09-30). The refusal names the variable, never the
        value. A NUL would do the same, but the environment cannot hold one */
     const hidden = (s) => !String(s).includes('Pasted42') && !/(sk|rk)_(live|test)_/.test(String(s));
     const bad = [['production', 'sk_live_Pasted42\n'], ['staging', 'sk_test_Pasted42\n'], ['production', 'sk_live_Pasted42\r\n'], ['production', '\nsk_live_Pasted42'], ['production', 'sk_live_Past\ned42'], ['production', 'sk_live_Pasted42 ']].map(([env, key]) => said(env, key));
-    check('a key pasted with a line break, wherever it falls, refuses to start in any context, in words that hold no key; the key alone starts',
+    check('a key pasted with a line break or a space, wherever it falls, refuses to start in any context, in words that hold no key; the key alone starts',
       bad.every(m => !!m && /^STRIPE_SECRET_KEY must be/.test(m) && hidden(m)) && said('production', 'sk_live_Pasted42') === null && said('staging', 'rk_test_Pasted42') === null, bad);
     const logged = [], was = { ce: console.error, e: process.env.SITE_ENV, k: process.env.STRIPE_SECRET_KEY, y: process.env.STRIPE_PRICE_YEAR, w: stripeLib.billingEnabled.warned };
     console.error = (...a) => { logged.push(a.map(String).join(' ')); };
     process.env.SITE_ENV = 'production'; process.env.STRIPE_SECRET_KEY = 'sk_live_Pasted42\n'; process.env.STRIPE_PRICE_YEAR = 'price_year'; stripeLib.billingEnabled.warned = false;
     let on = null;
     try { on = stripeLib.billingEnabled(); }
-    finally {
-      console.error = was.ce; stripeLib.billingEnabled.warned = was.w;
-      for (const [k, v] of [['SITE_ENV', was.e], ['STRIPE_SECRET_KEY', was.k], ['STRIPE_PRICE_YEAR', was.y]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
-    }
-    check('a running function takes it as billing off, not a broken sync, and its one log line holds no key', on === false && logged.length === 1 && /^billing off: STRIPE_SECRET_KEY must be/.test(logged[0]) && hidden(logged[0]), logged);
+    finally { console.error = was.ce; stripeLib.billingEnabled.warned = was.w; putEnv('SITE_ENV', was.e); putEnv('STRIPE_SECRET_KEY', was.k); putEnv('STRIPE_PRICE_YEAR', was.y); }
+    check('a running function handed one anyway takes billing as off rather than throwing on every household request, and its one log line holds no key', on === false && logged.length === 1 && /^billing off: STRIPE_SECRET_KEY must be/.test(logged[0]) && hidden(logged[0]), logged);
     const { spawnSync } = await import('node:child_process');
     const build = (key) => spawnSync(process.execPath, [path.join(ROOT, '..', 'scripts', 'migrate.mjs')], { env: { SITE_ENV: 'production', STRIPE_SECRET_KEY: key }, encoding: 'utf8', timeout: 30000 });
     const refused = build('sk_live_Pasted42\n'), built = build('sk_live_Pasted42');
@@ -3479,22 +3477,28 @@ try {
        points it at a port fetch never opens, so nothing leaves the machine */
     const { inspect } = await import('node:util');
     const KEY = 'sk_test_Spoiled42', shown = (e) => e ? [e.message, e.stack, inspect(e)].join('\n') : '';
-    const spoil = (url, init) => fetch('http://127.0.0.1:9/', { ...init, headers: { ...init.headers, authorization: init.headers.authorization.replace('Bearer ', 'Bearer \n') } });
+    const spoil = (url, init) => url.endsWith('/unread')
+      ? Promise.resolve(new Response(new ReadableStream({ start(c) { c.error(new TypeError('cut off: ' + init.headers.authorization)); } })))   /* an answer that breaks off, in the worst words */
+      : fetch('http://127.0.0.1:9/', { ...init, headers: { ...init.headers, authorization: init.headers.authorization.replace('Bearer ', 'Bearer \n') } });
     const theirs = await spoil('https://api.stripe.com/v1/prices/price_year', { method: 'GET', headers: { authorization: 'Bearer ' + KEY } }).then(() => null, e => e);
     const hook = globalThis.__LS_STRIPE_FETCH, was = { k: process.env.STRIPE_SECRET_KEY, y: process.env.STRIPE_PRICE_YEAR };
     globalThis.__LS_STRIPE_FETCH = spoil; process.env.STRIPE_SECRET_KEY = KEY; process.env.STRIPE_PRICE_YEAR = 'price_year'; stripeLib.forgetPrices();
-    /* both read the key and hand the request to fetch before their first await, so the key and the
-       hook go back at once, before a request from the open page can see either */
-    const direct = stripeLib.stripe('GET', '/prices/price_year').then(() => null, e => e), viaPrices = stripeLib.priceInfo().then(() => null, e => e);
-    globalThis.__LS_STRIPE_FETCH = hook;
-    for (const [k, v] of [['STRIPE_SECRET_KEY', was.k], ['STRIPE_PRICE_YEAR', was.y]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    /* all four read the key and hand the request to fetch before their first await, so the key and
+       the hook go back at once, before a request from the open page can see either. The cancel is the
+       one a deleted account or a join makes, and it logs its own failure */
+    const direct = stripeLib.stripe('GET', '/prices/price_year').then(() => null, e => e), viaPrices = stripeLib.priceInfo().then(() => null, e => e), cancel = stripeLib.cancelSubscription('sub_spoiled'),
+      broken = stripeLib.stripe('POST', '/prices/unread', {}).then(() => null, e => e);
+    globalThis.__LS_STRIPE_FETCH = hook; putEnv('STRIPE_SECRET_KEY', was.k); putEnv('STRIPE_PRICE_YEAR', was.y);
     const logged = [], ce = console.error; console.error = (...a) => { logged.push(a.map(String).join(' ')); ce.apply(console, a); };
-    let ours = null, asked = null;
-    try { ours = await direct; asked = await viaPrices; } finally { console.error = ce; stripeLib.forgetPrices(); }
+    let ours = null, asked = null, cut = null;
+    try { ours = await direct; asked = await viaPrices; await cancel; cut = await broken; } finally { console.error = ce; stripeLib.forgetPrices(); }
     check('fetch\'s own refusal of that header quotes the key, as the security review found', shown(theirs).includes('Spoiled42'), theirs && theirs.message);
-    check('but what stripe() throws in its place names no part of it, in its message, its stack or anything it carries, and nor does the prices read the site and the emails log',
-      !!ours && /^No answer from Stripe/.test(ours.message) && !/Spoiled42|Bearer/.test(shown(ours)) && ours.cause === undefined && !!asked && !shown(asked).includes('Spoiled42') && !logged.some(l => l.includes('Spoiled42')),
+    check('but what stripe() throws in its place names no part of it, in its message, its stack or anything it carries, and the prices read and the cancel say no more, in what they throw or log',
+      !!ours && /^No answer from Stripe/.test(ours.message) && !/Spoiled42|Bearer/.test(shown(ours)) && ours.cause === undefined && !!asked && !shown(asked).includes('Spoiled42') &&
+      logged.some(l => /^billing: could not cancel sub_spoiled No answer from Stripe/.test(l)) && !logged.some(l => l.includes('Spoiled42')),
       { ours: ours && ours.message, asked: asked && asked.message, logged });
+    check('an answer that breaks off while it is read, after a POST Stripe may have acted on, is told apart from no answer, in fixed words of its own',
+      !!cut && /^Stripe answered, but the answer could not be read/.test(cut.message) && !/Spoiled42|Bearer/.test(shown(cut)) && cut.cause === undefined, cut && cut.message);
   }
   const WH = 'whsec_test_secret';
   const sign = (body, t = Math.floor(Date.now() / 1000), secret = WH) => `t=${t},v1=${crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;

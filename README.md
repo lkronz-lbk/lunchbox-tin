@@ -538,7 +538,7 @@ UI per context (`production`, `staging`, `preview`), and the code falls back to 
 deploy context. That is the seam that
 matters: production reads its own database and its live Stripe key, and neither can reach
 a branch deploy or a pull request preview. The build refuses a Stripe key scoped to the
-wrong context.
+wrong context, or pasted with anything more than the key.
 
 **Netlify setup, once:** Site configuration → Build & deploy → Branches and deploy
 contexts → add `dev` as a branch deploy, and leave Deploy Previews on.
@@ -742,6 +742,12 @@ out by deleting it in the commit that does it.
   Set them to the new test prices; every other context, local `dev` included, is done.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
+- **Liz, before `main` takes PR #39: production's `STRIPE_SECRET_KEY`** must be the key alone,
+  and the variable needs the Builds scope as well as Functions, a separate setting on it. A
+  trailing space or line break works today, since fetch trims it, but from then on it refuses
+  main's deploy (the live one stays up). Pasting the key again from Stripe settles it without
+  anyone reading it; if Stripe no longer shows the live key, that means rolling it, with the old
+  one kept valid until `main` has deployed with the new one.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
   Store"; change it the same day (to the store link once it is live).
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
@@ -1123,16 +1129,20 @@ the idea bank stays free so a free list is never stuck with what it has.
 - **Environment**, per deploy context, test keys everywhere but production:
   `STRIPE_SECRET_KEY` (production refuses a test key, every other context refuses a live
   one, and every context refuses anything more than the key, such as a line break pasted with
-  it: `sk_` or `rk_`, `live_` or `test_`, then letters and digits only. Each refusal fails the
-  deploy and turns billing off, and names the variable, never the value. A Stripe request that
-  gets no answer is logged in fixed words, not fetch's, which quote a header fetch will not
-  send, and one header is the key),
+  it: `sk_` or `rk_`, `live_` or `test_`, then letters and digits only. A refusal fails the
+  deploy, the last good one staying live, and names the variable, never the value. Scope the
+  key to Builds as well as Functions, since the build cannot refuse what it cannot see: a
+  function handed a bad key takes billing as off, so every gate lifts and nothing can be bought,
+  on the web or in the iPhone app, and it makes no Stripe call, so a deleted household's
+  subscription goes on charging; sync carries on),
   `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
   button when set, and `STRIPE_PRICE_LIFETIME`, optional now, only so a forever bought before it
   was withdrawn is still recognized. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
+  A request that gets no answer, or an answer that cannot be read, is logged in fixed words, never
+  fetch's own, which can quote the authorization header, key and all.
 - **Email.** Sign-in asks for the address at the end of onboarding, once the week is built
   (skippable; offline or already signed in, the step does not appear). A first sign-in gets
   one welcome email. A scheduled function (`cron-trial.js`, 14:00 UTC daily, runs only on the
