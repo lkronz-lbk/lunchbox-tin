@@ -1122,7 +1122,12 @@ the idea bank stays free so a free list is never stuck with what it has.
   the webhook has landed; a caretaker sees none of this.
 - **Environment**, per deploy context, test keys everywhere but production:
   `STRIPE_SECRET_KEY` (production refuses a test key, every other context refuses a live
-  one), `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
+  one, and every context refuses anything more than the key, such as a line break pasted with
+  it: `sk_` or `rk_`, `live_` or `test_`, then letters and digits only. Each refusal fails the
+  deploy and turns billing off, and names the variable, never the value. A Stripe request that
+  gets no answer is logged in fixed words, not fetch's, which quote a header fetch will not
+  send, and one header is the key),
+  `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
   button when set, and `STRIPE_PRICE_LIFETIME`, optional now, only so a forever bought before it
