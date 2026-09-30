@@ -37,7 +37,8 @@ const { default: billingHandler } = await import('../netlify/functions/api-billi
 const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
 const { default: betaHandler } = await import('../netlify/functions/beta.js');
 const { default: recipeHandler } = await import('../netlify/functions/api-recipe.js');
-const { default: errorsHandler, ipBucket } = await import('../netlify/functions/api-errors.js');
+const { default: errorsHandler, ipBucket, ROWS_IN_ALL } = await import('../netlify/functions/api-errors.js');
+const { ipKey } = await import('../netlify/lib/db.js');
 const { default: appleHandler } = await import('../netlify/functions/api-apple.js');
 const appleLib = await import('../netlify/lib/apple.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
@@ -2600,6 +2601,20 @@ try {
     check('one IPv6 prefix is one address to the throttle, and a mapped IPv4 is itself', ipBucket('2001:db8:1:2:3:4:5:6') === '2001:0db8:0001:0002::/64' && ipBucket('2001:db8::1') === '2001:0db8:0000:0000::/64' && ipBucket('::ffff:1.2.3.4') === '1.2.3.4' && ipBucket('1.2.3.4') === '1.2.3.4');
     const errGet = await fetch(NODE_BASE + '/api/errors'), errJunk = await fetch(NODE_BASE + '/api/errors', { method: 'POST', body: 'not json' });
     check('the error endpoint answers nothing to a GET and refuses junk', errGet.status === 404 && errJunk.status === 400, [errGet.status, errJunk.status]);
+    /* a flood from more addresses than the hourly caps can see stops at the table's ceiling, not the database's. The
+       filler is two hours old and each report comes from a fresh address, so only the ceiling can turn one away */
+    const had = (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n;
+    await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '2 hours', 'lunchsorted-v3', 'error', 'smoke: filler ' || g FROM generate_series(1, $1::int) g`, [ROWS_IN_ALL - had - 1]);
+    const flood = (message, ip) => errorsHandler(new Request('http://127.0.0.1/api/errors', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'error', message, build: 'lunchsorted-v3' }) }), { ip });
+    const lastRoom = await flood('smoke: the last report there is room for', '203.0.113.7');
+    const atCeiling = (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n;
+    check('the report that brings the error table to its ceiling is kept', lastRoom.status === 204 && atCeiling === ROWS_IN_ALL, [lastRoom.status, atCeiling, ROWS_IN_ALL]);
+    const pastIt = await flood('smoke: one past the ceiling', '203.0.113.8');
+    const past = (await db.query("SELECT count(*)::int AS n, count(*) FILTER (WHERE message = 'smoke: one past the ceiling')::int AS it FROM app_errors")).rows[0];
+    const pastTicks = (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', ['err:' + ipKey(ipBucket('203.0.113.8'))])).rows[0].n;
+    check('past the ceiling a report is still answered 204 and grows nothing, not even the throttle',
+      pastIt.status === 204 && past.n === ROWS_IN_ALL && past.it === 0 && pastTicks === 0, [pastIt.status, past, pastTicks]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
     const anonAdmin = await fetch(NODE_BASE + '/api/admin');
     const adminPage = await page.evaluate(() => fetch('/api/admin').then(r => r.text().then(t => ({ status: r.status, text: t, csp: r.headers.get('content-security-policy') }))));
     check('the numbers page asks a stranger to sign in, and shows the person in ADMIN_EMAILS real counts',
