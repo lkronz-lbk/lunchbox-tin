@@ -19,9 +19,10 @@ import { cancelSubscription } from '../lib/stripe.js';
    - /request answers to three limits: LINKS_FROM_ONE an hour from one connection (a /64 on IPv6),
      LINKS_TO_ONE a quarter hour to one address, and LINKS_A_DAY for everyone. The counts live in
      rate_events under a digest (db.js), so no address sits there in the clear and a row is the same
-     small size whatever was sent. They are taken in one transaction behind one lock, so requests
-     arriving together are counted one at a time, and marked only when all three have room, so a
-     request turned away writes nothing. The day's limit bounds what a flood can write, three marks
+     small size whatever was sent. A request any of them already refuses is answered from one plain
+     count, waiting on nothing and writing nothing; one that may go through counts again in one
+     transaction behind one lock, so requests arriving together are counted one at a time, and is
+     marked only when all three still have room. The day's limit bounds what a flood can write, three marks
      and a sign-in link a request let through: about 6 KB at worst (the longest address allowed, in
      three-byte letters, sits in the link and two of its indexes), 12 MB a day, measured. A request
      let through pays for housekeeping as a throttled call does (db.js), so those rows go on a
@@ -33,13 +34,16 @@ import { cancelSubscription } from '../lib/stripe.js';
      parent already signed in is untouched (sessions last 180 days), and so is App Review's address,
      which is sent no email and keeps a day's count of its own. Raising the number would raise the
      mail a stranger can send in our name. The mail provider's own daily cap binds first where it is
-     lower, and takes the welcome and reminder emails with it: Resend's free plan sends a hundred a
-     day (2026-09-30).
+     lower, and takes the welcome, reminder and beta emails with it: Resend's free plan sends a
+     hundred a day (2026-09-30), which one connection spends in five hours, or five /64s at once. A
+     send the provider refuses is answered as the day's limit is, and its marks stay, so it cannot
+     be repeated past the limits.
    - /code writes nothing to rate_events: each code counts its own wrong tries on its link row
      (CODE_TRIES, auth.js), exactly, and a try at an address with no code waiting changes nothing.
-     Every failure gets the same answer, so a stranger cannot learn from it whether someone asked
-     for a link. Eight tries against a code of 40 bits is the guard against guessing, and a new email
-     brings a new code with eight of its own.
+     Every failure gets the same answer, which says what to do next, so a stranger cannot learn from
+     it whether someone asked for a link. Eight tries against a code of 40 bits is the guard against
+     guessing, and a new email brings a new code with eight of its own. A stranger who knows an
+     address can spend the codes waiting for it, never the link in the same email.
    - /verify counts nothing: a link's token is 32 random bytes, which no number of tries finds, and a
      count would be a row for every request anyone sent.
    Exported for the smoke suite, which holds them to the README's words. */
@@ -98,25 +102,30 @@ export default async function handler(req, context) {
       /* App Review's tester has no inbox of ours: one address, named in the environment, signs in with a
          fixed code and gets no email. The code is still only accepted for that address, still expires. */
       const review = reviewAccount(email);
-      /* the three limits (see the top of the file): the lock first, then the counts, which are marked only if
-         all three have room. A connection whose address is unknown, never the case on Netlify, shares one count */
+      /* the three limits (see the top of the file): one plain count first, then, for a request that may go
+         through, the lock and the same count again, which marks only if all three still have room. A
+         connection whose address is unknown, never the case on Netlify, shares one count */
       const conn = 'link-ip:' + ipKey(clientIp(req, context)), addr = 'link:' + digest(email), day = review ? 'link:review' : 'link:all';
-      const [, [room]] = await sql().transaction(q => [
-        q`SELECT pg_advisory_xact_lock(hashtext('api-auth request'))`,
-        q`WITH here AS (SELECT count(*) < ${LINKS_FROM_ONE} AS ok FROM rate_events WHERE key = ${conn} AND at > now() - interval '1 hour'),
-               them AS (SELECT count(*) < ${LINKS_TO_ONE} AS ok FROM rate_events WHERE key = ${addr} AND at > now() - interval '15 minutes'),
-               everyone AS (SELECT count(*) < ${LINKS_A_DAY} AS ok FROM rate_events WHERE key = ${day} AND at > now() - interval '1 day'),
-               tick AS (INSERT INTO rate_events (key)
-                        SELECT k FROM here, them, everyone, (VALUES (${conn}::text), (${addr}::text), (${day}::text)) AS v(k)
-                        WHERE here.ok AND them.ok AND everyone.ok RETURNING key)
-          SELECT here.ok AS here, them.ok AS them, everyone.ok AS everyone FROM here, them, everyone`]);
+      const limits = (q, mark) => q`
+        WITH here AS (SELECT count(*) < ${LINKS_FROM_ONE} AS ok FROM rate_events WHERE key = ${conn} AND at > now() - interval '1 hour'),
+             them AS (SELECT count(*) < ${LINKS_TO_ONE} AS ok FROM rate_events WHERE key = ${addr} AND at > now() - interval '15 minutes'),
+             everyone AS (SELECT count(*) < ${LINKS_A_DAY} AS ok FROM rate_events WHERE key = ${day} AND at > now() - interval '1 day'),
+             tick AS (INSERT INTO rate_events (key)
+                      SELECT k FROM here, them, everyone, (VALUES (${conn}::text), (${addr}::text), (${day}::text)) AS v(k)
+                      WHERE ${mark}::boolean AND here.ok AND them.ok AND everyone.ok RETURNING key)
+        SELECT here.ok AS here, them.ok AS them, everyone.ok AS everyone FROM here, them, everyone`;
+      let [room] = await limits(sql(), false);
+      if (room.here && room.them && room.everyone)
+        room = (await sql().transaction(q => [q`SELECT pg_advisory_xact_lock(hashtext('api-auth request'))`, limits(q, true)]))[1][0];
       if (!room.here) return fail('Too many sign-in requests from here; try again in an hour.', 429);
       if (!room.them) return fail('A link was sent recently. Check your inbox, or try again in a few minutes.', 429);
       if (!room.everyone) return fail('Sign-in is busy right now; try again later.', 503);
       await housekeep();
       const { token, code } = await createMagicLink(email, review || undefined);
       const link = `${siteUrl(req)}/api/auth/verify?t=${token}${body.beta === true ? '&b=1' : ''}`;   /* the app says a beta code is waiting; only the welcome's wording rides on it */
-      const sent = review ? { ok: true } : await sendMagicLink(email, link, code);
+      /* the mail provider refusing the send (its daily cap, most likely) is answered as the day's limit is */
+      const sent = review ? { ok: true } : await sendMagicLink(email, link, code).catch(e => { console.error('api-auth: the sign-in email was refused', e.message); return null; });
+      if (!sent) return fail('Sign-in is busy right now; try again later.', 503);
       /* the link and code come back to the caller only where a deploy has opted in (the test suite) */
       const show = sent.devLink && (siteEnv() === 'test' || process.env.DEV_LINKS === '1');
       return json({ ok: true, ...(show ? { devLink: sent.devLink, devCode: sent.devCode } : {}) });
@@ -175,7 +184,7 @@ export default async function handler(req, context) {
       if (!sameOrigin(req, siteUrl(req))) return fail('Not allowed', 403);
       /* the code counts its own tries (see the top of the file), and every way of failing gets this one answer */
       const ok = await consumeMagicCode(email, body.code);
-      if (!ok) return fail('That code is not right, or it has expired. Codes work once, for fifteen minutes.', 410);
+      if (!ok) return fail('That code is not right, or it has expired. Check it, or ask for a new email.', 410);
       const user = await findOrCreateUser(email);
       const session = await createSession(user.id, 'web');
       await welcome(user, req, body.beta === true);

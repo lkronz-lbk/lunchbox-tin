@@ -2971,9 +2971,9 @@ try {
   await until(p2, () => !!document.querySelector('#signinCode'));
   const devCode = await p2.evaluate(() => fetch('/api/auth/request', {method:'POST', headers:{'content-type':'application/json'}, body:'{"email":"sam@example.com"}'}).then(r => r.json()).then(j => j.devCode));
   /* Enter in the code field presses Sign in, and a key held down repeats: each repeat was one more
-     try of the code, and the server allows eight a quarter of an hour, so a mistyped code held for
-     a moment locked the address out. The key is held here, with the first try held open so the
-     field is still there for every repeat, and the code goes once. */
+     try of the code, and a code takes eight wrong tries, so a mistyped code held for a moment spent
+     itself. The key is held here, with the first try held open so the field is still there for
+     every repeat, and the code goes once. */
   let letGo = () => {}; const holding = new Promise(r => { letGo = r; });
   let codeTries = 0; const holdCode = async route => { if (route.request().method() === 'POST') codeTries++; await holding; await route.continue(); };
   await p2.route('**/api/auth/code', holdCode);
@@ -3007,7 +3007,7 @@ try {
        sign-in routes' rows are counted, so a phone's push landing meanwhile cannot move a count, and the digests are
        worked out here rather than with the code's own digest() */
     const auth = (route, body, ip, headers = {}) => authHandler(new Request('http://127.0.0.1/api/auth/' + route, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }), { ip });
-    const marks = async () => (await db.query("SELECT count(*)::int AS n FROM rate_events WHERE key LIKE 'link%' OR key LIKE 'code:%'")).rows[0].n;
+    const marks = async () => (await db.query("SELECT count(*)::int AS n FROM rate_events WHERE key LIKE 'link%' OR key LIKE 'code%' OR key LIKE 'verify%'")).rows[0].n;
     const links = async () => (await db.query('SELECT count(*)::int AS n FROM magic_links')).rows[0].n;
     const sha = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 24);
     const wide = n => Array.from({ length: n }, () => String.fromCodePoint(0x4E00 + crypto.randomInt(20000))).join('');   /* three bytes a letter */
@@ -3023,11 +3023,12 @@ try {
     const right = (await auth('code', { email: 'guess@example.com', code: asked.devCode }, '198.51.100.99')).status;
     const spent = (await db.query("SELECT code_tries AS n, code_used_at IS NULL AS unused FROM magic_links WHERE email = 'guess@example.com'")).rows;
     const again = await (await auth('request', { email: 'guess@example.com' }, '198.51.100.8')).json();
-    const fresh = (await auth('code', { email: 'guess@example.com', code: 'ZZZZ-ZZZZ' }, '198.51.100.8')).status;
+    const freshReply = await auth('code', { email: 'guess@example.com', code: 'ZZZZ-ZZZZ' }, '198.51.100.8');
+    const fresh = freshReply.status, answer = (await freshReply.json()).error;
     const counted = (await db.query("SELECT code_tries AS n FROM magic_links WHERE email = 'guess@example.com' ORDER BY created_at")).rows.map(r => r.n);
-    check('a code takes eight wrong tries, from however many connections, then refuses even the right code with the same answer as a wrong one, and a new email brings a code with eight of its own',
-      !!asked.devCode && !!again.devCode && tries.every(s => s === 410) && right === 410 && spent.length === 1 && spent[0].n === CODE_TRIES && spent[0].unused && fresh === 410 && counted.join() === `${CODE_TRIES},1`,
-      [tries, right, spent, fresh, counted]);
+    check('a code takes eight wrong tries, from however many connections, then refuses even the right code with the same answer as a wrong one, which says to ask for a new email, and a new email brings a code with eight of its own',
+      !!asked.devCode && !!again.devCode && tries.every(s => s === 410) && right === 410 && spent.length === 1 && spent[0].n === CODE_TRIES && spent[0].unused && fresh === 410 && counted.join() === `${CODE_TRIES},1` && /ask for a new email/.test(answer),
+      [tries, right, spent, fresh, counted, answer]);
     const keys = (await db.query('SELECT key FROM rate_events')).rows.map(r => r.key);
     const shaped = k => k === 'link:all' || k === 'link:review' || /^(link|link-ip):[0-9a-f]{24}$/.test(k), signInKeys = keys.filter(k => /^(link|code)/.test(k));
     check('the counts are kept under a digest of the address or the connection, the code route keeps none, and no mark in the table carries an address, the suite\'s own sign-ins included',
@@ -3071,6 +3072,15 @@ try {
       busy === 503 && wrote.join() === '0,0,0', [busy, wrote]);
     check('and App Review\'s address, which is sent no email, still gets its code then, without a mark on the day\'s count or an email',
       reviewed.join() === '200,0,1,0', reviewed);
+    /* the mail provider refusing a send (its daily cap): the parent is told sign-in is busy, not that something broke, and the
+       counts stay, so refused sends cannot run past the limits */
+    const realPush = mails.push;
+    mails.push = () => { throw new Error('Resend 429: daily quota reached'); };
+    const [m2, l2] = [await marks(), await links()];
+    let refused; try { refused = await auth('request', { email: 'refused@example.com' }, '192.0.2.197'); } finally { mails.push = realPush; }
+    const refusedBody = await refused.json();
+    check('a sign-in email the mail provider refuses is answered as busy, and still counts against the limits',
+      refused.status === 503 && /busy/.test(refusedBody.error) && (await marks()) - m2 === 3 && (await links()) - l2 === 1, [refused.status, refusedBody, (await marks()) - m2]);
     /* every window forgets on time: counts from a minute or an hour past it let a request through, and from just inside turn it away */
     const place = (key, n, minutes) => db.query("INSERT INTO rate_events (key, at) SELECT $1, now() - make_interval(mins => $3::int) FROM generate_series(1, $2::int)", [key, n, minutes]);
     await place('link:' + sha('old-quarter@example.com'), LINKS_TO_ONE, 16); await place('link:' + sha('new-quarter@example.com'), LINKS_TO_ONE, 14);
