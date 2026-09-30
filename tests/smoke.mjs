@@ -3817,6 +3817,9 @@ try {
     check('and the app says so where it stays, in green', !!(await pb.$('.banner.good [data-act="notice-dismiss"]')));
     await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(250);
     check('a beta household has the feedback strip on every tab', !!(await pb.$('.betabar a[href="/feedback.html"], .betabar [data-act="help-site"]')) && /Beta tester/.test(await pb.textContent('.betabar')));
+    /* the strip is on every tab, and its own rule had squeezed the button to 40px, under the 44px every button keeps */
+    const betaTap = await pb.$$eval('.betabar .btn', a => a.map(b => { const r = b.getBoundingClientRect(); return {h: r.height, w: r.width}; }));
+    check('and its Send feedback button is a full 44px to tap', betaTap.length === 1 && betaTap[0].h >= 44 && betaTap[0].w >= 44, betaTap);
     await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(250);
     check('on Foods too', !!(await pb.$('.betabar')));
     check('the beta page counts it', /1 spot left/.test(await (await fetch(NODE_BASE + '/beta')).text()));
