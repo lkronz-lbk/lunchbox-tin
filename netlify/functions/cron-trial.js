@@ -79,9 +79,10 @@ export default async function handler(req) {
   /* then the housekeeping that otherwise rides one throttled call in twenty-five, so old rows go (and
      a full error table reopens) however quiet the app is. After the emails, which have no other way
      out: the two share one time limit, a household's email is claimed before it is sent, and a sweep
-     that meets a day of expired rows at once can be slow. It takes the rate rows a batch at a time and
-     starts no batch twenty seconds after the run began, inside the thirty a scheduled function gets;
-     each batch that finished is kept even if the run is stopped */
+     that meets a day of expired rows at once can be slow. It takes the rate rows a batch at a time, the
+     first whatever the time and no further one once twenty seconds have passed since the run began,
+     inside the thirty a scheduled function gets; each batch that finished is kept even if the run is
+     stopped */
   try { await sweep(started + 20000); } catch (e) { console.error('cron-trial: sweep', e.message); }
   return res;
 }

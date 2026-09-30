@@ -1016,16 +1016,23 @@ writes the same one.
   sessions are stored as hashes. No passwords anywhere.
 - **Limits on signing in** (`netlify/functions/api-auth.js`): a sign-in email goes out at most three
   times a quarter hour to one address, twenty times an hour from one connection (a /64 counts as
-  one on IPv6) and two thousand times a day in all, and a request from another site is refused. A
-  code gets eight tries a quarter hour for one address, and a try counts only while a code for that
-  address is waiting, since only then can one be right. The link's own button counts nothing: its
-  token is 32 random bytes. Each count sits in `rate_events` under a digest of the address, never
-  the address, and is written only when the request is let through, so one turned away writes
-  nothing and a stranger inventing addresses cannot fill the database: a day of let-through requests
-  takes about 12 MB at worst (every address 320 three-byte letters), and the code tries they allow
-  about 3 MB. The two thousand is the one limit a stranger could spend for everyone, with five IPv4
-  addresses for a day or one IPv6 /48; it stops new sign-in emails, App Review's standing code
-  among them, and never a parent already signed in.
+  one on IPv6) and two thousand times a day in all, and a request from another site is refused. The
+  three are counted in one transaction behind one lock, so requests arriving together are counted
+  one at a time, and written only when all three have room, so a request turned away writes
+  nothing. Each count sits in `rate_events` under a digest of the address, never the address, and a
+  stranger inventing addresses cannot fill the database: a day of let-through requests takes about
+  12 MB at worst (every address as long as allowed, in three-byte letters), and a request let
+  through pays for housekeeping one time in twenty-five, as a throttled call does, so those rows go
+  on a deploy with no daily run as well. A code gets eight tries: each code counts its own wrong
+  ones on its link row (migration 0011), and after eight even the right code is refused, with the
+  same answer as a wrong code or an expired one, so nobody can learn from it whether a link was
+  asked for. A new email brings a new code with eight of its own. The link's own button counts
+  nothing: its token is 32 random bytes. The two thousand is the one limit a stranger could spend
+  for everyone, with five IPv4 addresses for a day or a hundred IPv6 /64s at once, which one home
+  connection given a /56 holds. It stops new sign-in emails, never a parent already signed in, and
+  not App Review's address, which is sent no email and keeps a day's count of its own. The mail
+  provider's own daily cap binds first where it is lower, and takes the welcome and reminder emails
+  with it: on 2026-09-30 the account was on Resend's free plan, a hundred a day.
 - **Households** (`/api/household`): one document per household with a version number.
   `PUT` with the version you last saw; if the server has moved on you get `409` with its
   copy, merge, and try again. The merge rules are the first script block in
@@ -1107,13 +1114,13 @@ writes the same one.
   rate-limit rows past a day, error reports past thirty days) rides along with about one
   throttled call in twenty-five, and runs once a day in production after the trial emails. The
   rate-limit rows go twenty thousand at a time, since a flood leaves a whole day of them due at
-  once: the call that rides along takes one batch, and the daily run keeps on until they are gone
-  or twenty seconds have passed.
+  once: the call that rides along takes one batch, and the daily run keeps on until they are gone,
+  starting no further batch once twenty seconds have passed.
 - **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
-  drive three browser contexts through sign-in by link and by code, the sign-in limits and what
-  they write, a forged sign-in form,
+  drive three browser contexts through sign-in by link and by code, a forged sign-in form,
   invite, joining with lunches of one's own, an edit on each phone, an uncheck round trip,
-  a helper's refused push, sign-out and delete, plus the merge rules on their own.
+  a helper's refused push, sign-out and delete, plus the merge rules, and the sign-in limits and
+  what they write, on their own.
 
 ## Billing
 

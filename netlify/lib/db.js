@@ -3,7 +3,11 @@ import { neon, NeonDbError } from '@neondatabase/serverless';
 
 /* One tagged-template query function. Neon in production; the test suite
    injects an in-process Postgres through the global hook. Call as
-   sql`SELECT ...` or, for a statement built as a string, sql(text). */
+   sql`SELECT ...` or, for a statement built as a string, sql(text). Statements
+   that must see each other's work go together through sql().transaction(q =>
+   [q`...`, q`...`]): one transaction, one round trip, read committed, so each
+   statement sees what committed before it began, a lock the one before it took
+   included. The results come back as an array, one list of rows a statement. */
 let _client, _clientFor;
 /* Which deploy this is. SITE_ENV is set per context in the Netlify UI; the values in
    netlify.toml reach the build only, never a running function, so Netlify's own CONTEXT
@@ -84,6 +88,9 @@ export function sql() {
     const secrets = secretsOf(url);
     /* the driver's query runs again each time it is awaited; this one runs once */
     _client = (strings, ...vals) => (typeof strings === 'string' ? client.query(strings) : client(strings, ...vals)).then(undefined, e => { throw told(e, secrets); });
+    /* the statements fn returns are the driver's own, made with the query function it is given, and what the
+       driver says about them is told in the same fixed words */
+    _client.transaction = (fn) => client.transaction(fn, { isolationLevel: 'ReadCommitted' }).then(undefined, e => { throw told(e, secrets); });
     _clientFor = url;
   }
   return _client;
@@ -118,8 +125,8 @@ export function clientIp(req, context) {
 
 /* A connection or an email address becomes a throttle's key only as a digest, and only for a day. It
    keeps the address out of rate_events, and it keeps the row small whatever the caller sends: about
-   170 bytes, where a key holding an address of 320 three-byte letters made a row of 3 KB (both
-   measured on Postgres 18, PGlite). */
+   170 bytes, where a key holding the longest address allowed, in three-byte letters, made a row of
+   3 KB (both measured on Postgres 18, PGlite). */
 export function digest(s) {
   return createHash('sha256').update(String(s)).digest('hex').slice(0, 24);
 }
@@ -144,16 +151,18 @@ export function ipKey(ip) {
    production: nothing personal outlives its use. The rate rows go a batch at a time, because a
    flood leaves a whole day of them due at once, and one DELETE of that many could outrun a
    function's time limit and be rolled back, leaving them all, or hold up the request that is paying
-   for it. rate_events has no id, so a batch is picked by ctid. A request clears one batch; the daily
-   run passes a deadline and keeps going until a batch comes back short or the deadline passes. Every
-   other table here is limited where its rows are written: by the day's sign-in emails, the error
-   table's ceiling, or a signed-in parent's hourly limits. */
+   for it. rate_events has no id, so a batch is picked by ctid, passing over rows another sweep has
+   locked: two sweeps at once share the rows rather than one waiting on the other and stopping short.
+   A request clears one batch; the daily run passes a deadline and keeps going until a batch comes
+   back short or the deadline passes, the first batch whatever the time. The other tables' deletes
+   are not batched: what comes due in them each day is held down where their rows are written (the
+   day's sign-in emails, the error table's ceiling, a signed-in parent's hourly limits). */
 export const SWEEP_BATCH = 20000;
 export async function sweep(deadline = 0) {
   const q = sql();
   for (;;) {
     const [{ n }] = await q`
-      WITH gone AS (DELETE FROM rate_events WHERE ctid = ANY (ARRAY(SELECT ctid FROM rate_events WHERE at < now() - interval '1 day' LIMIT ${SWEEP_BATCH})) RETURNING 1)
+      WITH gone AS (DELETE FROM rate_events WHERE ctid = ANY (ARRAY(SELECT ctid FROM rate_events WHERE at < now() - interval '1 day' LIMIT ${SWEEP_BATCH} FOR UPDATE SKIP LOCKED)) RETURNING 1)
       SELECT count(*)::int AS n FROM gone`;
     if (n < SWEEP_BATCH || Date.now() >= deadline) break;
   }
@@ -192,10 +201,16 @@ export async function recentKeys(prefix, windowSeconds) {
 export async function mark(key) { await sql()`INSERT INTO rate_events (key) VALUES (${key})`; }
 export async function unmark(prefix) { await sql()`DELETE FROM rate_events WHERE key LIKE ${prefix + '%'} AND at > now() - interval '1 hour'`; }   /* older marks are invisible already; the window keeps the delete on the (at) index under any collation */
 
+/* about one request in twenty-five pays for housekeeping: every throttled call, and every sign-in request
+   let through (api-auth.js), so a flood's rows go on a deploy with no daily run as well */
+export async function housekeep() {
+  if (Math.random() < 0.04) await sweep();
+}
+
 /* sliding-window throttle backed by the database */
 export async function throttled(key, limit, windowSeconds) {
   const q = sql();
-  if (Math.random() < 0.04) await sweep();               /* about one request in twenty-five pays for housekeeping */
+  await housekeep();
   const [{ n }] = await q`SELECT count(*)::int AS n FROM rate_events WHERE key = ${key} AND at > now() - make_interval(secs => ${windowSeconds})`;
   if (n >= limit) return true;
   await q`INSERT INTO rate_events (key) VALUES (${key})`;

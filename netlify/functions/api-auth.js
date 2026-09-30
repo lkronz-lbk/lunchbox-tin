@@ -1,4 +1,4 @@
-import { sql, json, fail, siteUrl, siteEnv, clientIp, ipKey, digest } from '../lib/db.js';
+import { sql, json, fail, siteUrl, siteEnv, clientIp, ipKey, digest, housekeep } from '../lib/db.js';
 import { normalizeEmail, normalizeCode, createMagicLink, peekMagicLink, consumeMagicLink, consumeMagicCode, findOrCreateUser,
          createSession, sessionCookie, currentUser, destroySession, destroyAllSessions,
          verifyNonce, verifyCookie, verifyCookieFrom, sameOrigin, mailStopToken, stopMail } from '../lib/auth.js';
@@ -16,29 +16,34 @@ import { cancelSubscription } from '../lib/stripe.js';
    POST /api/auth/delete    {confirm:'DELETE'} -> the person and, if they own it, the household */
 
 /* What a stranger can make these routes write, and how a limit could be turned on real parents.
-   A count for an address or a connection lives in rate_events under a digest (db.js), so no address
-   sits there in the clear and a row is the same small size whatever was sent. A count is marked only
-   when the request is let through: one turned away writes nothing. Requests arriving together can each see room for one
-   more, so a limit can be passed by the few in flight.
-   - /request answers to three limits at once: LINKS_FROM_ONE an hour from one connection (a /64 on
-     IPv6), LINKS_TO_ONE a quarter hour to one address, and LINKS_A_DAY for everyone. The last bounds
-     what a flood can write, three marks and a sign-in link a request let through: about 6 KB at
-     worst (an address of 320 three-byte letters sits in the link and two of its indexes), 12 MB a
-     day, measured. It also bounds the sign-in emails a stranger can make us send, and it is the lock
-     a stranger could spend on everyone: that many requests let through in a day stop every new
-     sign-in email, and App Review's standing code with them, until the oldest are a day old. At
-     twenty an hour a connection that takes five IPv4 addresses for a day, a hundred for an hour, or
-     one IPv6 /48 (65,536 /64s) at once. A parent already signed in is untouched (sessions last 180
-     days). Raising it would raise the mail a stranger can send in our name.
-   - /code counts a try only while a code for that address is waiting, the only time one can be
-     right: an invented address writes nothing, and every try that is counted rides on a link
-     /request let through (CODE_TRIES a link at most, 3 MB a day), so it has no limit of its own for
-     a stranger to spend. CODE_TRIES a quarter hour against a code of 40 bits is the guard against
-     guessing.
+   - /request answers to three limits: LINKS_FROM_ONE an hour from one connection (a /64 on IPv6),
+     LINKS_TO_ONE a quarter hour to one address, and LINKS_A_DAY for everyone. The counts live in
+     rate_events under a digest (db.js), so no address sits there in the clear and a row is the same
+     small size whatever was sent. They are taken in one transaction behind one lock, so requests
+     arriving together are counted one at a time, and marked only when all three have room, so a
+     request turned away writes nothing. The day's limit bounds what a flood can write, three marks
+     and a sign-in link a request let through: about 6 KB at worst (the longest address allowed, in
+     three-byte letters, sits in the link and two of its indexes), 12 MB a day, measured. A request
+     let through pays for housekeeping as a throttled call does (db.js), so those rows go on a
+     deploy with no daily run as well. The day's limit also bounds the sign-in emails a stranger can
+     make us send, and it is the lock a stranger could spend on everyone: that many requests let
+     through in a day stop every new sign-in email until the oldest are a day old. At twenty an hour
+     a connection that takes five IPv4 addresses for a day, a hundred for an hour, or a hundred IPv6
+     /64s at once, which one home connection given a /56 holds; five /64s keep it spent after that. A
+     parent already signed in is untouched (sessions last 180 days), and so is App Review's address,
+     which is sent no email and keeps a day's count of its own. Raising the number would raise the
+     mail a stranger can send in our name. The mail provider's own daily cap binds first where it is
+     lower, and takes the welcome and reminder emails with it: Resend's free plan sends a hundred a
+     day (2026-09-30).
+   - /code writes nothing to rate_events: each code counts its own wrong tries on its link row
+     (CODE_TRIES, auth.js), exactly, and a try at an address with no code waiting changes nothing.
+     Every failure gets the same answer, so a stranger cannot learn from it whether someone asked
+     for a link. Eight tries against a code of 40 bits is the guard against guessing, and a new email
+     brings a new code with eight of its own.
    - /verify counts nothing: a link's token is 32 random bytes, which no number of tries finds, and a
      count would be a row for every request anyone sent.
-   Exported for the smoke suite, which holds them to the README. */
-export const LINKS_FROM_ONE = 20, LINKS_TO_ONE = 3, LINKS_A_DAY = 2000, CODE_TRIES = 8;
+   Exported for the smoke suite, which holds them to the README's words. */
+export const LINKS_FROM_ONE = 20, LINKS_TO_ONE = 3, LINKS_A_DAY = 2000;
 
 const PAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -90,23 +95,25 @@ export default async function handler(req, context) {
       if (!email) return fail('That does not look like an email address');
       /* a stranger's page could otherwise post here from every visitor's browser, and spend the day's links from their connections */
       if (!sameOrigin(req, siteUrl(req))) return fail('Not allowed', 403);
-      /* the three limits in one statement, marked only if all three have room (see the top of the file).
-         A connection whose address is unknown, never the case on Netlify, shares one count */
-      const conn = 'link-ip:' + ipKey(clientIp(req, context)), addr = 'link:' + digest(email);
-      const [room] = await sql()`
-        WITH here AS (SELECT count(*) < ${LINKS_FROM_ONE} AS ok FROM rate_events WHERE key = ${conn} AND at > now() - interval '1 hour'),
-             them AS (SELECT count(*) < ${LINKS_TO_ONE} AS ok FROM rate_events WHERE key = ${addr} AND at > now() - interval '15 minutes'),
-             everyone AS (SELECT count(*) < ${LINKS_A_DAY} AS ok FROM rate_events WHERE key = 'link:all' AND at > now() - interval '1 day'),
-             tick AS (INSERT INTO rate_events (key)
-                      SELECT k FROM here, them, everyone, (VALUES (${conn}::text), (${addr}::text), ('link:all')) AS v(k)
-                      WHERE here.ok AND them.ok AND everyone.ok RETURNING key)
-        SELECT here.ok AS here, them.ok AS them, everyone.ok AS everyone FROM here, them, everyone`;
-      if (!room.here) return fail('Too many sign-in requests from here; try again in an hour.', 429);
-      if (!room.them) return fail('A link was sent recently. Check your inbox, or try again in a few minutes.', 429);
-      if (!room.everyone) return fail('Sign-in is busy right now; try again later.', 503);
       /* App Review's tester has no inbox of ours: one address, named in the environment, signs in with a
          fixed code and gets no email. The code is still only accepted for that address, still expires. */
       const review = reviewAccount(email);
+      /* the three limits (see the top of the file): the lock first, then the counts, which are marked only if
+         all three have room. A connection whose address is unknown, never the case on Netlify, shares one count */
+      const conn = 'link-ip:' + ipKey(clientIp(req, context)), addr = 'link:' + digest(email), day = review ? 'link:review' : 'link:all';
+      const [, [room]] = await sql().transaction(q => [
+        q`SELECT pg_advisory_xact_lock(hashtext('api-auth request'))`,
+        q`WITH here AS (SELECT count(*) < ${LINKS_FROM_ONE} AS ok FROM rate_events WHERE key = ${conn} AND at > now() - interval '1 hour'),
+               them AS (SELECT count(*) < ${LINKS_TO_ONE} AS ok FROM rate_events WHERE key = ${addr} AND at > now() - interval '15 minutes'),
+               everyone AS (SELECT count(*) < ${LINKS_A_DAY} AS ok FROM rate_events WHERE key = ${day} AND at > now() - interval '1 day'),
+               tick AS (INSERT INTO rate_events (key)
+                        SELECT k FROM here, them, everyone, (VALUES (${conn}::text), (${addr}::text), (${day}::text)) AS v(k)
+                        WHERE here.ok AND them.ok AND everyone.ok RETURNING key)
+          SELECT here.ok AS here, them.ok AS them, everyone.ok AS everyone FROM here, them, everyone`]);
+      if (!room.here) return fail('Too many sign-in requests from here; try again in an hour.', 429);
+      if (!room.them) return fail('A link was sent recently. Check your inbox, or try again in a few minutes.', 429);
+      if (!room.everyone) return fail('Sign-in is busy right now; try again later.', 503);
+      await housekeep();
       const { token, code } = await createMagicLink(email, review || undefined);
       const link = `${siteUrl(req)}/api/auth/verify?t=${token}${body.beta === true ? '&b=1' : ''}`;   /* the app says a beta code is waiting; only the welcome's wording rides on it */
       const sent = review ? { ok: true } : await sendMagicLink(email, link, code);
@@ -166,15 +173,8 @@ export default async function handler(req, context) {
       const email = normalizeEmail(body.email);
       if (!email) return fail('That does not look like an email address');
       if (!sameOrigin(req, siteUrl(req))) return fail('Not allowed', 403);
-      /* a try is counted only while a code for this address is waiting (see the top of the file) */
-      const key = 'code:' + digest(email);
-      const [t] = await sql()`
-        WITH waiting AS (SELECT EXISTS (SELECT 1 FROM magic_links WHERE email = ${email} AND code_used_at IS NULL AND expires_at > now()) AS yes),
-             room AS (SELECT count(*) < ${CODE_TRIES} AS yes FROM rate_events WHERE key = ${key} AND at > now() - interval '15 minutes'),
-             tick AS (INSERT INTO rate_events (key) SELECT ${key} FROM waiting, room WHERE waiting.yes AND room.yes RETURNING key)
-        SELECT waiting.yes AS waiting, room.yes AS room FROM waiting, room`;
-      if (!t.room) return fail('Too many tries; ask for a new email.', 429);
-      const ok = t.waiting && await consumeMagicCode(email, body.code);
+      /* the code counts its own tries (see the top of the file), and every way of failing gets this one answer */
+      const ok = await consumeMagicCode(email, body.code);
       if (!ok) return fail('That code is not right, or it has expired. Codes work once, for fifteen minutes.', 410);
       const user = await findOrCreateUser(email);
       const session = await createSession(user.id, 'web');
@@ -225,8 +225,9 @@ export default async function handler(req, context) {
       await q`DELETE FROM invites WHERE created_by = ${user.id}`;
       await destroyAllSessions(user.id);
       await q`DELETE FROM magic_links WHERE email = ${user.email}`;
-      /* the throttle keys are a digest of the address, which is still the address's, so they go with it */
-      await q`DELETE FROM rate_events WHERE key IN (${'link:' + digest(user.email)}, ${'code:' + digest(user.email)})`;
+      /* the count kept for the address is a digest of it, which is still the address's, so it goes with it
+         (the counts from before digests, which held the address itself, went in migration 0011) */
+      await q`DELETE FROM rate_events WHERE key = ${'link:' + digest(user.email)}`;
       await q`DELETE FROM users WHERE id = ${user.id}`;
       return json({ ok: true }, 200, sessionCookie('', true));
     }
