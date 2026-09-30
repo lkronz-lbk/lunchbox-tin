@@ -9,21 +9,43 @@ const FROM = () => process.env.MAIL_FROM || 'Lunch Sorted <hello@mail.lunchsorte
 const REPLY_TO = 'hello@lunchsorted.app';
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+/* the key alone, as Resend gives it: re_, then letters, digits and underscores. The build
+   (scripts/migrate.mjs) refuses the deploy over anything more, a line break pasted with it above all,
+   in words that name the variable and never what it holds, and the last good deploy stays live */
+export function resendKey() {
+  const key = process.env.RESEND_API_KEY || '';
+  if (key && !/^re_[A-Za-z0-9_]+$/.test(key)) throw new Error('RESEND_API_KEY must be re_, then letters, digits and underscores only; look for a space or a line break pasted with it');
+  return key;
+}
+
 export async function send(msg) {
   if (globalThis.__LS_MAIL) { globalThis.__LS_MAIL.push(msg); return { captured: true }; }
-  const key = process.env.RESEND_API_KEY;
+  /* gentler than the build: here a refusal would stop every sign-in link, and a variable scoped to
+     Functions alone never met the build. So a space or a line break around the key is dropped. One
+     inside it can never work, and a line break there makes fetch refuse the header in words that
+     quote it whole, so that is refused before fetch sees it, in words of our own */
+  const key = (process.env.RESEND_API_KEY || '').trim();
   if (!key) {
     if (siteEnv() === 'production') throw new Error('RESEND_API_KEY is not set');
     console.log(`[mail] to ${msg.to}: ${msg.subject}\n${msg.text}`);
     return { logged: true };
   }
+  if (/[^\x21-\x7e]/.test(key)) throw new Error('RESEND_API_KEY has a space or a line break inside it, so nothing was sent; paste the key alone');
   /* a slow mail service must never hold a sign-in past the function's own limit */
-  const res = await fetch('https://api.resend.com/emails', {
+  const init = {
     method: 'POST', signal: AbortSignal.timeout(4000),
     headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
     body: JSON.stringify({ from: FROM(), to: [msg.to], reply_to: REPLY_TO, subject: msg.subject, text: msg.text, html: msg.html })
-  });
-  if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
+  };
+  const doFetch = globalThis.__LS_RESEND_FETCH || fetch;
+  /* no answer (the four seconds running out included), or an error answer that could not be read,
+     is told in fixed words of our own. fetch's own error can quote a header it refused to send, and
+     one of these headers is the key, so its message, its stack and the error itself (as a cause)
+     stay here. Resend's own words about a refusal still come through: they never quote the key */
+  let res, text;
+  try { res = await doFetch('https://api.resend.com/emails', init); if (!res.ok) text = await res.text(); }
+  catch { throw new Error(`${res ? 'Resend answered with an error, but the answer could not be read' : 'No answer from Resend'} (fetch's own error is left out, as it can quote the key)`); }
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${text}`);
   return {};
 }
 
