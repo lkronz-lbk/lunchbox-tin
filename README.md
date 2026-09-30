@@ -144,12 +144,19 @@ throwing app script cannot leave it up forever. From there:
   check on the left (54×56, `have`) and the line itself, which opens a sheet (`lineSheet`) —
   "In 3 boxes this week. Changing a box changes the list.", a row per box into that
   compartment's sheet, "Open the recipe" when the dish has one, and "Already at home" at the
-  foot; a caretaker gets the rows without the ways in. **Copy** puts the list on the clipboard
+  foot (the recipe button under it, named for its recipe, and opening for a dish off the list but
+  still in a box); a caretaker gets the rows without the ways in and no check to be refused on.
+  "3 boxes" counts a kid on a day once, however many parts of that box want the thing. **Copy** puts the list on the clipboard
   and **Send** opens the phone's share sheet (Notes, Reminders, a text) where there is one, the
   browser's on the web and the Share plugin in the iPhone app; both carry the same text
   (`listText`, one line a thing by the same rule as the screen: "- Tortillas (3 boxes) — Turkey
-  wraps"). Once every box of the week has gone (`weekDone`), Shop shows next week's list in its
-  place, or offers **Plan next week** (`plan-next`) when there is none. A check is a pantry row, not a row on a list, and the pantry
+  wraps"; the text names no recipe, since nothing in a text can open one). Once every box of the
+  week has gone and the coming plan lands on next Monday (`weekDone`, Friday after three through
+  Sunday), Shop shows next week's list in its place, or offers **Plan next week** (`plan-next`,
+  with Undo); a plan that is simply old on a Tuesday gets the same "Plan the week" the other
+  tabs offer. Plan next week settles the week per lunchbox inside one aligned draw (`planAll`):
+  the week after for a box whose plan still has days in it, the coming week for a box whose plan
+  has gone by, so two boxes with different last pack days never end up a week apart. A check is a pantry row, not a row on a list, and the pantry
   is keyed by the food's name: a food on this week's list and next week's is one check, so
   checking it off under *Next week* crosses it off above as well, and takes it off both blocks of
   the copied list. That is the intent — a jar of peanut butter bought once is bought once —

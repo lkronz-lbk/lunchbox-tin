@@ -620,6 +620,10 @@ try {
       rows: [...document.querySelectorAll('#sheetBody .item[data-act="slot"]')].map(r => r.querySelector('.nm').textContent), home: !!document.querySelector('#sheetBody [data-act="have"]') }));
     check('tapping a line opens a sheet named for it: how many boxes, that changing a box changes the list, a row per box, and Already at home at the foot',
       lineSheet.title === lineName && /^In \d+ box(es)? this week\. Changing a box changes the list\.$/.test(lineSheet.head) && lineSheet.rows.length >= 1 && lineSheet.rows.every(r => /^[A-Z][a-z]+day · /.test(r)) && lineSheet.home, lineSheet);
+    await page.click('#sheetBody [data-act="have"]'); await page.waitForTimeout(350);
+    check('Already at home in the sheet closes it and ticks the line behind', !(await page.$('.sheet.open')) && await page.evaluate(n => { const row = [...document.querySelectorAll('#view .item.shopline')].find(e => e.querySelector('.nm').textContent === n); return !!row && row.classList.contains('done') && document.activeElement && document.activeElement.getAttribute('data-act') === 'have'; }, lineName));
+    await page.click('#view .item.done [data-act="have"] >> nth=0'); await page.waitForTimeout(300);
+    await page.evaluate(n => { [...document.querySelectorAll('#view .item.shopline [data-act="line-open"]')].find(e => e.querySelector('.nm').textContent === n).click(); }, lineName); await page.waitForTimeout(350);   /* the row was redrawn: find it again by name */
     await page.click('#sheetBody .item[data-act="slot"] >> nth=0'); await page.waitForTimeout(350);
     check('and a row goes to that compartment\'s sheet', /Main|Side|Fruit|Sweet|Vegetable|Snack|Drink/.test(await page.textContent('#sheetTitle')) && !!(await page.$('#sheetBody [data-act="sheet-shuffle"]')), await page.textContent('#sheetTitle'));
     await backdropTap(page); await page.waitForTimeout(300);
@@ -682,17 +686,29 @@ try {
   {
     /* once every box of the week has gone, Shop is next week's list, or the offer to plan it (A11) */
     const savedDoc = await page.evaluate(() => localStorage.getItem('lunchsorted'));
+    /* a plan that is simply old (last week's, on a Tuesday) gets the same Plan the week the other tabs offer */
     await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted'));
       const back = x => { const p = x.split('-').map(Number); const t = new Date(p[0], p[1] - 1, p[2] - 7); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); };
       d.kids.forEach(k => { if (!k.week) return; k.week.start = back(k.week.start); k.week.days.forEach(x => { x.d = back(x.d); }); k.next = null; });
       localStorage.setItem('lunchsorted', JSON.stringify(d)); });
     await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
-    check('once every box of the week has gone, Shop says so and offers to plan next week, with no stale lines', /boxes are done/.test(await page.textContent('#view')) && !!(await page.$('[data-act="plan-next"]')) && (await page.$$eval('.list .item.shopline', a => a.length)) === 0);
+    check('a plan that is simply from an earlier week gets Plan the week on Shop, as on Pack and Week', !/boxes are done/.test(await page.textContent('#view')) && !!(await page.$('[data-act="plan-all"]')) && (await page.$$eval('.list .item.shopline', a => a.length)) === 0);
+    await page.evaluate(s => localStorage.setItem('lunchsorted', s), savedDoc);
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    /* the week's last box home (pack days Monday and Tuesday, Tuesday four o'clock): the coming plan lands next Monday */
+    await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; k.settings.days = [1, 2]; k.week.days = k.week.days.filter(x => x.dow === 1 || x.dow === 2); k.next = null; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    await page.evaluate(() => window.__pinHour(16));
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200); await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
+    check('once every box of the week has gone, Shop says so and offers to plan next week, with no stale lines', /boxes are done/.test(await page.textContent('#view')) && !!(await page.$('[data-act="plan-next"]')) && (await page.$$eval('.list .item.shopline', a => a.length)) === 0, (await page.textContent('#view')).slice(0, 160));
     await page.click('[data-act="plan-next"]'); await page.waitForTimeout(600);
-    check('and Plan next week from Shop plans the coming week and shows its list', (await page.$$eval('.list .item.shopline', a => a.length)) > 0 && /Weeks? planned/.test(await page.textContent('#toast')) && await page.evaluate(() => {
-      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const t = new Date(); t.setHours(0,0,0,0); const iso = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-      return !!k.week && k.week.days.length > 0 && k.week.days.every(x => x.d >= iso); }), await page.textContent('#toast'));
+    const nextPlanned = await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const t = new Date(); t.setHours(0,0,0,0); const ws = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7) + 7); const iso = ws.getFullYear()+'-'+String(ws.getMonth()+1).padStart(2,'0')+'-'+String(ws.getDate()).padStart(2,'0'); return { next: !!k.next && k.next.start === iso, days: k.next ? k.next.days.length : 0 }; });
+    check('and Plan next week from Shop plans the week after, shows its list under its own date, and can be taken back', nextPlanned.next && nextPlanned.days === 2 && (await page.$$eval('.list .item.shopline [data-when="next"]', a => a.length)) > 0 && /Next week.s list, for the week of/.test(await page.textContent('#view')) && !!(await page.$('#toast [data-act="undo"]')), [nextPlanned, await page.textContent('#toast')]);
+    await page.click('[data-act="copy-list"]'); await page.waitForTimeout(250);
+    const overTxt = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+    check('and the text sent then is next week\'s list under its own heading', /^Lunch shopping list\n\nNEXT WEEK\n/.test(overTxt), overTxt.slice(0, 60));
+    await page.evaluate(() => window.__pinHour(9));
     await page.evaluate(s => localStorage.setItem('lunchsorted', s), savedDoc);
     await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);

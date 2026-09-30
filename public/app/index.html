@@ -224,6 +224,7 @@ a.btn{text-decoration:none}
 .item button.grow{align-self:stretch;justify-content:center;text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
 .item .nm{display:block;font-size:14.5px;line-height:1.3}
 .item .meta{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.05em}
+.item .meta .rcp{color:var(--accent);font-weight:700}
 .item .go{flex:none;display:inline-flex;align-items:center;color:var(--ink-3)}
 /* the day the kid's pick lands on carries the plan tag and the pick button; on a phone
    they are wider than the space left beside the day's foods, so they take a line of
@@ -1939,7 +1940,7 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    theme's borders brought over 3:1 ship in the same build without a line: nothing gained or lost.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v25', text:'New: lock the days that worked and plan the rest again, write tonight\u2019s leftovers straight into tomorrow\u2019s box, hand the phone over once to let them pick the whole week, and tell it when the box comes home.',
+var WHATS_NEW = {build:'lunchsorted-v25', text:'New: lock the days that worked and plan the rest again, write tonight\u2019s leftovers straight into tomorrow\u2019s box, hand the phone over once to let them pick the whole week, tell it when the box comes home, and tap a shopping line to see which boxes it is for.',
   steps:[
     ['Lock what worked', 'Plan the week plans the whole week again. Every day on Week has a lock: tap it and Plan the week leaves that day alone; the arrows beside it shuffle just that day. The lock on a compartment\u2019s sheet holds one compartment, and shows on the tin. A food you pick by hand is locked where you put it, and the toast says so.'],
     ['A smaller tin', 'Each compartment is the food and a small mark where there is something to know: a snowflake for keep cold, a lidded box for a sealed container, a pencil for something you wrote in, a ! for a rule you overruled. Tap it for the rest, including what goes well with the main.'],
@@ -1949,7 +1950,8 @@ var WHATS_NEW = {build:'lunchsorted-v25', text:'New: lock the days that worked a
     ['One line, not a form', 'A write-in asks for the name and nothing else \u2014 at six in the morning that is all there is time for. So the name is all we can check it against: if it trips a rule it goes in flagged, but nuts or dairy hiding inside \u201cleftover pasta\u201d are yours to catch. The compartment carries a pencil and the day says Written in, so you can see which ones are yours.'],
     ['The whole week in one sitting', 'With \u201cThey pick their box each day\u201d on, Week carries Let them pick the week. They choose the next box, then the one after, until there is nothing left to hold up against anything. Each tap saves as it happens, so stopping halfway keeps what they picked.'],
     ['Still one box in the morning', 'Pack keeps the single-box version, where it has always been, for the day you would rather ask on the day. And a compartment you wrote in yourself never trades \u2014 Monday\u2019s leftovers would not keep till Thursday.'],
-    ['When the box comes home', 'Each lunchbox says when its box is home \u2014 three o\u2019clock unless you say otherwise, in the lunchbox settings \u2014 and the question about it, the dot on Pack and the reminder wait for that time. A fourth answer under each food, Didn\u2019t get to it, counts for nothing. Answer later folds the question to a line that waits, and yesterday\u2019s waits behind today\u2019s instead of being lost.']
+    ['When the box comes home', 'Each lunchbox says when its box is home \u2014 three o\u2019clock unless you say otherwise, in the lunchbox settings \u2014 and the question about it, the dot on Pack and the reminder wait for that time. A fourth answer under each food, Didn\u2019t get to it, counts for nothing. Answer later folds the question to a line that waits, and yesterday\u2019s waits behind today\u2019s instead of being lost.'],
+    ['One line a thing on Shop', 'Each shopping line is the thing to buy, with how many boxes it is for beside it, and the dish it goes into underneath when that dish is more than one thing. Tap the check when it is already at home; tap the line and a sheet says which boxes it is for, each a way into that box. Send and Copy carry the same list, and once every box of the week is home, Shop shows next week\u2019s.']
   ]};
 var SYNC_OWED = false;              /* choices made behind the kid's screen, not yet pushed */
 var SEEN_KEY = 'lunchsorted-seen';
@@ -3130,9 +3132,12 @@ function planAll(subset, ahead){
   var map = null, swaps = 0, total = 0;
   prunePantry();
   order.forEach(function(k){
-    planWeek(k, k === lead ? null : map, ahead).forEach(function(c){ short[c] = 1; });
-    if(k === lead) map = alignMap(k, ahead);
-    else if(map){ var o = offMap(k, map, ahead); swaps += o.off; total += o.total; }
+    /* "next week" for a box whose plan still has days in it is the week after; for a box whose
+       plan has gone by, a fresh plan already anchors to the coming Monday, so it is the plain plan */
+    var ak = !!(ahead && k.week && !weekIsStale(k));
+    planWeek(k, k === lead ? null : map, ak).forEach(function(c){ short[c] = 1; });
+    if(k === lead) map = alignMap(k, ak);
+    else if(map){ var o = offMap(k, map, ak); swaps += o.off; total += o.total; }
   });
   return {short:Object.keys(short), boxes:ready.length, aligned:!!lead, swaps:swaps, total:total};
 }
@@ -3454,8 +3459,8 @@ function shoppingList(ahead){
           : [{name:f.n, aisle:f.a||'other', dish:null}];
         parts.forEach(function(pt){
           var key = normKey(pt.name);
-          var r = rows[key] || (rows[key] = {key:key, name:pt.name, aisle:pt.aisle, qty:0, forKids:[], dishes:[], uses:[], recipe:null, off:false});
-          r.qty++;
+          var r = rows[key] || (rows[key] = {key:key, name:pt.name, aisle:pt.aisle, qty:0, forKids:[], dishes:[], uses:[], recipe:null, off:false, boxes:nullMap()});
+          if(!r.boxes[k.id+'|'+d.d]){ r.boxes[k.id+'|'+d.d] = 1; r.qty++; }   /* one box is one kid on one day, however many parts of it want the thing */
           if(offList(f)) r.off = true;   /* bought for a box that holds a food no longer on the list */
           if(r.forKids.indexOf(k.name)<0) r.forKids.push(k.name);
           if(pt.dish && r.dishes.indexOf(pt.dish)<0) r.dishes.push(pt.dish);
@@ -4098,36 +4103,40 @@ function viewWeek(){
    left the list; whose box it is for waits in the line's sheet, one row a box */
 function shopMeta(r){
   var bits = [];
-  var dish = dishWords(r.dishes.map(function(d){ return r.recipe && r.recipe.n === d ? d+' \u00b7 recipe' : d; })); if(dish) bits.push(dish);
+  var dish = dishWords(r.dishes.map(function(d){ return r.recipe && r.recipe.n === d ? '\u0001'+d+'\u0002' : d; }));
+  if(dish) bits.push(dish);
   if(r.off) bits.push('off the list, still in the box');
-  return bits.length ? '<span class="meta">'+esc(bits.join(' · '))+'</span>' : '';
+  if(!bits.length) return '';
+  /* the dish with a recipe is marked in the accent, and says so, so it never reads as one more dish */
+  return '<span class="meta">'+esc(bits.join(' · ')).replace(/\u0001([^\u0002]*)\u0002/g, '<span class="rcp">$1 (recipe)</span>')+'</span>';
 }
 /* one shopping line: the check on the left, the rest opens the line's sheet */
 function shopLine(r, when){
   return '<div class="item shopline'+(r.have ? ' done' : '')+'">'
-    + '<button class="checkhit" data-act="have" data-key="'+esc(r.key)+'" data-when="'+when+'" aria-pressed="'+(!!r.have)+'" aria-label="'+esc(r.name)+(r.have ? ': at home. Put it back on the list' : ': check it off, it is at home')+'"><span class="box">'+svg('check',12)+'</span></button>'
+    + (isHelper() ? '<span class="checkhit" aria-hidden="true"><span class="box">'+svg('check',12)+'</span></span>'
+      : '<button class="checkhit" data-act="have" data-key="'+esc(r.key)+'" data-when="'+when+'" aria-pressed="'+(!!r.have)+'" aria-label="'+esc(r.name)+' at home"><span class="box">'+svg('check',12)+'</span></button>')
     + '<button class="linebody" data-act="line-open" data-key="'+esc(r.key)+'" data-when="'+when+'"><span class="grow"><span class="nm">'+esc(r.name)+'</span>'+shopMeta(r)+'</span>'
     + '<span class="qty">'+(r.qty > 1 ? r.qty+' boxes' : '')+'</span><span class="go">'+svg('chev',16)+'</span></button></div>';
 }
 /* the same line in the text a parent sends or copies: the thing, how many boxes, the dish when it is more than one thing */
 function lineWords(r){
-  return r.name+(r.qty > 1 ? ' ('+r.qty+' boxes)' : '')+(r.dishes.length ? ' \u2014 '+r.dishes.map(function(d){ return r.recipe && r.recipe.n === d ? d+' (recipe)' : d; }).join(', ') : '');
+  return r.name+(r.qty > 1 ? ' ('+r.qty+' boxes)' : '')+(r.dishes.length ? ' \u2014 '+r.dishes.join(', ') : '');
 }
 /* which boxes a line is for, each a way into that compartment; the recipe if the dish has one;
    and the check, at the foot, for the parent who came to say it is already at home */
 function lineSheet(key, when){
   var next = when === 'next', r = shoppingList(next).filter(function(x){ return x.key === key; })[0]; if(!r) return;
-  var many = kids().length > 1, n = r.uses.length;
+  var many = kids().length > 1, n = r.qty;
   var h = '<p class="hint" style="margin:0">In '+n+(n === 1 ? ' box' : ' boxes')+(next ? ' next week.' : ' this week.')+(isHelper() ? '' : ' Changing a box changes the list.')+'</p><div class="list">';
   r.uses.forEach(function(u){
-    var c = ALL_CATS.filter(function(x){ return x.k === u.cat; })[0], k = kidById(u.kidId), f = k && foodById(k, u.foodId);
+    var c = ALL_CATS.filter(function(x){ return x.k === u.cat; })[0], k = kidById(u.kidId), f = k && boxFood(k, u.foodId);
     var inner = '<span class="ric" aria-hidden="true">'+(f ? iconFor(f) : '')+'</span><span class="grow"><span class="nm">'+(many ? esc(u.kid)+' \u00b7 ' : '')+esc(dayLabel(u.d).full)+' \u00b7 '+esc(u.food)+'</span><span class="meta">'+esc(c ? c.label : '')+'</span></span>';
     h += isHelper() ? '<div class="item">'+inner+'</div>'
       : '<button class="item" data-act="slot" data-kid="'+esc(u.kidId)+'" data-day="'+esc(u.d)+'" data-cat="'+esc(u.cat)+'">'+inner+'<span class="go">'+svg('chev',16)+'</span></button>';
   });
   h += '</div>';
-  if(r.recipe) h += '<button class="btn ghost wide" data-act="cook" data-kid="'+esc(r.recipe.kidId)+'" data-id="'+esc(r.recipe.foodId)+'">'+svg('book',15)+'Open the recipe</button>';
-  if(!isHelper()) h += '<button class="btn wide'+(r.have ? ' primary' : '')+'" data-act="have" data-key="'+esc(r.key)+'" data-when="'+(next ? 'next' : 'now')+'" data-close="1" aria-pressed="'+(!!r.have)+'">'+svg('check',15)+(r.have ? 'At home \u2014 put it back on the list' : 'Already at home')+'</button>';
+  if(!isHelper()) h += '<button class="btn wide'+(r.have ? '' : ' primary')+'" data-act="have" data-key="'+esc(r.key)+'" data-when="'+(next ? 'next' : 'now')+'" data-close="1" aria-pressed="'+(!!r.have)+'">'+(r.have ? 'Put it back on the list' : svg('check',15)+'Already at home')+'</button>';
+  if(r.recipe) h += '<button class="btn ghost wide" data-act="cook" data-kid="'+esc(r.recipe.kidId)+'" data-id="'+esc(r.recipe.foodId)+'">'+svg('book',15)+'Recipe for '+esc(r.recipe.n)+'</button>';
   openSheet(r.name, h);
 }
 /* every box of the week is behind us: the list has nothing left in it for this week */
@@ -4136,13 +4145,14 @@ function weekDone(){
   return kids().every(function(k){ if(!k.week) return true; any = true; return k.week.days.every(dayGone); }) && any;
 }
 function viewShop(){
-  var rows = shoppingList(), multi = kids().length>1, over = !rows.length && weekDone(), later = shoppingList(true);
+  var rows = shoppingList(), multi = kids().length>1, later = shoppingList(true);
+  var over = !rows.length && weekDone() && !kids().some(function(k){ return k.week && weekIsStale(k) && iso(anchorWeek(k)) === iso(weekStart(today())); });
   var h = '<div class="stack"><div><p class="view-sub">Shopping list'
     + (multi ? ' \u00b7 '+(kids().length === 2 ? 'both lunchboxes' : 'all '+kids().length+' lunchboxes') : '')+'</p><h2 class="view-title">What to buy</h2></div>';
   if(!rows.length && !(over && later.length))
     return h + (over
-      ? '<div class="empty"><p>This week&#8217;s boxes are done. Plan next week and the list builds itself.</p><button class="btn primary" data-act="plan-next">Plan next week</button></div></div>'
-      : '<div class="empty"><p>Plan a week and the list builds itself from the boxes.</p><button class="btn primary" data-act="plan-all">Plan the week</button></div></div>');
+      ? '<div class="empty"><p>This week&#8217;s boxes are done.'+(isHelper() ? '' : ' Plan next week and the list builds itself.')+'</p>'+(isHelper() ? '' : '<button class="btn primary" data-act="plan-next">Plan next week</button>')+'</div></div>'
+      : '<div class="empty"><p>Plan a week and the list builds itself from the boxes.</p>'+(isHelper() ? '' : '<button class="btn primary" data-act="plan-all">Plan the week</button>')+'</div></div>');
   if(!rows.length){ rows = later; later = []; }              /* the week is done and the next one is planned: its list is the list */
 
   var toBuy = rows.filter(function(r){ return !r.have; }).length;
@@ -4769,7 +4779,7 @@ function slotSheet(kidId, dayStr, cat){
     });
     h += '</div>';
   }
-  openSheet(dayLabel(dayStr).full+' · '+c.label, h);
+  openSheet((kids().length > 1 ? kid.name+' \u00b7 ' : '')+dayLabel(dayStr).full+' \u00b7 '+c.label, h);   /* from Shop nothing else says whose */
 }
 /* One compartment, one day, one name. No aisle, no tags, no allergens: a parent
    improvising at the counter has one thing to say and the app should ask for one
@@ -5294,7 +5304,7 @@ function cookStart(r, name, foodId, kidId, cat){
   cookSheet();
 }
 function cookOpen(kidId, foodId){
-  var k = kidById(kidId) || activeKid(), f = k && foodById(k, foodId), r = recipeFor(f);
+  var k = kidById(kidId) || activeKid(), f = k && boxFood(k, foodId), r = recipeFor(f);   /* a dish off the list but still in a box still cooks */
   if(!f || !r) return;
   cookStart(r, f.n, f.id, k.id, f.c);
 }
@@ -5494,7 +5504,7 @@ function helpSheet(fromSupport){
     ['Can I bring a recipe in from somewhere else?', 'Recipes → Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read — copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox’s food list is offered after. Keeping one of your own is part of the Household plan.'],
     ['Can it walk me through cooking one?', 'Open a recipe and tap Cook it step by step. One step fills the screen, and What you need under it lists only what that step needs, with a box to check as each one goes in. The whole recipe is one tap away at the top. Nothing you check is saved, so it never reaches the other parent’s phone.'],
     ['Can I see it in grams, or in cups?', 'Open a recipe and tap Metric — or US, for one that came in written in grams; it converts both ways. A cup of flour is weighed in grams, broth is poured in milliliters, the oven carries its Celsius, and a spoonful of salt is left as a spoonful. The + and − make more or less and scale every amount.'],
-    ['Where does the shopping list come from?', 'Every planned box, as what to buy, by aisle, one line a thing. Tap a line to see which boxes it is for. Copy it, or Send it to Notes, Reminders or a text \u2014 the same list either way.'],
+    ['Where does the shopping list come from?', 'Every planned box, as what to buy, by aisle, one line a thing, with how many boxes it is for beside it. Tap the check when it is already at home; tap the line to see which boxes it is for. Copy it, or Send it to Notes, Reminders or a text \u2014 the same list either way. Once every box of the week is home, Shop shows next week\u2019s list, or offers to plan it.'],
     ['I have more than one kid — do I set it all up twice?', 'No. Add a lunchbox each. Plan the week gives them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and Week and Foods carry a tab for each along the top — in the settings too; Pack puts both boxes on one screen.'],
     ['Can I plan the week after?', 'Yes. On Week, tap the \u203a beside the date, then Plan next week. Shop lists it under Next week, and it becomes this week on its own.'],
     ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a “!”. The rule still applies whenever the week is planned.'],
@@ -5865,8 +5875,8 @@ document.addEventListener('click', function(ev){
      has today in it (Friday afternoon) that is the week after; once it is stale (the weekend) a
      fresh plan already anchors to the coming Monday, so "next week" is the plain plan. */
   if(act==='plan-next'){
-    var staleN = kids().every(function(k){ return !k.week || weekIsStale(k); });
-    if(staleN) planAllToast(); else planAllToast(kids().filter(function(k){ return !!k.week; }), null, true);
+    var snapN = snapshotWeeks(kids());
+    planAllToast(null, function(){ restoreWeeks(snapN); }, true);   /* planAll settles this week or next per lunchbox */
     return;
   }
   if(act==='shuffle-day'){
@@ -5935,7 +5945,7 @@ document.addEventListener('click', function(ev){
     var undo6 = slotUndo(k6, day6, cat6, was6, wi6);
     if(v6) toast(f6.n+' is in the box, locked \u2014 '+v6+', so it stays flagged', undo6);
     else if(wi6) toast(wi6.n+' took the write-in\u2019s place, locked', undo6);
-    else toast(dayLabel(day6.d).full+': '+f6.n+' \u2014 locked', undo6);
+    else toast((kids().length > 1 ? k6.name+'\u2019s ' : '')+dayLabel(day6.d).full+': '+f6.n+' \u2014 locked', undo6);
     return;
   }
   if(act==='write-in'){
@@ -6036,6 +6046,7 @@ document.addEventListener('click', function(ev){
     /* one pantry row, so a food on both weeks’ lists ticks in both places: the tap goes
        back to the week it came from, not to whichever row the list drew first */
     var when = el.getAttribute('data-when');
+    if(el.getAttribute('data-close')) closeSheet();      /* from the line's sheet: the struck line behind it is the answer */
     save(); render();
     focusBack(document.getElementById('view'), 'have', {'data-key':key, 'data-when':when});
     return;
