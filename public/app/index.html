@@ -105,22 +105,22 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 /* ---- the tin ---- */
 .tin{border:2px solid var(--line-strong);border-radius:var(--r-lg);background:var(--line-strong);
   display:grid;grid-template-columns:1fr 1fr;gap:2px;overflow:hidden}
-.cmp{background:var(--surface);border:0;padding:12px 12px 13px;min-height:104px;display:flex;flex-direction:column;
-  gap:7px;text-align:left;align-items:stretch;transition:background .12s ease}
+.cmp{background:var(--surface);border:0;padding:8px 10px 9px;min-height:58px;display:flex;flex-direction:column;
+  gap:3px;text-align:left;align-items:stretch;transition:background .12s ease}
 .cmp[data-act]:active{background:var(--surface-2)}
-.cmp .lab{font-family:var(--f-mono);font-size:9.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+/* the label row carries the marks: a care glyph, a lock, a pencil, the swap cue, the ! of an
+   overruled rule. 11px is the size the rest of the app uses for a label; the marks are 13px
+   line icons that take the theme's ink rather than emoji */
+.cmp .lab{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
   display:flex;align-items:center;justify-content:space-between;gap:6px}
-.cmp .nm{font-family:var(--f-display);font-size:15.5px;font-weight:600;line-height:1.22;letter-spacing:-0.01em;color:var(--ink)}
-.cmp .tr{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto;padding-top:6px}
-.cmp .tr i{font-style:normal;font-family:var(--f-mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;line-height:1;
-  padding:4px 6px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
-.cmp .tr i.care{background:transparent;color:var(--ink-3);padding-left:0}
+.cmp .nm{font-family:var(--f-display);font-size:14.5px;font-weight:600;line-height:1.2;letter-spacing:-0.01em;color:var(--ink)}
+.cmp .rest{font-size:12px;line-height:1.3;color:var(--warn);font-weight:600}
 .cmp.empty .nm{color:var(--ink-3);font-weight:500}
 .c-main .lab{color:var(--c-main)} .c-side .lab{color:var(--c-side)}
 .c-fruit .lab{color:var(--c-fruit)} .c-sweet .lab{color:var(--c-sweet)}
 .c-snack .lab{color:var(--c-snack)} .c-drink .lab{color:var(--c-drink)}
-.cmp.minor{min-height:76px}
-.tin .cmp.minor:nth-child(5):last-child{grid-column:1/-1}
+.cmp.minor{min-height:50px}
+.tin .cmp:nth-child(odd):last-child{grid-column:1/-1}
 .tick{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:50%;display:inline-flex;
   align-items:center;justify-content:center;flex:none}
 .tick svg{width:9px;height:9px;opacity:0}
@@ -129,14 +129,39 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .packbox[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
 .packbox[aria-pressed="true"] .tick{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .packbox[aria-pressed="true"] .tick svg{opacity:1}
-.lock{opacity:.85}
-.marks{display:inline-flex;align-items:center;gap:5px;flex:none}
+.marks{display:inline-flex;align-items:center;gap:5px;flex:none;letter-spacing:0;color:var(--ink-2)}
+.marks .mk{display:inline-flex;align-items:center;flex:none}
+.marks .mk svg{width:13px;height:13px}
+.marks .care{color:var(--ink-2)}
 .linkbtn{background:none;border:0;padding:11px 2px;margin:-11px -2px;font:inherit;color:var(--accent);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .over{width:15px;height:15px;border-radius:50%;background:var(--warn-soft);color:var(--warn);flex:none;
   display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;line-height:1}
 .swap{color:var(--ink-3);opacity:.9}
 .cmp:active .swap{opacity:1}
 .wrote{color:var(--ink-3);opacity:.95;display:inline-flex;flex:none}
+/* a day that has gone is one line on Week: the main and a count, the answer if there is one, and
+   the box as it was packed behind a tap */
+.gone-line{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:4px 4px;border:0;border-bottom:1px solid var(--line);
+  background:transparent;color:var(--ink-2);font:inherit;font-size:14px;text-align:left}
+.gone-line .grow{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gone-line .go{color:var(--ink-3);display:inline-flex}
+/* the day's own controls: a lock, open or closed, and a shuffle, each 44px with a spoken name */
+.dayopts{display:flex;gap:6px;flex:none}
+.iconbtn.lockbtn[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+/* the second lunchbox on Pack, folded to one line until it is tapped */
+.boxsum .item .nm{font-family:var(--f-display);font-size:17px;font-weight:600}
+/* the Household plan is a green star: 44px around a 19px glyph, with a spoken name; inside a
+   control the mark is 15px and sits before the words */
+.star{min-width:44px;height:44px;border:0;background:transparent;color:var(--accent);font-size:19px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:999px;padding:0}
+.star:active{background:var(--accent-soft)}
+.starmark{color:var(--accent);font-size:15px;line-height:1;margin-right:6px}
+.btn.primary .starmark{color:inherit}
+.actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+/* one line, explained once: the star, and later anything else a parent meets for the first time */
+.guide{border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--ink);border-radius:var(--r-md);padding:8px 8px 8px 12px;
+  font-size:14px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.guide .btn{flex:none}
 .wrote-in{display:flex;flex-direction:column;gap:9px;padding:12px 14px;border:1px solid var(--line);
   border-radius:var(--r-md);background:var(--surface-2)}
 .wrote-in .hint{margin:0;display:flex;align-items:center;gap:7px;color:var(--ink-2)}
@@ -169,7 +194,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .btn:active{transform:translateY(1px)}
 a.btn{text-decoration:none}
 .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
-.btn.ghost{border-color:var(--line);background:transparent;color:var(--ink-2);font-weight:500}
+.btn.ghost{border-color:var(--line-field);background:transparent;color:var(--ink-2);font-weight:500}
 .btn.wide{width:100%}
 .btn.sm{min-height:44px;padding:0 12px;font-size:13px;border-radius:var(--r-sm)}
 .dayhead .btn.sm{font-size:12px;padding:0 10px;gap:6px}
@@ -187,7 +212,6 @@ a.btn{text-decoration:none}
 /* a compartment holding a food that has since come off the list: it keeps what it was
    given, so the parent packing tomorrow still knows what they planned, and says plainly
    that it will not be picked again */
-.cmp .tr i.care.off{color:var(--warn);font-style:normal;text-transform:none;letter-spacing:.02em;font-weight:600}
 .item.arm .meta{color:var(--hot);letter-spacing:.02em}
 .item.arm{background:var(--hot-soft);box-shadow:inset 3px 0 0 var(--hot)}
 .sect-head h3{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;margin:0}
@@ -318,7 +342,7 @@ nav.tabs svg{width:21px;height:21px}
 .toast.show button{pointer-events:auto}
 .toast button{min-height:44px;margin:-10px -8px -10px 8px;padding:0 8px;background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px}
 @media (min-width:520px){
-  .cmp{min-height:112px}
+  .cmp{min-height:64px}
   h2.view-title{font-size:30px}
 }
 
@@ -494,7 +518,7 @@ ol.steps li{font-size:14.5px;line-height:1.55;padding-left:2px}
 .kiddone{display:flex;flex-direction:column;gap:18px;align-items:stretch}
 .kiddone .big{font-size:64px;line-height:1;text-align:center}
 .kiddone h1{text-align:center}
-.kiddone .tin .cmp{min-height:112px}
+.kiddone .tin .cmp{min-height:112px;gap:6px;padding:12px 10px}
 .kiddone .tin .ic{font-size:40px;line-height:44px;margin-bottom:2px}
 @media (prefers-reduced-motion:reduce){.pick:active{transform:none}}
 
@@ -514,7 +538,7 @@ ol.steps li{font-size:14.5px;line-height:1.55;padding-left:2px}
 /* --- multi-profile chrome --- */
 .topbar .who{display:flex;align-items:center;gap:8px;min-width:0}
 @media (max-width:399px){ .brand{font-size:17px} .topbar{gap:8px} .topbar .who{gap:6px} }
-.kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);max-width:min(46vw,190px);min-width:0;white-space:nowrap;overflow:hidden;
+.kidbtn{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line-field);background:var(--surface);max-width:min(46vw,190px);min-width:0;white-space:nowrap;overflow:hidden;
   border-radius:999px;padding:0 12px;min-height:44px;font-size:13.5px;font-weight:600;color:var(--ink)}
 .kidbtn .dot{width:8px;height:8px;flex:none}
 .kidbtn .nm{min-width:0;overflow:hidden;text-overflow:ellipsis}
@@ -532,7 +556,7 @@ ol.steps li{font-size:14.5px;line-height:1.55;padding-left:2px}
 .boxtabs .pin.ok{background:var(--accent);color:var(--accent-fg)}
 .boxtabs .pin.ok svg{width:9px;height:9px}
 .boxtabs .pin.due{background:var(--warn-soft);border:1.5px solid var(--warn)}
-.iconbtn{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-2);
+.iconbtn{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line-field);background:var(--surface);color:var(--ink-2);
   display:inline-flex;align-items:center;justify-content:center;padding:0}
 .iconbtn[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .kidbtn .caret{font-size:10px;color:var(--ink-3)}
@@ -749,6 +773,10 @@ var I = {
   share:'<path d="M12 3v12"/><path d="M7.5 7.5L12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
   help:'<circle cx="12" cy="12" r="9"/><path d="M9.4 9.6a2.6 2.6 0 1 1 3.7 2.4c-.7.4-1.1.9-1.1 1.7"/><circle cx="12" cy="16.8" r=".7" fill="currentColor" stroke="none"/>',
   lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7a3.5 3.5 0 0 1 7 0v3.5"/>',
+  unlock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7a3.5 3.5 0 0 1 6.6-1.6"/>',
+  shuffle:'<path d="M3 7h3c4 0 6 10 10 10h5"/><path d="M3 17h3c1.6 0 2.9-1.3 4-3"/><path d="M13 9.5C14 8 15 7 16 7h5"/><path d="M18 4l3 3-3 3"/><path d="M18 14l3 3-3 3"/>',
+  cold:'<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/><path d="M9.6 4.6L12 7l2.4-2.4M9.6 19.4L12 17l2.4 2.4"/>',
+  sealed:'<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M4 12.5h16M9 9V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5V9"/>',
   dice:'<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="9" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.3" fill="currentColor" stroke="none"/>',
   trash:'<path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7M7 7l1 12.2A1.8 1.8 0 0 0 9.8 21h4.4a1.8 1.8 0 0 0 1.8-1.8L17 7"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
@@ -1539,12 +1567,25 @@ function firstChargeAhead(){
   return paid() && e.source === 'stripe' && !!t && !!pe && !isNaN(pe) && pe.getTime() > Date.now() && Math.abs(pe.getTime() - t.getTime()) < 86400000 ? pe : null;
 }
 function fmtDay(d){ return d ? d.toLocaleDateString(undefined, {month:'short', day:'numeric'}) : ''; }
-/* a premium feature wears a small tag, with the days left, while everything is on; a lock once it is not */
-function premiumTag(){
-  if(!billingOn() || paid()) return '';
-  if(!trialing()) return '<span class="chip lock">'+svg('lock',12)+'Household plan</span>';
-  var n = trialCalendarDays();
-  return '<span class="chip good">Household plan \u00b7 '+(n <= 0 ? 'last day' : n === 1 ? '1 day' : n + ' days')+'</span>';
+/* The Household plan is a green star. Beside a plan feature while the three weeks run; inside
+   the control once they are over, where the control is the way to the plan. Either opens the
+   plan sheet, which says why you arrived. A 44px hit area around a 19px glyph, with a spoken
+   name, is the one icon-only control the app allows itself, and the guide line below says
+   what it means the first time one is seen. */
+var STAR = '\u2605', STAR_SEEN_KEY = 'lunchsorted-star-seen';
+function starBtn(why){
+  if(!trialing()) return '';
+  return '<button class="star" data-act="upgrade" data-why="'+esc(why || '')+'" aria-label="Part of the Household plan. See the plan">'+STAR+'</button>';
+}
+/* a control the plan has locked: the star sits inside it, and the tap opens the plan */
+function planLock(why, label, cls){
+  return '<button class="'+(cls || 'btn sm')+'" data-act="upgrade" data-why="'+esc(why || '')+'" aria-label="'+esc(label)+': part of the Household plan"><span class="starmark" aria-hidden="true">'+STAR+'</span>'+esc(label)+'</button>';
+}
+function starSeen(){ try{ return !!localStorage.getItem(STAR_SEEN_KEY); }catch(e){ return true; } }
+function starGuide(html){
+  if(!trialing() || starSeen() || html.indexOf('class="star"') < 0) return html;
+  var g = '<div class="guide"><span><span class="starmark" aria-hidden="true">'+STAR+'</span>marks what the Household plan keeps on after your three weeks.</span><button class="btn sm ghost" data-act="star-ok">OK</button></div>';
+  return html.replace('<div class="stack">', '<div class="stack">'+g);
 }
 function trialLine(){
   var n = trialCalendarDays();
@@ -1665,7 +1706,7 @@ function upgradeSheet(why){
   var h = '<p style="margin:0">'+(why === 'share' ? 'Sharing the lunches with the other parent’s phone, or a caretaker, is part of the Household plan.'
         : why === 'lunchbox' ? 'A second lunchbox is part of the Household plan. The first is free for as long as you like.'
         : why === 'recipe' ? 'Keeping a recipe of your own \u2014 written out, pasted in, or read off a page \u2014 is part of the Household plan. The two the app comes with stay free to cook from, and every recipe you have kept stays yours.'
-        : why === 'food' ? 'Writing a food in your own words \u2014 on the list or straight into one box \u2014 or bringing one in from a recipe page, is part of the Household plan. Everything you have added stays, and the idea bank \u2014 recipes and all \u2014 is free.'
+        : why === 'food' || why === 'write' ? 'Writing a food in your own words \u2014 on the list or straight into one box \u2014 or bringing one in from a recipe page, is part of the Household plan. Everything you have added stays, and the idea bank \u2014 recipes and all \u2014 is free.'
         : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
         : why === 'review' ? 'What came home is part of the Household plan.'
         : why === 'pantry' ? 'A pantry that remembers what you already have is part of the Household plan.'
@@ -1912,7 +1953,7 @@ function whatsNew(){
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
    Account categories. It is view state and never reaches S, or the merge would
    read a tap as a change and push on every one. */
-var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, addTo:null, ideaAdded:null, ideasDirty:false, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', recipeFound:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, reviewLater:{}, boxOpen:{}, addTo:null, ideaAdded:null, ideasDirty:false, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', recipeFound:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'});
 /* the one test for whether a pane may be on screen. A pane is opened by a tap but
    also by a link from an email and by the return from Stripe, so the render asks
@@ -2761,20 +2802,22 @@ function reviewedToday(kid, d){
   var stamps = row.skipped ? [row.at] : ALL_CATS.map(function(c){ return row[c.k] && row[c.k].at; });
   return stamps.some(function(t){ return t && String(t).slice(0,10) === iso(today()); });
 }
+/* how a box went, in words: what the summary card, the one-line day on Week and its sheet all say */
+function reviewWords(kid, dStr){
+  var row = (kid.eaten || {})[dStr]; if(!row) return '';
+  if(row.skipped) return 'nothing counted';
+  var answered = 0, out = [];
+  ALL_CATS.forEach(function(c){
+    var e = row[c.k], f = e && boxFood(kid, e.foodId); if(!e || !f) return;
+    answered++;
+    if(e.r === 'some') out.push('some of the '+f.n.toLowerCase());
+    else if(e.r === 'left') out.push(f.n+' came home');
+  });
+  return !answered ? 'nothing recorded' : out.length ? out.join(', ') : 'all eaten';
+}
 function reviewSummary(kid, dStr){
   var d = findDay(kid, dStr); if(!d) return '';
-  var row = (kid.eaten || {})[dStr] || {}, l = dayLabel(dStr), summary;
-  if(row.skipped) summary = 'nothing counted';
-  else {
-    var answered = 0, out = [];
-    ALL_CATS.forEach(function(c){
-      var e = row[c.k], f = e && boxFood(kid, e.foodId); if(!e || !f) return;
-      answered++;
-      if(e.r === 'some') out.push('some of the '+f.n.toLowerCase());
-      else if(e.r === 'left') out.push(f.n+' came home');
-    });
-    summary = !answered ? 'nothing recorded' : out.length ? out.join(', ') : 'all eaten';
-  }
+  var l = dayLabel(dStr), summary = reviewWords(kid, dStr) || 'nothing recorded';
   return (kids().length > 1 ? kidLine(kid) : '')
     + '<div class="card spread" style="padding:12px 16px"><span class="hint" style="margin:0">'
     + esc(l.diff === -1 ? 'Yesterday' : l.full)+': '+esc(summary)+'</span>'
@@ -3056,7 +3099,7 @@ function shuffleSheet(dayStr, ahead){
     + ks.map(function(k){ return '<button class="tg" data-nf="k" data-v="'+esc(k.id)+'" aria-pressed="'+(dayStr ? k === me : true)+'">'+esc(k.name)+'</button>'; }).join('')
     + '</div></div>'
     + '<p class="hint" id="shHint" style="margin:0">'+shuffleHint(dayStr ? 1 : ks.length)+'</p>'
-    + '<button class="btn primary wide" data-act="shuffle-go"'+(dayStr ? ' data-day="'+esc(dayStr)+'"' : '')+(ahead ? ' data-ahead="1"' : '')+'>'+(dayStr ? svg('swap',16)+'Shuffle' : ahead ? 'Plan next week' : 'Plan the week')+'</button>';
+    + '<button class="btn primary wide" data-act="shuffle-go"'+(dayStr ? ' data-day="'+esc(dayStr)+'"' : '')+(ahead ? ' data-ahead="1"' : '')+'>'+(dayStr ? svg('shuffle',16)+'Shuffle' : ahead ? 'Plan next week' : 'Plan the week')+'</button>';
   openSheet(l ? 'Shuffle '+l.full : (ahead ? 'Plan next week' : 'Plan the week'), h);
 }
 function shuffleHint(n){
@@ -3448,27 +3491,32 @@ function boxPacked(kid, day){
   var row = kid.packed[day.d] || {}, any = false;
   return catsFor(kid).every(function(c){ if(!boxFood(kid, day.slots[c.k])) return true; any = true; return ticked(row, c.k); }) && any;
 }
+/* the compartment's marks, in its label row: a care glyph with a spoken name, the ! of a rule
+   overruled, a pencil for a write-in, a lock, or the swap cue that says the box can be changed */
+function careMark(f){
+  if(f && has(f,'ice')) return '<span class="mk care" role="img" aria-label="keep cold">'+svg('cold',13)+'</span>';
+  if(f && has(f,'messy')) return '<span class="mk care" role="img" aria-label="sealed container">'+svg('sealed',13)+'</span>';
+  return '';
+}
 function tinHTML(kid, day, mode){
   var h = '<div class="tin'+(mode==='pack' && boxPacked(kid, day) ? ' packed' : '')+'">';
+  var gone = dayGone(day);
   catsFor(kid).forEach(function(c){
     var f = boxFood(kid, day.slots[c.k]);
-    var sub = f && has(f,'ice') ? 'keep cold' : (f && has(f,'messy') ? 'sealed container' : '');
-    var tr = f ? traitsOf(f) : [];
     var over = isOverride(kid, day, c.k);
     var off = offList(f);                   /* taken off the list since this box was drawn */
-    var mark = over ? '<span class="over" title="'+esc(violation(kid, f) || 'against a rule')+'">!</span>' : '';
-    if(f && f.once) mark += '<span class="wrote" title="Written in">'+svg('pencil',11)+'</span>';
-    if(mode!=='pack') mark += day.lock[c.k] ? '<span class="lock">'+svg('lock',11)+'</span>'
-             : (dayGone(day) || isHelper() ? '' : '<span class="swap">'+svg('swap',12)+'</span>');  /* the tap cue: this box can be swapped */
+    var mark = careMark(f);
+    if(over) mark += '<span class="mk over" role="img" aria-label="'+esc(violation(kid, f) || 'against a rule')+'">!</span>';
+    if(f && f.once) mark += '<span class="mk wrote" role="img" aria-label="written in">'+svg('pencil',13)+'</span>';
+    if(mode!=='pack') mark += day.lock[c.k] ? '<span class="mk lock" role="img" aria-label="locked">'+svg('lock',13)+'</span>'
+             : (gone || isHelper() ? '' : '<span class="mk swap" aria-hidden="true">'+svg('swap',13)+'</span>');  /* the tap cue: this box can be swapped */
     if(mark) mark = '<span class="marks">'+mark+'</span>';
-    var gone = dayGone(day);
     var tag = (mode==='pack' || gone) ? 'div' : 'button';       /* on Pack, and on a day that has gone, a compartment is not a button */
     h += '<'+tag+' class="cmp c-'+c.k+(f?'':' empty')+(off?' offlist':'')+(c.minor?' minor':'')+'"'
-      +  ((mode==='pack' || gone) ? '' : ' data-act="slot" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'"')+'>'
-      +  '<span class="lab">'+c.label+mark+'</span>'
+      +  ((mode==='pack' || gone) ? '' : ' data-act="slot" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" data-cat="'+c.k+'" aria-label="'+esc(c.label)+': '+esc(f ? f.n : 'nothing picked')+'. Change it"')+'>'
+      +  '<span class="lab"><span>'+c.label+'</span>'+mark+'</span>'
       +  '<span class="nm">'+(f ? esc(f.n) : 'Nothing picked')+'</span>'
-      +  '<span class="tr">'+(off ? '<i class="care off">off the list</i>' : '')+(sub ? '<i class="care">'+esc(sub)+'</i>' : '')
-      +  tr.map(function(t){ return '<i class="t-'+t+'">'+t+'</i>'; }).join('')+'</span></'+tag+'>';
+      +  (off ? '<span class="rest">off the list</span>' : '')+'</'+tag+'>';
   });
   return h+'</div>';
 }
@@ -3618,14 +3666,12 @@ function reviewCard(kid, d){
   var l = dayLabel(d.d), row = (kid.eaten || {})[d.d] || {};
   var head = '<div class="spread" style="align-items:flex-start"><div>'
     + '<p class="view-sub" style="margin:0 0 3px">'+esc(l.diff === 0 ? 'Today' : l.diff === -1 ? 'Yesterday' : l.full)+' · '+esc(l.date)+'</p>'
-    + '<h3>How did '+(kidRef(kid) ? esc(kidRef(kid))+'&#8217;s' : 'the')+' box go?</h3>'
-    + (premiumTag() ? '<div style="margin-top:6px">'+premiumTag()+'</div>' : '')+'</div>';
-  if(gated()) return '<div class="card review">'+head+'</div>'
-    + ''
-    + '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary sm" data-act="upgrade" data-why="review">Get the Household plan</button>'
+    + '<h3>How did '+(kidRef(kid) ? esc(kidRef(kid))+'&#8217;s' : 'the')+' box go?</h3></div>'+starBtn('review')+'</div>';
+  if(gated()) return '<div class="card review">'+head
+    + '<div class="row" style="gap:8px;flex-wrap:wrap">'+planLock('review', 'Household plan', 'btn sm')
     + '<button class="btn ghost sm" data-act="review-later" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">Not now</button></div></div>';
   /* the common answer first, one tap, above the fold; the way out sits at the foot and says what it does */
-  var h = '<div class="card review">'+head+'</div>'
+  var h = '<div class="card review">'+head
     + '<button class="btn primary wide" data-act="eat-all" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">'+svg('check',16)+'All eaten</button>';
   ALL_CATS.forEach(function(c){
     var f = boxFood(kid, d.slots[c.k]); if(!f) return;
@@ -3718,10 +3764,9 @@ function pickButton(kid, day){
   if(!kid.settings.kidPick) return '';
   var target = nextPickDay(kid);
   if(!target || target.d !== day.d || pickChoices(kid).length < 2 || !canPickDay(kid, target)) return '';
-  var who = kidRef(kid) ? esc(kidRef(kid)) : 'them', picked = day.kidPick && Object.keys(day.kidPick).length;
-  if(gated()) return '<button class="btn sm" data-act="upgrade" data-why="kidpick" style="margin-left:auto">'+svg('lock',13)+'Let '+who+' pick</button>';
-  return '<span class="pickwrap">'+premiumTag()
-    + '<button class="btn sm" data-act="kid-start" data-kid="'+esc(kid.id)+'">'+(picked ? 'Pick again' : 'Let '+who+' pick')+'</button></span>';
+  var who = kidRef(kid) || 'them', picked = day.kidPick && Object.keys(day.kidPick).length;
+  if(gated()) return '<span class="pickwrap">'+planLock('kidpick', 'Let '+who+' pick', 'btn sm')+'</span>';
+  return '<span class="pickwrap"><button class="btn sm" data-act="kid-start" data-kid="'+esc(kid.id)+'">'+(picked ? 'Pick again' : 'Let '+esc(who)+' pick')+'</button>'+starBtn('kidpick')+'</span>';
 }
 /* Handing the phone over once for the whole week, for the parent who would rather do
    Monday morning than five mornings. Only this week — the pick has never read any
@@ -3729,15 +3774,12 @@ function pickButton(kid, day){
 function weekPickRow(kid){
   if(!kid.settings.kidPick || isHelper() || !kid.week) return '';
   if(pickChoices(kid).length < 2 || !weekPickable(kid)) return '';
-  var who = kidRef(kid) ? esc(kidRef(kid)) : 'them';
-  if(gated()) return '<button class="btn ghost" data-act="upgrade" data-why="kidpick">'+svg('lock',15)
-    + 'Let '+who+' pick the week</button>';
+  var who = kidRef(kid) || 'them';
+  if(gated()) return '<div class="actions">'+planLock('kidpick', 'Let '+who+' pick the week', 'btn ghost sm')+'</div>';
   /* already been round once: say so, the way the one-box button on Pack does */
   var done = pickChoices(kid).every(function(d){ return d.kidPick && Object.keys(d.kidPick).length; });
-  return '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'
-    + '<button class="btn ghost" data-act="kid-start-week" data-kid="'+esc(kid.id)+'">'+svg('week',15)
-    + (done ? 'Pick the week again' : 'Let '+who+' pick the week')+'</button>'+premiumTag()
-    + '<span class="hint" style="margin:0;flex-basis:100%">Or just the next box, on Pack.</span></div>';
+  return '<div class="actions"><button class="btn ghost sm" data-act="kid-start-week" data-kid="'+esc(kid.id)+'">'+svg('week',15)
+    + (done ? 'Pick the week again' : 'Let '+esc(who)+' pick the week')+'</button>'+starBtn('kidpick')+'</div>';
 }
 /* Several lunchboxes: a row of folder tabs, one tap each, the same on Pack,
    Week and Foods. On Pack each tab carries that box's state — a tick once it
@@ -3789,61 +3831,45 @@ function householdReady(dateStr){
   });
   return out;
 }
-function viewPack(){
-  var kid = activeKid(), ks = kids(), multi = ks.length>1;
-  var news = !!WHATS_NEW.text && UI.notice === WHATS_NEW.text;    /* news waits behind the trial and the plan; an error does not, and a build with no note has no news */
-  var top = '<div class="stack">' + (news ? trialBanner() + planBanner() + noticeBanner() : noticeBanner() + trialBanner() + planBanner()) + kidPager(true);
-  if(!ks.some(function(k){ return foodsOf(k).length; }))
-    return top + '<p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
-
-  var day = nextPackDay(kid);
-  if(!day)
-    return top + '<p class="view-sub">Pack list</p><h2 class="view-title">No plan yet</h2>'
-      + '<div class="empty"><p>Plan the week and this page is the morning&#8217;s box.</p>'
-      + '<button class="btn primary" data-act="plan-all">Plan the week</button></div></div>';
-
-  var h = top;
-  /* The review is the one thing that should stack: it exists once a day and then
-     goes, and making a parent visit four boxes to answer four questions would be
-     the whole cost of one box at a time. A helper is never asked. */
-  var asked = 0, stack = '';
-  if(!isHelper()){
-    var rd = reviewDay(kid);
-    if(rd && laterHolds(kid, rd) && !reviewComplete(kid, rd)){        /* Answer later: the question waits, in one line, with the way back */
-      stack += '<div class="card spread" style="padding:12px 16px"><span class="hint" style="margin:0;color:var(--ink-2)">How did '
-        + (kidLabel(kid) ? esc(kidLabel(kid))+'\u2019s' : 'the')+' box go? Not answered yet.</span>'
-        + '<button class="btn ghost sm" data-act="review-now" data-kid="'+esc(kid.id)+'">Answer now</button></div>';
-    } else if(rd){
-      if(!reviewComplete(kid, rd) || UI.reviewEdit[kid.id] === rd.d){ stack += reviewCard(kid, rd); if(!reviewComplete(kid, rd)) asked++; }
-      else if(reviewedToday(kid, rd)) stack += reviewSummary(kid, rd.d);
-    }
-  }
-  /* the way past the question sits above it; the other boxes' rings on their tabs say who else is owed */
-  if(asked) stack = '<div class="spread"><p class="view-sub" style="margin:0">'+(kidLabel(kid) ? esc(kidLabel(kid))+'\u2019s box' : 'The box')+' came home</p>'
-    + '<button class="btn ghost sm" data-act="review-later-all">Answer later</button></div>' + stack;
-
-  var box = '';
-  var lab = dayLabel(day.d);
-  box += '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
-    + ' · '+esc(lab.date)+(multi ? ' · '+esc(kid.name) : '')+'</p><h2 class="view-title">'
-    + (lab.rel==='Today' ? 'Today&#8217;s box' : lab.rel==='Tomorrow' ? 'Tomorrow&#8217;s box' : esc(lab.full)+'&#8217;s box')
+/* Pack: the next school day's box for every lunchbox. One or two lunchboxes stack, the first
+   box open and the second one line until it is tapped, folding back once it is packed, so the
+   screen shrinks as the morning goes (FOLD_SECOND is the one condition that reverses it). Three
+   or more keep the folder tabs and one box at a time. */
+var FOLD_SECOND = true;
+function stackedPack(){ return kids().length <= 2; }
+function packedWords(kid, day){
+  var row = kid.packed[day.d] || {}, at = '', by = '';
+  catsFor(kid).forEach(function(c){ var e = row[c.k]; if(e && !e.off && (!at || e.at < at)){ at = e.at; by = e.by; } });
+  var who = memberById(by), d = at ? new Date(at) : null, when = '';
+  try{ if(d && !isNaN(d)) when = d.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'}).toLowerCase(); }catch(e){}
+  return '\u2713 packed'+(when ? ' '+when : '')+(who && who.name && who.name !== 'Me' ? ' \u00b7 '+esc(who.name) : '');
+}
+function boxTitle(kid, multi){ return multi ? (kidLabel(kid) ? esc(kidLabel(kid))+'&#8217;s box' : esc(kid.name)) : ''; }
+function boxLine(kid, day){
+  var n = catsFor(kid).filter(function(c){ return boxFood(kid, day.slots[c.k]); }).length, l = dayLabel(day.d);
+  var meta = boxPacked(kid, day) ? packedWords(kid, day) : 'not packed \u00b7 '+n+(n === 1 ? ' part' : ' parts');
+  return '<div class="list boxsum"><button class="item" data-act="box-open" data-kid="'+esc(kid.id)+'" aria-expanded="false">'
+    + '<span class="grow"><span class="nm">'+boxTitle(kid, true)+'</span><span class="meta">'+esc(l.rel || l.full)+' \u00b7 '+meta+'</span></span>'
+    + '<span class="go">'+svg('chev',16)+'</span></button></div>';
+}
+function boxBlock(kid, day, named){
+  var lab = dayLabel(day.d), tabs = !stackedPack();
+  var box = '<div><p class="view-sub">'+(lab.rel ? esc(lab.rel) : lab.diff<0 ? 'Already packed' : 'Next school day')
+    + ' \u00b7 '+esc(lab.date)+(tabs && named ? ' \u00b7 '+esc(kid.name) : '')+'</p><h2 class="view-title">'
+    + (named && !tabs ? boxTitle(kid, true) : lab.rel==='Today' ? 'Today&#8217;s box' : lab.rel==='Tomorrow' ? 'Tomorrow&#8217;s box' : esc(lab.full)+'&#8217;s box')
     + '</h2></div>';
-
   box += '<div class="kidgroup">'
     +  tinHTML(kid, day, 'pack')
     +  '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day)
     +  '<span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">' + packButton(kid, day) + pickButton(kid, day) + '</span></div></div>';
-
   /* what in this box gets made rather than bought: the recipe waits where the box
      is being packed, because that is the evening a parent is standing in the kitchen */
   var making = catsFor(kid).map(function(c){ return boxFood(kid, day.slots[c.k]); })
     .filter(function(f){
-      /* only what is worth standing at the counter for: a parent about to walk out of
-         the door does not need to be told there is a recipe for a ham sandwich */
+      /* worth standing at the counter for: one of the household's own, or something the
+         bank says takes real time. recipeFor already resolved it, so `id` says which of
+         the two it was without asking the library again. */
       var mr = f && recipeFor(f);
-      /* worth standing at the counter for: one of the household's own, or something
-         the bank says takes real time. recipeFor already resolved it, so `id` says
-         which of the two it was without asking the library again. */
       return !!mr && (!!mr.id || mr.m >= 10);
     });
   if(making.length)
@@ -3851,39 +3877,117 @@ function viewPack(){
       +  '<span class="hint muted" style="margin:0">Making it?</span>' + making.map(function(f){
            return '<button class="btn sm ghost" data-act="cook" data-kid="'+esc(kid.id)+'" data-id="'+esc(f.id)+'">'+svg('book',14)+esc(f.n)+'</button>';
          }).join('') + '</div>';
-
-  /* with more than one lunchbox, the box on screen is not the whole morning */
-  var hh = householdReady(day.d);
-  if(hh.boxes > 1){
-    var link = function(k){ return '<button class="linkbtn" data-act="pick-kid" data-id="'+esc(k.id)+'">'+esc(k.name)+'</button>'; };
-    box += '<p class="hint" style="margin:0;color:var(--ink-2)">'+hh.ready+' of '+hh.boxes+' boxes ready'
-      +  (hh.left.length ? ' — '+listNames(hh.left, link)+' still to pack.' : ' — everyone is packed.')+'</p>';
-  }
-  /* a night-before household came to pack tomorrow's box: it goes first, the questions after */
-  h += (packsAtNight() && afterSchool()) ? box + stack : stack + box;
-
+  return box;
+}
+/* the rest of that lunchbox's week, one line a day: two foods and a count, the pick where it lands */
+function comingUp(kid, day, named){
   var rest = kid.week.days.filter(function(x){ return x.d > day.d; });
-  if(rest.length){
-    h += '<div><div class="sect-head"><h3>Coming up</h3></div><div class="list">';
-    rest.forEach(function(x){
-      var l = dayLabel(x.d);
-      var what = catsFor(kid).map(function(c){ var f = boxFood(kid, x.slots[c.k]); return f?f.n:null; }).filter(Boolean).join(' · ');
-      var pick = pickButton(kid, x);
-      var pickedBy = (x.kidPick && Object.keys(x.kidPick).length) ? (kidLabel(kid) ? kidLabel(kid)+' picked' : 'Picked') : '';
-      /* the day the kid's pick would change carries the button, so the pick lands where it is seen */
-      /* the pick's own button cannot sit inside the row's, so that row is a div and the day
-         carries its own button instead — the day is still the way through to Week */
-      var tag = pick ? 'div' : 'button', inner = pick ? 'button' : 'span';
-      h += '<'+tag+' class="item'+(pick ? ' pickday' : '')+'"'+(pick ? '' : ' data-act="go-week"')+'><'+inner+' class="grow"'+(pick ? ' data-act="go-week"' : '')+'><span class="nm">'+esc(l.full)+(pick ? ' <span class="qty">'+esc(l.date)+'</span>' : '')+(pickedBy ? ' <span class="chip picked">'+esc(pickedBy)+'</span>' : '')+'</span>'
-        +  '<span class="meta">'+esc(what || 'nothing picked')+'</span></'+inner+'>'
-        +  (pick ? '<span class="row pickctl" style="gap:8px;flex-wrap:wrap">'+pick+'</span>' : '<span class="qty">'+esc(l.date)+'</span>')
-        +  '</'+tag+'>';
-    });
-    h += '</div></div>';
+  if(!rest.length) return '';
+  var h = '<div><div class="sect-head"><h3>Coming up'+(named ? ' \u00b7 '+esc(kid.name) : '')+'</h3></div><div class="list">';
+  rest.forEach(function(x){
+    var l = dayLabel(x.d);
+    var names = catsFor(kid).map(function(c){ var f = boxFood(kid, x.slots[c.k]); return f?f.n:null; }).filter(Boolean);
+    var what = names.length ? names.slice(0, 2).join(' \u00b7 ')+(names.length > 2 ? ' \u00b7 +'+(names.length - 2) : '') : 'nothing picked';
+    var pick = pickButton(kid, x);
+    var pickedBy = (x.kidPick && Object.keys(x.kidPick).length) ? (kidLabel(kid) ? kidLabel(kid)+' picked' : 'Picked') : '';
+    /* the day the kid's pick would change carries the button, so the pick lands where it is seen;
+       the pick's own button cannot sit inside the row's, so that row is a div and the day
+       carries its own button instead — the day is still the way through to Week */
+    var tag = pick ? 'div' : 'button', inner = pick ? 'button' : 'span';
+    h += '<'+tag+' class="item'+(pick ? ' pickday' : '')+'"'+(pick ? '' : ' data-act="go-week" data-kid="'+esc(kid.id)+'"')+'><'+inner+' class="grow"'+(pick ? ' data-act="go-week" data-kid="'+esc(kid.id)+'"' : '')+'><span class="nm">'+esc(l.full)+(pick ? ' <span class="qty">'+esc(l.date)+'</span>' : '')+(pickedBy ? ' <span class="chip picked">'+esc(pickedBy)+'</span>' : '')+'</span>'
+      +  '<span class="meta">'+esc(what)+'</span></'+inner+'>'
+      +  (pick ? '<span class="row pickctl" style="gap:8px;flex-wrap:wrap">'+pick+'</span>' : '<span class="qty">'+esc(l.date)+'</span>')
+      +  '</'+tag+'>';
+  });
+  return h + '</div></div>';
+}
+/* the question about a lunchbox's newest box home, or the line that holds its place: a
+   helper is never asked */
+function questionStack(kid){
+  if(isHelper()) return {html:'', asked:false};
+  var rd = reviewDay(kid), stack = '', asked = false;
+  if(rd && laterHolds(kid, rd) && !reviewComplete(kid, rd)){        /* Answer later: the question waits, in one line, with the way back */
+    stack += '<div class="card spread" style="padding:12px 16px"><span class="hint" style="margin:0;color:var(--ink-2)">How did '
+      + (kidLabel(kid) ? esc(kidLabel(kid))+'\u2019s' : 'the')+' box go? Not answered yet.</span>'
+      + '<button class="btn ghost sm" data-act="review-now" data-kid="'+esc(kid.id)+'">Answer now</button></div>';
+  } else if(rd){
+    if(!reviewComplete(kid, rd) || UI.reviewEdit[kid.id] === rd.d){ stack += reviewCard(kid, rd); if(!reviewComplete(kid, rd)) asked = true; }
+    else if(reviewedToday(kid, rd)) stack += reviewSummary(kid, rd.d);
   }
-  return h+'</div>';
+  /* the way past the question sits above it */
+  if(asked) stack = '<div class="spread"><p class="view-sub" style="margin:0">'+(kidLabel(kid) ? esc(kidLabel(kid))+'\u2019s box' : 'The box')+' came home</p>'
+    + '<button class="btn ghost sm" data-act="review-later-all" data-kid="'+esc(kid.id)+'">Answer later</button></div>' + stack;
+  return {html:stack, asked:asked};
+}
+function viewPack(){
+  var ks = kids(), multi = ks.length>1, tabs = multi && !stackedPack(), kid = activeKid();
+  var news = !!WHATS_NEW.text && UI.notice === WHATS_NEW.text;    /* news waits behind the trial and the plan; an error does not, and a build with no note has no news */
+  var top = '<div class="stack">' + (news ? trialBanner() + planBanner() + noticeBanner() : noticeBanner() + trialBanner() + planBanner()) + (tabs ? kidPager(true) : '');
+  if(!ks.some(function(k){ return foodsOf(k).length; }))
+    return top + '<p class="view-sub">Pack list</p><h2 class="view-title">Nothing to pack yet</h2>'+noFoodsEmpty()+'</div>';
+
+  var boxes = tabs ? [kid] : ks, blocks = '', stack = '', coming = '', first = null;
+  boxes.forEach(function(k, i){
+    var day = nextPackDay(k);
+    if(!day){
+      if(!foodsOf(k).length) return;                /* the banner above names a box with no foods */
+      blocks += '<div>'+(multi && !tabs ? '<p class="view-sub">'+esc(k.name)+'</p>' : '<p class="view-sub">Pack list</p>')+'<h2 class="view-title">No plan yet</h2>'
+        + '<div class="empty"><p>Plan the week and this page is the morning&#8217;s box.</p>'
+        + '<button class="btn primary" data-act="plan-all">Plan the week</button></div></div>';
+      return;
+    }
+    var open = tabs || i === 0 || !FOLD_SECOND || !!UI.boxOpen[k.id];
+    blocks += open ? boxBlock(k, day, multi) : boxLine(k, day);
+    if(!first){ first = k; coming = comingUp(k, day, multi && !tabs); }
+    /* with more than one lunchbox on tabs, the box on screen is not the whole morning */
+    if(tabs){
+      var hh = householdReady(day.d);
+      if(hh.boxes > 1){
+        var link = function(x){ return '<button class="linkbtn" data-act="pick-kid" data-id="'+esc(x.id)+'">'+esc(x.name)+'</button>'; };
+        blocks += '<p class="hint" style="margin:0;color:var(--ink-2)">'+hh.ready+' of '+hh.boxes+' boxes ready'
+          +  (hh.left.length ? ' \u2014 '+listNames(hh.left, link)+' still to pack.' : ' \u2014 everyone is packed.')+'</p>';
+      }
+    }
+    stack += questionStack(k).html;
+  });
+  /* a night-before household came to pack tomorrow's box: it goes first, the questions after */
+  return top + ((packsAtNight() && afterSchool()) ? blocks + stack : stack + blocks) + coming + '</div>';
 }
 
+/* a day is locked when every compartment with a food in it is; the lock on the day header
+   sets or clears them all, so the Sunday loop is lock what worked, then Plan the week */
+function dayLocked(kid, day){
+  var any = false;
+  var all = catsFor(kid).every(function(c){ if(!boxFood(kid, day.slots[c.k])) return true; any = true; return !!day.lock[c.k]; });
+  return any && all;
+}
+function dayLockButton(kid, day){
+  var on = dayLocked(kid, day), l = dayLabel(day.d).full;
+  return '<button class="iconbtn lockbtn" data-act="day-lock" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" aria-pressed="'+on+'" aria-label="'
+    + (on ? esc(l)+' is locked: a shuffle leaves it alone. Unlock it' : 'Lock '+esc(l))+'">'+svg(on ? 'lock' : 'unlock', 18)+'</button>';
+}
+/* the box as it was packed, one line: the main and a count, how it went, the rest behind a tap */
+function goneLine(kid, day){
+  var names = ALL_CATS.map(function(c){ var f = boxFood(kid, day.slots[c.k]); return f ? f.n : null; }).filter(Boolean);
+  var words = reviewWords(kid, day.d);
+  return '<button class="gone-line" data-act="gone-open" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" aria-label="'+esc(dayLabel(day.d).full)+'\u2019s box, as packed">'
+    + '<span class="grow">'+(names.length ? esc(names[0])+(names.length > 1 ? ' \u00b7 +'+(names.length - 1) : '') : 'Nothing packed')+'</span>'
+    + (words ? '<span class="qty">'+esc(words)+'</span>' : '')+'<span class="go">'+svg('chev',16)+'</span></button>';
+}
+function goneSheet(kidId, dStr){
+  var kid = kidById(kidId), day = kid && findDay(kid, dStr); if(!day) return;
+  var l = dayLabel(dStr), row = (kid.eaten || {})[dStr] || {};
+  var h = '<p class="hint" style="margin:0">What was packed stays.</p><div class="list">'
+    + ALL_CATS.map(function(c){
+        var f = boxFood(kid, day.slots[c.k]); if(!f) return '';
+        var e = row.skipped ? null : row[c.k], ans = e ? (e.r === 'ate' ? 'ate it' : e.r === 'some' ? 'some' : 'came home') : '';
+        return '<div class="item"><span class="ric" aria-hidden="true">'+iconFor(f)+'</span><span class="grow"><span class="nm">'+esc(f.n)+'</span>'
+          + '<span class="meta">'+esc(c.label)+(ans ? ' \u00b7 '+ans : '')+'</span></span></div>';
+      }).join('') + '</div>' + chipsHTML(kid, day);
+  var words = reviewWords(kid, dStr);
+  if(words) h += '<p class="hint" style="margin:0">How it went: '+esc(words)+'.</p>';
+  openSheet(l.full+' \u00b7 '+l.date, h);
+}
 function viewWeek(){
   var kid = activeKid(), multi = kids().length>1;
   if(!foodsOf(kid).length)
@@ -3894,7 +3998,7 @@ function viewWeek(){
   /* one glyph, 44px, with its spoken name: the header holds the title, this and Plan the week on one line at 375px */
   var nav = '<button class="iconbtn" data-act="week-ahead" data-v="'+(ahead ? 0 : 1)+'" aria-label="'+(ahead ? 'Back to this week' : 'Next week')+'">'+svg(ahead ? 'chevl' : 'chev', 20)+'</button>';
   var h = '<div class="stack">'+kidPager()+'<div>'
-    + '<p class="view-sub">'+(ahead ? 'Next week' : (NUMWORD[n]||n)+' lunch'+(n===1?'':'es'))+(multi ? ' · '+esc(kid.name) : '')+'</p>'
+    + '<p class="view-sub">'+(ahead ? 'Next week' : (NUMWORD[n]||n)+' lunch'+(n===1?'':'es'))+(multi ? ' \u00b7 '+esc(kid.name) : '')+'</p>'
     + '<div class="titlerow"><h2 class="view-title">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+'</h2>'+nav
     + (isHelper() ? '' : '<button class="btn primary sm" data-act="plan-kid">'+(ahead ? 'Plan next week' : 'Plan the week')+'</button>')+'</div></div>'
     + (ahead ? '' : planBanner() + weekPickRow(kid));
@@ -3903,12 +4007,12 @@ function viewWeek(){
       + (isHelper() ? '' : '<button class="btn primary" data-act="plan-kid">'+(ahead ? 'Plan next week' : 'Plan the week')+'</button>')+'</div></div>';
 
   wk.days.forEach(function(day){
-    var l = dayLabel(day.d);
-    h += '<div class="daycard'+(l.diff<0?' past':'')+'"><div class="dayhead"><div class="dayname">'+esc(l.full)
-      +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):(l.diff<0?' · gone':''))+'</em></div>'
-      +  (dayGone(day) || isHelper() ? '' : '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" aria-label="Shuffle '+esc(l.full)+'">'
-      +  svg('swap',14)+'Shuffle</button>')+'</div>'
-      +  tinHTML(kid, day, 'week') + '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day) + '</div></div>';
+    var l = dayLabel(day.d), gone = dayGone(day);
+    h += '<div class="daycard'+(gone?' past':'')+'"><div class="dayhead"><div class="dayname">'+esc(l.full)
+      +  '<em>'+esc(l.date)+(l.rel?' \u00b7 '+esc(l.rel):'')+(gone?' \u00b7 home':'')+'</em></div>'
+      +  (gone || isHelper() ? '' : '<div class="dayopts">'+dayLockButton(kid, day)
+      +  '<button class="iconbtn" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" aria-label="Shuffle '+esc(l.full)+'">'+svg('shuffle',18)+'</button></div>')+'</div>'
+      +  (gone ? goneLine(kid, day) : tinHTML(kid, day, 'week') + '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day) + '</div>')+'</div>';
   });
   return h + '</div>';
 }
@@ -3934,7 +4038,8 @@ function viewShop(){
   h += '<div class="spread"><span class="count">'+toBuy+' to buy'+(gated() ? '' : ' \u00b7 '+(rows.length-toBuy)+' at home')+'</span>'
     +  '<span class="row" style="gap:6px">'+(canShare() ? '<button class="btn ghost sm" data-act="send-list" aria-label="Send the list">'+svg('share',16)+'Send</button>' : '')
     +  '<button class="btn ghost sm" data-act="copy-list">Copy</button></span></div>'
-    +  (gated() || premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>'+(gated() ? 'A pantry that remembers is part of the Household plan.' : 'Check off what is already home.')+'</span>'+premiumTag()+'</p>' : '');
+    +  (gated() ? '<div class="card spread" style="padding:8px 8px 8px 14px"><span class="hint" style="margin:0">A pantry that remembers is part of the Household plan.</span>'+planLock('pantry', 'Household plan', 'btn sm')+'</div>'
+        : trialing() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Check off what is already home.</span>'+starBtn('pantry')+'</p>' : '');
   var groups = nullMap();
   rows.forEach(function(r){ (groups[r.aisle] = groups[r.aisle] || []).push(r); });
   AISLES.forEach(function(a){
@@ -4027,12 +4132,12 @@ function viewFoods(){
      on screen, locked, never hidden, and the idea bank stays free so a free list is
      never stuck with what it has */
   h += gated()
-    ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add your own \u2014 part of the Household plan">'+svg('lock',17)+'Add your own</button>'
+    ? planLock('food', 'Add your own', 'btn ghost wide')
       + '<button class="btn wide" data-act="ideas">'+svg('plus',17)+'Browse the idea bank</button>'
-      + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Every food here stays. Writing one in your own words is the Household plan; the idea bank, and the two recipes that come with it, stays free.</span>'+premiumTag()+'</p>'
+      + '<p class="hint muted" style="margin:0">Every food here stays. Writing one in your own words is the Household plan; the idea bank, and the two recipes that come with it, stays free.</p>'
     : isHelper() ? ''
     : '<button class="btn wide" data-act="add-own">'+svg('plus',17)+'Add your own</button>'
-      + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words.</span>'+premiumTag()+'</p>' : '');
+      + (trialing() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A food in your own words.</span>'+starBtn('food')+'</p>' : '');
   return h + backHTML + '</div>';     /* last on the tab: a shelf to go back to, not a wall to scroll past */
 }
 
@@ -4092,10 +4197,10 @@ function viewRecipes(){
     + '<h2 class="view-title">What you cook</h2></div>';
   if(!isHelper())
     h += gated()
-      ? '<button class="btn ghost wide" data-act="upgrade" data-why="recipe" aria-label="Import a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Import a recipe</button>'
-        + '<p class="hint muted" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>Keeping a recipe of your own is the Household plan. Every recipe below stays free to cook from.</span>'+premiumTag()+'</p>'
+      ? planLock('recipe', 'Import a recipe', 'btn ghost wide')
+        + '<p class="hint muted" style="margin:0">Keeping a recipe of your own is the Household plan. Every recipe below stays free to cook from.</p>'
       : '<button class="btn wide" data-act="recipe-import">'+svg('book',17)+'Import a recipe</button>'
-        + (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A recipe of your own, from a page or pasted in.</span>'+premiumTag()+'</p>' : '');
+        + (trialing() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A recipe of your own, from a page or pasted in.</span>'+starBtn('recipe')+'</p>' : '');
   /* a search box over a list you can see all of is furniture: it appears once there
      is more here than fits a screen, and stays while a search is running so it cannot
      vanish from under a parent mid-type */
@@ -4137,8 +4242,8 @@ function viewBox(){
       +  '<button data-act="pack-when" data-v="evening" aria-pressed="'+packsAtNight()+'">Night before</button></div></div>'
       +  '<div class="switch"><div><div class="t">Another lunchbox</div>'
       +  '<div class="d">Its own rules, its own foods, its own tab.</div></div>'
-      +  '<div class="row" style="gap:8px;align-items:center;flex:none">'+premiumTag()
-      +  '<button class="btn sm" data-act="add-kid">'+svg('plus',15)+'Add</button></div></div>'
+      +  '<div class="row" style="gap:8px;align-items:center;flex:none">'
+      +  (gated() ? planLock('lunchbox', 'Add', 'btn sm') : starBtn('lunchbox')+'<button class="btn sm" data-act="add-kid">'+svg('plus',15)+'Add</button>')+'</div></div>'
       +  '</div>'
       +  '<p class="hint" style="margin:8px 0 0">Pack the night before and Pack shows tomorrow&#8217;s box from three o&#8217;clock.</p>'
       +  '</div>';
@@ -4182,7 +4287,7 @@ function viewBox(){
     +  '<textarea id="avoidText" placeholder="salami, kiwi, sesame" maxlength="500">'+esc(s.avoidText)+'</textarea></div></div></div>';
 
   /* the kid's say */
-  h += '<div><div class="sect-head"><h3>'+(kidLabel(kid) ? esc(kidLabel(kid))+'&#8217;s say' : 'Their say')+'</h3>'+(premiumTag() ? '<span>'+premiumTag()+'</span>' : '')+'</div><div class="card">'
+  h += '<div><div class="sect-head"><h3>'+(kidLabel(kid) ? esc(kidLabel(kid))+'&#8217;s say' : 'Their say')+'</h3>'+(gated() ? planLock('kidpick', 'Household plan', 'btn sm ghost') : starBtn('kidpick'))+'</div><div class="card">'
     +  sw('kidpick-on', '', 'They pick their box each day', s.kidPick, 'From the week already planned and shopped for.')
     +  (s.kidPick ? '<div class="switch"><div><div class="t">How they pick</div></div>'
          + '<div class="seg two"><button data-act="kidpick-mode" data-v="parts" aria-pressed="'+(s.kidPickMode !== 'boxes')+'">Each part</button>'
@@ -4325,8 +4430,9 @@ function paneHousehold(){
   if(!isHelper()){
     h += '<div class="card stack" style="gap:10px"><h3>Ask someone in</h3>'
       +  '<p class="hint" style="margin:0">The other parent sees and changes everything you do. A caretaker sees the week and checks the box off, and nothing else.</p>'
-      +  '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn sm" data-act="invite">Invite the other parent</button>'
-      +  '<button class="btn ghost sm" data-act="invite-helper">Invite a caretaker</button>'+premiumTag()+'</div>';
+      +  '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'
+      +  (gated() ? planLock('share', 'Invite the other parent', 'btn sm')+planLock('share', 'Invite a caretaker', 'btn ghost sm')
+          : '<button class="btn sm" data-act="invite">Invite the other parent</button><button class="btn ghost sm" data-act="invite-helper">Invite a caretaker</button>'+starBtn('share'))+'</div>';
     if(Account.invite) h += '<div class="field"><label for="inviteUrl">Invite link</label>'
       + '<textarea id="inviteUrl" class="codebox" readonly style="min-height:60px">'+esc(Account.invite)+'</textarea>'
       + '<span class="hint">It works once, for a week'+(Account.inviteRole === 'helper' ? ', and gives them the week and the pack list only' : '')+'.</span>'
@@ -4497,8 +4603,8 @@ function kidSheet(){
       +  '<span class="meta">'+foodsOf(k).length+' foods'+(k.week?' · week planned':' · no plan yet')+'</span></span>'
       +  '<span class="dot" style="background:'+hueVar(k)+'"></span></button>';
   });
-  h += '</div><button class="btn wide" data-act="add-kid">'+svg('plus',17)+'Add a lunchbox'+(kids().length && premiumTag() ? ' <span style="margin-left:6px">'+premiumTag()+'</span>' : '')+'</button>'
-    +  '';
+  h += '</div>'+(gated() && kids().length ? planLock('lunchbox', 'Add a lunchbox', 'btn wide')
+    : '<div class="row" style="gap:6px"><button class="btn wide" style="flex:1" data-act="add-kid">'+svg('plus',17)+'Add a lunchbox</button>'+starBtn('lunchbox')+'</div>');
   openSheet('Lunchboxes', h);
 }
 function slotSheet(kidId, dayStr, cat){
@@ -4509,9 +4615,9 @@ function slotSheet(kidId, dayStr, cat){
   var main = boxFood(kid, day.slots.main);   /* the "goes well with" line names what is in the box */
   var h = '<div class="row" style="gap:8px;flex-wrap:wrap">'
     + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'" aria-label="Shuffle the '+esc(c.label.toLowerCase())+'">'
-    + svg('swap',15)+'Shuffle</button>'
-    + '<button class="tg" data-act="sheet-lock" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'"'
-    + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Don&#8217;t change this one</button></div>';
+    + svg('shuffle',15)+'Shuffle</button>'
+    + '<button class="iconbtn lockbtn" data-act="sheet-lock" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'"'
+    + ' aria-pressed="'+(!!day.lock[cat])+'" aria-label="'+(day.lock[cat] ? 'Locked: a shuffle leaves this one alone. Unlock it' : 'Lock this one')+'">'+svg(day.lock[cat] ? 'lock' : 'unlock',18)+'</button></div>';
   /* whatever is in the compartment, if it is something you make rather than buy. On its
      own line: the two buttons above change the plan, this one only reads. */
   var inSlot = boxFood(kid, day.slots[cat]);
@@ -4532,7 +4638,8 @@ function slotSheet(kidId, dayStr, cat){
         + '<div class="row" style="gap:8px;flex-wrap:wrap">'
         + '<button class="btn sm" data-act="write-in"'+w3+'>Change it</button>'
         + '<button class="btn ghost sm" data-act="write-clear"'+w3+'>Clear it</button></div></div>'
-      : '<button class="btn ghost wide" data-act="write-in"'+w3+'>'+svg('pencil',15)+'Write something in</button>';
+      : gated() ? planLock('write', 'Write something in', 'btn ghost wide')
+      : '<div class="row" style="gap:6px"><button class="btn ghost" style="flex:1" data-act="write-in"'+w3+'>'+svg('pencil',15)+'Write something in</button>'+starBtn('write')+'</div>';
   }
   if(!pool.length){
     h += '<div class="empty"><p>No '+esc(c.plural.toLowerCase())+' in the list yet.</p></div>';
@@ -5175,7 +5282,7 @@ function cookSheet(keepScroll){
     if(r.id && !f && !isHelper()){
       if(!recipeOn({r:r, own:true}).length)
         h += gated()
-          ? '<button class="btn ghost wide" data-act="upgrade" data-why="food" aria-label="Add it to the food list \u2014 part of the Household plan">'+svg('lock',17)+'Add it to the food list</button>'
+          ? planLock('food', 'Add it to the food list', 'btn ghost wide')
           : '<button class="btn ghost wide" data-act="recipe-to-food" data-id="'+esc(r.id)+'">'+svg('plus',17)+'Add it to the food list</button>';
       /* one of the household's own can be removed from where it is read; the idea
          bank's cannot, because it was never theirs to lose */
@@ -5245,9 +5352,9 @@ function foodSheet(kidId, foodId){
        the same tag as writing a food by hand — on screen, never hidden */
     h += '<p class="hint muted" style="margin:0">No recipe here. We only ship recipes someone has cooked and tested, so this dish has none \u2014 bring in the one you already trust.</p>'
       +  (gated()
-          ? '<button class="btn ghost wide" data-act="upgrade" data-why="recipe" aria-label="Add a recipe \u2014 part of the Household plan">'+svg('lock',17)+'Add a recipe</button>'
+          ? planLock('recipe', 'Add a recipe', 'btn ghost wide')
           : '<button class="btn wide" data-act="recipe-add" data-kid="'+esc(k.id)+'" data-id="'+esc(f.id)+'">'+svg('plus',17)+'Add a recipe</button>')
-      +  (premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A recipe of your own.</span>'+premiumTag()+'</p>' : '');
+      +  (trialing() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0"><span>A recipe of your own.</span>'+starBtn('recipe')+'</p>' : '');
   }
   h += '</div>';
   openSheet(f.n, h);
@@ -5269,7 +5376,8 @@ function helpSheet(fromSupport){
     ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings — the sliders at the top, or Account → Lunchboxes — or it came home twice in a row and is on hold. Foods says which, on the food.'],
     ['How do I add a food, or take one off?', 'On Foods, tap Ideas and tap what they’ll eat — as many as you like, the list stays where you are. Add all on a heading takes a whole compartment. Tap a checked one to take it off: one you just added goes on one tap, one that was already there asks for a second. With more than one lunchbox the checkmark also means every list the rules allow — tap one and it says which box the rules kept it out of. The trash can on the Foods tab works too. Everything offers Undo. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
     ['I took a food off — what about this week?', 'The boxes already planned keep it, marked off the list, so nothing you were going to pack goes blank on you — and it stays on the shopping list, because you still have that box to pack. It never comes up again, and the next Plan the week or Shuffle puts something else there; a compartment you locked, you change yourself. Foods you wrote yourself wait under Taken off at the foot of the Foods tab, with Put back.'],
-    ['What does locking a compartment do?', 'Tap a compartment on Week and choose Don\u2019t change this one: Plan the week and a day\u2019s Shuffle then leave it alone; Shuffle on the compartment itself changes it and unlocks it. A food you write in is locked; a rule you turn on can still take a locked food out, and says so.'],
+    ['What does the lock do?', 'A locked day or compartment is left alone by Plan the week and Shuffle. The lock on a day locks everything in it; the one on a compartment\u2019s sheet locks that one. A food you write in is locked; a rule you turn on can still take a locked food out, and says so.'],
+    ['What is the green star?', 'A part of the Household plan. Tap it to see the plan.'],
     ['What does on hold mean?', 'A food that came home twice in a row sits out for three weeks, then comes back. A list too short to fill the week may still use it.'],
     ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with — a Mediterranean quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
     ['Can I bring a recipe in from somewhere else?', 'Recipes → Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read — copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox’s food list is offered after. Keeping one of your own is part of the Household plan.'],
@@ -5282,6 +5390,7 @@ function helpSheet(fromSupport){
     ['Tonight’s leftovers are going in tomorrow — can I just write that in?', 'Yes. On Week, tap the compartment and Write something in. It goes in that one box on that one day: locked, so Shuffle and Plan the week leave it alone; off the food list, so it never comes up in another week; and off the shopping list, because it is already in your fridge. Only the name is checked against the rules. If it trips one it goes in flagged, like any food you used anyway — but a name that says nothing about what is in it tells us nothing, so check that one yourself. For the same reason the day stops claiming anything about protein or an ice pack. A compartment you wrote in is never traded away by the kid’s pick. Writing your own foods in is part of the Household plan.'],
     ['Where do they pick their box?', 'On Pack, on the next box with nothing in the bag — today’s, or the next day under Coming up. Switch it on with “They pick their box each day” in the lunchbox settings. Tapping the day itself goes to Week.'],
     ['How do I say what came home?', 'From three o\u2019clock, Pack asks about that box. All eaten is one tap; otherwise Ate it, Some or Came home under each food. Skip: nothing counted records nothing and stops asking; Answer later keeps the question, and Change beside the answer works for the rest of the day. A food that comes home twice in a row goes on hold for three weeks, and the next plan leans toward what got eaten. Part of the Household plan.'],
+    ['Where is the second lunchbox on Pack?', 'Under the first, as one line that says whether it is packed. Tap it to open the box; Packed folds it away again. With three or more, each has a tab.'],
     ['Can they pick the whole week at once?', 'Yes. Switch on “They pick their box each day” in the lunchbox settings, and Week carries Let them pick the week. It hands the phone over once: they choose the next box, then the one after, until there is nothing left to choose between. Every choice saves as it is made, so you can stop early and keep what they picked. Pack still has the one-box version for the morning.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
     ['We both changed the same thing — whose wins?', 'The later change, thing by thing: a food, a compartment on a day, a checkmark. A day that has gone is never rewritten. Tap Undo after the other phone has changed that compartment and it leaves theirs alone and says so.'],
@@ -5391,7 +5500,7 @@ function render(){
   if(UI.pane && (!paneOK(UI.pane) || (UI.pane !== 'box' && UI.tab !== 'setup'))) UI.pane = '';   /* only the settings sit over a lunchbox tab */
   /* the banners belong to the app, not to a tab: a pane that hid the storage warning
      would let a parent change settings that were never going to survive the reload */
-  document.getElementById('view').innerHTML = betaBar() + (UI.pane ? noticeBanner() : '') + (
+  document.getElementById('view').innerHTML = betaBar() + (UI.pane ? noticeBanner() : '') + starGuide(
       UI.pane==='box'  ? viewBox()
     : UI.pane          ? viewPane()
     : UI.tab==='pack'  ? viewPack()
@@ -5434,7 +5543,7 @@ var BOX_TABS = ['pack', 'week', 'foods'];
 var HELPER_OK = ['tab','help','help-site','whats-new','whats-new-ok','week-ahead','home-ok','pack-all','go-foods','go-week','go-kid-foods','kidsheet','pick-kid','notice-dismiss','undo','disarm',
   'food-open','cook','cook-recipe','recipe-clear-find','cook-tick','cook-step','cook-units','cook-makes','cook-done','recipe-site','sheet-close',
   'signout','leave','signin-request','signin-code','join-accept','join-dismiss','copy-list','send-list','kid-exit',
-  'pane','pane-done','delete-account'];   /* without these a caretaker cannot reach Sign out or Leave, which now sit a pane deep */
+  'pane','pane-done','delete-account','box-open','gone-open'];   /* without these a caretaker cannot reach Sign out or Leave, which now sit a pane deep */
 /* The recipe search filters as it is typed. The field is re-rendered by render(),
    which would take the keyboard's focus with it, so the list alone is redrawn and
    the input left exactly where the thumb put it. */
@@ -5556,7 +5665,7 @@ document.addEventListener('click', function(ev){
   if(act==='pane-done' || act==='box-done'){ closePane(); return; }
   if(act==='go-foods'){ UI.tab='foods'; UI.pane = ''; render(); window.scrollTo(0,0); return; }
   if(act==='go-kid-foods'){ S.activeKidId = el.getAttribute('data-id'); UI.tab='foods'; UI.pane = ''; save(); render(); window.scrollTo(0,0); return; }
-  if(act==='go-week'){ UI.tab='week'; UI.pane = ''; render(); window.scrollTo(0,0); return; }
+  if(act==='go-week'){ var gw = el.getAttribute('data-kid'); if(gw && kidById(gw)){ S.activeKidId = gw; saveView(); } UI.tab='week'; UI.pane = ''; render(); window.scrollTo(0,0); return; }
   if(act==='kidsheet'){ kidSheet(); return; }
 
   /* lunchbox profiles */
@@ -5667,7 +5776,9 @@ document.addEventListener('click', function(ev){
     if(!day5){ closeSheet(); toast('That day is no longer planned'); return; }
     if(dayGone(day5)){ closeSheet(); toast('That day has gone'); return; }   /* what was packed stays as it was */
     day5.lock[cat5] = !day5.lock[cat5]; touch(weekOf(k5, day5.d) || k5.week); touch(k5); save();
-    el.setAttribute('aria-pressed', day5.lock[cat5]); render(); return;
+    slotSheet(k5.id, day5.d, cat5); render(); toast(day5.lock[cat5] ? 'Locked' : 'Unlocked');
+    var lb = bodyEl.querySelector('[data-act="sheet-lock"]'); if(lb) lb.focus({preventScroll:true});
+    return;
   }
   if(act==='pick'){
     var k6 = kidById(el.getAttribute('data-kid'));
@@ -5757,6 +5868,7 @@ document.addEventListener('click', function(ev){
       if(was) row[c.k] = {at:at, by:by, off:true};                       /* an un-tick is a row too, so the other phone sees it */
       else if(!ticked(row, c.k)) row[c.k] = {at:at, by:by};              /* a compartment already ticked keeps who and when */
     });
+    if(!was && FOLD_SECOND && stackedPack() && kids()[0] !== k7) UI.boxOpen[k7.id] = false;   /* packed: the second box folds back to its line */
     touch(k7); save(); render();
     var pb = document.querySelector('[data-act="pack-all"][data-kid="'+k7.id+'"]'); if(pb) pb.focus();
     if(was){
@@ -6459,9 +6571,22 @@ document.addEventListener('click', function(ev){
   if(act==='review-later'){ UI.reviewLater[el.getAttribute('data-kid')] = {d:el.getAttribute('data-day'), at:Date.now()}; render(); return; }
   if(act==='week-ahead'){ UI.weekAhead = +el.getAttribute('data-v') === 1 ? 1 : 0; render(); window.scrollTo(0,0); return; }
   if(act==='review-now'){ delete UI.reviewLater[el.getAttribute('data-kid')]; render(); return; }
-  if(act==='review-later-all'){                            /* this box: the card is inside its own tab */
-    var rdL = reviewDay(kid); if(rdL) UI.reviewLater[kid.id] = {d:rdL.d, at:Date.now()};
+  if(act==='review-later-all'){                            /* this box's question; the other box keeps its own */
+    var kL = kidById(el.getAttribute('data-kid')) || kid, rdL = reviewDay(kL); if(rdL) UI.reviewLater[kL.id] = {d:rdL.d, at:Date.now()};
     render(); window.scrollTo(0,0); toast('It waits on Pack'); return;
+  }
+  if(act==='box-open'){ UI.boxOpen[el.getAttribute('data-kid')] = true; render(); return; }
+  if(act==='gone-open'){ goneSheet(el.getAttribute('data-kid'), el.getAttribute('data-day')); return; }
+  if(act==='star-ok'){ try{ localStorage.setItem(STAR_SEEN_KEY, '1'); }catch(e){} render(); return; }
+  if(act==='day-lock'){
+    var kD = kidById(el.getAttribute('data-kid')), dD = kD && findWeekDay(kD, el.getAttribute('data-day'));
+    if(!kD || !dD) return;
+    if(dayGone(dD)){ toast('That day has gone'); return; }
+    var onD = !dayLocked(kD, dD);
+    catsFor(kD).forEach(function(c){ if(boxFood(kD, dD.slots[c.k])) dD.lock[c.k] = onD; });
+    touch(weekOf(kD, dD.d) || kD.week); touch(kD); save(); render();
+    focusBack(document.getElementById('view'), 'day-lock', {'data-kid':kD.id, 'data-day':dD.d});
+    toast(dayLabel(dD.d).full+(onD ? ' locked' : ' unlocked')); return;
   }
   if(act==='trial-dismiss'){ try{ localStorage.setItem(TRIAL_SEEN_KEY, el.getAttribute('data-stage') || 'soon'); }catch(e){} render(); return; }
   if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }

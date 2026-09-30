@@ -4,10 +4,11 @@
    Everything here is a deliberate choice about what the pictures have to show,
    not incidental setup: two lunchboxes, because one hides the whole point of
    the pager and the matched plan; a Monday, because a plan drawn on a Thursday
-   is two days long; Emma's box finished and Noah's not, because that is what
-   the household line is for. Change the app, look at the shots, and if they no
-   longer tell the truth, run this. The kid's-pick shot is taken here too: the
-   screen fills itself now, so there is nothing left to frame by hand. */
+   is two days long; Emma's box finished and Noah's not, because a packed box
+   over a folded one is the morning half done, which is what Pack is for. Change
+   the app, look at the shots, and if they no longer tell the truth, run this. The
+   kid's-pick shot is taken here too: the screen fills itself now, so there is
+   nothing left to frame by hand. */
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,6 +56,9 @@ await ctx.addInitScript(() => {
   Fake.now = () => Real.now() + offset;
   Fake.parse = Real.parse; Fake.UTC = Real.UTC;
   window.Date = Fake;
+  /* the pictures are of a phone, where the list can be sent to Notes or a text; headless
+     Chromium has no share sheet, and without one Shop would show Copy alone */
+  Object.defineProperty(navigator, 'share', { value: () => Promise.resolve(), configurable: true });
 });
 
 const p = await ctx.newPage();
@@ -93,7 +97,8 @@ await p.click('[data-act="clear-week"]'); await wait(500);
 await p.click('[data-act="tab"][data-tab="pack"]'); await wait(400);
 await p.click('[data-act="plan-all"]'); await wait(900);
 
-/* stand on Emma everywhere */
+/* stand on Emma everywhere: Week and Foods carry the lunchbox tabs; Pack stacks two boxes
+   with Emma's, the first, open, so there is nothing to tap there */
 const emma = await p.evaluate(() => {
   const d = JSON.parse(localStorage.getItem('lunchsorted'));
   return d.kids.find(k => k.name === 'Emma').id;
@@ -152,7 +157,7 @@ await p.click('[data-act="box-done"]'); await wait(400);
 
 await shot('week', 'screen-week');
 await shot('pack', 'screen-pack', async () => {
-  /* Emma's box finished, so the household line has something to say */
+  /* Emma's box finished, so the shot shows a packed box over Noah's still to pack */
   const packed = await p.$('[data-act="pack-all"]');
   if (packed) { await packed.click(); await wait(400); }
 });

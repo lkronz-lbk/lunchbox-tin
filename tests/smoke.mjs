@@ -429,9 +429,20 @@ try {
     await page.getAttribute('nav.tabs [aria-current="true"]', 'data-tab') === 'week');
   const empties = await page.$$eval('.cmp.empty', a => a.length);
   check('every compartment is filled', empties === 0, empties);
-  const traitTins = await page.$$eval('.tin', a => a.filter(t => t.querySelectorAll('.tr i:not(.care)').length >= 2).length);
   const planned = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.length);
-  check('each box shows what its foods bring, as words in the compartments', planned >= 2 && traitTins >= planned && (await page.$$eval('.note', a => a.length)) === 0, {traitTins, planned});
+  const tin = await page.evaluate(() => {
+    const cells = [...document.querySelectorAll('.tin .cmp')];
+    const care = cells.filter(c => c.querySelector('.marks .care[role="img"][aria-label]')).length;
+    const cold = document.querySelectorAll('.marks .care[aria-label="keep cold"]').length;
+    const words = cells.filter(c => /\b(crunchy|soft|protein|tangy|salty|juicy|hearty|light)\b/i.test(c.textContent)).length;
+    const heights = cells.map(c => Math.round(c.getBoundingClientRect().height));
+    const lab = cells[0] && Math.round(parseFloat(getComputedStyle(cells[0].querySelector('.lab')).fontSize));
+    const mark = document.querySelector('.marks svg');
+    return { cells: cells.length, care, cold, words, minH: Math.min(...heights), maxH: Math.max(...heights), lab, mark: mark ? Math.round(mark.getBoundingClientRect().width) : 0,
+      tapped: cells.filter(c => c.tagName === 'BUTTON' && c.getBoundingClientRect().height >= 44).length };
+  });
+  check('the tin is compact: cells from 58px, an 11px label, no trait words, and every cell a 44px target', planned >= 2 && tin.cells >= planned * 4 && tin.minH >= 58 && tin.maxH < 100 && tin.lab === 11 && tin.words === 0 && tin.tapped === tin.cells && (await page.$$eval('.note', a => a.length)) === 0, tin);
+  check('the care words are a 13px glyph in the label row with a spoken name', tin.care >= 1 && tin.cold >= 1 && tin.mark === 13, tin);
   check('excluded allergens never enter the list', await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
     return !d.kids[0].foods.some(f => (f.al||[]).includes('nuts') || (f.al||[]).includes('dairy'));
@@ -1086,30 +1097,29 @@ try {
   /* ----------------------------------------- pack swipes like the plan */
   await page.click('[data-act="tab"][data-tab="pack"]');
   await page.waitForTimeout(300);
-  check('pack carries the same tabs as the plan', (await page.$$eval('.boxtabs button', a => a.length)) === 2);
-  const pins = await page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem('lunchsorted'));
-    const ks = d.kids.filter(k => !k.deletedAt);
-    const day = ks[0].week.days.find(x => x.d >= new Date().toISOString().slice(0,10));
-    return {day: day && day.d, kid: ks[0].id, cats: Object.keys(day ? day.slots : {}).filter(c => day.slots[c])};
+  check('with two lunchboxes Pack stacks them rather than tabbing: the first box open, the second one line', (await page.$$eval('.boxtabs', a => a.length)) === 0
+    && (await page.$$eval('#view .tin', a => a.length)) === 1 && (await page.$$eval('[data-act="box-open"]', a => a.length)) === 1
+    && /not packed \u00b7 \d parts/.test(await page.textContent('[data-act="box-open"]')), await page.textContent('[data-act="box-open"]'));
+  const secondBox = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted')), ks = d.kids.filter(k => !k.deletedAt), k = ks[1];
+    const day = k.week.days.find(x => x.d >= new Date().toISOString().slice(0,10));
+    return {day: day && day.d, kid: k.id, name: k.name, line: document.querySelector('[data-act="box-open"]').getAttribute('data-kid') === k.id,
+      lineHeight: document.querySelector('[data-act="box-open"]').getBoundingClientRect().height};
   });
-  if (pins.day) {
-    /* one Packed tick for the box on screen, and its pill should say so. The
-       other box may already be packed by an earlier check, so count relative. */
-    const readyLine = t => { const m = /(\d+) of (\d+) boxes ready/.exec(t); return m ? {ready: +m[1], boxes: +m[2]} : null; };
-    const before = readyLine(await page.textContent('#view'));
-    check('Pack says how much of the household is ready, not just the box on screen', !!before && before.boxes === 2, before);
-    await page.click('.boxtabs button:last-child'); await page.waitForTimeout(300);   /* the box not yet packed */
-    const okBefore = await page.$$eval('.boxtabs .pin.ok', a => a.length);
-    await page.click('[data-act="pack-all"]');
-    await page.waitForTimeout(300);
-    const okAfter = await page.$$eval('.boxtabs .pin.ok', a => a.length);
-    check('a pill says when that box is packed, so four kids is not four guesses', okAfter === okBefore + 1, {okBefore, okAfter});
-    const after = readyLine(await page.textContent('#view')), line = await page.textContent('#view');
-    check('and the household line counts it, naming who is still to pack',
-      !!after && after.ready === before.ready + 1 && (after.ready === after.boxes ? /everyone is packed/.test(line) : /\w+ still to pack\./.test(line)), {before, after});
-    await page.click('[data-act="pack-all"]');                   /* un-tick: leave the fixture as it was */
-    await page.waitForTimeout(300);
+  check('the line is the second lunchbox\'s, named, and a 44px target', secondBox.line && new RegExp(secondBox.name).test(await page.textContent('[data-act="box-open"]')) && secondBox.lineHeight >= 44, secondBox);
+  if (secondBox.day) {
+    await page.click('[data-act="box-open"]'); await page.waitForTimeout(300);
+    check('tapping the line opens that box in place, under the first', (await page.$$eval('#view .tin', a => a.length)) === 2 && (await page.$$eval('[data-act="box-open"]', a => a.length)) === 0
+      && (await page.$$eval('[data-act="pack-all"]', a => a.length)) === 2);
+    const wasPacked = await page.getAttribute(`[data-act="pack-all"][data-kid="${secondBox.kid}"]`, 'aria-pressed');
+    if (wasPacked === 'true') { await page.click(`[data-act="pack-all"][data-kid="${secondBox.kid}"]`); await page.waitForTimeout(300); await page.click('[data-act="box-open"]'); await page.waitForTimeout(300); }
+    await page.click(`[data-act="pack-all"][data-kid="${secondBox.kid}"]`); await page.waitForTimeout(300);
+    check('Packed folds it back to one line that says so, with the time', (await page.$$eval('#view .tin', a => a.length)) === 1
+      && /\u2713 packed \d{1,2}:\d\d (am|pm)/.test(await page.textContent('[data-act="box-open"]')), await page.textContent('[data-act="box-open"]'));
+    await page.click('[data-act="box-open"]'); await page.waitForTimeout(300);
+    await page.click(`[data-act="pack-all"][data-kid="${secondBox.kid}"]`); await page.waitForTimeout(300);   /* un-tick: leave the fixture as it was */
+    check('and un-packing it leaves it open, not packed', (await page.$$eval('#view .tin', a => a.length)) === 2 && (await page.getAttribute(`[data-act="pack-all"][data-kid="${secondBox.kid}"]`, 'aria-pressed')) === 'false');
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150); await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   }
 
 
@@ -1121,14 +1131,16 @@ try {
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   const askedToday = await page.$$eval('.review', a => a.length);
-  check('from three, it asks about today\'s box, in that box\'s tab, and Pack carries the dot',
-    askedToday === 1 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)) && !!(await page.$('nav.tabs .due')), askedToday);
-  check('both tabs show an answer is owed', (await page.$$eval('.boxtabs .pin.due', a => a.length)) === 2);
+  check('from three, it asks about today\'s box, under each box, and Pack carries the dot',
+    askedToday === 2 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)) && !!(await page.$('nav.tabs .due')), askedToday);
+  check('both boxes are asked about, each under its own name', (await page.$$eval('.review', a => a.length)) === 2 && (await page.$$eval('[data-act="review-later-all"]', a => a.length)) === 2);
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
-  check('Answer later clears every card at once and keeps the dot as the reminder',
-    (await page.$$eval('.review', a => a.length)) === 0 && !!(await page.$('nav.tabs .due')));
+  check('Answer later folds that box\'s card, leaves the other box\'s, and keeps the dot as the reminder',
+    (await page.$$eval('.review', a => a.length)) === 1 && !!(await page.$('nav.tabs .due')));
   check('and leaves a way back on screen', (await page.$$eval('[data-act="review-now"]', a => a.length)) === 1);
-  await page.click('[data-act="review-now"]'); await page.waitForTimeout(300);
+  await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
+  check('a second Answer later folds the other, so nothing is asked and the dot still says it is owed', (await page.$$eval('.review', a => a.length)) === 0 && !!(await page.$('nav.tabs .due')));
+  await page.click('[data-act="review-now"] >> nth=0'); await page.waitForTimeout(300);
   check('Answer now brings the question back', (await page.$$eval('.review', a => a.length)) === 1);
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
   await page.evaluate(() => window.__pinHour(17));
@@ -1136,14 +1148,16 @@ try {
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('and stays out of the way for the rest of that afternoon', (await page.$$eval('.review', a => a.length)) === 0);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
-  check('until Pack is tapped again: the dot is a door, and the question comes back', (await page.$$eval('.review', a => a.length)) === 1);
+  check('until Pack is tapped again: the dot is a door, and the questions come back', (await page.$$eval('.review', a => a.length)) === 2);
+  await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
   /* a night-before household is packing tomorrow's box by now */
-  check('a household that packs in the morning still sees today\'s box in the evening', /Today/.test(await page.$eval('#view .view-title', e => e.textContent)));
+  const packSub = () => page.$eval('#view .view-sub', e => e.textContent);
+  check('a household that packs in the morning still sees today\'s box in the evening', /Today/.test(await packSub()));
   await openPane(page, 'box');
   await page.click('[data-act="pack-when"][data-v="evening"]'); await page.waitForTimeout(300);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
-  check('say you pack the night before and, from three, Pack shows tomorrow\'s box', /Tomorrow/.test(await page.$eval('#view .view-title', e => e.textContent)));
+  check('say you pack the night before and, from three, Pack shows tomorrow\'s box', /Tomorrow/.test(await packSub()));
   await page.evaluate(() => window.__pinHour(19));
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
@@ -1154,7 +1168,7 @@ try {
   await page.evaluate(() => window.__pinHour(7));
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
-  check('but in the morning, before the box has gone, it is still today\'s', /Today/.test(await page.$eval('#view .view-title', e => e.textContent)));
+  check('but in the morning, before the box has gone, it is still today\'s', /Today/.test(await packSub()));
   await openPane(page, 'box');
   await page.click('[data-act="pack-when"][data-v="morning"]'); await page.waitForTimeout(300);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
@@ -1262,13 +1276,32 @@ try {
   }));
   check('every control in the week header is a 44px target',
     await page.$$eval('.titlerow .btn, .titlerow .iconbtn', a => a.length >= 2 && a.every(b => b.getBoundingClientRect().height >= 44 && b.getBoundingClientRect().width >= 44)));
-  check('the whole week is Plan the week and a day is Shuffle, the day\'s the smaller, and neither says draw',
+  check('the whole week is Plan the week; a day carries a lock and a shuffle, each an icon with its spoken name and a 44px target',
     /^Plan the week$/.test((await page.textContent('[data-act="plan-kid"]')).trim())
-    && /^Shuffle$/.test((await page.textContent('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0')).trim())
+    && /^Shuffle [A-Z][a-z]+day$/.test(await page.getAttribute('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0', 'aria-label'))
+    && /^Lock [A-Z][a-z]+day$/.test(await page.getAttribute('.daycard:not(.past) [data-act="day-lock"] >> nth=0', 'aria-label'))
     && await page.evaluate(() => {
-      const a = document.querySelector('[data-act="plan-kid"]'), d = document.querySelector('.daycard:not(.past) [data-act="shuffle-day"]');
-      return d.getBoundingClientRect().width < a.getBoundingClientRect().width && d.getBoundingClientRect().height >= 44;
+      const d = document.querySelector('.daycard:not(.past) [data-act="shuffle-day"]'), l = document.querySelector('.daycard:not(.past) [data-act="day-lock"]');
+      const box = e => e.getBoundingClientRect();
+      return !d.textContent.trim() && box(d).width >= 44 && box(d).height >= 44 && box(l).width >= 44 && box(l).height >= 44 && Math.abs(box(d).top - box(l).top) < 2;
     }));
+  {
+    /* the day lock: every compartment with a food in it, at once, and Plan the week leaves them alone */
+    const dayOf = () => page.evaluate(() => { const b = document.querySelector('.daycard:not(.past) [data-act="day-lock"]'); return b.getAttribute('data-day'); });
+    const lockDay = await dayOf();
+    const slotsBefore = await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0]; return JSON.stringify(k.week.days.find(x => x.d === d).slots); }, lockDay);
+    await page.click('.daycard:not(.past) [data-act="day-lock"] >> nth=0'); await page.waitForTimeout(300);
+    const locked = await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0], day = k.week.days.find(x => x.d === d);
+      return Object.keys(day.slots).filter(c => day.slots[c]).every(c => day.lock[c]); }, lockDay);
+    check('the lock on a day locks every compartment in it, says so, and the icon closes', locked && /locked$/.test(await page.textContent('#toast'))
+      && (await page.getAttribute('.daycard:not(.past) [data-act="day-lock"] >> nth=0', 'aria-pressed')) === 'true'
+      && /is locked/.test(await page.getAttribute('.daycard:not(.past) [data-act="day-lock"] >> nth=0', 'aria-label')), await page.textContent('#toast'));
+    await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(400); await goShuffle(page);
+    const slotsAfter = await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0]; return JSON.stringify(k.week.days.find(x => x.d === d).slots); }, lockDay);
+    check('and Plan the week leaves a locked day exactly as it was', slotsAfter === slotsBefore, {before: slotsBefore, after: slotsAfter});
+    await page.click('.daycard:not(.past) [data-act="day-lock"] >> nth=0'); await page.waitForTimeout(300);
+    check('a second tap unlocks it', (await page.getAttribute('.daycard:not(.past) [data-act="day-lock"] >> nth=0', 'aria-pressed')) === 'false' && /unlocked$/.test(await page.textContent('#toast')));
+  }
   const thisWeekTitle = await page.$eval('.view-title', e => e.textContent.trim());
   await page.click('[data-act="week-ahead"][data-v="1"]'); await page.waitForTimeout(300);
   const nextTitle = await page.$eval('.view-title', e => e.textContent.trim());
@@ -1611,8 +1644,8 @@ try {
   check('and on Week', smallWeek.length === 0, smallWeek);
   await page.click('.cmp[data-act="slot"] >> nth=0'); await page.waitForTimeout(350);
   const sheetOpen = await page.evaluate(() => ({vis: getComputedStyle(document.getElementById('sheet')).visibility,
-    lock: document.body.style.overflow, keep: /don.t change this one/i.test(document.getElementById('sheet').textContent)}));
-  check('opening a compartment sheet locks the page behind it and offers "Don\u2019t change this one"',
+    lock: document.body.style.overflow, keep: (() => { const b = document.querySelector('#sheet [data-act="sheet-lock"]'); return !!b && /^Lock /.test(b.getAttribute('aria-label') || '') && b.getBoundingClientRect().width >= 44; })()}));
+  check('opening a compartment sheet locks the page behind it and carries the lock, 44px and named for a screen reader',
     sheetOpen.vis === 'visible' && sheetOpen.lock === 'hidden' && sheetOpen.keep, sheetOpen);
   await backdropTap(page); await page.waitForTimeout(350);
   const sheetShut = await page.evaluate(() => ({vis: getComputedStyle(document.getElementById('sheet')).visibility, lock: document.body.style.overflow}));
@@ -2781,13 +2814,21 @@ try {
     (await pb.textContent('#view')).replace(/\s+/g, ' ').slice(0, 240));
   await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
-  check('the premium pieces wear a tag while they are on', await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length) >= 1 && (await pb.$$eval('.chip.lock', a => a.length)) === 0);
+  check('the premium pieces wear a green star while they are on, 44px around the glyph, with a spoken name', (await pb.$$eval('.star', a => a.length)) >= 1
+    && await pb.$$eval('.star', a => a.every(b => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44 && /Household plan/.test(b.getAttribute('aria-label'))))
+    && (await pb.$$eval('.chip.good, .chip.lock', a => a.length)) === 0);
+  check('and the star is explained once, on the first screen that shows one', /marks what the Household plan keeps on/.test(await pb.textContent('#view')));
+  await pb.click('[data-act="star-ok"]'); await pb.waitForTimeout(200);
+  check('OK puts the line away for good', !/marks what the Household plan keeps on/.test(await pb.textContent('#view')) && (await pb.$$eval('.star', a => a.length)) >= 1);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('and a second lunchbox just works', (await pb.$$eval('#nkName', a => a.length)) === 1);
   await sheetDone(pb); await pb.waitForTimeout(300);
   await pb.click('[data-act="kidpick-on"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="tab"][data-tab="pack"]'); await pb.waitForTimeout(250);
-  check('kid\'s pick is on, with the tag beside it', (await pb.$$eval('[data-act="kid-start"]', a => a.length)) === 1 && (await pb.$$eval('.chip.good', a => a.filter(c => /Household plan/.test(c.textContent)).length)) >= 1);
+  check('kid\'s pick is on, with the star beside it', (await pb.$$eval('[data-act="kid-start"]', a => a.length)) === 1 && (await pb.$$eval('.pickwrap .star', a => a.length)) === 1);
+  await pb.click('.pickwrap .star'); await pb.waitForTimeout(300);
+  check('and the star opens the plan sheet, which says why', /Letting them pick/.test(await pb.textContent('#sheetBody')));
+  await sheetDone(pb); await pb.waitForTimeout(250);
   /* Pack this box and the pick moves down to the next day, in Coming up, where the day and
      its foods share the row with the tag. The tag will not wrap, so it used to take the row
      and leave the day a column one letter wide: "Wednesday" read down the screen. */
@@ -2842,7 +2883,7 @@ try {
     k.past = [{d: iso, dow: y.getDay(), slots, lock: {}, kidPick: {}}]; k.packed = k.packed || {}; k.packed[iso] = {main:{at:new Date().toISOString(), by:null}};
     localStorage.setItem('lunchsorted', JSON.stringify(d)); });
   await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
-  check('the after-school review is locked in place: the question shows, the answers wait for the plan', /How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('.chip.lock', a => a.length)) >= 1);
+  check('the after-school review is locked in place: the question shows, the answers wait for the plan', /How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('[data-act="upgrade"][data-why="review"] .starmark', a => a.length)) === 1);
   await pb.click('[data-act="tab"][data-tab="shop"]'); await pb.waitForTimeout(250);
   check('the shopping list is still free, the pantry tick is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
   await pb.click('[data-act="have"]'); await pb.waitForTimeout(300);
@@ -2858,7 +2899,8 @@ try {
   }
   check('and the founding price is marked in Stripe, on the yearly price, not in the app', bcfg.prices.year.founding === true && bcfg.prices.month.founding === false, bcfg.prices);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
-  await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
+  check('with the three weeks over, Add wears the star and opens the plan instead of the lunchbox sheet', (await pb.$$eval('[data-act="add-kid"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="lunchbox"]', a => a.length)) === 1);
+  await pb.click('[data-act="upgrade"][data-why="lunchbox"]'); await pb.waitForTimeout(350);
   check('signed out, a second lunchbox opens the Household plan sheet with a sign-in button', (await pb.$$eval('#nkName', a => a.length)) === 0 && (await pb.$$eval('[data-act="go-signin"]', a => a.length)) === 1 && /second lunchbox/i.test(await pb.textContent('#sheetBody')));
   await pb.click('[data-act="go-signin"]'); await pb.waitForTimeout(300);
   check('and that button lands on the sign-in field', await pb.evaluate(() => document.activeElement && document.activeElement.id === 'signinEmail'));
@@ -3009,7 +3051,8 @@ try {
       a.toISOString() === old && b.toISOString() === old && c.toISOString() === fresh && d.toISOString() === fresh, [a, b, c, d]);
   }
   await openPane(pb, 'household');
-  await pb.click('[data-act="invite"]'); await pb.waitForTimeout(300);
+  check('with the three weeks over, both invites wear the star and open the plan', (await pb.$$eval('[data-act="invite"], [data-act="invite-helper"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="share"]', a => a.length)) === 2);
+  await pb.click('[data-act="upgrade"][data-why="share"]'); await pb.waitForTimeout(300);
   check('and the app opens the plan sheet instead, with both prices, the founding line and no forever', /other parent/i.test(await pb.textContent('#sheetBody')) && /\$19\.99 a year/.test(await pb.textContent('#sheetBody')) && /\$2\.99 a month/.test(await pb.textContent('#sheetBody')) && /Founding price: yours for as long as you stay subscribed/.test(await pb.textContent('#sheetBody')) && !/forever/i.test(await pb.textContent('#sheetBody')) && (await pb.$$eval('#sheetBody [data-plan="lifetime"]', a => a.length)) === 0);
   const monthly = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"month"}'}).then(r => r.json()));
   check('the monthly price opens a subscription checkout of its own', !!monthly.url && stripeCalls.some(c => c.path === '/v1/checkout/sessions' && c.params['line_items[0][price]'] === 'price_month' && c.params.mode === 'subscription' && c.params['subscription_data[metadata][plan]'] === 'month'));
@@ -3170,8 +3213,8 @@ try {
   await pb.click('[data-act="trial-dismiss"][data-stage^="plan-ended"]'); await pb.waitForTimeout(200);
   check('and OK puts it away for good, with no "three weeks" banner behind it', (await pb.$$eval('.banner', a => a.filter(b => /plan has ended|three weeks/.test(b.textContent)).length)) === 0);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
-  await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
-  check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && portalStill);
+  await pb.click('[data-act="upgrade"][data-why="lunchbox"]'); await pb.waitForTimeout(350);
+  check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && (await pb.$$eval('[data-act="add-kid"]', a => a.length)) === 0 && portalStill);
   await sheetDone(pb); await pb.waitForTimeout(200);
 
   /* forever, bought before it was withdrawn from sale: still honoured */
@@ -3606,7 +3649,7 @@ try {
   await ph.reload(); await ph.waitForLoadState('load'); await ph.click('[data-act="tab"][data-tab="setup"]');
   await until(ph, () => /Read-only on this phone/.test(document.querySelector('#view').textContent));
   await ph.click('[data-act="tab"][data-tab="pack"]'); await ph.waitForTimeout(250);
-  check('and on a lapsed household a helper sees no locks, tags or banners either', (await ph.$$eval('.chip.lock, .chip.good, [data-act="upgrade"], [data-act="trial-dismiss"]', a => a.filter(x => /Household|three weeks/.test(x.textContent)).length)) === 0);
+  check('and on a lapsed household a helper sees no locks, stars, tags or banners either', (await ph.$$eval('.chip.lock, .chip.good, .star, .starmark, [data-act="upgrade"], [data-act="trial-dismiss"]', a => a.filter(x => /Household|three weeks|\u2605/.test(x.textContent)).length)) === 0);
   await db.query(`UPDATE entitlements SET plan='household', status='active' WHERE household_id=${patState.household.id}`);
   await ctxH.close();
   await pb.click('[data-act="invite"]'); await until(pb, () => /works once, for a week\./.test(document.querySelector('#view').textContent));
