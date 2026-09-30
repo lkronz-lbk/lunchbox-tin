@@ -464,12 +464,13 @@ forward).
 - [x] Neon project with `production` and `staging` branches; `NETLIFY_DATABASE_URL` and
       `STAGING_DATABASE_URL` scoped to their contexts.
 - [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set.
-- [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price stays only so past purchases are recognized; a webhook endpoint per mode,
+- [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price is best left out of the variables (Billing, below); a webhook endpoint per mode,
       keys, secrets and price ids scoped per context (Billing, below).
 - [ ] Confirm HTTPS covers `www.lunchsorted.app` as well as the apex.
-- [ ] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
+- [x] On the staging URL, `curl -sI https://<staging>/api/billing` must show one
       `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
       function responses instead, every app open becomes a function call (remove that rule).
+      It shows the function's own, on staging and in production (2026-09-30).
 - [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form. The
       feedback form's notifications reach forms@lunchsorted.app (seen 2026-09-19 to 21); the
       waitlist form posts through the same Netlify Forms but has not been sent a test of its own.
@@ -710,11 +711,11 @@ is: **Liz** for a dashboard, a form or a decision, **code** for a change here. S
 out by deleting it in the commit that does it.
 
 **Stripe, Netlify and the stores**
-- **Liz: Netlify's Production `STRIPE_PRICE_LIFETIME`** is `price_1UCftV0owPVlNDn0wsQ0u1fY`,
-  which Stripe's live mode does not have (the log, 2026-09-30: `No such price`). Until `main`
+- **Liz: Netlify's Production `STRIPE_PRICE_LIFETIME`** names a price that Stripe's live mode
+  does not have (the function log, 2026-09-30: `billing: prices No such price`). Until `main`
   reads the prices one at a time, that blanks all of them in production: the site shows its
   typed fallback, the web plan sheet has no price, the trial emails name none, and the iPhone
-  plan sheet has no founding line, which the review screenshot shows; after it, only the log
+  plan sheet lacks the founding line that the review screenshot shows; after it, only the log
   still says so, every time the prices are read. Clear its Production value (forever is off
   sale, and no production household ever bought it through Stripe; the forever households are
   beta codes), then trigger a deploy of `main`, since functions read variables at deploy time.
@@ -723,9 +724,9 @@ out by deleting it in the commit that does it.
   "Cost: $79, once" on every beta household's Subscription pane.
 - **Liz: Netlify's `dev-server` context** (Preview Server & Agent Runners) still points
   `STRIPE_PRICE_YEAR`/`_MONTH` at the old test prices, now archived, so a checkout there fails,
-  and **Branch deploys** (staging) still has the old yearly one, `price_1UCg4j0owPVlNDn0Ppk5kehv`
-  ($29 a year on staging's `/api/billing`). Set them to the new test prices, as Deploy Previews
-  and local `dev` have them.
+  and **Branch deploys** (staging) still has the old yearly one ($29 a year on staging's
+  `/api/billing`, with no founding mark). Set them to the new test prices, as Deploy Previews
+  and local `dev` have them; the new yearly, $19.99, carries the mark.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
@@ -970,7 +971,8 @@ Prices are Stripe's on the web and Apple's in the iPhone app, kept the same by h
 `GET /api/billing`; no price is typed into them, only a fallback in the site's HTML. Each price
 is read on its own: one Stripe cannot give drops only its own line, and the function log names
 its variable (`billing: prices STRIPE_PRICE_LIFETIME price_…: No such price`); without the yearly
-one there are no prices at all, and the site's fallback shows. The launch
+one there are no prices at all, and the site's fallback shows. An archived price still reads,
+so it still shows, though Stripe will not sell it. The launch
 price is a **founding price**, $19.99 a year or $2.99 a month: the yearly Stripe price carries
 the metadata `founding = yes`, which puts "Founding price: yours for as long as you stay
 subscribed" on the site, both plan sheets and the emails. Raising it is a new Stripe price
@@ -1093,7 +1095,8 @@ the idea bank stays free so a free list is never stuck with what it has.
   still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
   "Manage billing", or "Manage in the App Store" for a plan Apple bills (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan
-  sheet with its prices (on the web read from Stripe, cached an hour; in the iPhone app read
+  sheet with its prices (on the web read from Stripe, cached an hour, or a minute while one of
+  them will not read; in the iPhone app read
   from the App Store, beside Restore purchases; never typed into the app);
   signed out it offers sign-in first, and remembers what you were doing so the sheet, or
   the lunchbox, comes back after the sign-in or the payment. The server refuses an invite
@@ -1108,8 +1111,9 @@ the idea bank stays free so a free list is never stuck with what it has.
   one), `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
-  button when set, and `STRIPE_PRICE_LIFETIME`, optional now, only so a forever bought before it
-  was withdrawn is still recognized. `STRIPE_TAX=0` turns
+  button when set, and `STRIPE_PRICE_LIFETIME`, best left unset now that forever is off sale: all
+  it does is quote that price on the Subscription pane of every forever household, the beta
+  testers' free ones included (a refund goes by the plan, not the price). `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
 - **Email.** Sign-in asks for the address at the end of onboarding, once the week is built
   (skippable; offline or already signed in, the step does not appear). A first sign-in gets

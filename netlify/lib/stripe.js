@@ -18,8 +18,9 @@ export function stripeKey() {
   return key;
 }
 export function prices() {
-  /* yearly is required; monthly is optional and appears when set. Forever is no longer sold: its
-     price is read only so a forever purchase already made is still recognised and refundable */
+  /* yearly is required; monthly is optional and appears when set. Forever is no longer sold, and
+     its id is best left unset: all it does is quote that price on the plan line of every forever
+     household, the beta testers' free ones included. A refund goes by the plan, not the price. */
   return { year: process.env.STRIPE_PRICE_YEAR || '', lifetime: process.env.STRIPE_PRICE_LIFETIME || '', month: process.env.STRIPE_PRICE_MONTH || '' };
 }
 /* read on every household request, so a mis-scoped key must disable billing, not sync:

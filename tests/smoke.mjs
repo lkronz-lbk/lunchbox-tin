@@ -3365,26 +3365,35 @@ try {
     /* one price Stripe cannot find drops that price alone. In production the forever id named a
        price live mode did not have, which blanked the yearly and monthly prices on the site and the
        web plan sheet, and the founding line on the iPhone's (2026-09-30) */
-    const life = process.env.STRIPE_PRICE_LIFETIME, year = process.env.STRIPE_PRICE_YEAR;
+    const saved = { STRIPE_PRICE_LIFETIME: process.env.STRIPE_PRICE_LIFETIME, STRIPE_PRICE_YEAR: process.env.STRIPE_PRICE_YEAR };
+    const restore = () => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } };
     const logged = [], was = console.error;
-    const ask = async () => { stripeLib.forgetPrices(); const r = await fetch(NODE_BASE + '/api/billing'); return { cache: r.headers.get('cache-control'), body: await r.json() }; };
-    let gone, healed, noYear;
+    /* a request that throws, or an answer that is not JSON, fails the checks below rather than the suite */
+    const ask = async () => { stripeLib.forgetPrices(); const r = await fetch(NODE_BASE + '/api/billing'); return { cache: r.headers.get('cache-control') || '', body: await r.json().catch(() => ({})) }; };
+    const reads = () => stripeCalls.filter(c => c.path.startsWith('/v1/prices/')).length;
+    const got = {};
     console.error = (...a) => { logged.push(a.map(String).join(' ')); was.apply(console, a); };
     try {
-      process.env.STRIPE_PRICE_LIFETIME = 'price_gone'; gone = await ask();
-      process.env.STRIPE_PRICE_LIFETIME = life; healed = await stripeLib.priceInfo();   /* not forgotten first: nothing partial was kept */
-      process.env.STRIPE_PRICE_YEAR = 'price_gone'; noYear = await ask();
-    } finally { console.error = was; process.env.STRIPE_PRICE_LIFETIME = life; process.env.STRIPE_PRICE_YEAR = year; stripeLib.forgetPrices(); }
-    const pr = gone.body.prices;
-    check('a forever price Stripe cannot find drops that line alone: the yearly and monthly prices and the founding mark still show',
-      gone.body.enabled === true && !!pr && !!pr.year && pr.year.amount === 1999 && pr.year.founding === true && !!pr.month && pr.month.amount === 299 && pr.lifetime === null, gone.body);
+      process.env.STRIPE_PRICE_LIFETIME = 'price_gone'; got.gone = await ask();
+      restore(); got.healed = await stripeLib.priceInfo();   /* not forgotten first: nothing partial was kept */
+      process.env.STRIPE_PRICE_YEAR = 'price_gone'; got.noYear = await ask();
+      restore(); delete process.env.STRIPE_PRICE_LIFETIME; got.cleared = await ask();   /* production, once its forever id is cleared */
+    } catch (e) { got.error = String(e); }
+    finally { console.error = was; restore(); stripeLib.forgetPrices(); }
+    const { gone = { body: {} }, healed, noYear = { body: {} }, cleared = { body: {} } } = got, pr = gone.body.prices || {}, cl = cleared.body.prices || {};
+    check('a forever price Stripe cannot find drops that line alone: the answer still carries the yearly and monthly prices and the founding mark',
+      gone.body.enabled === true && !!pr.year && pr.year.amount === 1999 && pr.year.founding === true && !!pr.month && pr.month.amount === 299 && pr.lifetime === null, got);
     check('and the log names the variable holding it, and the answer is asked for again within the minute',
-      logged.some(l => /^billing: prices STRIPE_PRICE_LIFETIME price_gone: No such price/.test(l)) && /max-age=60$/.test(gone.cache || ''), { logged, cache: gone.cache });
-    check('and an answer with a price missing is not remembered: the next ask, with Stripe answering, has all three', !!healed && !!healed.lifetime && healed.lifetime.amount === 7900 && healed.month.amount === 299, healed);
-    check('without the yearly price there are still no prices at all, so the plan sheet says "Yearly plan"',
-      noYear.body.enabled === true && noYear.body.prices === null && /max-age=60$/.test(noYear.cache || '') && logged.some(l => /^billing: prices STRIPE_PRICE_YEAR price_gone:/.test(l)), noYear);
-    const back = await ask();
-    check('and with every id good again, the whole answer is kept for the hour', !!back.body.prices && !!back.body.prices.lifetime && back.body.prices.lifetime.amount === 7900 && /max-age=3600$/.test(back.cache || ''), back);
+      logged.some(l => /^billing: prices STRIPE_PRICE_LIFETIME price_gone: No such price/.test(l)) && /max-age=60$/.test(gone.cache), { logged, cache: gone.cache });
+    check('and an answer with a price missing is not remembered: the next ask, with Stripe answering, has all three',
+      !!healed && !!healed.lifetime && healed.lifetime.amount === 7900 && !!healed.month && healed.month.amount === 299, got);
+    check('without the yearly price there are still no prices at all, as before',
+      noYear.body.enabled === true && noYear.body.prices === null && /max-age=60$/.test(noYear.cache) && logged.some(l => /^billing: prices STRIPE_PRICE_YEAR price_gone:/.test(l)), got);
+    check('with the forever id cleared, as production\'s is to be, the yearly and monthly are a whole answer, sent for the hour',
+      cl.lifetime === null && !!cl.year && cl.year.amount === 1999 && !!cl.month && cl.month.amount === 299 && /max-age=3600$/.test(cleared.cache), got);
+    const back = await ask(), before = reads(); await stripeLib.priceInfo();
+    check('and with every id good again the whole answer is back, sent for the hour and remembered: asked again, Stripe is not',
+      !!back.body.prices && !!back.body.prices.lifetime && back.body.prices.lifetime.amount === 7900 && /max-age=3600$/.test(back.cache) && reads() === before, { back, reads: reads() - before });
   }
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   check('with the three weeks over, Add wears the star and opens the plan instead of the lunchbox sheet', (await pb.$$eval('[data-act="add-kid"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="lunchbox"]', a => a.length)) === 1);
