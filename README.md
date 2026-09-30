@@ -750,6 +750,13 @@ out by deleting it in the commit that does it.
   and local `dev` have them; the new yearly, $19.99, carries the mark.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
+- **Liz: `STRIPE_SECRET_KEY`, one value per context, each the secret key alone.** Production
+  takes the live secret key (`sk_live_…`, or `rk_live_…` for a restricted key; never the
+  publishable `pk_live_…`), with the Builds scope as well as Functions. Branch deploys and Deploy
+  Previews take the test secret key (`sk_test_…`). Anything else refuses the deploy, and the
+  last good one stays live with the key it was built with. So if the live key is rolled, the
+  old one stays valid until a production deploy has succeeded with the new value, or live
+  billing stops. This item comes out only after that production deploy has gone through.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
   Store"; change it the same day (to the store link once it is live).
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
