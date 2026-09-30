@@ -700,7 +700,9 @@ so App Store Connect has to follow in the same sitting:
 - [x] **The build.** `main` went from v24 (no note) to v25 on 2026-09-30: Phase A with its own
       note, and PR #36, which had tagged v25 on its branch with no note and was never served on
       its own. No phone had read a v25 note, so there is no `seenAs`. The next build that
-      changes the app is v26.
+      changes the app is v26: the sheet focus fixes, which carry v25's note forward with
+      `seenAs:'lunchsorted-v25'`. That is the one hop `seenAs` allows, so the build after v26
+      writes a note of its own or says nothing.
 - [x] **Migrations `0009_milestones_errors` and `0010_trial_extra_days`** applied themselves on
       the `main` deploy (the build command runs `scripts/migrate.mjs`): 0009 backfills
       `signed_up` exactly and `paid` approximately, and was applied on the staging branch as
