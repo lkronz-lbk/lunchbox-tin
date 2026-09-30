@@ -139,13 +139,13 @@ export function subscriptionStatus(sub) {
 }
 /* a household that is deleted, folded into another, or given the beta's free forever must not keep
    paying. Says whether it cannot: cancelled now, or ended before, which Stripe answers as no such
-   subscription (404). After any other answer the subscription itself is read, since a cancel whose
-   answer was lost may have gone through all the same */
+   subscription (a 404, resource_missing). After any other answer the subscription itself is read,
+   since a cancel whose answer was lost may have gone through all the same */
 export async function cancelSubscription(id) {
   if (!id) return true;
   try { await stripe('DELETE', `/subscriptions/${id}`); return true; }
   catch (e) {
-    if (e.status === 404) return true;
+    if (e.status === 404 && e.code === 'resource_missing') return true;
     try { const s = await stripe('GET', `/subscriptions/${id}`); if (s.status === 'canceled' || s.status === 'incomplete_expired') return true; } catch {}
     console.error('billing: could not cancel', id, e.message);
     return false;

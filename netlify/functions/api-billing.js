@@ -174,7 +174,11 @@ async function fullyOff(obj) {
 async function undoCheckout(obj, subId, held) {
   const ended = await cancelSubscription(subId), refunded = await refundCheckout(obj, held);
   if (!ended) console.error('billing: CANCEL BY HAND', subId, 'paid while', held);
-  return `${ended ? 'canceled' : 'CANCEL BY HAND'}, ${!refunded ? 'REFUND BY HAND' : obj.amount_total ? 'refunded' : 'nothing charged at checkout'}: ${held}`;
+  /* one bought inside the three weeks charged nothing at checkout, but undone more than 48 hours after it (Stripe's
+     floor for the first charge; webhooks failing that long), its first charge may have been taken since */
+  const late = !obj.amount_total && !!(obj.metadata && obj.metadata.charge_later) && Number(obj.created) > 0 && Date.now() / 1000 - obj.created > 48 * 3600;
+  if (late) console.error('billing: CHECK BY HAND for a first charge on', subId, 'paid while', held);
+  return `${ended ? 'canceled' : 'CANCEL BY HAND'}, ${!refunded ? 'REFUND BY HAND' : obj.amount_total ? 'refunded' : late ? 'CHECK BY HAND for a first charge since' : 'nothing charged at checkout'}: ${held}`;
 }
 
 /* gives back what a checkout charged, through the invoice it paid; older Stripe accounts name the
@@ -263,10 +267,10 @@ export default async function handler(req, context) {
       if (sub) {
         let atStripe = null, noRecord = false;
         try { atStripe = await stripe('GET', `/subscriptions/${sub}`); }
-        catch (e) { if (e.status !== 404) { console.error('billing: beta could not read', sub, e.message); return fail('Try again in a moment', 503); } noRecord = true; }
+        catch (e) { if (!(e.status === 404 && e.code === 'resource_missing')) { console.error('billing: beta could not read', sub, e.message); return fail('Try again in a moment', 503); } noRecord = true; }
         /* an answer that does not say which of Stripe's states it is in is no answer: nothing is cancelled on a guess */
-        const state = atStripe && typeof atStripe === 'object' ? atStripe.status : atStripe;
-        if (!noRecord && !STRIPE_STATES.includes(state)) { console.error('billing: beta could not read', sub, 'state:', String(state).slice(0, 40)); return fail('Try again in a moment', 503); }
+        const said = atStripe && typeof atStripe === 'object' ? atStripe.status : atStripe, state = atStripe && typeof atStripe === 'object' ? said : undefined;
+        if (!noRecord && !STRIPE_STATES.includes(state)) { console.error('billing: beta could not read', sub, 'state:', String(JSON.stringify(said)).slice(0, 40)); return fail('Try again in a moment', 503); }
         if (!noRecord && state !== 'canceled' && state !== 'incomplete_expired') {
           if (subscriptionStatus(atStripe) !== 'canceled') return fail('This household already has the Household plan', 409, { paying: true });
           if (!(await cancelSubscription(sub))) { console.log(`billing: beta household=${h.id} waits: ${sub} could not be cancelled`); return fail('Try again in a moment', 503); }

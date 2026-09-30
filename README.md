@@ -1153,7 +1153,9 @@ the idea bank stays free so a free list is never stuck with what it has.
   log saying CANCEL or REFUND BY HAND for whatever Stripe refused. That holds whichever
   reaches the row first: neither a yearly checkout's write nor a subscription's own events
   land on a forever claimed after they read the row, however Stripe's stamp and our clock
-  stand, and a lapsed App Store forever holds nothing; buying forever on top of a
+  stand, and a lapsed App Store forever holds nothing. One bought inside the three weeks took
+  nothing at checkout, but undone more than 48 hours later (webhooks failing that long) its
+  first charge may have been taken since, and the log says CHECK BY HAND; buying forever on top of a
   yearly plan stops the yearly plan at its period end; a fresh yearly checkout replaces an
   unpaid one; a forever purchase refunded in full is undone (a yearly refund is paired with
   canceling the subscription in the dashboard), but only one bought through Stripe
