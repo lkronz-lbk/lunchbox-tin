@@ -1490,6 +1490,7 @@ var Store = {
   hadAccount:function(){ try{ return localStorage.getItem(Store.HAD_KEY) === '1'; }catch(e){ return false; } },
   markAccount:function(on){ try{ if(on) localStorage.setItem(Store.HAD_KEY, '1'); else localStorage.removeItem(Store.HAD_KEY); }catch(e){} },
   forget:function(){
+    UI.newsHeld = false;                          /* the note's mark goes below, and a note this open was holding goes with it */
     try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, Store.HAD_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', 'lunchsorted-trial-extra', 'lunchsorted-later', SEEN_KEY, BETA_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
@@ -2023,8 +2024,9 @@ var WHATS_NEW = {build:'lunchsorted-v27', seenAs:'lunchsorted-v25', text:'New: l
 var SYNC_OWED = false;              /* choices made behind the kid's screen, not yet pushed */
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
-/* at boot, and again when an OK clears the banner: a message that arrives over the note (the beta
-   switching on, an invite that has lapsed) only holds it back, until its OK or the next open */
+/* at boot, which alone decides whether this open owes the parent the note. What it owes it holds
+   (UI.newsHeld) until the walk-through is read or the phone starts over: a message that arrives
+   over the note (the beta switching on, an invite that has lapsed) only holds it back */
 function whatsNew(){
   var seen = ''; try{ seen = localStorage.getItem(SEEN_KEY) || ''; }catch(e){}
   if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
@@ -2033,12 +2035,12 @@ function whatsNew(){
      repeat would sit over the box every morning until a parent re-read what they read on Monday.
      Its `seen` is left where it is, so the next build's note still reaches them. */
   if(seen === WHATS_NEW.seenAs) return;
-  if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text && !UI.notice) UI.notice = WHATS_NEW.text;
+  if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text){ UI.newsHeld = true; if(!UI.notice) UI.notice = WHATS_NEW.text; }
 }
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
    Account categories. It is view state and never reaches S, or the merge would
    read a tap as a change and push on every one. */
-var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', undo:null, reviewEdit:{}, qOpen:null, boxOpen:{}, addTo:null, ideaAdded:null, ideasDirty:false, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', recipeFound:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
+var UI = {tab:'pack', pane:'', paneScroll:0, armed:'', deleteTyped:'', pendingImport:null, kid:null, notice:'', newsHeld:false, undo:null, reviewEdit:{}, qOpen:null, boxOpen:{}, addTo:null, ideaAdded:null, ideasDirty:false, pagerTo:false, weekAhead:0, cook:null, importTo:null, recipeDraft:null, foodRecipeId:null, recipeFind:'', recipeFound:false, obEmail:false, obDraft:'', ob:{name:'', heat:false, avoid:['nuts'], breadth:'some'}};
 var PANES = Object.assign(Object.create(null), {box:'Lunchbox settings', account:'Account', household:'Household', plan:'Subscription'});
 /* the one test for whether a pane may be on screen. A pane is opened by a tap but
    also by a link from an email and by the return from Stripe, so the render asks
@@ -3758,6 +3760,7 @@ function ideasTouched(){
 function newsSheetOpen(){ return !!(sheetState && sheetState.news); }
 function newsRead(){
   if(!newsSheetOpen()) return false;
+  UI.newsHeld = false;                                /* read, and owed no more this open, even where storage will not keep the mark */
   if(UI.notice === WHATS_NEW.text) UI.notice = '';   /* a message that arrived while it was open is not ours to clear */
   markSeen(); return true;
 }
@@ -3888,8 +3891,9 @@ function noticeBanner(){
   if(!msg && signedIn() && Account.status === 'error' && Account.tries >= RETRY_WAITS.length && UI.tab !== 'setup')
     return '<div class="banner"><span>Not sent to the other phone yet \u2014 it goes with your next change.</span></div>';
   if(!msg) return '';
-  return '<div class="banner'+(msg === WHATS_NEW.text || msg === BETA_ON ? ' good' : '')+'"><span>'+esc(msg)+'</span>'
-    + (msg === WHATS_NEW.text ? '<button class="btn sm ghost" data-act="whats-new">Show me</button>' : '')
+  /* Show me says, to a screen reader, what it would show: the cursor lands on it when an OK gives the note back */
+  return '<div class="banner'+(msg === WHATS_NEW.text || msg === BETA_ON ? ' good' : '')+'"><span'+(msg === WHATS_NEW.text ? ' id="newsText"' : '')+'>'+esc(msg)+'</span>'
+    + (msg === WHATS_NEW.text ? '<button class="btn sm ghost" data-act="whats-new" aria-describedby="newsText">Show me</button>' : '')
     + (UI.notice && msg !== WHATS_NEW.text ? '<button class="btn sm ghost" data-act="notice-dismiss">OK</button>' : '')+'</div>';
 }
 function noFoodsEmpty(){
@@ -6992,9 +6996,9 @@ document.addEventListener('click', function(ev){
     }).catch(function(e){ el.disabled = false; el.textContent = 'Delete my account and data'; offline(e); });
     return;
   }
-  /* the OK is its own message's and marks no build seen: a note that message held back comes
-     straight back, and its Show me takes the cursor the OK had */
-  if(act==='notice-dismiss'){ UI.notice=''; whatsNew(); render(); var sm = document.querySelector('#view [data-act="whats-new"]'); if(sm) focusQuietly(sm); return; }
+  /* the OK is its own message's and marks no build seen: a note this open owes, which that message
+     held back, comes straight back, and its Show me takes the cursor the OK had */
+  if(act==='notice-dismiss'){ UI.notice = UI.newsHeld ? WHATS_NEW.text : ''; render(); var sm = document.querySelector('#view [data-act="whats-new"]'); if(sm) focusQuietly(sm); return; }
   if(act==='whats-new-ok'){ newsRead(); closeSheet(); render(); return; }
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
@@ -7207,6 +7211,7 @@ Store.load().then(function(r){
        permanent, and must not be overwritten unless a copy was really kept */
     var kept = rejected || Store.backup(r.raw);
     S = newAccount(); DEVICE.memberId = S.members[0].id;
+    UI.newsHeld = false; markSeen();          /* a fresh household is owed no note, as when a save cannot be read at all; whatsNew() asked the one that broke */
     UI.notice = 'Your saved lunches could not be shown, so this is a fresh start.' + (kept ? ' A copy was kept on this phone.' : '');
     if(!kept) rejected = true;
     render();

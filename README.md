@@ -652,7 +652,9 @@ Got it at its foot or Done at its head retires the note for that build. A tap on
 only puts the sheet away, so a mis-tap during the slide-in does not spend a note that is only
 ever shown once. Nothing else spends it either: a message that arrives while the note is up (the
 beta switching on, an invite that has lapsed) takes the banner, its OK clears that message alone,
-and the note comes straight back. `npm run csp`
+and the note comes straight back. Whether an open owes the note is settled once, at boot, so an OK
+never brings it to a phone that has started over since (Erase everything, sign-out, deleting the
+account, a save that could not be shown), nor back once it has been read. `npm run csp`
 refuses a build whose note names an older build, so the note cannot be forgotten; set the
 text to `''` for a release with nothing to say.
 

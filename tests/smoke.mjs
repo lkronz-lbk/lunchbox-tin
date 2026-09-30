@@ -787,11 +787,14 @@ try {
     /* An OK on any other message is that message's alone. It used to mark the build seen too, so a
        note that message had pushed off the banner was gone for good: the beta switching on, or an
        invite that had lapsed, on the first open after an update, and the parent never heard what
-       changed. A lapsed invite needs nobody signed in: any code the server does not hold is one.
-       The OK waits for the boot's last redraw, billing's, which would take the cursor away again. */
+       changed. A lapsed invite needs nobody signed in: any code the server does not hold is one,
+       and this one is shaped like a real code (43 base64url characters), so a check on the shape
+       still lets it by. The OK waits for the boot's last redraw, billing's, which would take the
+       cursor away again. */
+    const noSuchInvite = 'no-such-invite-'.padEnd(43, 'x');
     {
       await page.evaluate(() => { localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'); localStorage.removeItem('lunchsorted-billing'); });
-      await page.goto(BASE + '/app/?join=NO-SUCH-INVITE'); await page.waitForLoadState('load');
+      await page.goto(BASE + '/app/?join=' + noSuchInvite); await page.waitForLoadState('load');
       const lapsed = await until(page, () => /expired or was already used/.test(document.getElementById('view').textContent)
         && document.querySelectorAll('.banner [data-act="notice-dismiss"]').length === 1 && !!localStorage.getItem('lunchsorted-billing'));
       check('a lapsed invite, opened on the first open after an update, takes the banner with an OK', lapsed);
@@ -799,15 +802,62 @@ try {
       check('and its OK clears that message alone, leaving the build unseen',
         lapsed && !/expired or was already used/.test(await page.textContent('#view')) && await page.evaluate(() => localStorage.getItem('lunchsorted-seen') === 'lunchsorted-v0'));
       if (!NOTE_TEXT) {
-        check('with no note to give back, nothing takes its place', !/New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0);
+        check('with no note to give back, nothing takes its place', lapsed && !/New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0);
       } else {
-        const back = lapsed && await page.evaluate(() => { const sm = document.querySelectorAll('[data-act="whats-new"]');
-          return sm.length === 1 && document.activeElement === sm[0] && getComputedStyle(sm[0]).outlineStyle === 'none'; });
-        check('the note it held back comes straight back, with the cursor on Show me and no ring round it', back);
+        /* noring is focusQuietly()'s mark, and what keeps the ring off under a thumb; the button's
+           description is the note, so a screen reader landing on Show me hears what it would show */
+        const back = lapsed && await page.evaluate(() => { const sm = document.querySelectorAll('[data-act="whats-new"]'), d = sm[0] && document.getElementById(sm[0].getAttribute('aria-describedby') || '');
+          return sm.length === 1 && document.activeElement === sm[0] && sm[0].classList.contains('noring') && !!d && d.parentElement === sm[0].parentElement && d.textContent.trim().length > 0; });
+        check('the note it held back comes straight back, the cursor on a Show me that a screen reader hears with the note, and no ring round it', back);
         if (back) { await page.click('[data-act="whats-new"]'); await sheetDone(page); await page.waitForTimeout(300); }
         check('and reading the walk-through is still what marks the build seen',
           back && !/New: /.test(await page.textContent('#view')) && await page.evaluate(b => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
       }
+    }
+    /* Whether an open owes the note is settled at boot, and a phone that starts over owes nothing:
+       an OK must not bring the note to a household set up since. Two ways to start over, on a phone
+       of its own: Erase everything, and a save that breaks the first draw. The break is the test's
+       own: the first draw into #view throws, once. */
+    {
+      const cx = await phone(); const px = await cx.newPage(); px.on('pageerror', e => errors.push(String(e.message)));
+      await cx.addInitScript(() => {
+        if (!sessionStorage.getItem('smoke-break-draw')) return;
+        sessionStorage.removeItem('smoke-break-draw');
+        const own = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+        let armed = true;
+        Object.defineProperty(Element.prototype, 'innerHTML', { configurable: true, get(){ return own.get.call(this); },
+          set(v){ if (armed && this.id === 'view') { armed = false; throw new Error('smoke: a draw that breaks'); } own.set.call(this, v); } });
+      });
+      const setUp = async () => {
+        if (!(await until(px, () => !!document.querySelector('#obName'), null, 5000))) return false;
+        await px.fill('#obName', 'Nia'); await px.click('[data-act="ob-go"]');
+        if (!(await until(px, () => !!document.querySelector('[data-act="ob-later"]'), null, 5000))) return false;
+        await px.click('[data-act="ob-later"]'); return until(px, () => !document.querySelector('.ob'), null, 5000);
+      };
+      const tapOK = async () => { const up = await until(px, () => document.querySelectorAll('.banner [data-act="notice-dismiss"]').length === 1, null, 5000);
+        if (up) { await px.click('.banner [data-act="notice-dismiss"]'); await px.waitForTimeout(250); } return up; };
+      const noNote = async () => (await px.$$eval('[data-act="whats-new"]', a => a.length)) === 0;
+      await px.goto(BASE + '/app/'); const first = await setUp();
+      /* an open that owes the note, a lapsed invite's message over it, then Erase everything and set up again */
+      await px.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
+      await px.goto(BASE + '/app/?join=' + noSuchInvite); await px.waitForLoadState('load');
+      const held = first && await until(px, () => /expired or was already used/.test(document.getElementById('view').textContent));
+      if (held) await openPane(px, 'account');
+      if (held && await until(px, () => !!document.querySelector('[data-act="clear-all"]'), null, 5000)) {
+        await px.click('[data-act="clear-all"]'); await px.waitForTimeout(150); await px.click('[data-act="clear-all"]'); await px.waitForTimeout(300); }
+      const erased = held && await px.evaluate(() => !!document.querySelector('.ob') && /expired or was already used/.test(document.getElementById('view').textContent));
+      const okErased = erased && await setUp() && await tapOK();
+      check('a phone erased and set up again is owed no note: the OK on a message from before brings none over the new household', okErased && await noNote());
+      /* a save that breaks the first draw */
+      await px.evaluate(() => { localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'); sessionStorage.setItem('smoke-break-draw', '1'); });
+      await px.reload(); await px.waitForTimeout(600);
+      const fresh = await px.evaluate(() => /could not be shown/.test(document.getElementById('view').textContent) && !!document.querySelector('.ob')
+        && Object.keys(localStorage).some(k => k.startsWith('lunchsorted-backup-')));
+      check('a save that breaks the first draw becomes a fresh start that keeps a copy and says so', fresh);
+      check('and the fresh household is owed no note: the build is marked seen', fresh && await px.evaluate(b => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
+      const okFresh = fresh && await setUp() && await tapOK();
+      check('so answering the questions and then its OK brings no note over the new week', okFresh && await noNote());
+      await cx.close();
     }
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
