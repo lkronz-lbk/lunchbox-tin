@@ -539,7 +539,9 @@ UI per context (`production`, `staging`, `preview`), and the code falls back to 
 deploy context. That is the seam that
 matters: production reads its own database and its live Stripe key, and neither can reach
 a branch deploy or a pull request preview. The build refuses a Stripe key scoped to the
-wrong context, and a Stripe or Resend key pasted with anything more than the key.
+wrong context, and a Stripe or Resend key pasted with anything more than the key, as long as
+the variable has the Builds scope: a build cannot check a key it cannot see, and it names the
+keys it could.
 
 **Netlify setup, once:** Site configuration → Build & deploy → Branches and deploy
 contexts → add `dev` as a branch deploy, and leave Deploy Previews on.
@@ -764,7 +766,9 @@ out by deleting it in the commit that does it.
 - **Liz: `RESEND_API_KEY`, the key alone in every context, before `main` takes the Resend key
   check.** Each value is `re_` then letters, digits and underscores, with nothing pasted around
   it, and the variable needs the Builds scope as well as Functions: without it the build never
-  sees the key and the check does nothing. With it, anything more refuses the deploy, even a
+  sees the key and the check does nothing. A build that goes through names the keys it could see
+  (`migrate: keys the build can see, each the key alone: …`), so a key missing from that line
+  has no Builds scope. With the scope, anything more refuses the deploy, even a
   space or a line break after the key, which sends mail today; the last good deploy stays live
   with the key it was built with, and keeps sending. Nobody could read the keys, so each
   context's next deploy is the first time the pattern meets its key: this check's deploy
@@ -994,18 +998,21 @@ writes the same one.
 - **Environment**: production reads `NETLIFY_DATABASE_URL` (Netlify DB / Neon); branch
   deploys and previews read `STAGING_DATABASE_URL` and refuse to run without it, so they
   can never touch production data or migrate it. `RESEND_API_KEY` and `MAIL_FROM` send the
-  emails; without a key, production refuses and a deploy with `DEV_LINKS=1` (or the test
-  suite) returns the link and code to the caller instead. The key must be the key alone, `re_`
-  then letters, digits and underscores: the build refuses the deploy over anything more, naming
-  the variable, never the value, as long as the variable has the Builds scope as well as
-  Functions (without it the build never sees the key). A running function cannot refuse the key
-  without stopping every sign-in link, so it drops whitespace around it and refuses only what
-  fetch could never send: nothing left, a line break still in it, or a character no header can
-  carry. Anything else goes to Resend, whose refusal is logged in its own words
-  (`Resend 403: …`), cut to 300 letters, with anything shaped like a key, a sign-in link's token
-  or a sign-in code blanked. A send that gets no answer (the network failed, or four seconds
-  passed), or an error answer it cannot read, is logged in fixed words, never fetch's own, which
-  can quote the authorization header, key and all. `SITE_ENV` is set per context in the Netlify UI (and in `netlify.toml` for the build).
+  emails; without a key, production refuses, and any other deploy writes the whole email, the
+  sign-in link and code included, to its function log instead of sending it; a deploy with
+  `DEV_LINKS=1` (or the test suite, which captures every email) also returns the link and code
+  to the caller. The key must be the key alone, `re_` then letters, digits and underscores: the
+  build refuses the deploy over anything more, naming the variable, never the value, as long as
+  the variable has the Builds scope as well as Functions (without it the build never sees the
+  key). A running function cannot refuse the key without stopping every sign-in link, so it
+  drops whitespace around it and refuses only a key that could never work: nothing left, or a
+  character still in it that fetch will not put in a header (a line break, any other control
+  character but tab, or one beyond Latin-1). Anything else goes to Resend, whose refusal is
+  logged in its own words (`Resend 403: …`), cut to 300 letters, with the key, a sign-in email's
+  link token and code, and anything else shaped like a key or a link's token blanked. A send
+  that gets no answer (the network failed, fetch refused the request, or four seconds passed),
+  or an error answer it cannot read, is logged in fixed words, never fetch's own, which can
+  quote the authorization header, key and all. `SITE_ENV` is set per context in the Netlify UI (and in `netlify.toml` for the build).
   `REVIEW_EMAIL` and `REVIEW_CODE` (production only, for App Review): that one address signs
   in with that standing code and is sent no email; eight or more letters and digits, and
   nothing else about it is special.

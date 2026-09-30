@@ -35,11 +35,13 @@ if (process.argv[1] && process.argv[1].endsWith('migrate.mjs')) {
      the key, fails the deploy here, loudly, rather than at the first checkout or the first email; the
      last good deploy stays live. Each message names its variable, never the key, and both are told at
      once, so one failed deploy shows everything there is to fix. A variable without the Builds scope
-     never reaches this, and is not checked */
+     never reaches this and is not checked, so the build says, by name, which keys it could see: one
+     missing from that line was never checked */
   const { stripeKey } = await import('../netlify/lib/stripe.js');
   const { resendKey } = await import('../netlify/lib/mail.js');
-  const refused = [stripeKey, resendKey].map(check => { try { check(); return ''; } catch (e) { return e.message; } }).filter(Boolean);
+  const refused = [stripeKey, resendKey].map(check => { try { check(); return ''; } catch (e) { return (e && e.message) || String(e) || 'refused'; } }).filter(Boolean);
   if (refused.length) { for (const why of refused) console.error('deploy refused:', why); process.exit(1); }
+  console.log(`migrate: keys the build can see, each the key alone: ${['STRIPE_SECRET_KEY', 'RESEND_API_KEY'].filter(name => process.env[name]).join(', ') || 'none'}`);
   const { databaseUrl } = await import('../netlify/lib/db.js');
   const url = databaseUrl();
   if (!url) { console.log('migrate: this context has no database URL, skipping'); process.exit(0); }
