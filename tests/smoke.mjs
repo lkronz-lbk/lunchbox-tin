@@ -4241,6 +4241,28 @@ try {
       { codePrice, codeApp, codeRows });
   }
   {
+    /* a yearly or monthly plan on a 100%-off code keeps its price and its renewal date, on the page and in
+       the Account tab's caption, Liz's call on 2026-09-30: only forever from a code reads free. The forever
+       row above is put back as it was, for the roster below */
+    const [was] = (await db.query(`SELECT plan, status, stripe_price_id, stripe_subscription_id, current_period_end, cancel_at_period_end FROM entitlements WHERE household_id = ${patState.household.id}`)).rows;
+    await db.query(`UPDATE entitlements SET plan = 'household', status = 'active', stripe_price_id = 'price_year', stripe_subscription_id = 'sub_code', current_period_end = to_timestamp(1800000000) WHERE household_id = ${patState.household.id}`);
+    await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
+    const codeYear = ['Your plan: Household', 'Cost: $19.99 a year', 'Renews: Jan 15, 2027'];
+    const yearRows = await planRows(codeYear);
+    await pb.click('[data-act="tab"][data-tab="setup"]');
+    const yearCaption = await pb.textContent('[data-act="pane"][data-pane="plan"] .meta');
+    await db.query(`UPDATE entitlements SET stripe_price_id = 'price_month' WHERE household_id = ${patState.household.id}`);
+    await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
+    const codeMonth = ['Your plan: Household', 'Cost: $2.99 a month', 'Renews: Jan 15, 2027'];
+    const monthRows = await planRows(codeMonth);
+    const codeSource = (await ent()).source;
+    await db.query(`UPDATE entitlements SET plan = 'lifetime', status = 'active', stripe_price_id = 'price_life', stripe_subscription_id = NULL, current_period_end = NULL WHERE household_id = ${patState.household.id}`);
+    check('a yearly or monthly plan on a 100%-off code keeps its price and its renewal date; only forever from a code reads free',
+      was.plan === 'lifetime' && was.status === 'active' && was.stripe_price_id === 'price_life' && was.stripe_subscription_id === null && was.current_period_end === null && !was.cancel_at_period_end
+        && codeSource === 'code' && JSON.stringify(yearRows) === JSON.stringify(codeYear) && yearCaption === 'Renews Jan 15, 2027' && JSON.stringify(monthRows) === JSON.stringify(codeMonth),
+      { was, codeSource, yearRows, yearCaption, monthRows });
+  }
+  {
     const { testers, standard } = (await adminStats()).roster;
     /* the backfill in migration 0005 runs once, against a database that is empty in this
        suite, so run it here over seeded history: it is the only part of the change that

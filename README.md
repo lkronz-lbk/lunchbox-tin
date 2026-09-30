@@ -1135,7 +1135,10 @@ the idea bank stays free so a free list is never stuck with what it has.
   beta's, from the link or a 100%-off code, reads "Household, free forever" and no other row,
   its caption is Free forever, the delete warning calls it the forever plan, not the forever
   purchase, and opening the beta link again never puts up the beta's banner over a forever
-  already held. Manage billing stays on the web, for the owner or whoever paid, wherever the
+  already held. Only forever reads free: a yearly or monthly plan on a 100%-off code keeps its
+  price and its renewal date (Liz, 2026-09-30), dated Renews even inside the three weeks, since
+  "First charged" and "Cancel before DATE" are a sale's alone. Manage billing stays on the web, for the
+  owner or whoever paid, wherever the
   row has a Stripe customer, the beta's included: a claim does not yet cancel a subscription
   Stripe is still retrying (a first charge that failed), which can go on charging, and nothing
   else in the app reaches it (the iPhone app never opens Stripe at all). Straight
