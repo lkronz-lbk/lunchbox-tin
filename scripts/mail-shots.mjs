@@ -15,7 +15,17 @@ await new Promise(r => server.listen(0, '127.0.0.1', r));
 const BASE = 'http://127.0.0.1:' + server.address().port;
 let chromium; try { ({ chromium } = await import('playwright')); } catch { ({ chromium } = await import('playwright-core')); }
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
-const ctx = await browser.newContext({ viewport:{width:375,height:812}, deviceScaleFactor:2, isMobile:true, hasTouch:true, colorScheme:'light' });
+const ctx = await browser.newContext({ viewport:{width:375,height:812}, deviceScaleFactor:2, isMobile:true, hasTouch:true, colorScheme:'light', timezoneId:'America/New_York' });
+/* a Monday morning, the way scripts/shots.mjs pins it: shot on a Thursday night, day 1 would be two lunches and "Tomorrow" */
+await ctx.addInitScript(() => {
+  const Real = Date;
+  const offset = new Real('2026-09-07T13:00:00Z').getTime() - Real.now();
+  function Fake(...a){ return a.length ? new Real(...a) : new Real(Real.now() + offset); }
+  Fake.prototype = Real.prototype;
+  Fake.now = () => Real.now() + offset;
+  Fake.parse = Real.parse; Fake.UTC = Real.UTC;
+  window.Date = Fake;
+});
 const page = await ctx.newPage();
 page.on('pageerror', e => console.error('page error:', e.message));
 const wait = ms => page.waitForTimeout(ms);

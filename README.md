@@ -33,20 +33,24 @@ throwing app script cannot leave it up forever. From there:
 
 - **Week** — draws a main, side, fruit and sweet per pack day and *assigns* them to days
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
-  balance, tangy against savory); each compartment carries the words the pairing used
-  (crunchy, soft, protein, tangy, sweet, salty, juicy, hearty, light), two at most; the
-  compartment sheet says which food goes well with the main, and the tin itself carries none of
-  them. The tin is compact: 58px cells, an 11px label, the food's name, and in the label row a
-  13px mark with a spoken name where there is something to say — a snowflake for keep cold, a
-  lidded box for a sealed container, a pencil for a write-in, a lock, the swap arrows that say the
-  box can be changed, a ! for a rule overruled. Lock a compartment (the lock on its sheet, open or
+  balance, tangy against savory); the compartment sheet says which food goes well with the
+  main, and the tin carries no trait words. The tin is compact: 58px cells, an 11px label, the
+  food's name, and in the label row a 13px mark with a spoken name where there is something to
+  say — a snowflake for keep cold, a lidded box for a sealed container, a pencil for a write-in,
+  a lock, the swap arrows that say the box can be changed, a ! for a rule overruled; on Week the
+  compartment is a button whose own label repeats them ("Main: Turkey wrap, keep cold, locked.
+  Change it"), on Pack, on a gone day and for a caretaker it is not a button. Lock a compartment (the lock on its sheet, open or
   closed, with a spoken name and no word) and it survives the next plan or shuffle; shuffling that
   one compartment on purpose unlocks it. The lock on a day's header locks every compartment with a
   food in it at once, so the Sunday loop is lock the days that worked, then Plan the week; a day
   is shown locked when all of them are. Week's header is one line — the title, the arrow to next
   week, Plan the week — and each day's header carries its lock and its Shuffle, two 44px icons.
-  A day that has gone is one line on Week, the main and a count with how the box went beside it,
-  and opens a sheet showing the box as it was packed.
+  A day that has gone (its header says "· home") is one line on Week, the main and a count with
+  how the box went beside it in three words (`reviewShort`: all eaten, 2 came home, 3 of 4 eaten,
+  nothing counted, not answered), and opens a read-only sheet showing the box as it was packed — every
+  compartment it had, even one switched off since. The day lock refuses a gone day and a day with
+  nothing in it, and an unlock leaves a write-in and the kid's pick locked, saying so; Shuffle on a
+  locked day says "Monday is locked" rather than blaming the food list.
   The words on screen: **Plan the week** plans the whole week (again), **Shuffle** changes one day
   or one compartment, a food that came home twice is **on hold**, a held compartment is **locked**;
   "draw", "resting" and "kept" are the code's words and never a parent's.
@@ -75,11 +79,16 @@ throwing app script cannot leave it up forever. From there:
   its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
   box alone. Turn it off under Account → Lunchboxes (**Match the boxes**), or the gear. Week and Foods carry the
   lunchboxes as folder tabs, one tap each. Pack stacks them when there are two: the first box open,
-  the second one line — "Leo's box · Today · not packed · 4 parts" — that opens in place on a tap
-  and folds back to "✓ packed 7:02 am · Liz" once it is packed, so the screen shrinks as the morning
-  goes (`FOLD_SECOND` is the one condition that reverses the fold); each box's question sits under
-  the boxes with its own Answer later, and Coming up is the first box's week, one line a day
-  (two foods and a count), named when there are two. From three lunchboxes Pack keeps the folder
+  the second one line — "Leo's box · Today · not packed · 4 parts", "· pick waiting" when the
+  kid's pick sits inside — that opens in place on a tap and folds back to "Leo's box · Today ·
+  ✓ packed 7:02 am · Liz" once it is packed (the name only when it is not this phone's), so the
+  screen shrinks as the morning goes (`FOLD_SECOND` is the one condition that reverses the fold;
+  the first box shown is always open, so a first lunchbox with no plan does not fold the only
+  box there is); each box's question sits above the boxes, under them for a night-before
+  household once the box is home, each with its own Answer later; Coming up is the first box's
+  week, one line a day (two foods and a count), named when there are two, and carries every
+  stacked box's kid's pick on the day it lands, since the second box has no Coming up of its own;
+  tapping a day there goes to Week on the first box. From three lunchboxes Pack keeps the folder
   tabs, one box at a time, each tab showing whether that box is packed or still owes an answer,
   and one line names who is left to pack. With matching on, Plan the week
   on Week is the household draw; with more than one box, Plan the week on Week and a day's Shuffle first ask
@@ -420,7 +429,7 @@ plans is the same week whatever day it runs on (a Thursday used to leave the kid
 nothing to offer). `SMOKE_TODAY=2026-09-14 npm test` pins another day.
 
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
-onboarding, the week draw and its trait words, packing, the kid's pick, the after-school review
+onboarding, the week draw and the compact tin, packing, the kid's pick, what came home
 and holds, the school rules re-checking a live plan, compartments switching on and off,
 anchoring, the shopping list, recipes (the two the app ships, an ingredient claimed by the step
 that means it, cook mode, the measures and the scaling,
@@ -844,7 +853,7 @@ place, not hidden: the kid's-pick button, the review card, the pantry check and 
 own" on Foods stay on screen and open the plan sheet, which says why you arrived. The plan is a
 green ★ (`starBtn`, `planLock`): beside a plan feature during the three weeks, a 44px hit area
 around a 19px glyph with a spoken name; inside the locked control once they are over, where the
-control itself is the way to the plan. The first screen that shows one carries one guide line —
+control itself is the way to the plan. Every screen that shows one carries one guide line —
 "★ marks what the Household plan keeps on after your three weeks" — until OK, kept on the phone
 (`lunchsorted-star-seen`). No chip spells the plan out, and no lock glyph stands in for it; three days
 before the end a banner says how long is left, and once after it says the three weeks are up and

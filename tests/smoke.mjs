@@ -512,7 +512,12 @@ try {
   check("a shuffle does not overwrite what the kid chose", stillMain === chosenMain);
   check('every compartment that can change shows the swap cue, a locked one the lock', await page.evaluate(() => {
     const cells = [...document.querySelectorAll('.daycard:not(.past) .cmp')];
-    return cells.length > 0 && cells.every(c => (c.querySelector('.swap') ? 1 : 0) + (c.querySelector('.lock') ? 1 : 0) === 1) && document.querySelectorAll('.daycard.past .cmp .swap').length === 0;
+    return cells.length > 0 && cells.every(c => (c.querySelector('.swap') ? 1 : 0) + (c.querySelector('.lock') ? 1 : 0) === 1) && [...document.querySelectorAll('.daycard.past')].every(d => !d.querySelector('.cmp') && !!d.querySelector('[data-act="gone-open"]'));
+  }));
+  check('a compartment on Week is a button that says its marks out loud', await page.evaluate(() => {
+    const cells = [...document.querySelectorAll('.daycard:not(.past) .cmp[data-act="slot"]')];
+    return cells.length > 0 && cells.every(c => { const l = c.getAttribute('aria-label') || '', marks = [...c.querySelectorAll('.mk[role="img"]')].map(m => m.getAttribute('aria-label'));
+      return /\. Change it$/.test(l) && marks.every(m => l.includes(m)); });
   }));
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(200);
 
@@ -1293,12 +1298,17 @@ try {
     await page.click('.daycard:not(.past) [data-act="day-lock"] >> nth=0'); await page.waitForTimeout(300);
     const locked = await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0], day = k.week.days.find(x => x.d === d);
       return Object.keys(day.slots).filter(c => day.slots[c]).every(c => day.lock[c]); }, lockDay);
-    check('the lock on a day locks every compartment in it, says so, and the icon closes', locked && /locked$/.test(await page.textContent('#toast'))
+    check('the lock on a day locks every compartment in it, says so, and the icon closes', locked && / locked$/.test(await page.textContent('#toast'))
       && (await page.getAttribute('.daycard:not(.past) [data-act="day-lock"] >> nth=0', 'aria-pressed')) === 'true'
       && /is locked/.test(await page.getAttribute('.daycard:not(.past) [data-act="day-lock"] >> nth=0', 'aria-label')), await page.textContent('#toast'));
     await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(400); await goShuffle(page);
     const slotsAfter = await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0]; return JSON.stringify(k.week.days.find(x => x.d === d).slots); }, lockDay);
     check('and Plan the week leaves a locked day exactly as it was', slotsAfter === slotsBefore, {before: slotsBefore, after: slotsAfter});
+    await page.click('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0'); await page.waitForTimeout(300);
+    if (await page.$('#shKids')) { await page.click('[data-act="shuffle-go"]'); await page.waitForTimeout(300); }
+    check('Shuffle on a locked day says the day is locked, and changes nothing', / is locked/.test(await page.textContent('#toast')) && (await page.evaluate(d => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt)[0]; return JSON.stringify(k.week.days.find(x => x.d === d).slots); }, lockDay)) === slotsBefore, await page.textContent('#toast'));
+    check('and the other lunchbox\'s same day is left alone by the lock', await page.evaluate(d => { const ks = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(x => !x.deletedAt); if (ks.length < 2 || !ks[1].week) return true;
+      const day = ks[1].week.days.find(x => x.d === d); return !day || !Object.keys(day.slots).some(c => day.slots[c] && day.lock[c]); }, lockDay));
     await page.click('.daycard:not(.past) [data-act="day-lock"] >> nth=0'); await page.waitForTimeout(300);
     check('a second tap unlocks it', (await page.getAttribute('.daycard:not(.past) [data-act="day-lock"] >> nth=0', 'aria-pressed')) === 'false' && /unlocked$/.test(await page.textContent('#toast')));
   }
@@ -1506,6 +1516,15 @@ try {
   await page.goto(BASE+'/app/');
   await page.waitForTimeout(500);
   check("the morning after, it asks how the box went", (await page.$$eval('.review', a => a.length)) === 1);
+  /* on Week that day has gone: one line, no lock, no shuffle, and a read-only sheet behind it */
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
+  check('a day that has gone has no lock and no shuffle, only its line, which says it is not answered yet', (await page.$$eval('.daycard.past [data-act="day-lock"], .daycard.past [data-act="shuffle-day"], .daycard.past .cmp', a => a.length)) === 0 && (await page.$$eval('.daycard.past [data-act="gone-open"]', a => a.length)) >= 1 && (await page.$eval('.daycard.past .gone-line .qty', e => e.textContent)) === 'not answered');
+  check('and the page does not scroll sideways for it', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  const goneLabel = await page.getAttribute('.daycard.past [data-act="gone-open"] >> nth=0', 'aria-label');
+  await page.click('.daycard.past [data-act="gone-open"] >> nth=0'); await page.waitForTimeout(350);
+  check('the line opens the box as it was packed, with nothing on the sheet that could change it', /box, as packed: /.test(goneLabel) && /What was packed stays\./.test(await page.textContent('#sheetBody')) && (await page.$$eval('#sheetBody [data-act]', a => a.length)) === 0 && (await page.$$eval('#sheetBody .item', a => a.length)) >= 1, goneLabel);
+  await backdropTap(page); await page.waitForTimeout(300);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('All eaten is the first thing on the card, one tap, and Skip waits at the foot saying what it does', await page.evaluate(() => {
     const c = document.querySelector('.review'), all = c.querySelector('[data-act="eat-all"]'), skip = c.querySelector('[data-act="eat-skip"]'), seg = c.querySelector('.seg');
     return !!(all && skip && seg) && all.classList.contains('primary') && !!(all.compareDocumentPosition(seg) & Node.DOCUMENT_POSITION_FOLLOWING)
@@ -1521,6 +1540,9 @@ try {
   check('answering closes the card', (await page.$$eval('.review', a => a.length)) === 0);
   check('what was answered stays on screen with a way to change it',
     (await page.$$eval('[data-act="eat-change"]', a => a.length)) === 1 && /all eaten/i.test(await page.textContent('#view')));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
+  check('and the gone line on Week says so in three words', (await page.$eval('.daycard.past .gone-line .qty', e => e.textContent)) === 'all eaten' && await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   await page.goto(BASE+'/app/'); await page.waitForTimeout(500);
   check('and it is still there after the app is reopened', (await page.$$eval('[data-act="eat-change"]', a => a.length)) === 1);
   await page.click('[data-act="eat-change"]'); await page.waitForTimeout(200);
@@ -2631,7 +2653,7 @@ try {
   await p3.click('[data-act="tab"][data-tab="week"]'); await p3.waitForTimeout(250);
   check('and a helper sees no Shuffle button and no swap cue, only the week', (await p3.$$eval('[data-act="plan-kid"],[data-act="shuffle-day"],.cmp .swap', a => a.length)) === 0 && (await p3.$$eval('.cmp', a => a.length)) > 0);
   await p3.click('.daycard:not(.past) .cmp >> nth=0'); await p3.waitForTimeout(200);
-  check('and the app says so instead of pretending', /Only a parent can change the plan/.test(await p3.textContent('#toast')));
+  check('and a compartment is not a button for a caretaker: nothing is drawn only to refuse', (await p3.$$eval('.cmp[data-act], .cmp button', a => a.length)) === 0 && (await p3.$$eval('.daycard:not(.past) .cmp', a => a.every(c => c.tagName === 'DIV' && !c.getAttribute('aria-label')))), await p3.$$eval('.daycard:not(.past) .cmp', a => a.map(c => c.tagName + (c.getAttribute('aria-label') || ''))));
   {
     /* the roster on the numbers page: who else is on an account, and when each of them was last active */
     const { standard } = (await adminStats()).roster;
@@ -2883,7 +2905,7 @@ try {
     k.past = [{d: iso, dow: y.getDay(), slots, lock: {}, kidPick: {}}]; k.packed = k.packed || {}; k.packed[iso] = {main:{at:new Date().toISOString(), by:null}};
     localStorage.setItem('lunchsorted', JSON.stringify(d)); });
   await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
-  check('the after-school review is locked in place: the question shows, the answers wait for the plan', /How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('[data-act="upgrade"][data-why="review"] .starmark', a => a.length)) === 1);
+  check('the after-school review is locked in place: the card says what it is, the answers wait for the plan', /How the box went is part of the Household plan\./.test(await pb.textContent('#view')) && !/How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('[data-act="upgrade"][data-why="review"] .starmark', a => a.length)) === 1);
   await pb.click('[data-act="tab"][data-tab="shop"]'); await pb.waitForTimeout(250);
   check('the shopping list is still free, the pantry tick is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
   await pb.click('[data-act="have"]'); await pb.waitForTimeout(300);

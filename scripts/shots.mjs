@@ -3,7 +3,7 @@
 
    Everything here is a deliberate choice about what the pictures have to show,
    not incidental setup: two lunchboxes, because one hides the whole point of
-   the pager and the matched plan; a Monday, because a plan drawn on a Thursday
+   the stacked boxes and the matched plan; a Monday, because a plan drawn on a Thursday
    is two days long; Emma's box finished and Noah's not, because a packed box
    over a folded one is the morning half done, which is what Pack is for. Change
    the app, look at the shots, and if they no longer tell the truth, run this. The
