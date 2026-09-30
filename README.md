@@ -747,12 +747,6 @@ out by deleting it in the commit that does it.
   Set them to the new test prices; every other context, local `dev` included, is done.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
-- **Liz, before `main` takes PR #39: production's `STRIPE_SECRET_KEY`** must be the key alone,
-  and the variable needs the Builds scope as well as Functions, a separate setting on it. A
-  trailing space or line break works today, since fetch trims it, but from then on it refuses
-  main's deploy (the live one stays up). Pasting the key again from Stripe settles it without
-  anyone reading it; if Stripe no longer shows the live key, that means rolling it, with the old
-  one kept valid until `main` has deployed with the new one.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
   Store"; change it the same day (to the store link once it is live).
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
