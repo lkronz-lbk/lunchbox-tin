@@ -53,6 +53,8 @@ globalThis.__LS_STRIPE_FETCH = async (url, init) => {
   if (u.pathname === '/v1/prices/price_year') return reply({ id: 'price_year', unit_amount: 1999, currency: 'usd', recurring: { interval: 'year' }, metadata: { founding: 'yes' } });
   if (u.pathname === '/v1/prices/price_life') return reply({ id: 'price_life', unit_amount: 7900, currency: 'usd' });
   if (u.pathname === '/v1/prices/price_month') return reply({ id: 'price_month', unit_amount: 299, currency: 'usd', recurring: { interval: 'month' } });
+  /* what live mode said of production's forever id on 2026-09-30: an id it does not have */
+  if (u.pathname === '/v1/prices/price_gone') return reply({ error: { type: 'invalid_request_error', code: 'resource_missing', param: 'price', message: "No such price: 'price_gone'" } }, 404);
   if (u.pathname === '/v1/checkout/sessions') {
     if (params['automatic_tax[enabled]'] === 'true' && globalThis.__LS_STRIPE_NO_TAX) return reply({ error: { message: 'You must configure Stripe Tax before enabling automatic_tax', code: 'invalid_request_error' } }, 400);
     return reply({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
@@ -3359,6 +3361,31 @@ try {
     process.env.STRIPE_PRICE_LIFETIME = life;
   }
   check('and the founding price is marked in Stripe, on the yearly price, not in the app', bcfg.prices.year.founding === true && bcfg.prices.month.founding === false, bcfg.prices);
+  {
+    /* one price Stripe cannot find drops that price alone. In production the forever id named a
+       price live mode did not have, which blanked the yearly and monthly prices on the site and the
+       web plan sheet, and the founding line on the iPhone's (2026-09-30) */
+    const life = process.env.STRIPE_PRICE_LIFETIME, year = process.env.STRIPE_PRICE_YEAR;
+    const logged = [], was = console.error;
+    const ask = async () => { stripeLib.forgetPrices(); const r = await fetch(NODE_BASE + '/api/billing'); return { cache: r.headers.get('cache-control'), body: await r.json() }; };
+    let gone, healed, noYear;
+    console.error = (...a) => { logged.push(a.map(String).join(' ')); was.apply(console, a); };
+    try {
+      process.env.STRIPE_PRICE_LIFETIME = 'price_gone'; gone = await ask();
+      process.env.STRIPE_PRICE_LIFETIME = life; healed = await stripeLib.priceInfo();   /* not forgotten first: nothing partial was kept */
+      process.env.STRIPE_PRICE_YEAR = 'price_gone'; noYear = await ask();
+    } finally { console.error = was; process.env.STRIPE_PRICE_LIFETIME = life; process.env.STRIPE_PRICE_YEAR = year; stripeLib.forgetPrices(); }
+    const pr = gone.body.prices;
+    check('a forever price Stripe cannot find drops that line alone: the yearly and monthly prices and the founding mark still show',
+      gone.body.enabled === true && !!pr && !!pr.year && pr.year.amount === 1999 && pr.year.founding === true && !!pr.month && pr.month.amount === 299 && pr.lifetime === null, gone.body);
+    check('and the log names the variable holding it, and the answer is asked for again within the minute',
+      logged.some(l => /^billing: prices STRIPE_PRICE_LIFETIME price_gone: No such price/.test(l)) && /max-age=60$/.test(gone.cache || ''), { logged, cache: gone.cache });
+    check('and an answer with a price missing is not remembered: the next ask, with Stripe answering, has all three', !!healed && !!healed.lifetime && healed.lifetime.amount === 7900 && healed.month.amount === 299, healed);
+    check('without the yearly price there are still no prices at all, so the plan sheet says "Yearly plan"',
+      noYear.body.enabled === true && noYear.body.prices === null && /max-age=60$/.test(noYear.cache || '') && logged.some(l => /^billing: prices STRIPE_PRICE_YEAR price_gone:/.test(l)), noYear);
+    const back = await ask();
+    check('and with every id good again, the whole answer is kept for the hour', !!back.body.prices && !!back.body.prices.lifetime && back.body.prices.lifetime.amount === 7900 && /max-age=3600$/.test(back.cache || ''), back);
+  }
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   check('with the three weeks over, Add wears the star and opens the plan instead of the lunchbox sheet', (await pb.$$eval('[data-act="add-kid"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="lunchbox"]', a => a.length)) === 1);
   await pb.click('[data-act="upgrade"][data-why="lunchbox"]'); await pb.waitForTimeout(350);

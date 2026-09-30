@@ -710,9 +710,22 @@ is: **Liz** for a dashboard, a form or a decision, **code** for a change here. S
 out by deleting it in the commit that does it.
 
 **Stripe, Netlify and the stores**
+- **Liz: Netlify's Production `STRIPE_PRICE_LIFETIME`** is `price_1UCftV0owPVlNDn0wsQ0u1fY`,
+  which Stripe's live mode does not have (the log, 2026-09-30: `No such price`). Until `main`
+  reads the prices one at a time, that blanks all of them in production: the site shows its
+  typed fallback, the web plan sheet has no price, the trial emails name none, and the iPhone
+  plan sheet has no founding line, which the review screenshot shows; after it, only the log
+  still says so, every time the prices are read. Clear its Production value (forever is off
+  sale, and no production household ever bought it through Stripe; the forever households are
+  beta codes), then trigger a deploy of `main`, since functions read variables at deploy time.
+  `curl -s https://lunchsorted.app/api/billing` should then show the yearly and monthly prices,
+  the yearly with `"founding":true`. Pointing it at the live $79 price instead would put
+  "Cost: $79, once" on every beta household's Subscription pane.
 - **Liz: Netlify's `dev-server` context** (Preview Server & Agent Runners) still points
-  `STRIPE_PRICE_YEAR`/`_MONTH` at the old test prices, now archived, so a checkout there fails.
-  Set them to the new test prices; every other context, local `dev` included, is done.
+  `STRIPE_PRICE_YEAR`/`_MONTH` at the old test prices, now archived, so a checkout there fails,
+  and **Branch deploys** (staging) still has the old yearly one, `price_1UCg4j0owPVlNDn0Ppk5kehv`
+  ($29 a year on staging's `/api/billing`). Set them to the new test prices, as Deploy Previews
+  and local `dev` have them.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
@@ -954,7 +967,10 @@ signed by Apple (App Store, below). Each platform sells it one way only, and a p
 paid on either side works on every phone and browser in the household.
 Prices are Stripe's on the web and Apple's in the iPhone app, kept the same by hand. The site
 (`public/price.js`), the plan sheet and the trial emails all read Stripe's through
-`GET /api/billing`; no price is typed into them, only a fallback in the site's HTML. The launch
+`GET /api/billing`; no price is typed into them, only a fallback in the site's HTML. Each price
+is read on its own: one Stripe cannot give drops only its own line, and the function log names
+its variable (`billing: prices STRIPE_PRICE_LIFETIME price_…: No such price`); without the yearly
+one there are no prices at all, and the site's fallback shows. The launch
 price is a **founding price**, $19.99 a year or $2.99 a month: the yearly Stripe price carries
 the metadata `founding = yes`, which puts "Founding price: yours for as long as you stay
 subscribed" on the site, both plan sheets and the emails. Raising it is a new Stripe price
