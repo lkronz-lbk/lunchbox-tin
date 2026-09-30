@@ -4760,7 +4760,7 @@ function feedbackMail(kind){
     'Kid\u2019s pick: '+kids().map(function(k){ return k.settings.kidPick ? (k.settings.kidPickMode === 'boxes' ? 'whole box' : 'each part') : 'off'; }).join(', '),
     'Came from: '+(UI.lastTab || 'the start')+' \u00b7 plan: '+planLabel()+' \u00b7 zone: '+(S.tz || '?'),
     'Storage: '+(Store.ok ? 'ok' : 'blocked')+' \u00b7 online: '+(navigator.onLine ? 'yes' : 'no')
-  ]);
+  ].concat(IAP.lastError ? ['Last App Store error: '+IAP.lastError] : []));
   return 'mailto:hello@lunchsorted.app?subject='+encodeURIComponent(kind === 'question' ? 'Lunch Sorted: a question' : 'Lunch Sorted: something wrong')+'&body='+encodeURIComponent(lines.join('\n'));
 }
 
@@ -6723,6 +6723,7 @@ document.addEventListener('click', function(ev){
       return iapLink(r).then(function(res){
         done();
         if(res.status === 200 && paid()){
+          IAP.lastError = null;
           closeSheet();
           render(); toast('Welcome to the Household plan'); resumeAfter(); return;
         }
@@ -6732,7 +6733,11 @@ document.addEventListener('click', function(ev){
         toast('Paid \u2014 it can take a minute to show up here');
         setTimeout(function(){ Sync.pull().then(render).catch(function(){}); }, 6000);
       });
-    }).catch(function(){ done(); toast('The purchase did not go through. Try again in a moment'); });
+    }).catch(function(e){
+      /* the App Store's own reason goes in a bug report (feedbackMail), never on screen */
+      IAP.lastError = String((e && (e.code || e.message)) || 'unknown').slice(0, 160);
+      done(); toast('The purchase did not go through. Try again in a moment');
+    });
     return;
   }
   if(act==='iap-restore'){
