@@ -223,6 +223,11 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
   a.pantry['apples'] = {have:true, at:t1}; b.pantry['bread'] = {have:true, at:t2};
   m = M.merge(a, b);
   check('merge: ticks from both phones are kept', !!(m.kids[0].packed['2026-09-01'].main && m.kids[0].packed['2026-09-01'].side) && !!(m.pantry.apples && m.pantry.bread));
+  a = clone(); b = clone();
+  a.kids[0].eaten['2026-09-01'] = {main:{foodId:'f1', r:'none', at:t1, by:'mem_a'}}; b.kids[0].eaten['2026-09-01'] = {side:{foodId:'f2', r:'left', at:t2, by:'mem_b'}};
+  a.kids[0].settings = {days:[1,2,3,4,5], review:false, homeAt:'17:30', updatedAt:t2}; b.kids[0].settings = {days:[1,2,3,4,5], review:true, homeAt:'15:00', updatedAt:t1};
+  m = M.merge(a, b);
+  check('merge: a Didn’t get to it answer travels like any other, and the newer what-came-home settings win', m.kids[0].eaten['2026-09-01'].main.r === 'none' && m.kids[0].eaten['2026-09-01'].side.r === 'left' && m.kids[0].settings.review === false && m.kids[0].settings.homeAt === '17:30');
   /* recipes belong to the household, so they merge like members and lunchboxes do */
   a = clone(); b = clone();
   a.recipes = [{id:'rec_1', n:'Blondies', m:40, y:12, ing:['1 cup oats'], steps:['Stir.'], src:'', url:null, createdAt:t1, updatedAt:t1, deletedAt:null}];
@@ -1015,11 +1020,11 @@ try {
     (a, id) => (a.find(b => b.getAttribute('data-id') !== id) || {getAttribute: () => null}).getAttribute('data-id'), breaks.id);
   await page.click('[data-act="pick"][data-id="' + other + '"]');
   await page.waitForTimeout(400);
-  check('a food chosen by hand is locked, so a shuffle leaves it alone', await page.evaluate(d => {
+  check('a food chosen by hand is locked, and remembered as chosen', await page.evaluate(d => {
     const doc = JSON.parse(localStorage.getItem('lunchsorted'));
     const k = doc.kids.filter(x => !x.deletedAt).find(x => x.id === doc.activeKidId);
-    return k.week.days.find(x => x.d === d.day).lock.main === true;
-  }, {day: dayStr}));
+    const day = k.week.days.find(x => x.d === d.day); return day.lock.main === true && !!day.chosen && day.chosen.main === day.slots.main;
+  }, {day: dayStr}) && /locked/.test(await page.textContent('#toast')), await page.textContent('#toast'));
   check('swapping the compartment ends that food\'s override', await page.evaluate(d => {
     const doc = JSON.parse(localStorage.getItem('lunchsorted'));
     const k = doc.kids.filter(x => !x.deletedAt).find(x => x.id === doc.activeKidId);
@@ -1174,8 +1179,6 @@ try {
   const homeKid = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).activeKidId);
   check('the lunchbox settings say when the box comes home, three by default', (await page.$eval('#homeAt', e => e.value)) === '15:00' && /When does the box come home\?/.test(await page.textContent('#view')));
   await page.selectOption('#homeAt', '17:30'); await page.waitForTimeout(300);
-  check('the reminder switch is named for the box coming home, not three o\'clock', await page.evaluate(() => {
-    const t = document.querySelector('#view').textContent; return !/Remind us at three/.test(t) && (!document.querySelector('[data-act="review-reminder"]') || /Remind us when the box is home/.test(t)); }));
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('at five, a box that comes home at half past is not asked about yet; the other box\'s is', (await page.$$eval('.review', a => a.length)) === 1 && (await folds()).length === 0 && (await page.getAttribute('[data-act="review-later-all"]', 'data-kid')) !== homeKid && !!(await page.$('nav.tabs .due')));
   /* the reminder on the phone follows the same time: stub the plugin, flip the switch, read what was scheduled */
@@ -1186,6 +1189,8 @@ try {
       schedule: async o => { window.__ln.scheduled = o.notifications; } } } };
   });
   await openPane(page, 'box');
+  check('the reminder switch is named for the box coming home, not three o\'clock', await page.evaluate(() => {
+    const t = document.querySelector('#view').textContent; return !/Remind us at three/.test(t) && !!document.querySelector('[data-act="review-reminder"]') && /Remind us when the box is home/.test(t); }));
   await page.click('[data-act="review-reminder"]'); await page.waitForTimeout(700);
   const lnPlanned = await page.evaluate(() => window.__ln.scheduled.filter(n => n.id >= 2000).map(n => ({ id: n.id, at: new Date(n.schedule.at).getHours() * 60 + new Date(n.schedule.at).getMinutes(), day: new Date(n.schedule.at).getDate(), title: n.title })));   /* the evening pick reminders sit below 2000 */
   const todayD = await page.evaluate(() => new Date().getDate());
@@ -1222,12 +1227,13 @@ try {
   check('with yesterday\'s box never answered, today\'s is asked about first', (await page.$$eval('.review', a => a.length)) === 1 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)));
   const openKid = await page.getAttribute('[data-act="review-later-all"]', 'data-kid');
   await page.click('[data-act="eat-all"]'); await page.waitForTimeout(300);
-  const nowOpen = await page.$$eval('.review', a => a.map(e => ({ sub: e.querySelector('.view-sub').textContent, kid: (e.querySelector('[data-act="eat-all"]') || {}).getAttribute ? e.querySelector('[data-act="eat-all"]').getAttribute('data-kid') : null })));
-  check('and once it is answered, yesterday\'s question comes up rather than being lost', nowOpen.length === 1 && (openKid !== homeKid || /Yesterday/.test(nowOpen[0].sub)), nowOpen);
-  if (openKid !== homeKid) { await page.click('[data-act="eat-all"]'); await page.waitForTimeout(300); check('and yesterday\'s comes up after that box\'s', (await page.$$eval('.review .view-sub', a => a.map(e => e.textContent))).some(t => /Yesterday/.test(t))); }
+  const mid = await page.evaluate(() => ({ cards: [...document.querySelectorAll('.review .view-sub')].map(e => e.textContent), folds: [...document.querySelectorAll('.card.fold')].map(e => e.textContent.trim()), view: document.querySelector('#view').textContent }));
+  check('and once it is answered, the other box\'s today comes up first, its own answer stays on screen, and yesterday\'s waits behind, named', mid.cards.length === 1 && /Today/.test(mid.cards[0]) && /Today: all eaten/.test(mid.view) && (openKid !== homeKid || mid.folds.some(t => /Yesterday’s box came home/.test(t))), mid);
+  await page.click('[data-act="eat-all"]'); await page.waitForTimeout(300);
+  check('with both boxes answered, yesterday\'s question opens, named as yesterday\'s, under the answers', (await page.$$eval('.review .view-sub', a => a.map(e => e.textContent))).some(t => /Yesterday/.test(t)) && /box go yesterday\?/.test(await page.textContent('.review')) && (await page.$$eval('[data-act="eat-change"]', a => a.length)) === 2, (await page.textContent('#view')).slice(0, 240));
   check('yesterday\'s card is a real one: All eaten, four answers a food, Skip at the foot', await page.evaluate(() => { const c = document.querySelector('.review'); return !!c && !!c.querySelector('[data-act="eat-all"]') && c.querySelectorAll('.seg.four').length > 0 && !!c.querySelector('[data-act="eat-skip"]'); }));
   await page.click('[data-act="eat-skip"]'); await page.waitForTimeout(300);
-  check('Skip puts it to rest, and the other box\'s question takes its place', !(await page.$$eval('.review .view-sub', a => a.some(e => /Yesterday/.test(e.textContent)))) && (await page.$$eval('.review', a => a.length)) <= 1);
+  check('Skip puts it to rest', (await page.$$eval('.review, .card.fold', a => a.length)) === 0);
   /* leave the fixture as it was: nothing answered, no box in the past, and both questions held */
   await page.evaluate(id => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids.forEach(k => { k.eaten = {}; if (k.id === id) { k.past = (k.past || []).slice(0, -1); } }); localStorage.setItem('lunchsorted', JSON.stringify(d)); localStorage.removeItem('lunchsorted-later'); }, homeKid);
   await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(300);
@@ -1710,7 +1716,7 @@ try {
   await page.waitForTimeout(400);
 
   /* ------------------------------------------------ friction: targets, sheet, words */
-  const small = async () => page.$$eval('.btn.sm, .tg, .kidbtn, .seg button, .x, .cmp[data-act], nav.tabs button, .item[data-act]', a =>
+  const small = async () => page.$$eval('.btn.sm, .tg, .kidbtn, .seg button, .x, .cmp[data-act], nav.tabs button, .item[data-act], .card.fold, .iconbtn, .star', a =>
     a.filter(e => e.checkVisibility()).map(e => ({h: Math.round(e.getBoundingClientRect().height), t: e.textContent.trim().slice(0,20)})).filter(x => x.h < 44));
   await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   const smallSetup = await small();
@@ -2639,7 +2645,7 @@ try {
     await openSlot();
     const pickId = await page.$eval('[data-act="pick"]:not(.done)', b => b.getAttribute('data-id'));
     await page.click(`[data-act="pick"][data-id="${pickId}"]`); await page.waitForTimeout(150);
-    check('choosing off the list over a write-in offers Undo', await undoUp(/took its place|stays flagged/));
+    check('choosing off the list over a write-in offers Undo', await undoUp(/took the write-in|stays flagged/));
     check('and their document merges in while that toast is up', await merged('RaceSix'));
     await tapUndo();
     const pk = await slotState();
@@ -3017,7 +3023,7 @@ try {
     k.past = [{d: iso, dow: y.getDay(), slots, lock: {}, kidPick: {}}]; k.packed = k.packed || {}; k.packed[iso] = {main:{at:new Date().toISOString(), by:null}};
     localStorage.setItem('lunchsorted', JSON.stringify(d)); });
   await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
-  check('the after-school review is locked in place: the card says what it is, the answers wait for the plan', /How the box went is part of the Household plan\./.test(await pb.textContent('#view')) && !/How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('[data-act="upgrade"][data-why="review"] .starmark', a => a.length)) === 1);
+  check('the after-school review is locked in place: the card says what it is, the answers wait for the plan, and nothing else asks', /How the box went is part of the Household plan\./.test(await pb.textContent('#view')) && !/How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="review-later-all"], .card.fold', a => a.length)) === 0 && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('[data-act="upgrade"][data-why="review"] .starmark', a => a.length)) === 1);
   await pb.click('[data-act="tab"][data-tab="shop"]'); await pb.waitForTimeout(250);
   check('the shopping list is still free, the pantry tick is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
   await pb.click('[data-act="have"]'); await pb.waitForTimeout(300);

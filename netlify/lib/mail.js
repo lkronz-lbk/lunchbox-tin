@@ -142,7 +142,7 @@ export function sendTester(to, site, day, stopUrl) {
          steps: ['After your kid gets home, <b>Pack</b> asks how it went. Tap <b>All eaten</b>, or <b>Ate it</b>, <b>Some</b>, <b>Came home</b> or <b>Didn\u2019t get to it</b> under each food.',
                  'That is it. Next week\u2019s shuffle leans toward what actually got eaten.',
                  'While you are on <b>Foods</b>: <b>Add your own</b>, with what to buy for it, so the list carries your family\u2019s real food. And new this week, a tab of its own: <b>Recipes</b>, along the bottom \u2014 every recipe in one place for the whole household, searchable by name or by what is in the cupboard, with <b>Import a recipe</b> for one you found somewhere else.'],
-         alt: 'What came home: ate it, some, or came home',
+         alt: 'What came home: All eaten in one tap, or Ate it, Some, Came home or Didn\u2019t get to it under each food',
          ask: 'Recipes landed this week: they have a tab of their own now, the two it comes with are free to cook from, and Recipes \u2192 Import a recipe brings in your own. Did you cook from it? Here is what I am planning next:<ul style="padding-left:22px">' + PLANNED.map(x => `<li style="margin:0 0 6px">${esc(x)}</li>`).join('') + '</ul>Would those help? What would you add? And would you keep using Lunch Sorted? Tell me why, either way.',
          askText: 'Recipes landed this week: they have a tab of their own now, the two it comes with are free to cook from, and Recipes -> Import a recipe brings in your own. Did you cook from it?\n\nHere is what I am planning next:\n' + PLANNED.map(x => '- ' + x).join('\n') + '\n\nWould those help? What would you add? And would you keep using Lunch Sorted? Tell me why, either way.' }
   }[day];
