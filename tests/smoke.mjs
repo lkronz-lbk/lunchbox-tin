@@ -521,7 +521,7 @@ try {
     await pf.click('[data-act="ob-later"]'); await pf.waitForTimeout(300);
     /* what has the cursor, whether a ring is drawn round it, and where the page is */
     const cursor = () => pf.evaluate(() => { const a = document.activeElement || document.body,
-      o = {tag: a.tagName, id: a.id, inSheet: !!a.closest('#sheet'), heading: /^H[23]$/.test(a.tagName) && !!a.closest('#view'), ring: getComputedStyle(a).outlineStyle !== 'none', y: window.scrollY};
+      o = {tag: a.tagName, id: a.id, inSheet: !!a.closest('#sheet'), first: a === document.querySelector('#view h2, #view h3'), ring: getComputedStyle(a).outlineStyle !== 'none', y: window.scrollY};
       [...a.attributes].forEach(x => { if (x.name.indexOf('data-') === 0) o[x.name.slice(5)] = x.value; }); return o; });
     /* a tap inside the open sheet, or false when there is nothing there to tap */
     const tapIn = async sel => { const h = await pf.$('#sheet.open ' + sel); if (!h) return false; try { await h.click({timeout: 3000}); return true; } catch { return false; } };
@@ -597,7 +597,7 @@ try {
     if (await pf.$('[data-act="pane-done"]')) { await pf.click('[data-act="pane-done"]'); await pf.waitForTimeout(250); }
     /* One key held down repeats. On Done it would close the sheet and press whatever the cursor went
        back to, which opens the sheet again: one press is one tap. */
-    await pf.click('[data-act="tab"][data-tab="week"]'); await pf.waitForTimeout(250);
+    await clear(); await pf.click('[data-act="tab"][data-tab="week"]'); await pf.waitForTimeout(250);
     await pf.focus('[data-act="help"]'); await pf.keyboard.press('Enter'); up = await sheetIsOpen(pf);
     await pf.focus('#sheetClose'); await pf.keyboard.down('Enter'); await pf.waitForTimeout(150);
     await pf.keyboard.down('Enter'); await pf.waitForTimeout(150); await pf.keyboard.up('Enter'); await pf.waitForTimeout(250);
@@ -613,9 +613,10 @@ try {
     /* the field waits for the sheet to slide in; a sheet put away before then keeps where the cursor went back to */
     await clear(); await pf.click('[data-act="kidsheet"]'); up = await sheetIsOpen(pf);
     const quick = up && await tapIn('[data-act="add-kid"]');
-    if (quick) await pf.evaluate(() => document.getElementById('sheetClose').click());
+    /* the field must not have the cursor yet when Done is pressed, or this would test nothing */
+    const early = quick && await pf.evaluate(() => { const was = (document.activeElement || {}).id; document.getElementById('sheetClose').click(); return was !== 'nkName'; });
     await pf.waitForTimeout(450); c = await cursor();
-    check('a sheet put away before its field has taken the cursor leaves the cursor where it went back to', quick && !(await pf.$('.sheet.open')) && c.act === 'kidsheet' && !c.inSheet, c);
+    check('a sheet put away before its field has taken the cursor leaves the cursor where it went back to', early && !(await pf.$('.sheet.open')) && c.act === 'kidsheet' && !c.inSheet, {c, early});
     /* Packed puts focus back on its button after the redraw, and a focus() left to scroll drags a
        half-hidden button into view: the page jumped under the thumb, which is the one thing a tick
        must never do. A screen short enough that Pack scrolls with one lunchbox, the button left
@@ -636,9 +637,9 @@ try {
     check('Packed leaves the page where it was, with the cursor back on the button', !!jump && jump.top < 0 && jump.top > -44 && jump.y1 === jump.y0 && jump.act === 'pack-all' && jump.pressed === 'true', jump);
     /* the cook sheet does the same to its own controls: redrawn with its place kept, then the cursor
        put back on what was pressed. With that half off the top of the sheet, the sheet moved. */
-    await pf.setViewportSize({width:375, height:400});
+    await clear(); await pf.setViewportSize({width:375, height:400});
     await pf.click('[data-act="tab"][data-tab="recipes"]'); await pf.waitForTimeout(250);
-    await pf.click('#view [data-act="cook-recipe"] >> nth=0'); up = await sheetIsOpen(pf);
+    await pf.click('#view [data-act="cook-recipe"] >> nth=0', {timeout: 5000}).catch(() => {}); up = await sheetIsOpen(pf);
     const cookJump = up && await pf.evaluate(async () => {
       const b = document.getElementById('sheetBody'), e = b.querySelector('[data-act="cook-makes"][data-v="1"]'); if (!e) return null;
       b.scrollTop = Math.round(e.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop + e.getBoundingClientRect().height / 2);
@@ -661,7 +662,7 @@ try {
     if (named) { await pf.fill('#nkName', 'Wren'); await tapIn('[data-act="save-kid"]'); await pf.waitForTimeout(400); }
     c = await cursor();
     check('when what opened a sheet has gone with what the sheet changed, the cursor lands on the first heading in the view, not nowhere',
-      named && !(await pf.$('.sheet.open')) && c.heading && !c.inSheet && !c.ring, c);
+      named && !(await pf.$('.sheet.open')) && c.first && !c.inSheet && !c.ring, c);
     await cf.close();
   }
 
@@ -2807,8 +2808,21 @@ try {
   await p2.fill('#signinEmail', 'sam@example.com'); await p2.click('[data-act="signin-request"]');
   await until(p2, () => !!document.querySelector('#signinCode'));
   const devCode = await p2.evaluate(() => fetch('/api/auth/request', {method:'POST', headers:{'content-type':'application/json'}, body:'{"email":"sam@example.com"}'}).then(r => r.json()).then(j => j.devCode));
-  await p2.fill('#signinCode', devCode.toLowerCase()); await p2.press('#signinCode', 'Enter');
+  /* Enter in the code field presses Sign in, and a key held down repeats: each repeat was one more
+     try of the code, and the server allows eight a quarter of an hour, so a mistyped code held for
+     a moment locked the address out. The key is held here, with the first try held open so the
+     field is still there for every repeat, and the code goes once. */
+  let letGo = () => {}; const holding = new Promise(r => { letGo = r; });
+  let codeTries = 0; const holdCode = async route => { if (route.request().method() === 'POST') codeTries++; await holding; await route.continue(); };
+  await p2.route('**/api/auth/code', holdCode);
+  await p2.fill('#signinCode', devCode.toLowerCase()); await p2.focus('#signinCode');
+  await p2.keyboard.down('Enter'); await p2.keyboard.down('Enter'); await p2.keyboard.down('Enter'); await p2.keyboard.up('Enter');
+  await p2.waitForTimeout(250);
+  const tries = codeTries;
+  letGo();
   await until(p2, () => /Join their household/.test(document.querySelector('#view').textContent));
+  await p2.unroute('**/api/auth/code', holdCode);
+  check('a held Enter in the code field tries the code once, not once a repeat', tries === 1, tries);
   check('the code from the email signs in without leaving the app, and offers the household', /Join their household/.test(await p2.textContent('#view')) && await p2.evaluate(() => fetch('/api/household').then(r => r.status)) === 200);
   /* App Review's account: a standing code, no email, and the code is no good for anyone else */
   {
@@ -3614,7 +3628,7 @@ try {
   const mailDone = await sheetDone(pb); await pb.waitForTimeout(300);
   /* the boot drew the page before the sheet came, so nothing had the cursor to go back to: the first heading in the view takes it */
   check('and Done, with nothing that had the cursor to go back to, lands on the first heading in the view', mailDone && await pb.evaluate(() => { const a = document.activeElement;
-    return !!a && /^H[23]$/.test(a.tagName) && !!a.closest('#view'); }));
+    return !!a && a === document.querySelector('#view h2, #view h3'); }));
   check('a signed-in parent who is not in ADMIN_EMAILS gets not-found from the numbers page', (await pb.evaluate(() => fetch('/api/admin').then(r => r.status))) === 404);
   const noCustomer = await pb.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
@@ -3696,32 +3710,54 @@ try {
       inviteExtended === 200 && st.household.trialExtraDays === 30 && invites === 2, [inviteExtended, st.household && st.household.trialExtraDays, invites]);
     {
       /* A sheet the server opens after a tap goes back to whatever had the cursor when it came, and that
-         must never be a button waiting for its second tap. The invite is held until "Clear the plans"
-         has been armed and given the cursor by keyboard, then refused, as an out-of-date plan would be.
-         Without the guard, Done hands the cursor to "Tap again to clear", and Enter clears every plan. */
-      let release = () => {}; const gate = new Promise(r => { release = r; });
+         must never be a button waiting for its second tap, or Delete once DELETE has been typed. The
+         invite is held until the button is ready and has the cursor (where a parent on a keyboard
+         would leave it), then refused, as an out-of-date plan would be. Without the guard, Done hands
+         the cursor to the button, and one Enter clears every plan, or deletes the account. Enter is
+         pressed only once the cursor is known to be safe, so a failure fails its own check and does
+         not clear the household every later check reads. */
       const isInvite = u => u.pathname === '/api/household/invite';
-      const refuse = async route => { await gate; await route.fulfill({status: 402, contentType: 'application/json', body: JSON.stringify({error: 'Sharing is part of the Household plan'})}); };
+      const refusedWith = async (ready, act) => {
+        let release = () => {}; const gate = new Promise(r => { release = r; });
+        const refuse = async route => { await gate; await route.fulfill({status: 402, contentType: 'application/json', body: JSON.stringify({error: 'Sharing is part of the Household plan'})}); };
+        const out = {};
+        await pb.route(isInvite, refuse);
+        try {
+          await openPane(pb, 'household');
+          out.asked = !!(await pb.$('[data-act="invite"]'));
+          if (out.asked) await pb.click('[data-act="invite"]', {timeout: 5000});
+          await openPane(pb, 'account');
+          out.ready = await ready();
+          out.onIt = await pb.evaluate(w => { const a = document.activeElement; return !!a && a.getAttribute('data-act') === w; }, act);
+        } finally { release(); }
+        out.came = out.asked && await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetTitle').textContent), null, 5000);
+        out.closed = !!out.came && await sheetDone(pb); await pb.waitForTimeout(300);
+        out.where = await pb.evaluate(() => { const a = document.activeElement || document.body; return {tag: a.tagName, id: a.id, act: a.getAttribute('data-act')}; });
+        await pb.unroute(isInvite, refuse);
+        return out;
+      };
       const weeks = () => pb.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => !!k.week)));
-      await pb.route(isInvite, refuse);
-      const asked = invites === 2 && !!(await pb.$('[data-act="invite"]'));
-      if (asked) await pb.click('[data-act="invite"]');
-      await openPane(pb, 'account');
       const weeksWere = await weeks();
-      const clearBtn = await pb.$('[data-act="clear-week"]');
-      if (clearBtn) await clearBtn.click();
-      const armed = !!clearBtn && /Tap again to clear/.test(await pb.textContent('[data-act="clear-week"]'));
-      if (armed) await pb.focus('[data-act="clear-week"]');
-      release();
-      const came = asked && await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetTitle').textContent), null, 5000);
-      const closed = came && await sheetDone(pb); await pb.waitForTimeout(300);
-      const where = await pb.evaluate(() => { const a = document.activeElement || document.body; return {tag: a.tagName, id: a.id, act: a.getAttribute('data-act')}; });
-      if (closed) { await pb.keyboard.press('Enter'); await pb.waitForTimeout(300); }
-      const weeksNow = await weeks();
-      await pb.unroute(isInvite, refuse);
+      const armedCase = await refusedWith(async () => {
+        const b = await pb.$('[data-act="clear-week"]'); if (!b) return false;
+        await b.click();
+        if (!/Tap again to clear/.test(await pb.textContent('[data-act="clear-week"]'))) return false;
+        await pb.focus('[data-act="clear-week"]'); return true;
+      }, 'clear-week');
+      if (armedCase.where.id === 'paneTitle') { await pb.keyboard.press('Enter'); await pb.waitForTimeout(300); }
       check('a sheet the server opens after a tap never hands the cursor to a button waiting for its second tap: Done lands on the page\u2019s title, and Enter clears nothing',
-        armed && came && closed && where.id === 'paneTitle' && /true/.test(weeksWere) && weeksNow === weeksWere, {asked, armed, came, closed, where, weeksWere, weeksNow});
+        armedCase.ready && armedCase.onIt && armedCase.came && armedCase.closed && armedCase.where.id === 'paneTitle' && /true/.test(weeksWere) && (await weeks()) === weeksWere, {armedCase, weeksWere});
       if (await pb.$('[data-act="pane-done"]')) { await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200); }   /* any other tap takes the arming off */
+      const deleteCase = await refusedWith(async () => {
+        if (!(await pb.$('#deleteConfirm'))) return false;
+        await pb.fill('#deleteConfirm', 'DELETE');
+        const on = await pb.evaluate(() => { const b = document.querySelector('[data-act="delete-account"]'); return !!b && !b.disabled; });
+        if (on) await pb.focus('[data-act="delete-account"]');
+        return on;
+      }, 'delete-account');
+      check('nor to Delete once DELETE has been typed: Done lands on the page\u2019s title', deleteCase.ready && deleteCase.onIt && deleteCase.came && deleteCase.closed && deleteCase.where.id === 'paneTitle', deleteCase);
+      if (await pb.$('#deleteConfirm')) await pb.fill('#deleteConfirm', '');
+      if (await pb.$('[data-act="pane-done"]')) { await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200); }   /* and any other tap forgets the typed word */
     }
     await db.query(`UPDATE households SET trial_extra_days = 0 WHERE id = ${hid}`);
     await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);

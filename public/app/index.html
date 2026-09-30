@@ -3646,7 +3646,7 @@ var sheetState = null;
    with what the sheet changed) it goes to the first heading in the view. Never onto a
    button waiting for its second tap, or onto Delete once DELETE has been typed: one Enter
    would finish it.
-   preventScroll throughout, as in closePane. */
+   Under a thumb nothing here scrolls the page (focusQuietly). */
 var lastAct = null, sheetFrom = null, sheetGoing = false, keyboarding = false;
 function dataOf(el){
   var at = {};
@@ -7068,14 +7068,17 @@ document.addEventListener('change', function(ev){
   }
 });
 document.addEventListener('keydown', function(ev){
-  /* A held Enter repeats. On a button that would press Done and then whatever the cursor went
-     back to, or arm "Tap again" and confirm it before anyone could read it. One press, one tap. */
-  if(ev.key === 'Enter' && ev.repeat && ev.target && ev.target.closest && ev.target.closest('button')){ ev.preventDefault(); return; }
-  /* The keyboard is in use: Tab anywhere, or any key pressed outside a text field (typing, and
-     the phone keyboard's own Done key, land in the field). See focusQuietly: a ring it held back
-     shows again at once. */
-  var kt = ev.target && ev.target.tagName || '';
-  if(ev.key === 'Tab' || !/^(INPUT|TEXTAREA|SELECT)$/.test(kt)){
+  /* A held Enter repeats, and each repeat would act again: press Done and then whatever the cursor
+     went back to, arm "Tap again" and confirm it before anyone could read it, try a sign-in code
+     until the address is locked out. One press acts once. Only a text box (new lines) and a
+     stepper (servings, one more each repeat) take the repeats: neither closes nor arms anything. */
+  var rt = ev.target || {};
+  if(ev.key === 'Enter' && ev.repeat && rt.tagName !== 'TEXTAREA' && !(rt.closest && rt.closest('.step'))){ ev.preventDefault(); return; }
+  /* The keyboard is in use: Tab anywhere, or a key that moves or presses outside a text field
+     (typing, and the phone keyboard's own Done key, land in the field; VoiceOver's scrub arrives
+     as Escape and counts for nothing). See focusQuietly: a ring it held back shows again at once. */
+  var kt = rt.tagName || '';
+  if(ev.key === 'Tab' || (/^(Enter| |Arrow|Page|Home|End)/.test(ev.key) && !/^(INPUT|TEXTAREA|SELECT)$/.test(kt))){
     keyboarding = true;
     if(document.activeElement && document.activeElement.classList) document.activeElement.classList.remove('noring');
   }

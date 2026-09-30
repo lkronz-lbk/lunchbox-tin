@@ -367,13 +367,16 @@ throwing app script cannot leave it up forever. From there:
   own handler runs, so a sheet that opens later (the emailed link, the return from signing in,
   a refused invite) goes back to whatever had the cursor when it opened; when nothing did, or
   the opener went with what the sheet changed, the cursor lands on the first heading in the
-  view (the morning question on Pack, the page's title elsewhere). It is never handed to a
-  button waiting for its second tap, nor to Delete once DELETE has been typed, and a held Enter
-  presses a button once. Nothing behind the kid's-pick screen takes it; a sheet that arrives
-  while the child has the phone gets it when the phone is handed back. The focus a sheet, a
-  tick, Packed or a page's Done hands back goes through `focusQuietly`: for a parent on a
-  thumb it neither scrolls nor wears a ring; for a parent using the keyboard since the last
-  touch (Tab, or any key outside a text field) it is ringed and scrolled into view. A heading
+  view: the page's title on every tab but Pack, which has none, and there whatever card or box
+  comes first (the morning question, when it is waiting above the box). The cursor is never
+  handed to a button waiting for its second tap, nor to Delete once DELETE has been typed, and
+  nothing behind the kid's-pick screen takes it; a sheet that arrives while the child has the
+  phone gets it when the phone is handed back. A held Enter acts once, wherever it is pressed
+  (a sign-in code is tried once, not once a repeat); only a text box (new lines) and the
+  servings stepper (one more each repeat) take its repeats. The focus a sheet, a tick, Packed
+  or a page's Done hands back goes through `focusQuietly`: for a parent on a thumb it neither
+  scrolls nor wears a ring; for a parent using the keyboard since the last touch (Tab, or a key
+  that moves or presses outside a text field) it is ringed and scrolled into view. A heading
   that takes the cursor wears no ring either way. Tab can still leave an open sheet, and
   Escape does not close one (Owed, below).
 - **A parent may override a rule** for one compartment: pick a flagged food from the
