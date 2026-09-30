@@ -1015,6 +1015,11 @@ try {
     (a, id) => (a.find(b => b.getAttribute('data-id') !== id) || {getAttribute: () => null}).getAttribute('data-id'), breaks.id);
   await page.click('[data-act="pick"][data-id="' + other + '"]');
   await page.waitForTimeout(400);
+  check('a food chosen by hand is locked, so a shuffle leaves it alone', await page.evaluate(d => {
+    const doc = JSON.parse(localStorage.getItem('lunchsorted'));
+    const k = doc.kids.filter(x => !x.deletedAt).find(x => x.id === doc.activeKidId);
+    return k.week.days.find(x => x.d === d.day).lock.main === true;
+  }, {day: dayStr}));
   check('swapping the compartment ends that food\'s override', await page.evaluate(d => {
     const doc = JSON.parse(localStorage.getItem('lunchsorted'));
     const k = doc.kids.filter(x => !x.deletedAt).find(x => x.id === doc.activeKidId);
@@ -1136,15 +1141,24 @@ try {
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   const askedToday = await page.$$eval('.review', a => a.length);
-  check('from three, it asks about today\'s box, under each box, and Pack carries the dot',
-    askedToday === 2 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)) && !!(await page.$('nav.tabs .due')), askedToday);
-  check('both boxes are asked about, each under its own name', (await page.$$eval('.review', a => a.length)) === 2 && (await page.$$eval('[data-act="review-later-all"]', a => a.length)) === 2);
+  const folds = () => page.$$eval('.card.fold', a => a.map(e => e.textContent.trim()));
+  check('from three, it asks about today\'s box, one card open, the other box\'s question one line, and Pack carries the dot',
+    askedToday === 1 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)) && (await folds()).length === 1 && !!(await page.$('nav.tabs .due')), [askedToday, await folds()]);
+  check('the line names the box and asks the question', /^\S.* · Today’s box came home\. How did it go\?/.test((await folds())[0]), await folds());
+  const firstAsked = await page.getAttribute('[data-act="review-later-all"]', 'data-kid');
+  await page.click('.card.fold[data-act="review-now"]'); await page.waitForTimeout(300);
+  check('tapping the line opens that box\'s card and folds the first', (await page.$$eval('.review', a => a.length)) === 1 && (await page.getAttribute('[data-act="review-later-all"]', 'data-kid')) !== firstAsked && (await folds()).length === 1);
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
-  check('Answer later folds that box\'s card, leaves the other box\'s, and keeps the dot as the reminder',
-    (await page.$$eval('.review', a => a.length)) === 1 && !!(await page.$('nav.tabs .due')));
-  check('and leaves a way back on screen', (await page.$$eval('[data-act="review-now"]', a => a.length)) === 1);
+  check('Answer later folds that card to a line that says it is waiting, and the other box\'s card opens in its place',
+    (await page.$$eval('.review', a => a.length)) === 1 && (await page.getAttribute('[data-act="review-later-all"]', 'data-kid')) === firstAsked && /Waiting for your answer\./.test((await folds())[0]) && !!(await page.$('nav.tabs .due')), await folds());
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
-  check('a second Answer later folds the other, so nothing is asked and the dot still says it is owed', (await page.$$eval('.review', a => a.length)) === 0 && !!(await page.$('nav.tabs .due')));
+  check('a second Answer later folds the other, so nothing is asked and the dot still says it is owed', (await page.$$eval('.review', a => a.length)) === 0 && (await folds()).length === 2 && !!(await page.$('nav.tabs .due')));
+  /* the hold is kept on the phone, not in the page: a reload keeps both lines folded */
+  await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(300);
+  await page.evaluate(() => window.__pinHour(15));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  check('Answer later holds across a reload', (await page.$$eval('.review', a => a.length)) === 0 && (await folds()).every(t => /Waiting for your answer/.test(t)) && (await folds()).length === 2, await folds());
   await page.click('[data-act="review-now"] >> nth=0'); await page.waitForTimeout(300);
   check('Answer now brings the question back', (await page.$$eval('.review', a => a.length)) === 1);
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
@@ -1153,7 +1167,73 @@ try {
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('and stays out of the way for the rest of that afternoon', (await page.$$eval('.review', a => a.length)) === 0);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
-  check('until Pack is tapped again: the dot is a door, and the questions come back', (await page.$$eval('.review', a => a.length)) === 2);
+  check('until Pack is tapped again: the dot is a door, and the questions come back', (await page.$$eval('.review', a => a.length)) === 1 && (await folds()).length === 1);
+
+  /* each lunchbox has its own box-home time; the question, the dot and the reminder follow it */
+  await openPane(page, 'box');
+  const homeKid = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).activeKidId);
+  check('the lunchbox settings say when the box comes home, three by default', (await page.$eval('#homeAt', e => e.value)) === '15:00' && /When does the box come home\?/.test(await page.textContent('#view')));
+  await page.selectOption('#homeAt', '17:30'); await page.waitForTimeout(300);
+  check('the reminder switch is named for the box coming home, not three o\'clock', await page.evaluate(() => {
+    const t = document.querySelector('#view').textContent; return !/Remind us at three/.test(t) && (!document.querySelector('[data-act="review-reminder"]') || /Remind us when the box is home/.test(t)); }));
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  check('at five, a box that comes home at half past is not asked about yet; the other box\'s is', (await page.$$eval('.review', a => a.length)) === 1 && (await folds()).length === 0 && (await page.getAttribute('[data-act="review-later-all"]', 'data-kid')) !== homeKid && !!(await page.$('nav.tabs .due')));
+  /* the reminder on the phone follows the same time: stub the plugin, flip the switch, read what was scheduled */
+  await page.evaluate(() => {
+    window.__ln = { scheduled: [], asked: 0 };
+    window.Capacitor = { isNativePlatform: () => true, Plugins: { LocalNotifications: {
+      cancel: async () => {}, checkPermissions: async () => ({ display: 'granted' }), requestPermissions: async () => { window.__ln.asked++; return { display: 'granted' }; },
+      schedule: async o => { window.__ln.scheduled = o.notifications; } } } };
+  });
+  await openPane(page, 'box');
+  await page.click('[data-act="review-reminder"]'); await page.waitForTimeout(700);
+  const lnPlanned = await page.evaluate(() => window.__ln.scheduled.filter(n => n.id >= 2000).map(n => ({ id: n.id, at: new Date(n.schedule.at).getHours() * 60 + new Date(n.schedule.at).getMinutes(), day: new Date(n.schedule.at).getDate(), title: n.title })));   /* the evening pick reminders sit below 2000 */
+  const todayD = await page.evaluate(() => new Date().getDate());
+  check('the reminder is scheduled for the box\'s own time: half past five today for this box, and both times tomorrow',
+    lnPlanned.length >= 3 && lnPlanned[0].day === todayD && lnPlanned[0].at === 17 * 60 + 30 && /How did .*box go\?/.test(lnPlanned[0].title)
+      && lnPlanned.some(n => n.day !== todayD && n.at === 15 * 60) && lnPlanned.some(n => n.day !== todayD && n.at === 17 * 60 + 30) && lnPlanned.every(n => n.id >= 2000 && n.id < 2007), lnPlanned);
+  await page.click('[data-act="review-reminder"]'); await page.waitForTimeout(500);
+  await page.evaluate(() => { delete window.Capacitor; delete window.__ln; });
+  await page.evaluate(() => window.__pinHour(18));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  check('at six it is asked about too', (await page.$$eval('.review', a => a.length)) === 1 && (await folds()).length === 1);
+  /* the switch: a lunchbox that is never asked */
+  await openPane(page, 'box');
+  await page.click('[data-act="review-on"]'); await page.waitForTimeout(300);
+  check('Ask what came home turns the question off for this lunchbox, and says so', (await page.getAttribute('[data-act="review-on"]', 'aria-pressed')) === 'false' && /We won’t ask/.test(await page.textContent('#toast')));
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  check('and Pack asks about the other box only, with the dot for it', (await page.$$eval('.review', a => a.length)) === 1 && (await folds()).length === 0 && (await page.getAttribute('[data-act="review-later-all"]', 'data-kid')) !== homeKid && !!(await page.$('nav.tabs .due')));
+  await openPane(page, 'box');
+  await page.click('[data-act="review-on"]'); await page.waitForTimeout(200);
+  await page.selectOption('#homeAt', '15:00'); await page.waitForTimeout(300);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  check('switched back on, with the box home at three again, both are asked', (await page.$$eval('.review', a => a.length)) === 1 && (await folds()).length === 1);
+  /* yesterday's question is not lost when today's box comes home: it waits behind it */
+  await page.evaluate(id => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids.find(x => x.id === id); const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);
+    const iso = y.getFullYear()+'-'+String(y.getMonth()+1).padStart(2,'0')+'-'+String(y.getDate()).padStart(2,'0');
+    const slots = {}; for (const c of ['main','side','fruit','sweet']) { const f = k.foods.find(x => x.c === c && !x.deletedAt); if (f) slots[c] = f.id; }
+    k.past = (k.past || []).concat([{d: iso, dow: y.getDay(), slots, lock: {}, kidPick: {}}]); k.packed = k.packed || {}; k.packed[iso] = {main:{at:new Date().toISOString(), by:null}};
+    localStorage.setItem('lunchsorted', JSON.stringify(d)); }, homeKid);
+  await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(300);
+  await page.evaluate(() => window.__pinHour(18));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
+  check('with yesterday\'s box never answered, today\'s is asked about first', (await page.$$eval('.review', a => a.length)) === 1 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)));
+  const openKid = await page.getAttribute('[data-act="review-later-all"]', 'data-kid');
+  await page.click('[data-act="eat-all"]'); await page.waitForTimeout(300);
+  const nowOpen = await page.$$eval('.review', a => a.map(e => ({ sub: e.querySelector('.view-sub').textContent, kid: (e.querySelector('[data-act="eat-all"]') || {}).getAttribute ? e.querySelector('[data-act="eat-all"]').getAttribute('data-kid') : null })));
+  check('and once it is answered, yesterday\'s question comes up rather than being lost', nowOpen.length === 1 && (openKid !== homeKid || /Yesterday/.test(nowOpen[0].sub)), nowOpen);
+  if (openKid !== homeKid) { await page.click('[data-act="eat-all"]'); await page.waitForTimeout(300); check('and yesterday\'s comes up after that box\'s', (await page.$$eval('.review .view-sub', a => a.map(e => e.textContent))).some(t => /Yesterday/.test(t))); }
+  check('yesterday\'s card is a real one: All eaten, four answers a food, Skip at the foot', await page.evaluate(() => { const c = document.querySelector('.review'); return !!c && !!c.querySelector('[data-act="eat-all"]') && c.querySelectorAll('.seg.four').length > 0 && !!c.querySelector('[data-act="eat-skip"]'); }));
+  await page.click('[data-act="eat-skip"]'); await page.waitForTimeout(300);
+  check('Skip puts it to rest, and the other box\'s question takes its place', !(await page.$$eval('.review .view-sub', a => a.some(e => /Yesterday/.test(e.textContent)))) && (await page.$$eval('.review', a => a.length)) <= 1);
+  /* leave the fixture as it was: nothing answered, no box in the past, and both questions held */
+  await page.evaluate(id => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids.forEach(k => { k.eaten = {}; if (k.id === id) { k.past = (k.past || []).slice(0, -1); } }); localStorage.setItem('lunchsorted', JSON.stringify(d)); localStorage.removeItem('lunchsorted-later'); }, homeKid);
+  await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(300);
+  await page.evaluate(() => window.__pinHour(17));
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
+  await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
   await page.click('[data-act="review-later-all"]'); await page.waitForTimeout(300);
   /* a night-before household is packing tomorrow's box by now */
@@ -1555,6 +1635,19 @@ try {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0], f = k.foods.find(x => x.id === k.week.days[0].slots.main);
     return f && document.querySelector('#view').textContent.includes(f.n + ' came home'); }), summaryText.slice(0, 200));
   await page.click('[data-act="eat-change"]'); await page.waitForTimeout(200);
+  check('each food has a fourth answer, Didn’t get to it, and the four still clear 44px', await page.evaluate(() => {
+    const segs = [...document.querySelectorAll('.review .seg')];
+    return segs.length > 0 && segs.every(s => s.querySelectorAll('button').length === 4 && /Didn’t get to it/.test(s.querySelector('[data-r="none"]').textContent)
+      && [...s.querySelectorAll('button')].every(b => b.getBoundingClientRect().height >= 44));
+  }));
+  await page.click('.review .seg button[data-cat="main"][data-r="none"]'); await page.waitForTimeout(150);
+  for (const c of ['side','fruit','sweet']) { if (await page.$('.review .seg button[data-cat="'+c+'"]')) { await page.click('.review .seg button[data-cat="'+c+'"][data-r="ate"]'); await page.waitForTimeout(120); } }
+  check('Didn’t get to it closes the card like any answer, and the summary says so in words', (await page.$$eval('.review', a => a.length)) === 0 && /didn’t get to the/i.test(await page.textContent('#view')), (await page.textContent('#view')).match(/didn.t get to[^<]{0,40}/));
+  check('and it is recorded as nothing to learn from, not as came home', await page.evaluate(() => {
+    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const row = Object.values(k.eaten || {})[0];
+    return !!row && row.main.r === 'none' && row.main.foodId === k.week.days[0].slots.main;
+  }));
+  await page.click('[data-act="eat-change"]'); await page.waitForTimeout(200);
   await page.click('[data-act="eat-all"]'); await page.waitForTimeout(250);
   check('outcomes are stored against the food, with who and when', await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
@@ -1586,6 +1679,25 @@ try {
       .week.days.filter(x => x.slots.main === id).length, reviewedFood);
   }
   check('the draw leaves a resting food out', restedDrawn === 0, restedDrawn);
+  await page.evaluate(id => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0];
+    const iso = n => { const x = new Date(); x.setDate(x.getDate() - n); x.setHours(0,0,0,0);
+      return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
+    k.eaten[iso(2)] = {main:{foodId:id, r:'none'}}; k.eaten[iso(4)] = {main:{foodId:id, r:'none'}};
+    localStorage.setItem('lunchsorted', JSON.stringify(d));
+  }, reviewedFood);
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
+  check('two Didn’t get to it in a row is not two came home: the food is not put on hold', !/on hold until/.test(await page.textContent('#view')));
+  await page.evaluate(id => {
+    const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0];
+    const iso = n => { const x = new Date(); x.setDate(x.getDate() - n); x.setHours(0,0,0,0);
+      return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
+    k.eaten[iso(2)] = {main:{foodId:id, r:'left'}}; k.eaten[iso(4)] = {main:{foodId:id, r:'left'}};
+    localStorage.setItem('lunchsorted', JSON.stringify(d));
+  }, reviewedFood);
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(200);
   let restedRedrawn = 0;
   for (let i = 0; i < 5; i++) {
     await page.click('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0'); await page.waitForTimeout(200); await goShuffle(page);

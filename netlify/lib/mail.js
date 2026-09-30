@@ -139,7 +139,7 @@ export function sendTester(to, site, day, stopUrl) {
     6: { subject: 'Almost a week in. What came home?',
          intro: 'Almost a week in, and thank you. Today is the last one: what comes home.',
          feature: 'what came home.',
-         steps: ['After your kid gets home, <b>Pack</b> asks how it went. Tap <b>Ate it</b>, <b>Some</b> or <b>Came home</b> for each compartment.',
+         steps: ['After your kid gets home, <b>Pack</b> asks how it went. Tap <b>All eaten</b>, or <b>Ate it</b>, <b>Some</b>, <b>Came home</b> or <b>Didn\u2019t get to it</b> under each food.',
                  'That is it. Next week\u2019s shuffle leans toward what actually got eaten.',
                  'While you are on <b>Foods</b>: <b>Add your own</b>, with what to buy for it, so the list carries your family\u2019s real food. And new this week, a tab of its own: <b>Recipes</b>, along the bottom \u2014 every recipe in one place for the whole household, searchable by name or by what is in the cupboard, with <b>Import a recipe</b> for one you found somewhere else.'],
          alt: 'What came home: ate it, some, or came home',

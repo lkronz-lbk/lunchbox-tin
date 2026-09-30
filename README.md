@@ -34,7 +34,8 @@ throwing app script cannot leave it up forever. From there:
 - **Week** — draws a main, side, fruit and sweet per pack day and *assigns* them to days
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
   balance, tangy against savory); the compartment sheet says which food goes well with the
-  main, and the tin carries no trait words. The tin is compact: 58px cells, an 11px label, the
+  main, and the tin carries no trait words. A food chosen by hand from that sheet is locked, as a
+  write-in and the kid's pick are, and the toast says so ("Monday: Pasta salad cup, locked"). The tin is compact: 58px cells, an 11px label, the
   food's name, and in the label row a 13px mark with a spoken name where there is something to
   say — a snowflake for keep cold, a lidded box for a sealed container, a pencil for a write-in,
   a lock, the swap arrows that say the box can be changed, a ! for a rule overruled; on Week the
@@ -84,8 +85,9 @@ throwing app script cannot leave it up forever. From there:
   ✓ packed 7:02 am · Liz" once it is packed (the name only when it is not this phone's), so the
   screen shrinks as the morning goes (`FOLD_SECOND` is the one condition that reverses the fold;
   the first box shown is always open, so a first lunchbox with no plan does not fold the only
-  box there is); each box's question sits above the boxes, under them for a night-before
-  household once the box is home, each with its own Answer later; Coming up is the first box's
+  box there is); the boxes' questions sit above the boxes, under them for a night-before
+  household once the box is home, one card open at a time with the other folded to a line;
+  Coming up is the first box's
   week, one line a day (two foods and a count), named when there are two, and carries every
   stacked box's kid's pick on the day it lands, since the second box has no Coming up of its own;
   tapping a day there goes to Week on the first box. From three lunchboxes Pack keeps the folder
@@ -272,15 +274,29 @@ throwing app script cannot leave it up forever. From there:
   Every food has an emoji icon derived from its name, so
   custom foods get a picture too. A household that packs the night before (Account →
   Lunchboxes → **When do you pack?**) sees tomorrow's box from 3pm.
-- **Did they eat it?** — from 3pm on a pack day, or the morning after, the Pack view asks about
-  that box: "All eaten" first, one tap at the top of the card, then ate it / some / came home per
-  compartment; "Skip: nothing counted" at the foot records nothing and stops asking. Outcomes are
-  stored against the food, so they survive re-plans. "Answer later" replaces the card with a one-line "Answer now" until the next
-  3pm or the next open; a red dot on the Pack tab says an answer is owed, and the iPhone app can
-  remind at 3pm (Account → Lunchboxes → **Remind us at three**, off until switched on). From 3pm today's box has gone:
-  no re-draw, swap, kid's pick, shopping line or merge touches it. The draw leans toward foods that get
-  eaten, and anything that came home twice running is put on hold for three weeks (`resting` in
-  the code; **on hold** on every screen). Outgoing weeks are archived (`kid.past`) so Monday can still ask about Friday.
+- **Did they eat it?** — once the box is home on a pack day, or the morning after, the Pack view
+  asks about that box: "All eaten" first, one tap at the top of the card, then ate it / some /
+  came home / didn't get to it per compartment; "Skip: nothing counted" at the foot records
+  nothing and stops asking. "Didn't get to it" is stored (`r: 'none'`) but teaches nothing: it is
+  not a came-home, so two in a row put nothing on hold, and the summary says "didn't get to the
+  pasta". Outcomes are stored against the food, so they survive re-plans. Each lunchbox says when
+  its box comes home (Account → Lunchboxes → **When does the box come home?**, 3pm by default, half
+  hours to 6:30pm; `settings.homeAt`): the question, the red dot on the Pack tab and the reminder
+  follow that time, and never come before three, because the day itself still goes at 3pm
+  (`dayGone`) — that rule is unchanged. **Ask what came home** on the same page (`settings.review`,
+  on by default) turns the question, the dot and the reminder off for that lunchbox. The newest
+  box home that is still unanswered is the one asked about, so yesterday's question waits behind
+  today's rather than being lost, and a box up to a week old is still asked about. With two boxes
+  home one card is open at a time; the other waits as one line ("Leo · Today's box came home. How
+  did it go?") that opens on a tap. "Answer later" folds the card to that line ("Waiting for your
+  answer.") and holds it, on this phone (`lunchsorted-later`), until it is answered, skipped or a
+  week old; tapping the Pack tab again while an answer is owed brings every card back. The iPhone
+  app can remind (Account → Lunchboxes → **Remind us when the box is home**, off until switched
+  on): one a day per home time, so two boxes home at different times get one each. From 3pm
+  today's box has gone: no re-draw, swap, kid's pick, shopping line or merge touches it. The draw
+  leans toward foods that get eaten, and anything that came home twice running is put on hold for
+  three weeks (`resting` in the code; **on hold** on every screen). Outgoing weeks are archived
+  (`kid.past`) so Monday can still ask about Friday.
 - **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and, signed out, "Erase everything"
