@@ -35,14 +35,17 @@ export function databaseUrl() { return database().url; }
 /* What the driver says about a connection can still quote the address, password and all: when it
    cannot read one the shape above lets by (a port past 65535, a stray %), and when fetch will not
    send it. So nothing the driver says leaves here: it is rethrown in fixed words of our own, without
-   its message, its stack or itself as a cause. A query the database refused (a unique violation,
-   say) is the database's own answer, and callers read its code, so it comes through as it is,
+   its message, its stack or itself as a cause. A refusal the database answered with (a unique
+   violation, say, or its proxy's own, a wrong password, which comes with an empty code) is the
+   answer's words, not the driver's, and callers read its code, so it comes through as it is,
    unless its words hold the password. */
 const LEFT_OUT = "the driver's own words are left out, as they can quote the address, password and all";
 function told(e, secrets) {
-  if (e instanceof NeonDbError && !e.sourceError && /^[0-9A-Z]{5}$/.test(e.code || '')) {
+  /* the driver copies a refusal's code from the answer, so a string there, a Postgres code or the
+     proxy's empty one, is the database's answer and nothing of the driver's own */
+  if (e instanceof NeonDbError && !e.sourceError && typeof e.code === 'string' && /^([0-9A-Z]{5})?$/.test(e.code)) {
     if (!holds(e, secrets)) return e;
-    return Object.assign(new Error('The database refused a query in words that hold the password, so they are left out'), { code: e.code });
+    return Object.assign(new Error('The database refused a query in words that hold the password, so they are left out'), e.code ? { code: e.code } : {});
   }
   if (e && e.sourceError) return new Error(`No answer from the database (${LEFT_OUT})`);
   /* a NeonDbError with no fetch error behind it is the driver's word on an answer it could not use */
@@ -53,13 +56,15 @@ function told(e, secrets) {
   /* anything else failed before the query went (a value it could not send) or after (an answer it could not read) */
   return new Error(`A query could not be sent to the database, or its answer could not be read (${LEFT_OUT})`);
 }
-/* whether a refusal's words hold the password, in any field and whatever the field's shape, and in
-   either case, as a percent escape can come back in the other; anything that cannot be read as
-   words is taken to hold it */
+/* whether a refusal's words hold the password, in any field and whatever the field's shape, and with
+   A to Z in either case, as a percent escape can come back in the other (only A to Z: a whole-string
+   lowercase turns some letters one way alone and another inside a word); anything that cannot be
+   read as words is taken to hold it */
+const fold = (s) => s.replace(/[A-Z]/g, c => c.toLowerCase());
 function holds(e, secrets) {
   let words;
-  try { words = `${e.message}\n${JSON.stringify(Object.values(e))}`.toLowerCase(); } catch { return true; }
-  return secrets.some(s => words.includes(s.toLowerCase()) || words.includes(JSON.stringify(s).slice(1, -1).toLowerCase()));
+  try { words = fold(`${e.message}\n${JSON.stringify(Object.values(e))}`); } catch { return true; }
+  return secrets.some(s => words.includes(fold(s)) || words.includes(fold(JSON.stringify(s).slice(1, -1))));
 }
 /* the password as the address carries it, and as the database reads it */
 function secretsOf(url) {

@@ -1,7 +1,7 @@
 # Lunch Sorted
 
 Plan a week of packed school lunches in about a minute. A static site: a marketing
-page, and an installable offline web app. No build step, no framework, no server.
+page, and an installable offline web app. No bundler, no framework, no server.
 
 - **Landing page** — `public/index.html`
 - **The app** — `public/app/index.html` (one self-contained file: markup, styles, logic)
@@ -773,8 +773,8 @@ out by deleting it in the commit that does it.
   Roles, Reset password) makes a staging address worth nothing against production. Then paste
   the new string alone into every context's `STAGING_DATABASE_URL` (Branch deploys and Deploy
   Previews at least) and retry dev's last deploy: until a value is replaced, each build that reads
-  it fails with `migrate failed: password authentication failed …`, and a deploy already live
-  with the old string cannot reach the database until it is rebuilt. This item comes out once
+  it fails as `migrate failed:` with the database's reason, a wrong password, and a deploy already
+  live with the old string cannot reach the database until it is rebuilt. This item comes out once
   main's first deploy with the check has gone through (`migrate:` lines in its build log).
 - **Liz: `STRIPE_SECRET_KEY`, one value per context, each the secret key alone.** Production
   takes the live secret key, with the Builds scope as well as Functions: the standard
@@ -1050,11 +1050,11 @@ writes the same one.
   Connect dialog offers, refuses the deploy at the build (`deploy refused:`), naming the
   variable, never the value, and a running function refuses it too: the driver's error about it
   quotes it whole, password and all, and every function logs what it throws. For the same
-  reason `sql()` passes on only what the database said with a Postgres error code (a unique
-  violation, a wrong password), in its own words and with its code, unless they hold the
-  password; anything else the driver says (an address it cannot read, no answer, an answer that
-  is not a result) is logged in fixed words. At the build, either fails the deploy as
-  `migrate failed:`.
+  reason `sql()` passes on only a refusal the database or its proxy answered with (a unique
+  violation, a wrong password), in its own words and with its code when it has one, unless they
+  hold the password; anything else the driver says (an address it cannot read, no answer, an
+  answer that is not a result) is logged in fixed words. At the build, either fails the deploy
+  as `migrate failed:`, naming the migration file when one was running.
   Housekeeping (`sweep()` in `netlify/lib/db.js`: expired links, sessions and invites,
   rate-limit rows past a day, error reports past thirty days) rides along with about one
   throttled call in twenty-five, and runs once a day in production after the trial emails.

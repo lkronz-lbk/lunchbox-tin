@@ -15,7 +15,8 @@ export async function migrate(sql, log = () => {}) {
   for (const f of files) {
     if (done.has(f)) continue;
     const body = fs.readFileSync(path.join(DIR, f), 'utf8');
-    for (const stmt of splitStatements(body)) await sql(stmt);
+    try { for (const stmt of splitStatements(body)) await sql(stmt); }
+    catch (e) { if (e && typeof e === 'object') e.migration = f; throw e; }   /* so a refused deploy names the file */
     await sql`INSERT INTO schema_migrations (name) VALUES (${f}) ON CONFLICT (name) DO NOTHING`;
     log(`applied ${f}`);
   }
@@ -47,10 +48,9 @@ if (process.argv[1] && process.argv[1].endsWith('migrate.mjs')) {
   if (!databaseUrl()) { console.log('migrate: this context has no database URL, skipping'); process.exit(0); }
   /* through sql(), so what the driver says about the connection reaches the build log in fixed
      words, never its own, which can quote the address; a migration the database refused is told
-     in the database's own words, with its code and where in the statement it stopped. The file is
-     the one after the last "applied" line */
+     in the database's own words, with its file, its code and where in the statement it stopped */
   let n;
   try { n = await migrate(sql(), console.log); }
-  catch (e) { console.error('migrate failed:', e.message + (e.code ? ` (code ${e.code}${e.position ? `, position ${e.position}` : ''})` : '')); process.exit(1); }
+  catch (e) { console.error('migrate failed:', (e.migration ? `${e.migration}: ` : '') + e.message + (e.code ? ` (code ${e.code}${e.position ? `, position ${e.position}` : ''})` : '')); process.exit(1); }
   console.log(`migrate: ${n} applied`);
 }
