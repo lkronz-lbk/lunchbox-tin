@@ -20,7 +20,7 @@ SHOTS = [
     ('recipes', '05-recipes', 'Recipes that make\nsix lunches.',       'Two kid-tested ones come free. Scale the batch, switch between US measures and metric, and check off what you already have.'),
     ('cook',    '06-cook',    'Cook it one step\nat a time.',          'One step on the screen, with the amounts for just that step underneath it and a box to check off for each one as it goes in.'),
     ('setup',   '07-rules',   'Your school’s rules,\nrespected.',       'Nut-free, cold-only, no ice pack, a short eating window. Foods are flagged, never silently dropped.'),
-    ('foods',   '08-foods',   'Foods they’ll\nactually eat.',           'Start from what parents pack, add more from a long list of ideas, and tell it what came home. Next week’s draw learns.'),
+    ('foods',   '08-foods',   'Foods they’ll\nactually eat.',           'Start from what parents pack, add more from a long list of ideas, and tell it what came home. Next week’s plan learns.'),
 ]
 CROP_BOT = {'cook': 840}   # (name: raw pixels off the bottom) for a sheet that stops short of the screen
                 # and would otherwise trail empty ground. Keep the way on in the picture:

@@ -110,7 +110,7 @@ throwing app script cannot leave it up forever. From there:
   deli turkey, cheese slices and tortillas; `ING_AISLE` puts each part in its aisle), one line
   per thing with a count, and the dishes it is for underneath. Bank foods carry their lists,
   a food seeded before lists existed takes the bank's, and "Add your own" asks for one.
-  **Copy** puts the list on the clipboard grouped by aisle; the share button opens the phone’s share
+  **Copy** puts the list on the clipboard grouped by aisle; **Send** opens the phone’s share
   sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
   Share plugin in the iPhone app. A check is a pantry row, not a row on a list, and the pantry
   is keyed by the food's name: a food on this week's list and next week's is one check, so
@@ -288,7 +288,8 @@ throwing app script cannot leave it up forever. From there:
   copy-out/paste-in transfer between phones, clear the plans, delete the account, and
   — only on a phone that has never signed in — erase everything. Sign out and Leave ask first,
   like every other control that clears the phone: the first tap arms the button and says what
-  goes, the second does it, and Stay stands it down.
+  goes, the second does it, and Stay stands it down; a phone holding no household (a link opened
+in another browser) has nothing to ask about and signs out on one.
   **Household**: the people, your name, and the two invites. **Subscription** (only where
   Stripe is configured, and never for a caretaker): the plan, what it costs while there is
   something to pay, the date it
@@ -647,13 +648,6 @@ were taken off a .35 opacity in both themes. It is on `dev` rather than in this 
 mean the first chip below and the checkbox above it are now on opposite sides of the same
 3:1 line, so whatever ships them to `main` has to ship both.
 
-- **Every help question renders as a section label.** `.faq summary` is written to override
-  `.more summary` — body font, 15px, `letter-spacing:0`, `text-transform:none`, `--ink` — but it
-  is declared *before* it at identical specificity, so it loses all four. Every question in the
-  help sheet therefore comes out as 10.5px uppercase mono in `--ink-3`: the "FIVE LUNCHES" style,
-  twenty of them stacked (the colors hold AAA since 2026-09-27; the size and case are the bug). The fix is to
-  move `.faq summary` after `.more summary`, which restyles the whole sheet.
-
 - **`06-cook.png` does not fill its canvas.** `CROP_BOT = {'cook': 840}` in
   `scripts/store-compose.py` ends the phone frame ~500px above the bottom edge where every other
   shot bleeds off it, so the sixth image in the gallery is a stubby phone. At most ~229 raw px can
@@ -826,18 +820,20 @@ it back needs no migration.
 Free, for good, is one lunchbox, the week's plan, the shopping list, the pack list, and the
 built-in idea bank to build the food list from. The **Household** plan (yearly or
 monthly) is the part that remembers and shares: a food written in the parent's own words,
-kid's pick, the after-school review and its holds, a pantry that carries over, every lunchbox, the
+kid's pick, what came home and its holds, a pantry that carries over, every lunchbox, the
 other parent's phone and a caretaker's pack list. **Every household gets all of it for its
 first 21 days**, no card, counted from the account document's `createdAt` (the same clock on
 every phone and on the server), and then drops to free with the premium pieces locked in
 place, not hidden: the kid's-pick button, the review card, the pantry check and "Add your
 own" on Foods stay on screen with a lock and open the plan sheet. During the three weeks the
 same pieces wear a small "Household plan" tag so it is clear what is being tried; three days
-before the end a banner says when, and once after it says what changed, each dismissable
-once. A household whose paid plan has ended — cancelled, refunded, lapsed, or a first charge
+before the end a banner says how long is left, and once after it says the three weeks are up and
+what was added stays, each dismissable once. A household whose paid plan has ended — cancelled, refunded, lapsed, or a first charge
 that failed — is never told its three weeks are up: the banner, the Subscription row and the
-plan page say the plan has ended and when (`planEnded()`, from the entitlement row's `canceled`
-status, or an App Store row more than three days past its end), and a renewal that failed while
+plan page say the plan has ended, with the date where the row carries one that has passed
+(`planEnded()`, from the entitlement row's `canceled` status, or an App Store row more than three
+days past its end; `planEndedOn()`), each ending dismissable once; the trial-ended email is not
+sent to such a household either. A renewal that failed while
 Stripe or Apple retry it gets its own banner with the one button that fixes it (Manage billing,
 or Manage in the App Store), dismissable once per failure. With no `STRIPE_*` variables in a
 deploy nothing is gated or tagged and the app is exactly the free one.

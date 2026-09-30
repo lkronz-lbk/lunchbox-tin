@@ -31,6 +31,10 @@ export async function run(now = Date.now(), siteOverride = '') {
     /* the window for "ending" is wide enough that a large cohort with one shared start still gets through over two runs */
     const kind = left > 1 * DAY && left <= 4 * DAY ? 'trial_ending' : left <= 0 && left > -2 * DAY ? 'trial_ended' : null;
     if (!kind) continue;
+    /* a household whose plan ended as the three weeks did -- a first charge that failed, most
+       often -- is told that in the app, in the plan's own words; "your three weeks are up" would be
+       the wrong letter */
+    if (kind === 'trial_ended' && h.status === 'canceled') continue;
     /* the notice row is claimed first, so two overlapping runs cannot both send; anything that
        goes wrong for this household releases the claim and moves on to the next */
     const claimed = await q`INSERT INTO notices (household_id, kind) VALUES (${h.id}, ${kind}) ON CONFLICT DO NOTHING RETURNING household_id`;

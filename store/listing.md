@@ -78,7 +78,7 @@ the enrollment, so settle it before launch.
 > So I built this.
 >
 > A WEEK OF LUNCHES PLANNED IN A MINUTE
-> Answer three questions and you get five planned lunchboxes: a main, a side, a fruit and a sweet for every school day. Not a random shuffle. Something crunchy against a soft main, protein when the main is light, something sharp to cut the salt. Re-shuffle the whole week, or individual boxes if needed, or just switch out one item.
+> Answer three questions and you get five planned lunchboxes: a main, a side, a fruit and a sweet for every school day. Not a random shuffle. Something crunchy against a soft main, protein when the main is light, something sharp to cut the salt. Plan the whole week again, shuffle one day, or just switch out one item.
 >
 > NOTHING TO SET UP FIRST
 > There is no food library to build before you get anything back. It starts with foods most kids eat and you adapt from there. Take out the options they refuse, and add more from a long list of ideas. On the Household plan you can write in that pickle roll-up only your kid will eat, or paste in the address of a recipe you found and let the app read the ingredients off it.

@@ -1577,7 +1577,7 @@ try {
   const fromCorner = await helpOrder();
   check('the help sheet\'s questions render as questions, not as section labels', !!fromCorner.asQuestion && fromCorner.asQuestion[0] === 'none' && fromCorner.asQuestion[1] === 15, fromCorner.asQuestion);
   check('and from the ? the answers come first, the mail buttons under them', !fromCorner.mailFirst && /Something is wrong/.test(await page.textContent('#sheetBody')));
-  check('and no answer says draw, resting or kept', !/\bdraws?\b|\bdrawn\b|\bresting\b|\bkept\b(?!\s+(?:\w+\s+)?out\b|\s+(?:on|there|for)\b)/i.test(await page.textContent('#sheetBody')), (await page.textContent('#sheetBody')).match(/[^.]*\b(draws?|drawn|resting|kept)\b[^.]*/i));
+  check('and no answer says draw, resting or kept', !/\b(?:re)?draws?\b|\bdrawn\b|\bresting\b|\brest(?:s|ed)\b|\bkept\b(?!\s+(?:\w+\s+)?out\b|\s+(?:on|there|for)\b)/i.test(await page.textContent('#sheetBody')), (await page.textContent('#sheetBody')).match(/[^.]*\b((?:re)?draws?|drawn|resting|rest(?:s|ed)|kept)\b[^.]*/i));
   await sheetDone(page); await page.waitForTimeout(250);
   await page.click('#view .item[data-act="help"]'); await page.waitForTimeout(300);
   const fromSupport = await helpOrder();
@@ -2459,7 +2459,7 @@ try {
     check('this phone\u2019s own push has landed (fifth)', await settled());
     check('the other phone gets in first, a fifth time', await aheadOnServer('RaceFive') === 200);
     await openSlot(); await page.click('[data-act="sheet-shuffle"]'); await page.waitForTimeout(150);
-    check('shuffling over a write-in offers Undo', await undoUp(/written in/));
+    check('shuffling over a write-in offers Undo', await undoUp(/shuffled away/));
     check('and their document merges in while that toast is up', await merged('RaceFive'));
     await tapUndo();
     const sh = await slotState();
@@ -2813,7 +2813,7 @@ try {
   await pb.click('[data-act="pack-all"]'); await pb.waitForTimeout(250);   /* un-tick: the box reads unpacked again, though the off rows stay */
   check('no banner nags in week one', (await pb.$$eval('.banner', a => a.filter(b => /three weeks/.test(b.textContent)).length)) === 0);
   await setBorn(19); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
-  check('with three days left the app says when everything ends, once', /three weeks of everything end on [A-Z][a-z]{2} \d{1,2}/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) >= 1);
+  check('with three days left the app says so, once, in one line', /Everything is on for [23] more days\./.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) >= 1, (await pb.textContent('#view')).match(/Everything is on[^.]*\./));
   /* the filled button on a banner used to take the banner's own ink: brown on green in light, orange on green in dark */
   const bannerContrast = () => pb.evaluate(() => {
     const b = document.querySelector('.banner .btn.primary'); if(!b) return 0;
@@ -2827,7 +2827,7 @@ try {
   await pb.evaluate(() => document.documentElement.removeAttribute('data-theme'));
   check('and the banner\'s filled button can be read in both themes', lightC >= 4.5 && darkC >= 4.5, [lightC, darkC]);
   await pb.click('[data-act="trial-dismiss"]'); await pb.waitForTimeout(200); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
-  check('and Later means later', !/three weeks of everything end/.test(await pb.textContent('#view')));
+  check('and Later means later', !/Everything is on for/.test(await pb.textContent('#view')));
   await setBorn(30); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
   check('when the three weeks are up it says so, once, and the plan sheet is one tap away', /three weeks are up/.test(await pb.textContent('#view')));
   await pb.click('[data-act="trial-dismiss"]'); await pb.waitForTimeout(200);
@@ -3166,8 +3166,8 @@ try {
   await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200);
   check('and the Subscription row reads Ended', /Subscription\s*Ended/.test(await pb.textContent('#view')), (await pb.textContent('#view')).match(/Subscription\s*[^\n]{0,30}/));
   await pb.click('[data-act="tab"][data-tab="pack"]'); await pb.waitForTimeout(250);
-  check('Pack says the plan ended, once, in its own words', /Household plan has ended/.test(await pb.textContent('#view')) && !/three weeks are up/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="trial-dismiss"][data-stage="plan-ended"]', a => a.length)) === 1);
-  await pb.click('[data-act="trial-dismiss"][data-stage="plan-ended"]'); await pb.waitForTimeout(200);
+  check('Pack says the plan ended, once, in its own words', /Household plan ended/.test(await pb.textContent('#view')) && !/three weeks are up/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="trial-dismiss"][data-stage^="plan-ended"]', a => a.length)) === 1);
+  await pb.click('[data-act="trial-dismiss"][data-stage^="plan-ended"]'); await pb.waitForTimeout(200);
   check('and OK puts it away for good, with no "three weeks" banner behind it', (await pb.$$eval('.banner', a => a.filter(b => /plan has ended|three weeks/.test(b.textContent)).length)) === 0);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
@@ -4398,7 +4398,7 @@ try {
       faq.type === 'FAQPage' && faq.qa.length >= 5 && faq.qa.every(x => x.same) && !/\$\d/.test(faq.text), faq.qa.filter(x => !x.same));
     check('and it carries a description and a canonical address', !!(await site.$('meta[name="description"]')) && (await site.$eval('link[rel="canonical"]', l => l.href)) === 'https://lunchsorted.app/help.html');
   }
-  check('the help page answers the questions and points at the planner and the address', /pick the week/.test(await site.textContent('body')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href^="mailto:hello@lunchsorted.app"]')));
+  check('the help page answers the questions and points at the planner and the address', /plan the week/.test(await site.textContent('body')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href^="mailto:hello@lunchsorted.app"]')));
   check('the help page carries the two anchors the ideas pages link to', !!(await site.$('h2#pick')) && !!(await site.$('h2#rules')) && !!(await site.$('a[href="/ideas/"]')));
   {
     /* the ideas pages load /ga.js like the front page, so they are served under the front page's
