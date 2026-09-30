@@ -15,6 +15,7 @@ import { chargeLaterUntil } from '../lib/trial.js';
    POST /api/billing/webhook            -> Stripe, signed                                              */
 
 const PLANS = { year: 'household', lifetime: 'lifetime' };
+const STRIPE_STATES = ['active', 'trialing', 'past_due', 'canceled', 'unpaid', 'incomplete', 'incomplete_expired', 'paused'];
 const HANDLED = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.expired',
   'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted', 'charge.refunded']);
 
@@ -28,6 +29,9 @@ async function membership(userId) {
 
 /* ---- the webhook ---- */
 const idOf = (v) => typeof v === 'string' ? v : v && v.id;
+/* forever held on the row: the beta's, a code's, a purchase's, or the App Store's while it lasts (a
+   sandbox one lapses, and the website sells the plan again, as checkout below decides) */
+const foreverHeld = (r) => !!r && r.plan === 'lifetime' && r.status === 'active' && !(r.source === 'apple' && lapsed(r.current_period_end));
 async function household(idText) {
   const id = Number(idText);
   if (!Number.isInteger(id) || id < 1) return null;
@@ -80,7 +84,7 @@ async function applyEvent(ev) {
        100%-off one, which only the coupon itself can say */
     const deferred = !!(obj.metadata && obj.metadata.charge_later);
     const source = obj.amount_total !== 0 ? 'stripe' : !deferred ? 'code' : (await fullyOff(obj)) ? 'code' : 'stripe';
-    const [cur] = await q`SELECT plan, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
+    const [cur] = await q`SELECT plan, status, source, current_period_end, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
     const oldSub = cur && cur.stripe_subscription_id;
     if (plan === 'lifetime') {
       const ok = await write(hid, at, { plan: 'lifetime', source, status: 'active', customer: cust, subscription: null, price: prices().lifetime, paidBy, charged: obj.payment_status === 'paid' });
@@ -88,7 +92,13 @@ async function applyEvent(ev) {
       if (ok && oldSub) { try { await stripe('POST', `/subscriptions/${oldSub}`, { cancel_at_period_end: true }); } catch (e) { console.error('billing: could not stop the old subscription', oldSub, e.message); } }
       return ok ? 'applied' : 'stale';
     }
-    if (cur && cur.plan === 'lifetime') return 'lifetime kept';        /* forever already; a yearly checkout cannot lower it */
+    if (foreverHeld(cur)) {
+      /* forever already, which a yearly checkout cannot lower. One paid after the forever was written (a
+         checkout left open in a tab while the beta was claimed) would charge for nothing every year, with
+         nothing on the row to name it: it is ended now and its payment given back, as for the App Store below */
+      const late = idOf(obj.subscription);
+      return late ? undoCheckout(obj, late, 'the household had forever') : 'lifetime kept';
+    }
     const subId = idOf(obj.subscription);
     /* the subscription's own dates come with it, so the plan line has its renewal date from the
        first moment and the subscription.created event, which may carry an earlier stamp, is not needed */
@@ -96,16 +106,18 @@ async function applyEvent(ev) {
     if (subId) { try { sub = await stripe('GET', `/subscriptions/${subId}`); } catch (e) { console.error('billing: could not read', subId, e.message); } }
     const ok = await write(hid, at, { plan: 'household', source, status: sub ? subscriptionStatus(sub) : 'active', periodEnd: periodEnd(sub),
       cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy,
-      charged: obj.payment_status === 'paid' });   /* $0 today inside the three weeks: charged later, on the subscription's own event */
+      charged: obj.payment_status === 'paid', keepForever: true });   /* $0 today inside the three weeks: charged later, on the subscription's own event */
     /* a second subscription for the same household (a card that failed, then a fresh checkout) replaces the first */
     if (ok && oldSub && subId && oldSub !== subId) await cancelSubscription(oldSub);
     if (!ok) {
-      /* paid on the web after the household had bought the plan through the App Store (a checkout
-         left open in a tab, then the iPhone): the row stays Apple's, so this subscription would
-         charge for nothing, and with no customer on the row nobody could cancel it. It is ended now
-         and its payment given back. */
+      /* paid on the web once the household held the plan another way: through the App Store (a
+         checkout left open in a tab, then the iPhone), or forever, the beta's claimed while this event
+         was on its way (between the read above and this write). The row stays as it is, so this
+         subscription would charge for nothing, and with nothing on the row nobody could cancel it. It
+         is ended now and its payment given back. */
       const [row] = await q`SELECT plan, status, source, current_period_end FROM entitlements WHERE household_id = ${hid}`;
-      if (appleLive(row) && subId) { await cancelSubscription(subId); return (await refundCheckout(obj)) ? 'refunded: the App Store holds it' : 'canceled: the App Store holds it; refund by hand'; }
+      if (appleLive(row) && subId) return undoCheckout(obj, subId, 'the App Store held the plan');
+      if (foreverHeld(row) && subId) return undoCheckout(obj, subId, 'the household had forever');
     }
     return ok ? 'applied' : 'stale';
   }
@@ -113,25 +125,30 @@ async function applyEvent(ev) {
   if (/^customer\.subscription\.(created|updated|deleted)$/.test(ev.type)) {
     const hid = await householdFor(obj);
     if (!hid) return 'no household';
-    const [cur] = await q`SELECT plan, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
-    if (cur && cur.plan === 'lifetime') return 'lifetime kept';        /* a subscription winding down after a lifetime purchase changes nothing */
+    const [cur] = await q`SELECT plan, status, source, current_period_end, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
+    if (foreverHeld(cur)) return 'lifetime kept';                     /* a subscription winding down after a lifetime purchase changes nothing */
     if (cur && cur.stripe_subscription_id && cur.stripe_subscription_id !== obj.id) return 'other subscription';   /* an older one of the same customer */
     const status = ev.type === 'customer.subscription.deleted' ? 'canceled' : subscriptionStatus(obj);
     const price = obj.items && obj.items.data && obj.items.data[0] && obj.items.data[0].price && obj.items.data[0].price.id;
     const ok = await write(hid, at, { plan: status === 'canceled' ? 'free' : 'household', source: status === 'canceled' ? 'none' : 'stripe', status,
-      periodEnd: periodEnd(obj), cancelAtPeriodEnd: obj.cancel_at_period_end, customer: idOf(obj.customer), subscription: obj.id, price, keepCode: true,
+      periodEnd: periodEnd(obj), cancelAtPeriodEnd: obj.cancel_at_period_end, customer: idOf(obj.customer), subscription: obj.id, price, keepCode: true, keepForever: true,
       charged: obj.status === 'active' || obj.status === 'past_due' });   /* trialing has charged nothing yet */
     return ok ? 'applied' : 'stale';
   }
 
   if (ev.type === 'charge.refunded') {
     /* a forever purchase refunded in full is a forever purchase undone; a yearly refund is
-       paired with cancelling the subscription in the dashboard, which arrives as its own event */
+       paired with cancelling the subscription in the dashboard, which arrives as its own event.
+       Only a forever bought through Stripe took money through Stripe (Apple's own refund ends one
+       bought there). The beta's, or a 100%-off code's, charged nothing, but keeps the customer of
+       anything bought before, so a charge of that customer refunded now is an earlier one, and the
+       forever stays */
     if (!obj.refunded) return 'partial';
     const hid = await householdFor(obj);
     if (!hid) return 'no household';
-    const [cur] = await q`SELECT plan FROM entitlements WHERE household_id = ${hid}`;
+    const [cur] = await q`SELECT plan, source FROM entitlements WHERE household_id = ${hid}`;
     if (!cur || cur.plan !== 'lifetime') return 'not lifetime';
+    if (cur.source !== 'stripe') return 'not a Stripe sale';
     const ok = await write(hid, at, { plan: 'free', source: 'none', status: 'canceled', customer: idOf(obj.customer), subscription: null, price: null });
     return ok ? 'applied' : 'stale';
   }
@@ -151,9 +168,22 @@ async function fullyOff(obj) {
   return false;
 }
 
+/* a web checkout paid for a household that already holds the plan another way: the subscription it
+   started would charge for nothing, with nothing on the row to name it, so it is ended and its payment
+   given back. What could not be done is logged, and said in the outcome, to be done by hand */
+async function undoCheckout(obj, subId, held) {
+  const ended = await cancelSubscription(subId), refunded = await refundCheckout(obj, held);
+  if (!ended) console.error('billing: CANCEL BY HAND', subId, 'paid while', held);
+  /* one bought inside the three weeks charged nothing at checkout, but undone more than 48 hours after it (Stripe's
+     floor for the first charge; webhooks failing that long), its first charge may have been taken since */
+  const late = !obj.amount_total && !!(obj.metadata && obj.metadata.charge_later) && Number(obj.created) > 0 && Date.now() / 1000 - obj.created > 48 * 3600;
+  if (late) console.error('billing: CHECK BY HAND for a first charge on', subId, 'paid while', held);
+  return `${ended ? 'canceled' : 'CANCEL BY HAND'}, ${!refunded ? 'REFUND BY HAND' : obj.amount_total ? 'refunded' : late ? 'CHECK BY HAND for a first charge since' : 'nothing charged at checkout'}: ${held}`;
+}
+
 /* gives back what a checkout charged, through the invoice it paid; older Stripe accounts name the
    payment on the invoice, newer ones list it under invoice_payments. Returns whether it was refunded. */
-async function refundCheckout(obj) {
+async function refundCheckout(obj, held) {
   if (!obj.amount_total || !obj.invoice) return !obj.amount_total;
   try {
     const invId = typeof obj.invoice === 'string' ? obj.invoice : obj.invoice.id;
@@ -167,7 +197,7 @@ async function refundCheckout(obj) {
     if (!pi && !charge) throw new Error('no payment on ' + invId);
     await stripe('POST', '/refunds', pi ? { payment_intent: pi } : { charge }, 'refund-' + obj.id);
     return true;
-  } catch (e) { console.error('billing: REFUND BY HAND, checkout', obj.id, 'paid while the App Store held the plan:', e.message); return false; }
+  } catch (e) { console.error('billing: REFUND BY HAND, checkout', obj.id, 'paid while', held + ':', e.message); return false; }
 }
 
 export default async function handler(req, context) {
@@ -221,15 +251,37 @@ export default async function handler(req, context) {
       const body = await req.json().catch(() => ({}));
       if (await throttled('beta:' + user.id, 5, 3600)) return fail('Too many tries in an hour; try again shortly', 429);
       if (!codeMatches(body.code)) return fail('That beta link is not right', 404);
-      if (h.plan === 'lifetime' && h.status === 'active' && !(h.source === 'apple' && lapsed(h.current_period_end))) return json({ ok: true, already: true });
+      if (foreverHeld(h)) return json({ ok: true, already: true });
       if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
       /* a household paying for the Household plan is a customer, not a tester: the card would go on being charged */
       if (h.stripe_subscription_id && (h.status === 'active' || h.status === 'past_due')) return fail('This household already has the Household plan', 409, { paying: true });
       /* two claims in the same instant can both pass this count and land at cap + 1: fine for a hand-shared link and a cap of 25 */
       if (await betaCount() >= betaCap()) return fail('The beta is full', 409, { full: true });
-      const ok = await write(h.id, new Date().toISOString(), { plan: 'lifetime', source: 'code', status: 'active', customer: h.stripe_customer_id || null, subscription: null, price: null, paidBy: user.id });
+      /* a subscription still on the row can still charge: a first charge that failed when the three
+         weeks ended reads as ended here while Stripe goes on retrying the card, and a retry that went
+         through after the claim would bill the forever every year, with nothing left on the row to
+         find it by. Stripe's word decides, since the row can be behind it: a plan Stripe says is paid
+         for, or a renewal it is retrying, is refused as above; one that has ended, or that Stripe has
+         no record of, is left; anything else is cancelled first. If Stripe cannot say, the claim waits */
+      const sub = h.stripe_subscription_id;
+      if (sub) {
+        let atStripe = null, noRecord = false;
+        try { atStripe = await stripe('GET', `/subscriptions/${sub}`); }
+        catch (e) { if (!(e.status === 404 && e.code === 'resource_missing')) { console.error('billing: beta could not read', sub, e.message); return fail('Try again in a moment', 503); } noRecord = true; }
+        /* an answer that does not say which of Stripe's states it is in is no answer: nothing is cancelled on a guess */
+        const said = atStripe && typeof atStripe === 'object' ? atStripe.status : atStripe, state = atStripe && typeof atStripe === 'object' ? said : undefined;
+        if (!noRecord && !STRIPE_STATES.includes(state)) { console.error('billing: beta could not read', sub, 'state:', String(JSON.stringify(said)).slice(0, 40)); return fail('Try again in a moment', 503); }
+        if (!noRecord && state !== 'canceled' && state !== 'incomplete_expired') {
+          if (subscriptionStatus(atStripe) !== 'canceled') return fail('This household already has the Household plan', 409, { paying: true });
+          if (!(await cancelSubscription(sub))) { console.log(`billing: beta household=${h.id} waits: ${sub} could not be cancelled`); return fail('Try again in a moment', 503); }
+        }
+      }
+      /* over the row as it was read: a checkout that lands meanwhile makes the write miss, and the next
+         try meets the refusal above. Whoever claims is not made the payer: that opens another parent's
+         card and invoices in the portal, and an earlier payer's stays theirs */
+      const ok = await write(h.id, new Date().toISOString(), { plan: 'lifetime', source: 'code', status: 'active', customer: h.stripe_customer_id || null, subscription: null, price: null, expectSub: sub || null });
       console.log(`billing: beta household=${h.id} ${ok ? 'on' : 'stale'}`);
-      if (!ok) return fail('Try again in a moment', 503);                /* a Stripe event stamped ahead of our clock: the code stays on the phone */
+      if (!ok) return fail('Try again in a moment', 503);                /* a Stripe event stamped ahead of our clock, or a checkout just landed: the code stays on the phone */
       return json({ ok: true });
     }
     const site = siteUrl(req);

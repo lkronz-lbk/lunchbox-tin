@@ -639,8 +639,20 @@ planned list as check boxes. "No more of these" is honored.
 button into the app with the code from `BETA_CODE` (Netlify env, per context). The app keeps the
 code on the phone until a parent is signed in, then `POST /api/billing/beta` switches the
 household to forever for good, refused once `BETA_CAP` (default 25; 0 closes it) households
-carry `source = 'code'`. A household that checks out with a 100%-off Stripe code (TESTER) is
-written the same way and kept so through later Stripe events; `/admin` lists them under
+carry `source = 'code'`. The claim asks Stripe about a subscription still on the row, since the
+row can be behind: a first charge that failed when the three weeks ended leaves the row reading
+ended while Stripe goes on retrying the card, and a retry that went through afterwards would
+bill the forever every year. One Stripe says is paid for, or a renewal it is retrying, is
+refused as a paying household is; one that has ended, or that Stripe has no record of (taken on
+trust), is left; anything else is cancelled first. If Stripe cannot be reached, cannot be
+asked from that context (no key, or one the build refuses), does not say what state the
+subscription is in, or will not cancel it, the claim waits (503) and the app offers another
+go. The forever is written only while the row still carries the subscription the claim read,
+so a checkout that lands meanwhile wins, and one the claim overtakes is cancelled and refunded
+(Billing, the webhook).
+Whoever claims is not made the payer, whose card the portal shows. A household that checks out
+with a 100%-off Stripe code (TESTER) is written the same way and kept so through later Stripe
+events, a refund of an earlier charge among them; `/admin` lists them under
 "Beta testers", a row a person rather than a row a household, beside the "Standard users"
 roster of everyone else.
 
@@ -799,6 +811,17 @@ out by deleting it in the commit that does it.
 **Decisions waiting**
 - **Liz: the beta link** still gives the first `BETA_CAP` households the plan free forever.
   Keep it as the testers' thanks, or close it (`BETA_CAP=0`) now that forever is off sale.
+- **Liz: Manage billing on a forever nobody paid for.** The UX review wanted it gone from the
+  beta's Subscription page. It stayed while a beta claim could leave a subscription charging; a
+  claim now cancels the one on the row, and a checkout paid onto a forever is cancelled and
+  refunded. What it still reaches there: the invoices of anything bought before; the open
+  invoice a failed first charge leaves, which Stripe stops collecting when the subscription is
+  cancelled but does not void; and a subscription an earlier checkout replaced, or a checkout
+  paid onto the forever, if cancelling it failed (the log says "could not cancel" for the one,
+  CANCEL BY HAND for the other). Taking it away
+  is an app change with a build of its own: the portal button in
+  `panePlan()` (`!foreverGiven()`), the comment beside it, and the smoke check "and
+  Subscription quotes it no price".
 - **Liz: the new terms and privacy wording** (September 2026) went live with v25 on
   2026-09-30, unannounced: whether the beta households should be told. The terms' own date
   moved to that day too, for one renamed feature ("the question about what came home") and a
@@ -1124,11 +1147,21 @@ the idea bank stays free so a free list is never stuck with what it has.
   one upsert that only applies when the event is not older than the last one applied, so
   two deliveries racing each other are ordered by Postgres. On checkout the subscription
   is read back from Stripe for its renewal date, so the plan line is complete at once. A
-  lifetime purchase is never lowered by a subscription ending; buying forever on top of a
+  lifetime purchase is never lowered by a subscription ending, and a yearly or monthly
+  checkout paid once the household has forever (one left open in a tab while the beta was
+  claimed) is cancelled and refunded, as one paid once the App Store holds the plan is, the
+  log saying CANCEL or REFUND BY HAND for whatever Stripe refused. That holds whichever
+  reaches the row first: neither a yearly checkout's write nor a subscription's own events
+  land on a forever claimed after they read the row, however Stripe's stamp and our clock
+  stand, and a lapsed App Store forever holds nothing. One bought inside the three weeks took
+  nothing at checkout, but undone more than 48 hours later (webhooks failing that long) its
+  first charge may have been taken since, and the log says CHECK BY HAND; buying forever on top of a
   yearly plan stops the yearly plan at its period end; a fresh yearly checkout replaces an
   unpaid one; a forever purchase refunded in full is undone (a yearly refund is paired with
-  canceling the subscription in the dashboard). Deleting the account, or an owner folding
-  their household into another, cancels its subscription first.
+  canceling the subscription in the dashboard), but only one bought through Stripe
+  (`source = 'stripe'`): the beta's forever and a 100%-off code's charged nothing, so a charge of
+  the same customer refunded later is an earlier one, and they stay. Deleting the account, or
+  an owner folding their household into another, cancels its subscription first.
 - **Portal** (`POST /api/billing/portal`) opens Stripe's customer portal for the card,
   invoices and cancellation, and comes back to `/app/?portal=1`; the iPhone app never opens it. It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
@@ -1174,9 +1207,10 @@ the idea bank stays free so a free list is never stuck with what it has.
   price and its renewal date (Liz, 2026-09-30), dated Renews even inside the three weeks, since
   "First charged" and "Cancel before DATE" are a sale's alone. Manage billing stays on the web, for the
   owner or whoever paid, wherever the
-  row has a Stripe customer, the beta's included: a claim does not yet cancel a subscription
-  Stripe is still retrying (a first charge that failed), which can go on charging, and nothing
-  else in the app reaches it (the iPhone app never opens Stripe at all). Straight
+  row has a Stripe customer, the beta's included (the iPhone app never opens Stripe at all). It
+  was kept for a subscription Stripe was still retrying when the beta was claimed; the claim
+  cancels that one now, and what else the button reaches, and whether a forever nobody paid for
+  keeps it, are under Decisions waiting. Straight
   after checkout it says only that the plan is switching on, because the webhook has not
   landed and every other row would
   still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
@@ -1201,14 +1235,14 @@ the idea bank stays free so a free list is never stuck with what it has.
   key to Builds as well as Functions, since the build cannot refuse what it cannot see: a
   function handed a bad key takes billing as off, so every gate lifts and nothing can be bought,
   on the web or in the iPhone app, and it makes no Stripe call, so a deleted household's
-  subscription goes on charging; sync carries on),
+  subscription goes on charging and a beta claim over a subscription waits; sync carries on),
   `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
   button when set, and `STRIPE_PRICE_LIFETIME`, best left unset now that forever is off sale: all
   it does is quote that price on the Subscription pane of a household that bought forever through
   Stripe, matched by id (a free forever is never priced), and production has none; a refund goes
-  by the plan, not the price. `STRIPE_TAX=0` turns
+  by the plan and where it was bought, not the price. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
   A request that gets no answer, or an answer that cannot be read, is logged in fixed words, never
   fetch's own, which can quote the authorization header, key and all.
