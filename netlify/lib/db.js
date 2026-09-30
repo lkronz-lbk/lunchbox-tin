@@ -75,15 +75,16 @@ export async function sweep() {
 
 /* The error table's ceiling: api-errors.js writes a report only under it and /admin says when it
    is reached, so no flood can fill the database. The Neon plan holds 512 MB, and a full database
-   refuses sign-ins, syncs and payments. A row at its largest (every field in three-byte letters,
-   which the 8 KB body allows, and a stack on each, as every message in a flood can differ) takes
-   about 10 KB with its TOAST and index: ten thousand measured 99 MB, and 35 MB in plain ASCII.
+   refuses sign-ins, syncs and payments. A row at its largest (every field the body carries in
+   three-byte letters, which its 8 KB allows, and a stack on each, as every message in a flood can
+   differ) takes about 10 KB with its TOAST and index: ten thousand measured 99 MB, and 35 MB in
+   plain ASCII.
    Past it every report is dropped, a real breakage's too, until rows pass thirty days or someone
    deletes some; reports arriving together can each see room for one more, so it can be passed by
    the few in flight. The count at the ceiling, measured on Postgres 18 (PGlite): under a
    millisecond either way the planner takes it, an index-only scan of about 30 index pages once
-   autovacuum has set the visibility map, or the heap (1,000 pages of ASCII rows, 2,500 of the
-   largest) before, all in memory during a flood. */
+   autovacuum has set the visibility map, or the heap (1,000 pages of ASCII rows, up to 2,500 of
+   the largest) before, all in memory during a flood. */
 export const ERRORS_KEPT = 10000;
 
 /* one row a household a moment, the first time only: the funnel the numbers page reads.

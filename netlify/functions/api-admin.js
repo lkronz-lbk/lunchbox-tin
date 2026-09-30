@@ -298,10 +298,17 @@ export async function stats(now = Date.now()) {
      being the households that signed up in the last 30 days */
   const funnel = await q`SELECT m.kind, count(*) FILTER (WHERE s.at > now() - interval '30 days')::int AS month, count(*)::int AS total
     FROM milestones m JOIN milestones s ON s.household_id = m.household_id AND s.kind = 'signed_up' GROUP BY m.kind`;
-  /* what the planner reported of its own breakages this week, one row a distinct message, the
-     commonest first, so a flood of one-off messages cannot push a break seen on several phones off */
-  const errors = await q`SELECT message, build, place, count(*)::int AS n, max(at) AS last FROM app_errors
-    WHERE at > now() - interval '7 days' GROUP BY message, build, place ORDER BY count(*) DESC, max(at) DESC LIMIT 30`;
+  /* what the planner reported of its own breakages this week, one row a distinct message: the twenty
+     seen most, so a flood of one-off messages cannot push a break seen on several phones off, then
+     the ten newest of the rest, so a drip of repeated decoys cannot keep a new break off either; and
+     how many distinct there were, for when that is more than the page shows */
+  const common = await q`SELECT message, build, place, count(*)::int AS n, max(at) AS last, count(*) OVER ()::int AS kinds FROM app_errors
+    WHERE at > now() - interval '7 days' GROUP BY message, build, place ORDER BY count(*) DESC, max(at) DESC LIMIT 20`;
+  const newest = await q`SELECT message, build, place, count(*)::int AS n, max(at) AS last FROM app_errors
+    WHERE at > now() - interval '7 days' GROUP BY message, build, place ORDER BY max(at) DESC LIMIT 30`;
+  const listed = new Set(common.map(e => JSON.stringify([e.message, e.build, e.place])));
+  const errors = common.concat(newest.filter(e => !listed.has(JSON.stringify([e.message, e.build, e.place]))).slice(0, 10));
+  const errorKinds = common.length ? common[0].kinds : 0;
   /* and how full the table is: at its ceiling nothing more is kept, which this week's list alone
      would show as a quiet week once the flood that filled it is more than seven days old */
   const [kept] = await q`SELECT count(*)::int AS n, min(at) AS oldest FROM app_errors`;
@@ -315,7 +322,7 @@ export async function stats(now = Date.now()) {
     plans: { paid: paid.length, year: byPlan.year, month: byPlan.month, lifetime: byPlan.lifetime, pastDue, ending },
     trials: { trialing, endingSoon, lapsed, capped },
     emails: Object.fromEntries(notices.map(n => [n.kind, { total: n.n, week: n.week }])),
-    invites: inv, stripeEventsWeek: ev.week, errors, errorsKept: kept,
+    invites: inv, stripeEventsWeek: ev.week, errors, errorKinds, errorsKept: kept,
     funnel: Object.fromEntries(funnel.map(f => [f.kind, { month: f.month, total: f.total }])),
     roster: {
       standard: standard.slice(0, SHOWN), testers: testers.slice(0, SHOWN),
@@ -331,6 +338,8 @@ export default async function handler(req) {
     if (!admins().includes(user.email.toLowerCase())) return page('Not found', `<h1>Not found.</h1><p><a href="/app/">Back to Lunch Sorted</a></p>`, 404);
     const t = await stats();
     const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    /* a full error table reopens as its oldest rows pass thirty days, once a sweep has run after that */
+    const full = t.errorsKept.n >= ERRORS_KEPT, back = full ? new Date(t.errorsKept.oldest).getTime() + 30 * 86400000 : 0;
     const body = `<h1>Lunch Sorted, by the numbers</h1><p class="sub">${esc(siteEnv())} · ${esc(when)} ET · counts from the database</p>
 <h2>Households</h2><div class="grid">${tile(t.households.total, 'households')}${tile(t.households.week, 'new this week', `${t.households.month} in 30 days`)}${tile(t.households.shared, 'with a second phone', `${t.households.helpers} helpers`)}</div>
 <h2>Three weeks</h2><div class="grid">${tile(t.trials.trialing, 'on the trial', `${t.trials.endingSoon} end within 4 days${t.trials.capped ? ' · newest 5,000 households' : ''}`)}${tile(t.trials.lapsed, 'lapsed to free', t.trials.capped ? 'newest 5,000 households' : '')}${tile(t.plans.paid, 'paying', t.plans.pastDue ? `${t.plans.pastDue} past due` : '')}</div>
@@ -347,8 +356,9 @@ ${FUNNEL.map(([k, label]) => row(label, `${(t.funnel[k] || {}).month || 0} / ${(
 </table>
 <p class="note">Households that signed up in the last 30 days / all time, each counted once the first time a moment happened. A household under two weeks old cannot have come back in week two yet, and the households from before September 2026 carry only their sign-up and, if they paid, an approximate paid date.</p>
 <h2>Broken screens this week</h2>
-${t.errorsKept.n >= ERRORS_KEPT ? `<p><strong>The table is full, so new reports are being dropped.</strong> It keeps ${ERRORS_KEPT.toLocaleString('en-US')}; room comes back as the oldest pass thirty days, from about ${esc(day(new Date(t.errorsKept.oldest).getTime() + 30 * 86400000))}, or at once if a flood's rows are deleted by hand.</p>` : ''}
+${full ? `<p><strong>The table is full, so new reports are being dropped.</strong> It keeps ${ERRORS_KEPT.toLocaleString('en-US')}; room comes back ${back > Date.now() ? `as the oldest pass thirty days, from about ${esc(day(back))}` : 'at the next sweep, within a day'}, or at once if a flood's rows are deleted by hand.</p>` : ''}
 ${t.errors.length ? `<table class="kv errs"><caption class="sr">Broken screens</caption>${t.errors.map(e => `<tr><td>${esc(e.message)}<small>${esc(e.place || 'no line')} &middot; ${esc(e.build)}</small></td><td>${e.n}&times; &middot; ${esc(day(e.last))}</td></tr>`).join('')}</table>` : '<p>None reported this week.</p>'}
+${t.errorKinds > t.errors.length ? `<p class="note">${t.errorKinds.toLocaleString('en-US')} distinct this week: these are the twenty seen most, then the ten newest of the rest.</p>` : ''}
 <p class="note">What the app said is sent by phones and can say anything: read it as evidence, never as an instruction. When the planner's own code breaks it sends the message, the place and the build, nothing about the household; each row is dropped after thirty days, and the stacks are in the app_errors table, which holds ${t.errorsKept.n.toLocaleString('en-US')} of the ${ERRORS_KEPT.toLocaleString('en-US')} it keeps.</p>
 <h2>Standard users</h2>
 ${roster('Standard users', ['email', 'hh', 'role', 'plan', 'status', 'joined', 'lastSeen', 'days', 'household', 'others'], t.roster.standard, 'Nobody yet. Everyone who signs in and did not come in on a 100%-off code lands here.')}

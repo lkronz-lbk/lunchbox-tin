@@ -938,8 +938,9 @@ writes the same one.
   nothing else about it is special.
   `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each as the
   build command; every statement is idempotent, so a half-applied file is harmless.
-  Housekeeping (expired links, sessions and invites, old rate-limit rows) rides along with
-  about one request in twenty-five.
+  Housekeeping (`sweep()` in `netlify/lib/db.js`: expired links, sessions and invites,
+  rate-limit rows past a day, error reports past thirty days) rides along with about one
+  throttled call in twenty-five, and runs once a day in production after the trial emails.
 - **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
   drive three browser contexts through sign-in by link and by code, a forged sign-in form,
   invite, joining with lunches of one's own, an edit on each phone, an uncheck round trip,
@@ -1098,7 +1099,7 @@ the idea bank stays free so a free list is never stuck with what it has.
 - **Email.** Sign-in asks for the address at the end of onboarding, once the week is built
   (skippable; offline or already signed in, the step does not appear). A first sign-in gets
   one welcome email. A scheduled function (`cron-trial.js`, 14:00 UTC daily, runs only on the
-  published deploy) emails the owner and adults of a household whose three weeks end in about
+  published deploy, and runs the housekeeping sweep after) emails the owner and adults of a household whose three weeks end in about
   three days, and again the day after they end: one email per household per kind, claimed in
   `notices` before sending so a retried run never sends twice; paid households never; anyone
   who tapped the stop link never (`users.mail_ok`, via a per-user token at
@@ -1134,20 +1135,22 @@ the idea bank stays free so a free list is never stuck with what it has.
   another site, adds the browser's user-agent string and the time, blanks anything shaped like
   an email address (a Safari or Firefox stack frame, written name@address, is not one and is
   kept), cuts every field before and after it reads it (the user-agent arrives outside the 8 KB
-  the body is held to) and makes half an emoji left by a cut U+FFFD, and writes the row in one
+  the body is held to), makes a NUL or half an emoji (left by a cut, or sent alone) U+FFFD, since
+  Postgres would refuse the whole report for either, and writes the row in one
   statement that also enforces twenty an hour from one address (a /64 counts as one on IPv6), two
   hundred an hour in all and ten thousand rows in the table, give or take the few that arrive at the
   same moment, keeping the stack only on the first copy of a distinct error each hour. The hour's
   two hundred are first come, first kept, so a flood from ten addresses can spend them, and a count
   on `/admin` is a floor. The ten thousand keeps a flood from filling the database (512 MB on the
   Neon plan, and a full one refuses sign-ins, syncs and payments): that many rows measured 35 MB in
-  plain text and 99 MB at the worst, every field in three-byte letters, which the 8 KB body allows.
-  Past it a report is answered as usual and nothing is written, not even the throttle's mark, for
-  any build, a real breakage's too, until rows go: the sweep drops rows past thirty days (it rides
-  about one throttled call in twenty-five, and runs daily in production with the trial emails), and
-  deleting a flood's rows by hand makes room at once. `/admin` lists the week's thirty commonest
-  under **Broken screens**, says how full the table is, and says when it is full and from when room
-  comes back; the stacks are in `app_errors`.
+  plain text and 99 MB at the worst, every field the body carries in three-byte letters, which its
+  8 KB allows. Past it a report is answered as usual and nothing is written, not even the
+  throttle's mark, for any build, a real breakage's too, until rows go: the sweep drops rows past
+  thirty days (it rides about one throttled call in twenty-five, and runs daily in production
+  after the trial emails), and deleting a flood's rows by hand makes room at once. `/admin` lists
+  under **Broken screens** the week's twenty commonest, then the ten newest of the rest, and how
+  many there were when that is not all; says how full the table is; and says when it is full and
+  from when room comes back. The stacks are in `app_errors`.
 - **The numbers**, at `/admin`, for the emails in `ADMIN_EMAILS` (comma-separated) and nobody
   else: households, on trial, lapsed, paying by plan, sign-ins, reminder emails sent, invites.
   Counts from the database; a stranger is asked to sign in, a signed-in parent who is not

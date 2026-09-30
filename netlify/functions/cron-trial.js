@@ -6,7 +6,8 @@ import { sendTrialEnding, sendTrialEnded, priceWords } from '../lib/mail.js';
 /* Once a day: the households whose three weeks end in about three days get one
    email saying when; the ones whose three weeks ended yesterday get one saying
    what changed. Each household, each kind, once; paid households never; anyone
-   who tapped "stop these reminders" never. Runs only on the published deploy. */
+   who tapped "stop these reminders" never. Then the housekeeping sweep in db.js. Runs only on the
+   published deploy. */
 const DAY = 86400000;
 const PER_RUN = 200;
 
@@ -71,12 +72,15 @@ export default async function handler(req) {
   if (siteEnv() !== 'production') return new Response('not here', { status: 404 });
   const body = await req.json().catch(() => null);
   if (!body || !body.next_run) return new Response('not found', { status: 404 });
-  /* the housekeeping that otherwise rides one throttled call in twenty-five, on a clock too, so old
-     rows go (and a full error table reopens) however quiet the app is; on its own, so neither the
-     sweep nor the emails can cost the other its day */
+  let res;
+  try { await run(); res = new Response('ok'); }
+  catch (e) { console.error('cron-trial', e); res = new Response('failed', { status: 500 }); }
+  /* then the housekeeping that otherwise rides one throttled call in twenty-five, so old rows go (and
+     a full error table reopens) however quiet the app is. After the emails, which have no other way
+     out: the two share one time limit, a household's email is claimed before it is sent, and a sweep
+     that meets a day of expired rows at once can be slow */
   try { await sweep(); } catch (e) { console.error('cron-trial: sweep', e.message); }
-  try { await run(); return new Response('ok'); }
-  catch (e) { console.error('cron-trial', e); return new Response('failed', { status: 500 }); }
+  return res;
 }
 
 export const config = { schedule: '0 14 * * *' };

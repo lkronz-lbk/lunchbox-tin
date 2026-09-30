@@ -2617,8 +2617,12 @@ try {
       pastIt.status === 204 && past.n === ERRORS_KEPT && past.it === 0 && pastTicks === 0, [pastIt.status, past, pastTicks]);
     /* a week after a flood its rows are off this week's list, and without this line the page would read as a quiet week */
     const fullAdmin = await page.evaluate(() => fetch('/api/admin').then(r => r.text()));
-    check('and the numbers page says the table is full and when room comes back',
-      /The table is full, so new reports are being dropped/.test(fullAdmin) && /room comes back[^<]*from about [A-Z][a-z]{2} \d{1,2}, \d{4}/.test(fullAdmin), fullAdmin.match(/Broken screens this week[\s\S]{0,500}/)?.[0]);
+    const oldestKept = (await db.query('SELECT min(at) AS t FROM app_errors')).rows[0].t;
+    const roomFrom = new Date(new Date(oldestKept).getTime() + 30 * 86400000).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' });
+    check('and the numbers page says the table is full, and that room comes back thirty days after its oldest row',
+      /The table is full, so new reports are being dropped/.test(fullAdmin) && fullAdmin.includes('as the oldest pass thirty days, from about ' + roomFrom), [roomFrom, fullAdmin.match(/Broken screens this week[\s\S]{0,500}/)?.[0]]);
+    check('the limits are the ones the README gives: twenty an hour from one address, two hundred in all, ten thousand rows',
+      EACH_AN_HOUR === 20 && ROWS_AN_HOUR === 200 && ERRORS_KEPT === 10000, [EACH_AN_HOUR, ROWS_AN_HOUR, ERRORS_KEPT]);
     await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
     /* everyone's hourly cap: filled to one short with rows from five minutes ago, the next report is kept and one more from a fresh address is not */
     const inHour = async () => (await db.query("SELECT count(*)::int AS n FROM app_errors WHERE at > now() - interval '1 hour'")).rows[0].n;
@@ -2636,14 +2640,16 @@ try {
     check('one address\'s hourly cap keeps what it allows and writes nothing for the report after',
       fromOne === EACH_AN_HOUR && (await marks('203.0.113.11')) === EACH_AN_HOUR, [fromOne, EACH_AN_HOUR]);
     await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
-    /* a cut through an emoji leaves half of one, which UTF-8 cannot write: what goes to the database has the half made U+FFFD.
-       PGlite would store the half as U+FFFD itself, so the check reads the values handed to the driver, not the row */
+    /* what Postgres cannot hold goes to the database as U+FFFD: half an emoji at the start (sent alone) and at the end (left by
+       the cut at 300), and a NUL between. PGlite would store the halves as U+FFFD itself, so the check reads the values handed to
+       the driver, not the row, and asks TextEncoder rather than the server's own pattern whether each value is whole */
+    const REPLACED = String.fromCharCode(0xFFFD), NUL = String.fromCharCode(0), LOW_HALF = String.fromCharCode(0xDE00);
     const realSql = globalThis.__LS_SQL; let sent = null;
     globalThis.__LS_SQL = async (strings, ...vals) => { if (typeof strings !== 'string' && strings.join('').includes('INSERT INTO app_errors')) sent = vals; return realSql(strings, ...vals); };
-    try { await flood('x'.repeat(299) + '\u{1F34E}', '203.0.113.12'); } finally { globalThis.__LS_SQL = realSql; }
-    const halfEmoji = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-    check('a message cut through an emoji reaches the database with no half of one in it',
-      !!sent && sent.includes('x'.repeat(299) + '\uFFFD') && !sent.some(v => typeof v === 'string' && halfEmoji.test(v)), sent && sent.filter(v => typeof v === 'string').map(v => JSON.stringify(v.slice(-2))));
+    try { await flood(LOW_HALF + 'x'.repeat(296) + NUL + 'y' + '\u{1F34E}', '203.0.113.12'); } finally { globalThis.__LS_SQL = realSql; }
+    const whole = v => new TextDecoder().decode(new TextEncoder().encode(v)) === v && !v.includes(NUL);
+    check('a NUL and half an emoji, sent alone or left by a cut, reach the database as U+FFFD, and nothing Postgres cannot hold does',
+      !!sent && sent.includes(REPLACED + 'x'.repeat(296) + REPLACED + 'y' + REPLACED) && sent.every(v => typeof v !== 'string' || whole(v)), sent && sent.filter(v => typeof v === 'string').map(v => JSON.stringify(v.slice(0, 2) + '...' + v.slice(-3))));
     await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
     /* commonest first: a message seen twice outranks a later one seen once */
     await db.query(`INSERT INTO app_errors (at, build, kind, message) VALUES (now() - interval '20 minutes', 'lunchsorted-v3', 'error', 'smoke: seen on two phones'), (now() - interval '20 minutes', 'lunchsorted-v3', 'error', 'smoke: seen on two phones'), (now(), 'lunchsorted-v3', 'error', 'smoke: seen once, later')`);
@@ -2655,6 +2661,15 @@ try {
     const twice = adminPage.text.indexOf('smoke: seen on two phones'), once = adminPage.text.indexOf('smoke: seen once, later');
     check('the commonest is listed first, and the page says how full the table is without calling it full',
       twice > -1 && once > twice && new RegExp('holds \\d[\\d,]* of the ' + ERRORS_KEPT.toLocaleString('en-US') + ' it keeps').test(adminPage.text) && !/The table is full/.test(adminPage.text), [twice, once]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* thirty-one messages seen twice fill the twenty commonest and more, and a new one seen once still shows, among the newest of the rest */
+    await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '30 minutes', 'lunchsorted-v3', 'error', 'smoke: seen twice, ' || (g % 31) FROM generate_series(0, 61) g`);
+    await db.query(`INSERT INTO app_errors (build, kind, message) VALUES ('lunchsorted-v3', 'error', 'smoke: new this minute')`);
+    const kinds = (await db.query("SELECT count(*)::int AS n FROM (SELECT 1 FROM app_errors WHERE at > now() - interval '7 days' GROUP BY message, build, place) g")).rows[0].n;
+    const mixed = await page.evaluate(() => fetch('/api/admin').then(r => r.text()));
+    const listedRows = ((mixed.match(/<table class="kv errs">[\s\S]*?<\/table>/) || [''])[0].match(/<tr>/g) || []).length;
+    check('past the twenty commonest, a new break seen once is still listed, after them, and the page says how many there were',
+      mixed.includes('smoke: new this minute') && mixed.indexOf('smoke: new this minute') > mixed.indexOf('smoke: seen twice, ') && listedRows === 30 && mixed.includes(kinds.toLocaleString('en-US') + ' distinct this week'), [kinds, listedRows]);
     await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
     check('and shows the funnel, with this household signed up and planned', /The funnel/.test(adminPage.text) && /Planned a week<\/td><td>1 \/ 1/.test(adminPage.text) && /Signed up<\/td><td>1 \/ 1/.test(adminPage.text), adminPage.text.match(/The funnel[\s\S]{0,600}/)?.[0]);
     /* the one script that sorts the rosters is allowed by its own hash and nothing else */
@@ -4299,6 +4314,19 @@ try {
       const { default: cronHandler } = await import('../netlify/functions/cron-trial.js');
       const stray = await cronHandler(new Request('http://x/cron', { method: 'POST', body: '{}' }));
       check('the job refuses to run for anything but the schedule on the published deploy', stray.status === 404);
+      /* on the published deploy the job then sweeps: a month-old error report and a two-day-old throttle mark go, younger ones
+         stay. The suite's test key leaves production without billing, so the emails before it send nothing */
+      await db.query(`INSERT INTO app_errors (at, build, kind, message) VALUES (now() - interval '31 days', 'lunchsorted-v3', 'error', 'smoke: a month old'), (now() - interval '29 days', 'lunchsorted-v3', 'error', 'smoke: not yet a month')`);
+      await db.query(`INSERT INTO rate_events (key, at) VALUES ('smoke:two days old', now() - interval '2 days'), ('smoke:two hours old', now() - interval '2 hours')`);
+      const leftover = async () => (await db.query("SELECT message AS k FROM app_errors WHERE build = 'lunchsorted-v3' UNION ALL SELECT key FROM rate_events WHERE key LIKE 'smoke:%'")).rows.map(r => r.k).sort().join();
+      const seeded = await leftover(), mailsBefore = mails.length, wasEnv = process.env.SITE_ENV;
+      process.env.SITE_ENV = 'production';
+      let swept; try { swept = await cronHandler(new Request('http://x/cron', { method: 'POST', body: '{"next_run":"x"}' })); } finally { process.env.SITE_ENV = wasEnv; }
+      const stayed = await leftover();
+      check('on the published deploy the daily job also sweeps: a month-old error report and a two-day-old throttle mark go, younger ones stay',
+        swept.status === 200 && seeded === 'smoke: a month old,smoke: not yet a month,smoke:two days old,smoke:two hours old' && stayed === 'smoke: not yet a month,smoke:two hours old' && mails.length === mailsBefore,
+        [swept.status, seeded, stayed, mails.length - mailsBefore]);
+      await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'"); await db.query("DELETE FROM rate_events WHERE key LIKE 'smoke:%'");
       const { default: testerHandler } = await import('../netlify/functions/cron-tester.js');
       const strayT = await testerHandler(new Request('http://x/cron', { method: 'POST', body: '{"next_run":"x"}' }));
       check('and so does the beta-week job, even with a schedule-shaped body, off the published deploy', strayT.status === 404);
