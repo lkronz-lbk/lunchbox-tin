@@ -281,8 +281,10 @@ throwing app script cannot leave it up forever. From there:
   correct, because the school rules go by them.
 - **Pack** — the next school day's box with ice-pack, sealed-container and no-protein
   flags, and one **Packed** check per box that fills every compartment at once (the packed
-  rows stay per compartment underneath, so sync and the other phone are unchanged). The
-  compartments there are not buttons: only Week changes a box, and only Week shows the swap
+  rows stay per compartment underneath, so sync and the other phone are unchanged), and puts
+  the cursor back on itself, or on the line a second box folds into, without scrolling under a
+  thumb (Sheets and the cursor, below). The compartments there are not buttons: only Week
+  changes a box, and only Week shows the swap
   arrows. **Kid's pick** lives here, behind the lunchbox's "They pick their box
   each day" switch (Household plan), for the next box not yet in the bag. Two ways, chosen
   under "How they pick" and both trading within the week already shopped for, so nothing
@@ -355,6 +357,28 @@ throwing app script cannot leave it up forever. From there:
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and, signed out, "Erase everything"
   are two-tap, deleting a food offers Undo, and the shopping checks survive a plan clear.
+- **Sheets and the cursor** — every sheet is a dialog, so the cursor (keyboard and
+  screen-reader focus) goes to the sheet's title as it opens and, as it closes, back to the
+  control whose tap opened it, found again by what it carries once the screen behind has been
+  redrawn (`openSheet`, `sheetGone`). A handler that places the cursor itself wins, and a sheet
+  opened from inside another goes back to what opened the first. A sheet redrawn by a tap
+  inside it puts the cursor back on what was tapped, or on the title if the redraw took that
+  away, disabled it or left something waiting for a second tap. A tap counts only while its
+  own handler runs, so a sheet that opens later (the emailed link, the return from signing in,
+  a refused invite) goes back to whatever had the cursor when it opened; when nothing did, or
+  the opener went with what the sheet changed, the cursor lands on the first heading in the
+  view: the page's title on every tab but Pack, which has none, and there whatever card or box
+  comes first (the morning question, when it is waiting above the box). The cursor is never
+  handed to a button waiting for its second tap, nor to Delete once DELETE has been typed, and
+  nothing behind the kid's-pick screen takes it; a sheet that arrives while the child has the
+  phone gets it when the phone is handed back. A held Enter acts once, wherever it is pressed
+  (a sign-in code is tried once, not once a repeat); only a text box (new lines) and the
+  servings stepper (one more each repeat) take its repeats. The focus a sheet, a tick, Packed
+  or a page's Done hands back goes through `focusQuietly`: for a parent on a thumb it neither
+  scrolls nor wears a ring; for a parent using the keyboard since the last touch (Tab, or a key
+  that moves or presses outside a text field) it is ringed and scrolled into view. A heading
+  that takes the cursor wears no ring either way. Tab can still leave an open sheet, and
+  Escape does not close one (Owed, below).
 - **A parent may override a rule** for one compartment: pick a flagged food from the
   compartment sheet and it goes in, rule named, with Undo. The compartment carries a `!`, the day
   an *Against the rules* chip, and the rules sweep leaves it alone. The override is recorded
@@ -532,7 +556,8 @@ plans is the same week whatever day it runs on (a Thursday used to leave the kid
 nothing to offer). `SMOKE_TODAY=2026-09-14 npm test` pins another day.
 
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
-onboarding, the week draw and the compact tin, packing, the kid's pick, what came home
+onboarding, the week draw and the compact tin, packing, where the cursor is left around a
+sheet and after Packed, the kid's pick, what came home
 and holds, the school rules re-checking a live plan, compartments switching on and off,
 anchoring, the shopping list, recipes (the two the app ships, an ingredient claimed by the step
 that means it, cook mode, the measures and the scaling,
@@ -686,8 +711,10 @@ so App Store Connect has to follow in the same sitting:
       entered for 1.0 (6) describe v24's controls ("shuffle the week", "the gear").
 - [x] **The build.** `main` went from v24 (no note) to v25 on 2026-09-30: Phase A with its own
       note, and PR #36, which had tagged v25 on its branch with no note and was never served on
-      its own. No phone had read a v25 note, so there is no `seenAs`. The next build that
-      changes the app is v26.
+      its own. No phone had read a v25 note, so v25 carries no `seenAs`. The next build that
+      changes the app is v26: the sheet focus fixes, which carry v25's note forward with
+      `seenAs:'lunchsorted-v25'`. That is the one hop `seenAs` allows, so the build after v26
+      writes a note of its own or says nothing, and drops `seenAs` either way.
 - [x] **Migrations `0009_milestones_errors` and `0010_trial_extra_days`** applied themselves on
       the `main` deploy (the build command runs `scripts/migrate.mjs`): 0009 backfills
       `signed_up` exactly and `paid` approximately, and was applied on the staging branch as
@@ -761,6 +788,11 @@ out by deleting it in the commit that does it.
 - **Tests for what the sheet says about charging later.** Nothing checks the web sheet's
   "Nothing is charged until DATE" or the pane's "First charged" and "Cancel before DATE";
   the server's `chargeLater` is checked, the copy is not.
+- **Escape, and a sheet that keeps the cursor inside it.** A sheet takes the cursor but does not
+  hold it: Tab walks out of an open sheet into the page behind, Escape does nothing, and the page
+  behind the kid's-pick screen can be reached the same way. Escape should do what Done does, and
+  `inert` go on the page while a sheet or the kid's screen is up: B10 in the UX plan, with the
+  First week and planning deploy.
 - **Known edges, watched, not fixed:** a purchase made on a phone whose state is stale, after
   the household has started paying on the web, is refused and the parent told to ask Apple
   for a refund; a subscription restarted from iPhone Settings while the web is billing; a
