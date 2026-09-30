@@ -1490,7 +1490,9 @@ var Store = {
   hadAccount:function(){ try{ return localStorage.getItem(Store.HAD_KEY) === '1'; }catch(e){ return false; } },
   markAccount:function(on){ try{ if(on) localStorage.setItem(Store.HAD_KEY, '1'); else localStorage.removeItem(Store.HAD_KEY); }catch(e){} },
   forget:function(){
-    UI.newsHeld = false;                          /* the note's mark goes below, and a note this open was holding goes with it */
+    /* a phone that starts over owes no note: one held back goes, and so does one on the banner. The
+       mark goes below; setting the phone up again puts it back (ob-go, ob-skip) */
+    UI.newsHeld = false; if(UI.notice === WHATS_NEW.text) UI.notice = '';
     try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, Store.HAD_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', 'lunchsorted-trial-extra', 'lunchsorted-later', SEEN_KEY, BETA_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
@@ -6033,7 +6035,7 @@ document.addEventListener('click', function(ev){
     touch(kid.settings);
     seedLibrary(kid, UI.ob.breadth);
     planWeek(kid);
-    S.onboardedAt = now(); UI.tab = 'week';
+    S.onboardedAt = now(); markSeen(); UI.tab = 'week';   /* a household set up here has nothing to be told, as at boot, even after starting over mid-open */
     UI.obEmail = navigator.onLine && !signedIn();
     if(Account.elsewhere){ Account.elsewhere = false; Sync.push(true); }
     save(); render(); window.scrollTo(0,0);
@@ -6048,7 +6050,7 @@ document.addEventListener('click', function(ev){
     kid.settings.noHeat = !UI.ob.heat;
     kid.settings.avoidAllergens = UI.ob.avoid.slice();
     touch(kid.settings);
-    S.onboardedAt = now(); UI.tab = 'foods';
+    S.onboardedAt = now(); markSeen(); UI.tab = 'foods';
     if(Account.elsewhere){ Account.elsewhere = false; Sync.push(true); }
     save(); render(); window.scrollTo(0,0); return;
   }
@@ -7211,7 +7213,7 @@ Store.load().then(function(r){
        permanent, and must not be overwritten unless a copy was really kept */
     var kept = rejected || Store.backup(r.raw);
     S = newAccount(); DEVICE.memberId = S.members[0].id;
-    UI.newsHeld = false; markSeen();          /* a fresh household is owed no note, as when a save cannot be read at all; whatsNew() asked the one that broke */
+    UI.newsHeld = false;                      /* whatsNew() asked the household that broke. Setting up the fresh one marks the build seen; one left on disk, with no copy kept, is still owed the note */
     UI.notice = 'Your saved lunches could not be shown, so this is a fresh start.' + (kept ? ' A copy was kept on this phone.' : '');
     if(!kept) rejected = true;
     render();
