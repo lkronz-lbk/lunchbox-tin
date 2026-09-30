@@ -906,8 +906,9 @@ writes the same one.
   that fails is retried three times with growing waits, then waits for the next change;
   returning to the app pulls if the last sync is more than thirty seconds old.
 - **Members**: owner, parent (adult), helper. An invite (`POST /api/household/invite`) is a
-  link that works once, for a week, and only while whoever made it is still in the household
-  (someone who is removed, or leaves, takes their links with them); opening it lands at the top of the Account tab with the sign-in
+  link that works once, for a week, and only while whoever made it is still a parent in the
+  household (someone who is removed, or leaves, takes their links with them, and coming back as
+  a caretaker does not revive them); opening it lands at the top of the Account tab with the sign-in
   card and the inviter's name. A phone that already has lunches brings them into the
   household when it joins, and keeps the member it already was. A helper receives only the
   plan, the foods in it and the checks (no rules, allergens, history or addresses), cannot

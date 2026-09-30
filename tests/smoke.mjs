@@ -2693,6 +2693,11 @@ try {
     const peekGone = await fetch(NODE_BASE + '/api/household/invite?code=' + kept);
     const usedGone = await consumeInvite(kept, kim.id);
     check('an invite is good only while whoever made it is still in the household', peekLive.status === 200 && peekGone.status === 410 && usedGone === null, [peekLive.status, peekGone.status, usedGone]);
+    /* asked back as a caretaker, she must not find the link she made as a parent alive again */
+    await db.query("INSERT INTO household_members (household_id, user_id, role, member_id) VALUES ($1, $2, 'helper', 'mem_kimsmoke')", [srv.household.id, kim.id]);
+    const peekHelper = await fetch(NODE_BASE + '/api/household/invite?code=' + kept);
+    const usedHelper = await consumeInvite(kept, kim.id);
+    check('and it stays dead if they come back as a caretaker', peekHelper.status === 410 && usedHelper === null, [peekHelper.status, usedHelper]);
     await db.query('DELETE FROM users WHERE id = $1', [kim.id]);   /* and the invite goes with her */
   }
 

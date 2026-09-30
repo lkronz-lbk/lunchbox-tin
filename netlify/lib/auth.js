@@ -156,14 +156,16 @@ export async function createInvite(householdId, userId, role = 'adult') {
   return code;
 }
 
-/* An invite is good only while the member who made it is still in the household. Without that,
+/* An invite is good only while whoever made it is still a parent in the household. Without that,
    an adult who made a link and was then removed (or left) could sign in again and walk back in
-   with it for the rest of its week; removing someone has to remove their way back too. */
+   with it for the rest of its week; removing someone has to remove their way back too. A
+   caretaker makes no invites, so one who is a caretaker now made theirs as someone else: asked
+   back as a caretaker, an adult who had been removed must not find their old links alive. */
 export async function consumeInvite(code, userId) {
   const rows = await sql()`
     UPDATE invites SET used_by = ${userId}, used_at = now()
     WHERE code_hash = ${hash(code)} AND used_at IS NULL AND expires_at > now()
-      AND EXISTS (SELECT 1 FROM household_members m WHERE m.household_id = invites.household_id AND m.user_id = invites.created_by)
+      AND EXISTS (SELECT 1 FROM household_members m WHERE m.household_id = invites.household_id AND m.user_id = invites.created_by AND m.role <> 'helper')
     RETURNING household_id, role`;
   return rows[0] || null;
 }
@@ -173,7 +175,7 @@ export async function peekInvite(code) {
     SELECT i.household_id, i.role, h.name, u.email AS "inviterEmail", u.name AS "inviterName"
     FROM invites i JOIN households h ON h.id = i.household_id JOIN users u ON u.id = i.created_by
     WHERE i.code_hash = ${hash(code)} AND i.used_at IS NULL AND i.expires_at > now()
-      AND EXISTS (SELECT 1 FROM household_members m WHERE m.household_id = i.household_id AND m.user_id = i.created_by)`;
+      AND EXISTS (SELECT 1 FROM household_members m WHERE m.household_id = i.household_id AND m.user_id = i.created_by AND m.role <> 'helper')`;
   return rows[0] || null;
 }
 

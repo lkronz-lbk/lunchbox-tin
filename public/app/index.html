@@ -616,7 +616,9 @@ textarea.codebox:not([readonly]){font-size:16px}   /* a parent types into this o
    answers, pantry ticks) merge by their own "at" stamps, so nobody's tick is
    lost and an un-tick (a row marked off) travels too. Lists come out in a
    fixed order so both phones compute the same document. A day that has gone
-   keeps the plan that existed on it. The local copy wins every tie. */
+   keeps the plan that existed on it. The local copy wins every tie, but for one: with two
+   copies of a week level, a day carrying its own stamp beats a copy of it that carries none
+   (mergeWeek says why). */
 window.LSMerge = (function(){
   "use strict";
   function stamp(r){ return (r && (r.updatedAt || r.at)) || ''; }
@@ -1988,7 +1990,7 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
 var WHATS_NEW = {build:'lunchsorted-v25', text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
   steps:[
     ['Check your avoid list', 'Under Anything else in the lunchbox settings, a word now has to be the whole word: \u201cham\u201d keeps ham out and lets graham crackers in. It no longer catches a longer word it sits inside \u2014 \u201cmelon\u201d misses watermelon, \u201cnut\u201d misses walnut \u2014 so write each of those out.'],
-    ['Lock what worked', 'Shuffle all is now Plan the week; Shuffle day is the crossed arrows beside each day. Every day on Week has a lock: tap it and Plan the week leaves that day alone. The lock on a compartment\u2019s sheet holds one compartment, and shows on the tin. A food you pick by hand is locked where you put it, and the toast says so.'],
+    ['Lock what worked', 'Shuffle all is now Plan the week; Shuffle day is the crossed arrows beside each day. Every day on Week has a lock: tap it and Plan the week leaves that day alone. The lock on a compartment\u2019s sheet holds one compartment, and shows on the tin. A food you pick by hand is locked where you put it, and the message says so.'],
     ['A smaller tin', 'Each compartment is the food and a small mark where there is something to know: a snowflake for keep cold, a lidded box for a sealed container, a pencil for something you wrote in, a ! for a rule you overruled. Tap it for the rest, including what goes well with the main.'],
     ['Write one in', 'Tap a compartment on Week and Write something in. Whatever you type goes into that one box on that one day \u2014 locked, so a shuffle leaves it alone; off the food list, so it never comes up again; and off the shopping list, because it is already in your fridge. Only the name is checked against your rules, so what is inside it is yours to catch.'],
     ['The whole week in one sitting', 'With \u201cThey pick their box each day\u201d on, Week carries Let them pick the week. They choose the next box, then the one after, until there is nothing left to hold up against anything. Each tap saves as it happens, so stopping halfway keeps what they picked. Pack keeps the one-box pick for the morning.'],
