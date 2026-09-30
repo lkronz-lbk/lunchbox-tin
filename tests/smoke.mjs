@@ -3785,11 +3785,15 @@ try {
     check('on Foods too', !!(await pb.$('.betabar')));
     check('the beta page counts it', /1 spot left/.test(await (await fetch(NODE_BASE + '/beta')).text()));
     /* nobody paid for it: no price, though Stripe has one for forever (as staging's does), and no word of buying it */
+    await pb.click('[data-act="tab"][data-tab="setup"]');
+    const betaCaption = await pb.textContent('[data-act="pane"][data-pane="plan"] .meta');
     await openPane(pb, 'plan');
     const betaRows = await planRows(['Your plan: Household, free forever']);
     const lifePrice = await pb.evaluate(() => { try { return JSON.parse(localStorage.getItem('lunchsorted-billing')).prices.lifetime.amount; } catch (e) { return null; } });
+    const betaCard = await pb.$eval('#view .card', c => ({ controls: c.querySelectorAll('button, a').length, emptyRows: [...c.querySelectorAll('.row')].filter(r => !r.children.length).length }));
     check('a beta household\'s Subscription says free forever, with no cost line and nothing about buying it, though Stripe has a forever price',
-      lifePrice === 7900 && JSON.stringify(betaRows) === JSON.stringify(['Your plan: Household, free forever']), { lifePrice, betaRows });
+      lifePrice === 7900 && betaCaption === 'Free forever' && JSON.stringify(betaRows) === JSON.stringify(['Your plan: Household, free forever']) && betaCard.controls === 0 && betaCard.emptyRows === 0,
+      { lifePrice, betaCaption, betaRows, betaCard });
     await openPane(pb, 'account');
     const betaGone = await pb.$$eval('#view li', a => a.map(l => l.textContent));
     check('and the delete warning calls it the forever plan, not a purchase', betaGone.includes('The forever plan, which does not come back') && !betaGone.some(l => /purchase|paid/i.test(l)), betaGone);
@@ -4083,8 +4087,10 @@ try {
   const forever = await until(pb, () => /Household, forever/.test(document.querySelector('#view').textContent));
   check('Subscription says forever and offers no upgrade', forever && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
   const boughtRows = await planRows(['Your plan: Household, forever', 'Cost: $79, once', 'Bought: Paid once, never renews']);
+  await pb.click('[data-act="tab"][data-tab="setup"]');
+  const boughtCaption = await pb.textContent('[data-act="pane"][data-pane="plan"] .meta');
   check('and forever bought through Stripe keeps its words: what it cost, and that it was paid once',
-    JSON.stringify(boughtRows) === JSON.stringify(['Your plan: Household, forever', 'Cost: $79, once', 'Bought: Paid once, never renews']), boughtRows);
+    boughtCaption === 'Forever' && JSON.stringify(boughtRows) === JSON.stringify(['Your plan: Household, forever', 'Cost: $79, once', 'Bought: Paid once, never renews']), { boughtCaption, boughtRows });
   await openPane(pb, 'account');
   check('and the delete warning still calls it the forever purchase', (await pb.$$eval('#view li', a => a.map(l => l.textContent))).includes('The forever purchase, which does not come back'),
     await pb.$$eval('#view li', a => a.map(l => l.textContent)));
@@ -4167,12 +4173,18 @@ try {
   await hook({ id: 'evt_tester', type: 'checkout.session.completed', created: t0 + 9.5, data: { object: { id: 'cs_test_t', mode: 'payment', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
   check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
   {
-    /* that row carries forever's price id, as a sale's does, so the id alone cannot tell a code from a purchase */
+    /* that row carries forever's price id, as a sale's does, so the id alone cannot tell a code from a purchase;
+       and the checkout left a Stripe customer, so the server offers the portal, where there is nothing to bill */
     const [{ stripe_price_id: codePrice }] = (await db.query(`SELECT stripe_price_id FROM entitlements WHERE household_id = ${patState.household.id}`)).rows;
     await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
     const codeRows = await planRows(['Your plan: Household, free forever']);
-    check('and Subscription quotes it no price and says nothing of buying it, though the row carries forever\'s price id',
-      codePrice === 'price_life' && JSON.stringify(codeRows) === JSON.stringify(['Your plan: Household, free forever']), { codePrice, codeRows });
+    const codeApp = await pb.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => {
+      let lifeId = null; try { lifeId = JSON.parse(localStorage.getItem('lunchsorted-billing')).prices.lifetime.id; } catch (e) {}
+      return { portal: j.entitlement.portal, lifeId, manage: document.querySelectorAll('#view [data-act="portal"]').length };
+    }));
+    check('and Subscription quotes it no price, says nothing of buying it, and offers no Manage billing, though its row carries forever\'s price id and a Stripe customer',
+      codePrice === 'price_life' && codeApp.lifeId === 'price_life' && codeApp.portal === true && codeApp.manage === 0 && JSON.stringify(codeRows) === JSON.stringify(['Your plan: Household, free forever']),
+      { codePrice, codeApp, codeRows });
   }
   {
     const { testers, standard } = (await adminStats()).roster;
@@ -4364,6 +4376,10 @@ try {
     await notify('DID_RENEW', txn({ expiresDate: Date.now() + 365 * DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 1 });
     await notify('EXPIRED', txn({ expiresDate: Date.now() - DAY }), null);
     check('and the yearly one it replaced, which Apple lets run until it is cancelled in Settings, cannot lower it', (await row()).plan === 'lifetime' && (await row()).status === 'active', await row());
+    await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
+    const appleRows = await planRows(['Your plan: Household, forever', 'Cost: Through the App Store', 'Bought: Paid once, never renews']);
+    check('and on the website its Subscription keeps a purchase\'s words: bought once, through the App Store',
+      JSON.stringify(appleRows) === JSON.stringify(['Your plan: Household, forever', 'Cost: Through the App Store', 'Bought: Paid once, never renews']), appleRows);
     await notify('REFUND', txn({ productId: 'app.lunchsorted.household.forever', originalTransactionId: '2000000000000200', transactionId: '2000000000000200', type: 'Non-Consumable', expiresDate: undefined, revocationDate: Date.now() }), null);
     check('a forever purchase Apple refunds is undone', (await row()).plan === 'free' && (await row()).status === 'canceled', await row());
 
