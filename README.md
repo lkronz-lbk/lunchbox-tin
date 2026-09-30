@@ -1163,8 +1163,9 @@ the idea bank stays free so a free list is never stuck with what it has.
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
   button when set, and `STRIPE_PRICE_LIFETIME`, best left unset now that forever is off sale: all
-  it does is quote that price on the Subscription pane of every forever household, the beta
-  testers' free ones included (a refund goes by the plan, not the price). `STRIPE_TAX=0` turns
+  it does is quote that price on the Subscription pane of a household that bought forever through
+  Stripe, matched by id (a free forever is never priced), and production has none; a refund goes
+  by the plan, not the price. `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
   A request that gets no answer, or an answer that cannot be read, is logged in fixed words, never
   fetch's own, which can quote the authorization header, key and all.
