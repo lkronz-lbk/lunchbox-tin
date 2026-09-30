@@ -650,7 +650,9 @@ open after the update (a phone new to the app is never shown it). The sentence s
 whose one button, Show me, opens the walk-through of `WHATS_NEW.steps`; coming out of that by
 Got it at its foot or Done at its head retires the note for that build. A tap on the backdrop
 only puts the sheet away, so a mis-tap during the slide-in does not spend a note that is only
-ever shown once. `npm run csp`
+ever shown once. Nothing else spends it either: a message that arrives while the note is up (the
+beta switching on, an invite that has lapsed) takes the banner, its OK clears that message alone,
+and the note comes straight back. `npm run csp`
 refuses a build whose note names an older build, so the note cannot be forgotten; set the
 text to `''` for a release with nothing to say.
 

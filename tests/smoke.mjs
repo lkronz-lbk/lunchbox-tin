@@ -784,6 +784,31 @@ try {
       await page.reload(); await page.waitForTimeout(600);
       check('and once dismissed it stays gone', !/New: /.test(await page.textContent('#view')) && await page.evaluate((b) => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
     }
+    /* An OK on any other message is that message's alone. It used to mark the build seen too, so a
+       note that message had pushed off the banner was gone for good: the beta switching on, or an
+       invite that had lapsed, on the first open after an update, and the parent never heard what
+       changed. A lapsed invite needs nobody signed in: any code the server does not hold is one.
+       The OK waits for the boot's last redraw, billing's, which would take the cursor away again. */
+    {
+      await page.evaluate(() => { localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'); localStorage.removeItem('lunchsorted-billing'); });
+      await page.goto(BASE + '/app/?join=NO-SUCH-INVITE'); await page.waitForLoadState('load');
+      const lapsed = await until(page, () => /expired or was already used/.test(document.getElementById('view').textContent)
+        && document.querySelectorAll('.banner [data-act="notice-dismiss"]').length === 1 && !!localStorage.getItem('lunchsorted-billing'));
+      check('a lapsed invite, opened on the first open after an update, takes the banner with an OK', lapsed);
+      if (lapsed) { await page.click('.banner [data-act="notice-dismiss"]'); await page.waitForTimeout(250); }
+      check('and its OK clears that message alone, leaving the build unseen',
+        lapsed && !/expired or was already used/.test(await page.textContent('#view')) && await page.evaluate(() => localStorage.getItem('lunchsorted-seen') === 'lunchsorted-v0'));
+      if (!NOTE_TEXT) {
+        check('with no note to give back, nothing takes its place', !/New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0);
+      } else {
+        const back = lapsed && await page.evaluate(() => { const sm = document.querySelectorAll('[data-act="whats-new"]');
+          return sm.length === 1 && document.activeElement === sm[0] && getComputedStyle(sm[0]).outlineStyle === 'none'; });
+        check('the note it held back comes straight back, with the cursor on Show me and no ring round it', back);
+        if (back) { await page.click('[data-act="whats-new"]'); await sheetDone(page); await page.waitForTimeout(300); }
+        check('and reading the walk-through is still what marks the build seen',
+          back && !/New: /.test(await page.textContent('#view')) && await page.evaluate(b => localStorage.getItem('lunchsorted-seen') === b, APP_BUILD));
+      }
+    }
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
     /* the tick states: crossed off is ruled through, already-in-hand is not, and a

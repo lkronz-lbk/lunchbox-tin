@@ -2023,6 +2023,8 @@ var WHATS_NEW = {build:'lunchsorted-v27', seenAs:'lunchsorted-v25', text:'New: l
 var SYNC_OWED = false;              /* choices made behind the kid's screen, not yet pushed */
 var SEEN_KEY = 'lunchsorted-seen';
 function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){} }
+/* at boot, and again when an OK clears the banner: a message that arrives over the note (the beta
+   switching on, an invite that has lapsed) only holds it back, until its OK or the next open */
 function whatsNew(){
   var seen = ''; try{ seen = localStorage.getItem(SEEN_KEY) || ''; }catch(e){}
   if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
@@ -6990,7 +6992,9 @@ document.addEventListener('click', function(ev){
     }).catch(function(e){ el.disabled = false; el.textContent = 'Delete my account and data'; offline(e); });
     return;
   }
-  if(act==='notice-dismiss'){ UI.notice=''; markSeen(); render(); return; }
+  /* the OK is its own message's and marks no build seen: a note that message held back comes
+     straight back, and its Show me takes the cursor the OK had */
+  if(act==='notice-dismiss'){ UI.notice=''; whatsNew(); render(); var sm = document.querySelector('#view [data-act="whats-new"]'); if(sm) focusQuietly(sm); return; }
   if(act==='whats-new-ok'){ newsRead(); closeSheet(); render(); return; }
   if(act==='elsewhere-ok'){ Account.elsewhere = false; render(); return; }
   if(act==='sync-now'){ if(!navigator.onLine){ toast('You are offline'); return; } Account.tries = 0; Sync.pull().then(render); return; }
