@@ -537,7 +537,7 @@ try {
     const withParts = dishes.filter(f => f.buy && f.buy.length);
     const names = await page.$$eval('.list .item .nm', a => a.map(x => x.textContent));
     check('a dish with parts lists the parts, never the dish', withParts.length > 0 && withParts.every(f => !names.includes(f.n) && f.buy.every(b => names.includes(b))), {withParts: withParts.map(f => f.n), names});
-    const shared = await page.$$eval('.list .item', a => a.filter(x => /\u00d7\d/.test(x.querySelector('.qty').textContent)).length);
+    const shared = await page.$$eval('.list .item', a => a.filter(x => /\d+ boxes/.test(x.querySelector('.qty').textContent)).length);
     check('a part two dishes share is one line with a count', dishes.length < 2 || shared > 0 || new Set(withParts.flatMap(f => f.buy)).size === withParts.flatMap(f => f.buy).length, shared);
     const fromBank = await page.evaluate(() => {
       const d = JSON.parse(localStorage.getItem('lunchsorted')); const f = d.kids[0].foods.find(x => x.buy && x.buy.length); delete f.buy;   /* a food seeded before lists existed */
@@ -596,17 +596,33 @@ try {
     /* the tick states: crossed off is ruled through, already-in-hand is not, and a
        row that toggles says so out loud */
     const shopRow = await page.$$eval('[data-act="have"]', a => a.slice(0, 1).map(b => ({
-      pressed: b.getAttribute('aria-pressed'), done: b.classList.contains('done') }))[0]);
-    check('a shopping row that is not ticked says so', shopRow && shopRow.pressed === 'false' && !shopRow.done, shopRow);
+      pressed: b.getAttribute('aria-pressed'), done: b.closest('.item').classList.contains('done'), w: b.getBoundingClientRect().width, h: b.getBoundingClientRect().height }))[0]);
+    check('a shopping row that is not ticked says so, and its check is a 54px-wide, 56px-tall target', shopRow && shopRow.pressed === 'false' && !shopRow.done && shopRow.w >= 54 && shopRow.h >= 56, shopRow);
     await page.click('[data-act="have"] >> nth=0'); await page.waitForTimeout(300);
     const shopOn = await page.$$eval('[data-act="have"]', a => a.slice(0, 1).map(b => ({
-      pressed: b.getAttribute('aria-pressed'), done: b.classList.contains('done'),
-      line: getComputedStyle(b.querySelector('.nm')).textDecorationLine }))[0]);
+      pressed: b.getAttribute('aria-pressed'), done: b.closest('.item').classList.contains('done'),
+      line: getComputedStyle(b.closest('.item').querySelector('.nm')).textDecorationLine }))[0]);
     check('ticking it flips aria-pressed and rules the name through', shopOn
       && shopOn.pressed === 'true' && shopOn.done && shopOn.line.includes('line-through'), shopOn);
     await page.click('[data-act="have"] >> nth=0'); await page.waitForTimeout(300);
     check('and unticking it puts both back', await page.$eval('[data-act="have"]', b =>
-      b.getAttribute('aria-pressed') === 'false' && !b.classList.contains('done')));
+      b.getAttribute('aria-pressed') === 'false' && !b.closest('.item').classList.contains('done')));
+    /* one line a thing: a single-ingredient food has nothing under it; a dish of several things names itself under each, and says how many boxes */
+    const lines = await page.$$eval('.list .item.shopline', a => a.map(e => ({ nm: e.querySelector('.nm').textContent, meta: (e.querySelector('.meta') || {}).textContent || '', qty: e.querySelector('.qty').textContent })));
+    check('a thing that is a food by itself is one line with nothing under it, and a dish of several things is named under each of them',
+      lines.length > 0 && lines.every(l => !l.meta.split(' · ').includes(l.nm)) && lines.every(l => l.qty === '' || /^\d+ boxes$/.test(l.qty)) && !lines.some(l => /×|x\d/.test(l.qty)), lines.slice(0, 6));
+    /* the line opens a sheet: which boxes it is for, each a way into that compartment */
+    const many = await page.$('.list .item.shopline .qty:not(:empty)');
+    const firstLine = many ? await many.evaluateHandle(e => e.closest('.item').querySelector('[data-act="line-open"]')) : await page.$('.list .item.shopline [data-act="line-open"]');
+    const lineName = await firstLine.evaluate(e => e.querySelector('.nm').textContent);
+    await firstLine.click(); await page.waitForTimeout(350);
+    const lineSheet = await page.evaluate(() => ({ title: document.querySelector('#sheetTitle').textContent, head: (document.querySelector('#sheetBody .hint') || {}).textContent || '',
+      rows: [...document.querySelectorAll('#sheetBody .item[data-act="slot"]')].map(r => r.querySelector('.nm').textContent), home: !!document.querySelector('#sheetBody [data-act="have"]') }));
+    check('tapping a line opens a sheet named for it: how many boxes, that changing a box changes the list, a row per box, and Already at home at the foot',
+      lineSheet.title === lineName && /^In \d+ box(es)? this week\. Changing a box changes the list\.$/.test(lineSheet.head) && lineSheet.rows.length >= 1 && lineSheet.rows.every(r => /^[A-Z][a-z]+day · /.test(r)) && lineSheet.home, lineSheet);
+    await page.click('#sheetBody .item[data-act="slot"] >> nth=0'); await page.waitForTimeout(350);
+    check('and a row goes to that compartment\'s sheet', /Main|Side|Fruit|Sweet|Vegetable|Snack|Drink/.test(await page.textContent('#sheetTitle')) && !!(await page.$('#sheetBody [data-act="sheet-shuffle"]')), await page.textContent('#sheetTitle'));
+    await backdropTap(page); await page.waitForTimeout(300);
     check('the empty box is drawn with a border that clears 3:1 of the row it sits on, in both themes',
       await page.evaluate(() => {
         const lin = c => (c /= 255) <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
@@ -633,7 +649,7 @@ try {
     await page.context().grantPermissions(['clipboard-read','clipboard-write']);
     await page.click('[data-act="copy-list"]'); await page.waitForTimeout(250);
     const txt = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
-    check('Copy puts the list on the clipboard grouped by aisle, one line a thing', /^Lunch shopping list\n\n[A-Z][a-z]+\n- /.test(txt) && txt.split('\n').filter(l => l.startsWith('- ')).length === (await page.$$eval('.list .item:not(.done)', a => a.length)), txt.slice(0, 80));
+    check('Copy puts the list on the clipboard grouped by aisle, one line a thing', /^Lunch shopping list\n\n[A-Z][a-z]+\n- /.test(txt) && txt.split('\n').filter(l => l.startsWith('- ')).length === (await page.$$eval('#view .list .item:not(.done)', a => a.length)), txt.slice(0, 80));
     await page.click('[data-act="help"]'); await page.waitForTimeout(300);
     check('the ? at the top opens help: questions, a way to write in, and the page on the site', (await page.$$eval('#sheetBody details', a => a.length)) >= 4 && !!(await page.$('#sheetBody a[data-feedback][href^="mailto:"]')) && !!(await page.$('#sheetBody a[href="/help.html"]')));
     await page.evaluate(() => document.querySelector('#sheetBody details summary').click()); await page.waitForTimeout(150);
@@ -641,19 +657,46 @@ try {
     check('the ? still fits beside a long name and two lunchboxes', await page.evaluate(() => { const b = document.querySelector('[data-act="help"]').getBoundingClientRect(); return b.right <= window.innerWidth - 8 && document.documentElement.scrollWidth <= window.innerWidth; }));
     await sheetDone(page); await page.waitForTimeout(250);
     check('the share button shows only where the phone has a share sheet', (await page.$$eval('[data-act="send-list"]', a => a.length)) === (await page.evaluate(() => navigator.share ? 1 : 0)));
+    /* Send carries the very text Copy does: stub the phone's share sheet and compare */
+    await page.evaluate(() => { window.__shared = null; Object.defineProperty(navigator, 'share', { value: d => { window.__shared = d; return Promise.resolve(); }, configurable: true }); });
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150); await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
+    await page.click('[data-act="send-list"]'); await page.waitForTimeout(250);
+    const sent = await page.evaluate(() => window.__shared);
+    check('Send hands the share sheet the same text Copy puts on the clipboard, under the same title', !!sent && sent.text === txt && sent.title === 'Lunch shopping list', sent && sent.text.slice(0, 80));
+    check('and that text says how many boxes a thing is for, and names a dish only where it is more than one thing', txt.split('\n').filter(l => l.startsWith('- ')).every(l => !/ x\d/.test(l)) && /\(\d+ boxes\)/.test(txt) === (await page.$$eval('.list .item.shopline .qty', a => a.some(q => q.textContent))), txt.split('\n').slice(0, 8));
+    await page.evaluate(() => { delete navigator.share; delete window.__shared; });
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150); await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
   }
   const head = await page.textContent('.count');
-  await page.click('.list .item');
+  await page.click('.list .item [data-act="have"]');
   await page.waitForTimeout(200);
   check('a pantry tick moves an item out of the buy count', head !== await page.textContent('.count'));
   /* the tap a parent makes twenty times in a row: render() throws the button away, so
      focus goes back on the row rather than to the top of the list */
-  const tickRow = '.list .item[data-act="have"]:not(.done) >> nth=0';
+  const tickRow = '.list .item:not(.done) [data-act="have"] >> nth=0';
   const tickedKey = await page.getAttribute(tickRow, 'data-key');
   await page.click(tickRow); await page.waitForTimeout(250);
   check('and focus lands back on the row that was ticked, not at the top of the list',
     await page.evaluate(k => { const a = document.activeElement;
       return !!a && a.getAttribute('data-act') === 'have' && a.getAttribute('data-key') === k; }, tickedKey), tickedKey);
+  {
+    /* once every box of the week has gone, Shop is next week's list, or the offer to plan it (A11) */
+    const savedDoc = await page.evaluate(() => localStorage.getItem('lunchsorted'));
+    await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const back = x => { const p = x.split('-').map(Number); const t = new Date(p[0], p[1] - 1, p[2] - 7); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); };
+      d.kids.forEach(k => { if (!k.week) return; k.week.start = back(k.week.start); k.week.days.forEach(x => { x.d = back(x.d); }); k.next = null; });
+      localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
+    check('once every box of the week has gone, Shop says so and offers to plan next week, with no stale lines', /boxes are done/.test(await page.textContent('#view')) && !!(await page.$('[data-act="plan-next"]')) && (await page.$$eval('.list .item.shopline', a => a.length)) === 0);
+    await page.click('[data-act="plan-next"]'); await page.waitForTimeout(600);
+    check('and Plan next week from Shop plans the coming week and shows its list', (await page.$$eval('.list .item.shopline', a => a.length)) > 0 && /Weeks? planned/.test(await page.textContent('#toast')) && await page.evaluate(() => {
+      const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const t = new Date(); t.setHours(0,0,0,0); const iso = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+      return !!k.week && k.week.days.length > 0 && k.week.days.every(x => x.d >= iso); }), await page.textContent('#toast'));
+    await page.evaluate(s => localStorage.setItem('lunchsorted', s), savedDoc);
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
+  }
 
   /* ------------------------------------------------------- writing one in
      One compartment, one day, a name the parent typed: on no list, never drawn,
@@ -1103,9 +1146,10 @@ try {
     await page.evaluate(() => !document.querySelector('#who .kidbtn') && !document.querySelector('.boxtabs') && !document.querySelector('#who [data-act="box-settings"]')));
   check('and says whose list it is without counting to two', /both lunchboxes/.test(await page.textContent('#view .view-sub')));
   check('and every lunchbox is in it', await page.evaluate(() => {
-    const names = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => k.name);
-    const metas = [...document.querySelectorAll('.list .item .meta')].map(m => m.textContent).join(' ');
-    return names.every(n => metas.includes(n));
+    const kids = JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt && k.week);
+    const lines = [...document.querySelectorAll('#view .list .item .nm')].map(m => m.textContent.trim().toLowerCase());
+    /* each lunchbox's planned foods, as what is bought for them, are on the one list */
+    return kids.length > 0 && kids.every(k => k.week.days.some(d => Object.values(d.slots).some(id => { const f = k.foods.find(x => x.id === id); return f && (f.buy && f.buy.length ? f.buy : [f.n]).some(b => lines.includes(b.toLowerCase())); })));
   }));
 
 
@@ -1435,8 +1479,8 @@ try {
   if(!dupe) check('ticking the next-week row leaves focus on that row, not on this week\u2019s twin',
     false, 'the pair was never built, so nothing was tested');
   if(dupe){
-    const dupeDone = k => page.evaluate(x => [].slice.call(document.querySelectorAll('[data-act="have"]'))
-      .filter(b => b.getAttribute('data-key') === x).map(b => b.classList.contains('done')), k);
+    const dupeDone = k => page.evaluate(x => [].slice.call(document.querySelectorAll('#view [data-act="have"]'))
+      .filter(b => b.getAttribute('data-key') === x).map(b => b.closest('.item').classList.contains('done')), k);
     const was = await dupeDone(dupe);
     const at = await page.evaluate(k => [].slice.call(document.querySelectorAll('[data-act="have"][data-when="next"]'))
       .map(b => b.getAttribute('data-key')).indexOf(k), dupe);
@@ -2096,7 +2140,7 @@ try {
   check('a food named "Constructor" does not crash the shopping list', (await page.textContent('#view')).includes('Constructor'));
 
   /* destructive actions */
-  await page.click('.list .item'); await page.waitForTimeout(150);            /* tick one pantry row */
+  await page.click('.list .item [data-act="have"]'); await page.waitForTimeout(150);            /* tick one pantry row */
   await openPane(page, 'account');
   await page.click('[data-act="clear-week"]'); await page.waitForTimeout(200);
   check('"Clear the plans" needs a second tap', (await page.textContent('[data-act="clear-week"]')).includes('again'));
@@ -2450,12 +2494,12 @@ try {
   await page.fill('#nfName', 'Shared test food'); await page.click('[data-act="save-own"]');
   await until(page, () => fetch('/api/household').then(r => r.json()).then(j => JSON.stringify(j.doc).includes('Shared test food')));
   await p2.click('[data-act="tab"][data-tab="shop"]'); await p2.waitForTimeout(300);
-  const pantryKey = await p2.getAttribute('.list .item[data-act="have"] >> nth=0', 'data-key');
-  await p2.click('.list .item[data-act="have"] >> nth=0');
+  const pantryKey = await p2.getAttribute('.list .item [data-act="have"] >> nth=0', 'data-key');
+  await p2.click('.list .item [data-act="have"] >> nth=0');
   await until(p2, k => !!JSON.parse(localStorage.getItem('lunchsorted')).pantry[k], pantryKey);   /* the save is debounced */
   const first = await p2.evaluate(k => JSON.parse(localStorage.getItem('lunchsorted')).pantry[k].have, pantryKey);
   check('a pantry tick reaches the server', await until(p2, a => fetch('/api/household').then(r => r.json()).then(j => !!j.doc.pantry[a.k] && j.doc.pantry[a.k].have === a.v), {k: pantryKey, v: first}), {pantryKey, first});
-  await p2.click('.list .item[data-act="have"] >> nth=0');                                   /* and straight back */
+  await p2.click('.list .item [data-act="have"] >> nth=0');                                   /* and straight back */
   check('an un-tick reaches the server as a row, not an absence', await until(p2, a => fetch('/api/household').then(r => r.json()).then(j => !!j.doc.pantry[a.k] && j.doc.pantry[a.k].have === !a.v), {k: pantryKey, v: first}), {pantryKey, first});
   await p2.goto(BASE+'/app/'); await p2.waitForLoadState('load');
   check('a food added on one phone reaches the other', await until(p2, () => JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.some(f => f.n === 'Shared test food'))));

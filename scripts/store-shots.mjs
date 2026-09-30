@@ -82,7 +82,7 @@ await shot('pack');
 
 /* 4 · the shopping list */
 await page.click('[data-act="tab"][data-tab="shop"]'); await wait(400);
-for (let i = 0; i < 2; i++) { await page.locator('.list .item[data-act="have"]').nth(i).click(); await wait(250); }   /* two things the pantry already has */
+for (let i = 0; i < 2; i++) { await page.locator('.list .item [data-act="have"]').nth(i).click(); await wait(250); }   /* two things the pantry already has: the check on the left of the line */
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('shop');
 

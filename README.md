@@ -137,11 +137,19 @@ throwing app script cannot leave it up forever. From there:
 - **Shop** — every planned box rolled into one aisle-grouped list across all lunchboxes. A dish
   goes on the list as what you buy for it (`buy` on the food: turkey and cheese pinwheels are
   deli turkey, cheese slices and tortillas; `ING_AISLE` puts each part in its aisle), one line
-  per thing with a count, and the dishes it is for underneath. Bank foods carry their lists,
-  a food seeded before lists existed takes the bank's, and "Add your own" asks for one.
-  **Copy** puts the list on the clipboard grouped by aisle; **Send** opens the phone’s share
-  sheet (Notes, Reminders, a text) where there is one, the browser's on the web and the
-  Share plugin in the iPhone app. A check is a pantry row, not a row on a list, and the pantry
+  per thing, "3 boxes" beside it when it is for more than one, and the dish it goes into under
+  it only when that dish is more than one thing — grapes are a line with nothing under them; a
+  dish with a recipe is marked "· recipe". Bank foods carry their lists, a food seeded before
+  lists existed takes the bank's, and "Add your own" asks for one. A line is two controls: the
+  check on the left (54×56, `have`) and the line itself, which opens a sheet (`lineSheet`) —
+  "In 3 boxes this week. Changing a box changes the list.", a row per box into that
+  compartment's sheet, "Open the recipe" when the dish has one, and "Already at home" at the
+  foot; a caretaker gets the rows without the ways in. **Copy** puts the list on the clipboard
+  and **Send** opens the phone's share sheet (Notes, Reminders, a text) where there is one, the
+  browser's on the web and the Share plugin in the iPhone app; both carry the same text
+  (`listText`, one line a thing by the same rule as the screen: "- Tortillas (3 boxes) — Turkey
+  wraps"). Once every box of the week has gone (`weekDone`), Shop shows next week's list in its
+  place, or offers **Plan next week** (`plan-next`) when there is none. A check is a pantry row, not a row on a list, and the pantry
   is keyed by the food's name: a food on this week's list and next week's is one check, so
   checking it off under *Next week* crosses it off above as well, and takes it off both blocks of
   the copied list. That is the intent — a jar of peanut butter bought once is bought once —
