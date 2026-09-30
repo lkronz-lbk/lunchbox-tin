@@ -4044,62 +4044,92 @@ try {
     const again = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, already: j.already }))));
     check('claiming twice is fine and says so', again.status === 200 && again.already === true, again);
     await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', stripe_subscription_id = 'sub_beta_x' WHERE household_id = ${patState.household.id}`);
+    const payingCalls = stripeCalls.length;
     const paying = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, paying: j.paying }))));
-    check('a household paying for the plan is refused the beta, so its card is not charged for nothing', paying.status === 409 && paying.paying === true && (await entPat()).plan === 'household', paying);
-    /* its first charge failed when the three weeks ended: the row reads ended while Stripe goes on retrying the card,
-       so the claim goes through, and cancels that subscription before forever is written over it. Left running, a
-       retry that went through would bill a free forever every year, and nothing on the row could find it again.
-       This parent's five claims an hour are spent by here, and these four would also come out of the twenty billing
-       requests an hour that backing out of Stripe needs further down, so both counters start again first: the four
-       take fewer than the five they clear */
-    await db.query(`DELETE FROM rate_events WHERE key IN ('beta:${patState.me.userId}', 'billing:${patState.me.userId}')`);
-    const claimNow = () => pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.status));
+    check('a household paying for the plan is refused the beta, so its card is not charged for nothing, and its subscription is left alone',
+      paying.status === 409 && paying.paying === true && (await entPat()).plan === 'household' && !stripeCalls.slice(payingCalls).some(c => c.path.startsWith('/v1/subscriptions/')), paying);
+    /* its first charge failed when the three weeks ended: the row reads ended while Stripe goes on retrying the card, so
+       the claim goes through and cancels that subscription before forever is written over it. Left running, a retry that
+       went through would bill a free forever every year, with nothing on the row to find it by. The claim asks Stripe
+       first, since the row can be behind it, and Stripe here is a stub that remembers what it cancelled: a first charge
+       being retried, a plan paid for, one long ended, no answer at all, a cancel it refuses, a cancel whose answer is
+       lost on the way back, and a checkout that lands on the row while the claim waits on Stripe.
+       The throttles are not what these check, so each claim starts this parent's hourly counts again: its five claims,
+       and the twenty billing requests the checkouts further down need, keep their room */
+    const claimNow = async () => {
+      await db.query(`DELETE FROM rate_events WHERE key IN ('beta:${patState.me.userId}', 'billing:${patState.me.userId}')`);
+      return pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.status));
+    };
     const lapsedOn = sub => db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', stripe_subscription_id = '${sub}' WHERE household_id = ${patState.household.id}`);
     const rowNow = async () => (await db.query(`SELECT plan, source, status, stripe_subscription_id AS sub FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
     const isForever = r => r.plan === 'lifetime' && r.source === 'code' && r.status === 'active' && r.sub === null;
-    await lapsedOn('sub_x');
-    const callsBefore = stripeCalls.length;
-    const retrying = await claimNow();
-    check('a household whose first charge failed gets the beta, and the subscription Stripe is still retrying is cancelled first',
-      retrying === 200 && stripeCalls.slice(callsBefore).some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_x') && isForever(await rowNow()),
-      { retrying, calls: stripeCalls.slice(callsBefore).map(c => c.method + ' ' + c.path), row: await rowNow() });
-    /* Stripe answering three other ways: not at all; that it has no such subscription, which is how it answers a
-       second cancel of one it ended long ago; and a cancel that went through with its answer lost on the way back */
-    const stripeStub = globalThis.__LS_STRIPE_FETCH;
+    /* a claim, what it asked Stripe about subscriptions, and the row after it */
+    const asked = async () => { const from = stripeCalls.length, status = await claimNow();
+      return { status, calls: stripeCalls.slice(from).filter(c => c.path.startsWith('/v1/subscriptions/')).map(c => c.method + ' ' + c.path.split('/').pop()), row: await rowNow() }; };
+    const stripeStub = globalThis.__LS_STRIPE_FETCH, ended = new Set();
+    const answer = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
     globalThis.__LS_STRIPE_FETCH = async (url, init) => {
-      const path = new URL(url).pathname, sub = path.replace(/^\/v1\/subscriptions\//, '');
-      if (!['sub_down', 'sub_gone', 'sub_cut'].includes(sub)) return stripeStub(url, init);
+      const path = new URL(url).pathname, id = path.replace(/^\/v1\/subscriptions\//, '');
+      if (!/^sub_(x|paid|gone|down|stuck|cut|race)$/.test(id)) return stripeStub(url, init);
       stripeCalls.push({ method: init.method, path });
-      if (sub === 'sub_down') throw new TypeError('fetch failed');
-      if (init.method === 'DELETE') return sub === 'sub_gone'
-        ? new Response(JSON.stringify({ error: { type: 'invalid_request_error', code: 'resource_missing', message: "No such subscription: 'sub_gone'" } }), { status: 404 })
-        : { ok: true, status: 200, text: () => Promise.reject(new Error('connection reset')) };
-      return new Response(JSON.stringify({ id: sub, object: 'subscription', status: 'canceled' }), { status: 200 });
+      if (id === 'sub_down') throw new TypeError('fetch failed');
+      if (init.method === 'GET') return answer(id === 'sub_paid' ? { id, object: 'subscription', status: 'active' }
+        : id === 'sub_gone' || ended.has(id) ? { id, object: 'subscription', status: 'canceled' }
+        : { id, object: 'subscription', status: 'past_due', trial_end: 1790000000, items: { data: [{ current_period_start: 1790000000 }] } });   /* the first charge, when the free weeks ended */
+      if (ended.has(id)) return answer({ error: { type: 'invalid_request_error', code: 'resource_missing', message: `No such subscription: '${id}'` } }, 404);
+      if (id === 'sub_stuck') return answer({ error: { type: 'api_error', message: 'stub: not now' } }, 500);
+      if (id === 'sub_race') await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', stripe_subscription_id = 'sub_new' WHERE household_id = ${patState.household.id}`);
+      ended.add(id);
+      return id === 'sub_cut' ? { ok: true, status: 200, text: () => Promise.reject(new Error('connection reset')) } : answer({ id, object: 'subscription', status: 'canceled' });
     };
     try {
+      /* the other parent paid before, so the card behind the portal is theirs */
+      const [payer] = (await db.query(`INSERT INTO users (email) VALUES ('payer@example.com') RETURNING id`)).rows;
+      await lapsedOn('sub_x'); await db.query(`UPDATE entitlements SET paid_by = ${payer.id} WHERE household_id = ${patState.household.id}`);
+      const retrying = await asked();
+      check('a household whose first charge failed gets the beta, and the subscription Stripe is still retrying is cancelled first',
+        retrying.status === 200 && JSON.stringify(retrying.calls) === JSON.stringify(['GET sub_x', 'DELETE sub_x']) && isForever(retrying.row), retrying);
+      const payerNow = (await db.query(`SELECT paid_by FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0].paid_by;
+      check('and whoever claims is not made the payer: the card and its invoices stay the other parent\'s', payerNow === payer.id, { payerNow, payer: payer.id });
+      await db.query(`DELETE FROM users WHERE id = ${payer.id}`);   /* the numbers page counts every person */
+      await lapsedOn('sub_paid');
+      const paid = await asked();
+      check('one Stripe says is paid for, its news not yet on the row, is refused like any paying household, and left running',
+        paid.status === 409 && JSON.stringify(paid.calls) === JSON.stringify(['GET sub_paid']) && paid.row.status === 'canceled' && paid.row.sub === 'sub_paid', paid);
       await lapsedOn('sub_down');
-      const unreachable = await claimNow();
-      check('if Stripe cannot be reached the claim waits, with the subscription still on the row for the next go',
-        unreachable === 503 && JSON.stringify(await rowNow()) === JSON.stringify({ plan: 'free', source: 'none', status: 'canceled', sub: 'sub_down' }), { unreachable, row: await rowNow() });
-      const asked = stripeCalls.length;
+      const down = await asked();
+      await lapsedOn('sub_stuck');
+      const stuck = await asked();
+      check('if Stripe cannot be reached, or will not cancel it, the claim waits, with the subscription still on the row for the next go',
+        down.status === 503 && JSON.stringify(down.calls) === JSON.stringify(['GET sub_down']) && down.row.plan === 'free' && down.row.sub === 'sub_down'
+        && stuck.status === 503 && JSON.stringify(stuck.calls) === JSON.stringify(['GET sub_stuck', 'DELETE sub_stuck', 'GET sub_stuck']) && stuck.row.plan === 'free' && stuck.row.sub === 'sub_stuck',
+        { down, stuck });
       await lapsedOn('sub_gone');
-      const endedLongAgo = await claimNow(), endedRow = await rowNow();
+      const gone = await asked();
       await lapsedOn('sub_cut');
-      const answerLost = await claimNow(), lostRow = await rowNow();
-      const calls = stripeCalls.slice(asked).map(c => c.method + ' ' + c.path);
-      check('a subscription Stripe ended long ago, or cancelled with its answer lost, is asked about and does not hold the claim up',
-        endedLongAgo === 200 && isForever(endedRow) && answerLost === 200 && isForever(lostRow)
-        && ['DELETE /v1/subscriptions/sub_gone', 'DELETE /v1/subscriptions/sub_cut', 'GET /v1/subscriptions/sub_cut'].every(c => calls.includes(c)),
-        { endedLongAgo, endedRow, answerLost, lostRow, calls });
+      const cut = await asked();
+      check('one Stripe ended long ago is left as it is, and one cancelled with its answer lost is read back: neither holds the claim up',
+        gone.status === 200 && JSON.stringify(gone.calls) === JSON.stringify(['GET sub_gone']) && isForever(gone.row)
+        && cut.status === 200 && JSON.stringify(cut.calls) === JSON.stringify(['GET sub_cut', 'DELETE sub_cut', 'GET sub_cut']) && isForever(cut.row),
+        { gone, cut });
+      const cancelledBefore = await stripeLib.cancelSubscription('sub_x'), refused = await stripeLib.cancelSubscription('sub_stuck');
+      check('cancelling one Stripe cancelled before counts as done, as its no-such-subscription answer says, and one it will not cancel does not',
+        cancelledBefore === true && refused === false, { cancelledBefore, refused });
+      await lapsedOn('sub_race');
+      const race = await asked();
+      const raceAgain = await claimNow();
+      check('a checkout that lands while the claim waits on Stripe is not written over: the claim waits, and its next go is refused as paying',
+        race.status === 503 && race.row.plan === 'household' && race.row.status === 'active' && race.row.sub === 'sub_new' && raceAgain === 409, { race, raceAgain });
     } finally { globalThis.__LS_STRIPE_FETCH = stripeStub; }
     await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL WHERE household_id = ${patState.household.id}`);
     process.env.BETA_CAP = '1';
     const fullPage = await (await fetch(NODE_BASE + '/beta')).text();
     check('at the cap the page says the beta is full and takes an email for the list', /beta is full/.test(fullPage) && /name="waitlist"/.test(fullPage) && /value="beta-full"/.test(fullPage) && /action="\/on-the-list\.html"/.test(fullPage) && !/Join the beta/.test(fullPage));
-    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'none' WHERE household_id = ${patState.household.id}`);
+    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', stripe_subscription_id = 'sub_full' WHERE household_id = ${patState.household.id}`);
     process.env.BETA_CAP = '0';                                   /* closed: nobody else gets in, whatever the count */
+    const fullCalls = stripeCalls.length;
     const full = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, full: j.full }))));
-    check('and a claim past the cap is refused', full.status === 409 && full.full === true, full);
+    check('and a claim past the cap is refused, before Stripe is asked about the subscription on its row', full.status === 409 && full.full === true && !stripeCalls.slice(fullCalls).some(c => c.path.startsWith('/v1/subscriptions/')), full);
     /* a tester's first sign-in gets the beta welcome, not the three-weeks one: the flag rides on the link and the code */
     {
       const rq = await (await fetch(NODE_BASE + '/api/auth/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'betawelcome@example.com', beta: true }) })).json();
@@ -4412,6 +4442,15 @@ try {
   await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_price_id = NULL WHERE household_id = ${patState.household.id}`);
   const betaRefund = await hook({ id: 'evt_refund_beta', type: 'charge.refunded', created: t0 + 9.1, data: { object: { id: 'ch_2', object: 'charge', customer: 'cus_pat', refunded: true } } });
   check('but a full refund of an earlier charge cannot end a forever nobody paid for', betaRefund.status === 200 && (await ent()).plan === 'lifetime' && (await ent()).source === 'code' && (await ent()).status === 'active' && (await ent()).cust === 'cus_pat', await ent());
+  {
+    /* a yearly checkout left open in a tab while the beta was claimed, and paid after: it would charge a free forever every year */
+    const before = stripeCalls.length;
+    const late = await hook({ id: 'evt_forever_clash', type: 'checkout.session.completed', created: t0 + 9.15, data: { object: { id: 'cs_forever_clash', mode: 'subscription', payment_status: 'paid', amount_total: 1999, customer: 'cus_pat', subscription: 'sub_late', invoice: 'in_clash', client_reference_id: String(patState.household.id), metadata: { plan: 'year' } } } });
+    const calls = stripeCalls.slice(before);
+    check('a yearly checkout paid after the beta was claimed is cancelled and refunded, and the forever stays as it was',
+      late.status === 200 && calls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_late') && calls.some(c => c.path === '/v1/refunds' && c.params.payment_intent === 'pi_clash')
+      && (await ent()).plan === 'lifetime' && (await ent()).source === 'code' && (await ent()).sub === null, [calls.map(c => c.method + ' ' + c.path), await ent()]);
+  }
   /* one household, two ways to pay: Stripe's clock and Apple's cannot be compared, so a Stripe
      delivery late enough to pass the ordering check must still not undo a plan paid to Apple */
   await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.annual' WHERE household_id=${patState.household.id}`);

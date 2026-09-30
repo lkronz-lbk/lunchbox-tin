@@ -16,7 +16,10 @@ import { sql, milestone } from './db.js';
      other are ordered by Postgres, not by us; and
    - the row is not held by a live App Store plan. Stripe's stamps and Apple's cannot be compared,
      so without this a late Stripe delivery (the cancellation of a subscription that ended months
-     ago, retried) would pass the check above and wipe a plan the household is paying Apple for.
+     ago, retried) would pass the check above and wipe a plan the household is paying Apple for;
+   - and, when the caller gives v.expectSub, the row still carries that subscription (or none, for
+     null): the beta claim reads the row, asks Stripe, then writes, and a checkout that landed in
+     between must not be written over.
    Returns whether the row was written. */
 export async function write(hid, at, v) {
   const rows = await sql()`
@@ -30,6 +33,7 @@ export async function write(hid, at, v) {
       stripe_subscription_id = EXCLUDED.stripe_subscription_id, stripe_price_id = EXCLUDED.stripe_price_id,
       paid_by = COALESCE(EXCLUDED.paid_by, entitlements.paid_by), event_at = EXCLUDED.event_at, updated_at = now()
     WHERE (entitlements.event_at IS NULL OR entitlements.event_at <= EXCLUDED.event_at)
+      AND (${v.expectSub === undefined} OR entitlements.stripe_subscription_id IS NOT DISTINCT FROM ${v.expectSub === undefined ? null : v.expectSub})
       AND NOT (entitlements.source = 'apple' AND entitlements.status IN ('active', 'past_due')
                AND (entitlements.current_period_end IS NULL OR entitlements.current_period_end > now() - interval '3 days'))
     RETURNING household_id, source, status`;
