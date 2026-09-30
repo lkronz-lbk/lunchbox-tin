@@ -79,6 +79,14 @@ export async function milestone(householdId, kind) {
   catch (e) { console.error('milestone', kind, e.message); }
 }
 
+/* marks under a prefix, within a window: what a household has open right now (one checkout at a time) */
+export async function recentKeys(prefix, windowSeconds) {
+  const rows = await sql()`SELECT key FROM rate_events WHERE key LIKE ${prefix + '%'} AND at > now() - make_interval(secs => ${windowSeconds})`;
+  return rows.map(r => r.key);
+}
+export async function mark(key) { await sql()`INSERT INTO rate_events (key) VALUES (${key})`; }
+export async function unmark(prefix) { await sql()`DELETE FROM rate_events WHERE key LIKE ${prefix + '%'}`; }
+
 /* sliding-window throttle backed by the database */
 export async function throttled(key, limit, windowSeconds) {
   const q = sql();

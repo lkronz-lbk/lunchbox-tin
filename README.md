@@ -289,7 +289,10 @@ throwing app script cannot leave it up forever. From there:
   re-checked on every import and merge), and the kid's-pick screens and the Foods list show
   it in place of the emoji; tapping it again offers "Take another" or "Remove the photo".
   Every food has an emoji icon derived from its name, so
-  custom foods get a picture too. A household that packs the night before (Account →
+  custom foods get a picture too. Five bank foods were renamed in v25 (Goldfish crackers,
+  Babybel cheese round, Jello cup, the two Sunbutter dishes); a household seeded before then
+  keeps the old names, and `BANK_ALIAS` answers to them, so the idea bank shows them ticked,
+  the shopping list knows what they are made of, and none is treated as one of the parent's own. A household that packs the night before (Account →
   Lunchboxes → **When do you pack?**) sees tomorrow's box from 3pm.
 - **Did they eat it?** — once the box is home on a pack day, or the morning after, the Pack view
   asks about that box: "All eaten" first, one tap at the top of the card, then ate it / some /
@@ -339,12 +342,22 @@ throwing app script cannot leave it up forever. From there:
   are still ahead and only covers the days still to come; otherwise it goes into next week. An
   existing plan is re-drawn in place until its last day has gone by, and a shuffle never touches
   a day that has already gone: what was packed stays exactly as it was, for the review and the
-  pack checks. The shopping list likewise skips days already gone. The after-school review only asks about a
+  pack checks. Once every day of the plan has gone by (the weekend), Week shows the coming week
+  in its place — empty, "No plan for this week yet", Plan the week — and the arrow the week
+  after it, so Sunday is planning night and "Next ›" never means two Mondays out; a week that
+  was planned two Mondays out waits its turn (`rollover` moves `kid.next` into `kid.week` only
+  once its Monday is the one a fresh plan would start on, and archives the stale week
+  meanwhile). Changing the pack days follows into the weeks already planned, for the days
+  still ahead: a day switched on is drawn into each planned week where it lands (`packDayChange`,
+  each compartment as a single re-draw against that box), a day switched off leaves it, a day
+  that has gone stays as it was, and the toast says which ("Wednesday added to the week",
+  "Wednesday taken off the week — the box that has gone stays"). The shopping list likewise skips days already gone. The after-school review only asks about a
   day the plan already existed on, or that had something checked into the bag.
 - **Lunchbox settings** — the gear beside the lunchbox name on Week, Pack, Shop and Foods:
   lunchboxes, name, pack days, per-lunchbox school rules (cold-only, no ice pack, short
   eating time, no chocolate or candy), allergen exclusions (including seeds & sesame), a
-  free-text avoid list, the kid's say. Optional **snack** and **drink** compartments per
+  free-text avoid list that matches whole words, singular or plural ("ham" keeps ham out and
+  lets graham crackers in; "pea" peas, not peaches — `onAvoidList`), the kid's say. Optional **snack** and **drink** compartments per
   lunchbox: switching one on seeds a few foods and fills the current week, so the tin never
   grows an empty cell.
 - **Account** — the sixth tab is a short list of rows, each opening its own page over the
@@ -361,7 +374,12 @@ in another browser) has nothing to ask about and signs out on one.
   renews or ends, and how to stop it. **Lunchboxes**: the lunchbox settings, the same page
   the gear opens. **Contact support**: the help sheet, the same one the ? opens. Signed out
   the sign-in card stays on the tab itself, because that is the one thing that tab is for
-  and a `?join=` link lands there. The open page is `UI.pane`, which never reaches the
+  and a `?join=` link lands there; the Sign in buttons inside the Household and Subscription
+  pages open that card (`go-signin`) rather than a page with no form on it. Why the sign-in was
+  asked for is kept on the phone (`lunchsorted-after`: the plan sheet's reason — a lunchbox, an
+  invite, a food, a recipe, a write-in, the pantry, the question, the kid's pick, the plan) and
+  the parent lands back there whether they arrive by the emailed link or type the code
+  (`resumeAfter`). The open page is `UI.pane`, which never reaches the
   account document, so a tap is never read as a change; `paneOK()` is the single test for
   whether a pane may be on screen and the render asks it too, because a pane is opened by a
   link from an email and by the return from Stripe as well as by a tap.
@@ -581,7 +599,12 @@ two hops, `seenAs` has to become a list and the guard has to check all of them.
 That hazard is only real once the intervening build has actually shipped. **An unshipped tag is
 free to amend**: while `dev` sits above the tag production is serving, more work on it is more
 work on the same unreleased build, and it does not bump. A *shipped* build is the opposite —
-bump it, always, or the cache-first service worker keeps serving the old shell. Do not read the
+bump it, always, or the cache-first service worker keeps serving the old shell. A phone left
+open when a new build's worker takes control (skipWaiting + claim) reloads itself the first
+moment nothing is in hand — no sheet open, nothing being typed, the kid's screen closed, nothing
+armed — so the window in which one build runs against another's shell is seconds, not a day
+(the `controllerchange` listener in the third script block; the very first worker is not a new
+build). Do not read the
 first rule as license to skip the second. Nothing enforces either: `npm run csp` compares
 `APP_BUILD`, `VERSION` and `WHATS_NEW.build` to each other, and cannot tell that the app changed
 and the tag did not.
@@ -817,7 +840,9 @@ writes the same one.
   `public/app/index.html` (`window.LSMerge`): newer `updatedAt` wins per record, a newer
   deletion beats an older edit, packed and eat and pantry checks merge by their own `at`
   stamps (an uncheck is a row marked `off`, so it travels too; a review row's stamp is its
-  latest answer), the newer plan wins day by day except that a day already gone keeps the
+  latest answer), a plan merges day by day — each day by its own `updatedAt` where it has one
+  (`touchDay`: every writer stamps the day it touched, so two parents changing different days
+  both win) and by its week's where it does not — except that a day already gone keeps the
   plan that existed on it, lists come out in a fixed order so both phones compute the same
   document, and the local copy wins ties. The test suite runs the block on its own. A push
   that fails is retried three times with growing waits, then waits for the next change;
@@ -917,8 +942,15 @@ the idea bank stays free so a free list is never stuck with what it has.
   and asks Stripe Tax to add tax where it applies (if Tax is not finished in the
   dashboard the session is retried without it and the error logged). A household that
   already has the plan is not sold it again (409), nor is one paying through the App Store,
-  which is told where it is managed. The web only: a checkout asked for with `client: 'ios'` is
-  refused (403), and the iPhone app never opens Stripe at all, to buy or to manage.
+  which is told where it is managed. One checkout at a time for a household: each opened
+  session is marked in `rate_events` (`checkout:<household>:<user>:<session>`, half an hour, the
+  session's own life); another member asking while one is open is refused (409, `open: true`,
+  "Someone in your household is paying right now"), so two parents cannot both pay on the last
+  day and leave one subscription cancelling the other with no refund; the same member asking
+  again has their earlier session expired at Stripe and replaced, so backing out of Stripe and
+  trying again works, and a completed checkout clears the mark. The web only: a checkout asked
+  for with `client: 'ios'` is refused (403), and the iPhone app never opens Stripe at all, to buy
+  or to manage.
 - **Webhook** (`POST /api/billing/webhook`, signature checked against the raw body, five
   minutes of clock drift, and the event's `livemode` must match the deploy context) listens
   for `checkout.session.completed`, `checkout.session.async_payment_succeeded`,

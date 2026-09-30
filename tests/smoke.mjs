@@ -63,6 +63,7 @@ globalThis.__LS_STRIPE_FETCH = async (url, init) => {
   if (u.pathname === '/v1/invoice_payments') return reply({ data: [{ payment: { type: 'payment_intent', payment_intent: 'pi_clash' } }] });
   if (u.pathname === '/v1/refunds') return reply({ id: 're_clash', status: 'succeeded' });
   if (u.pathname === '/v1/billing_portal/sessions') return reply({ url: 'https://billing.stripe.com/p/session/test_1' });
+  if (/^\/v1\/checkout\/sessions\/[^/]+\/expire$/.test(u.pathname)) return reply({ id: u.pathname.split('/')[4], status: 'expired' });
   if (u.pathname.startsWith('/v1/subscriptions/')) {
     const id = u.pathname.split('/').pop();
     if (init.method === 'GET') return reply({ id, object: 'subscription', status: 'active', cancel_at_period_end: false, customer: 'cus_pat', items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] } });
@@ -228,6 +229,21 @@ const NODE_BASE = 'http://' + (ADDR.family === 'IPv6' || ADDR.family === 6 ? '['
   a.kids[0].settings = {days:[1,2,3,4,5], review:false, homeAt:'17:30', updatedAt:t2}; b.kids[0].settings = {days:[1,2,3,4,5], review:true, homeAt:'15:00', updatedAt:t1};
   m = M.merge(a, b);
   check('merge: a Didn’t get to it answer travels like any other, and the newer what-came-home settings win', m.kids[0].eaten['2026-09-01'].main.r === 'none' && m.kids[0].eaten['2026-09-01'].side.r === 'left' && m.kids[0].settings.review === false && m.kids[0].settings.homeAt === '17:30');
+  {
+    const wk = (stamp) => ({ id:'wk_1', kidId:'kid_1', start:'2026-09-07', createdAt:t1, updatedAt:stamp, days:[
+      { d:'2026-09-07', dow:1, slots:{main:'f1'}, lock:{main:false}, kidPick:{}, over:{}, updatedAt:t1 },
+      { d:'2026-09-08', dow:2, slots:{main:'f1'}, lock:{main:false}, kidPick:{}, over:{}, updatedAt:t1 },
+      { d:'2026-09-09', dow:3, slots:{main:'f1'}, lock:{main:false}, kidPick:{}, over:{} } ] });
+    const t3 = '2026-09-03T10:00:00.000Z';
+    a = clone(); b = clone(); a.kids[0].week = wk(t2); b.kids[0].week = wk(t3);
+    a.kids[0].week.days[0].slots.main = 'a_mon'; a.kids[0].week.days[0].updatedAt = t2;      /* this phone changed Monday, later */
+    b.kids[0].week.days[1].slots.main = 'b_tue'; b.kids[0].week.days[1].updatedAt = t3;      /* the other phone changed Tuesday, later still */
+    b.kids[0].week.days[0].slots.main = 'b_mon'; b.kids[0].week.days[0].updatedAt = t1;      /* and Monday, earlier */
+    m = M.merge(a, b, '2026-09-01');
+    const days = Object.fromEntries(m.kids[0].week.days.map(d => [d.d, d.slots.main]));
+    check('merge: two parents changing different days both win, day by day, by the day\'s own stamp', days['2026-09-07'] === 'a_mon' && days['2026-09-08'] === 'b_tue', days);
+    check('merge: a day with no stamp of its own goes by its week\'s, and a tie goes to this phone', days['2026-09-09'] === 'f1' && (() => { const x = clone(), y = clone(); x.kids[0].week = wk(t2); y.kids[0].week = wk(t2); x.kids[0].week.days[2].slots.main = 'x'; y.kids[0].week.days[2].slots.main = 'y'; return M.merge(x, y, '2026-09-01').kids[0].week.days[2].slots.main === 'x'; })(), days);
+  }
   /* recipes belong to the household, so they merge like members and lunchboxes do */
   a = clone(); b = clone();
   a.recipes = [{id:'rec_1', n:'Blondies', m:40, y:12, ing:['1 cup oats'], steps:['Stir.'], src:'', url:null, createdAt:t1, updatedAt:t1, deletedAt:null}];
@@ -709,8 +725,41 @@ try {
     const overTxt = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
     check('and the text sent then is next week\'s list under its own heading', /^Lunch shopping list\n\nNEXT WEEK\n/.test(overTxt), overTxt.slice(0, 60));
     await page.evaluate(() => window.__pinHour(9));
+    /* on the weekend the plan that has gone by is behind us: Week shows the coming week, empty, and the arrow the one after */
+    await page.evaluate(s => localStorage.setItem('lunchsorted', s), savedDoc);
+    await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted'));
+      const back = x => { const p = x.split('-').map(Number); const t = new Date(p[0], p[1] - 1, p[2] - 7); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); };
+      d.kids.forEach(k => { if (!k.week) return; k.week.start = back(k.week.start); k.week.days.forEach(x => { x.d = back(x.d); }); k.next = null; });
+      localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(300);
+    const weekNow = await page.evaluate(() => ({ title: document.querySelector('.view-title').textContent, empty: !!document.querySelector('.empty'), gone: document.querySelectorAll('.daycard.past').length, banner: [...document.querySelectorAll('.banner')].map(b => b.textContent).join(' | ') }));
+    const comingMonday = await page.evaluate(() => { const t = new Date(); t.setHours(0,0,0,0); const ws = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7)); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ws.getMonth()] + ' ' + ws.getDate(); });
+    check('with a plan whose every day has gone by, Week is the coming week, unplanned, with no day from the old plan and no "earlier week" banner', weekNow.title === 'Week of ' + comingMonday && weekNow.empty && weekNow.gone === 0 && !/earlier week/.test(weekNow.banner), weekNow);
     await page.evaluate(s => localStorage.setItem('lunchsorted', s), savedDoc);
     await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    /* a week planned two weeks out on that weekend waits for its turn rather than becoming this week */
+    await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0];
+      const shift = (x, n) => { const p = x.split('-').map(Number); const t = new Date(p[0], p[1] - 1, p[2] + n); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); };
+      const nxt = JSON.parse(JSON.stringify(k.week)); nxt.id = 'week_far'; nxt.start = shift(k.week.start, 7); nxt.days.forEach(x => { x.d = shift(x.d, 7); });
+      k.week.start = shift(k.week.start, -7); k.week.days.forEach(x => { x.d = shift(x.d, -7); }); k.next = nxt;
+      localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    check('a week planned two Mondays out does not become this week: the old plan goes to the archive and the coming week is open to plan', await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return !k.week && !!k.next && k.next.id === 'week_far' && k.past.length > 0; }));
+    await page.evaluate(s => localStorage.setItem('lunchsorted', s), savedDoc);
+    await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
+    /* a pack day switched on is drawn into the week; switched off, it leaves the week; the change says so */
+    await openPane(page, 'box');
+    const dayOff = await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const on = k.settings.days; return [1,2,3,4,5,6,0].find(d => on.indexOf(d) < 0); });
+    const daysBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.length);
+    await page.click('[data-act="day"][data-d="' + dayOff + '"]'); await page.waitForTimeout(400);
+    const afterOn = await page.evaluate(dw => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const day = k.week.days.find(x => x.dow === dw); const t = new Date(); t.setHours(0,0,0,0); const iso = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+      return { n: k.week.days.length, has: !!day, ahead: !day || day.d >= iso, filled: !!day && !!k.foods.find(f => f.id === day.slots.main), sorted: k.week.days.every((x, i, a) => !i || a[i-1].d < x.d) }; }, dayOff);
+    check('switching a pack day on draws that day into the week, in its place, and says so', (afterOn.ahead ? afterOn.has && afterOn.filled && afterOn.n === daysBefore + 1 && afterOn.sorted : afterOn.n === daysBefore) && /added to the week|has gone/.test(await page.textContent('#toast')), [afterOn, await page.textContent('#toast')]);
+    await page.click('[data-act="day"][data-d="' + dayOff + '"]'); await page.waitForTimeout(400);
+    const afterOff = await page.evaluate(dw => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return { n: k.week.days.length, has: !!k.week.days.find(x => x.dow === dw), on: k.settings.days.indexOf(dw) > -1 }; }, dayOff);
+    check('and switching it off takes it out again', !afterOff.on && afterOff.n === daysBefore && !afterOff.has, [afterOff, await page.textContent('#toast')]);
+    await page.click('[data-act="box-done"]'); await page.waitForTimeout(200);
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(300);
   }
 
@@ -1655,7 +1704,9 @@ try {
     const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0];
     const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);
     const iso = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
-    k.week.days[0].d = iso(y);                     /* pretend the first box was yesterday */
+    k.week.days[0].d = iso(y); k.week.days[0].dow = y.getDay();   /* pretend the first box was yesterday */
+    const t = new Date(); t.setHours(0,0,0,0); const ws = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7)); k.week.start = iso(ws);
+    k.week.days.push(Object.assign(JSON.parse(JSON.stringify(k.week.days[0])), { d: iso(t), dow: t.getDay() }));   /* and today's box, so the week is still this week and Week shows yesterday as a day that has gone */
     const c = new Date(); c.setDate(c.getDate() - 3); k.week.createdAt = c.toISOString();   /* and that the plan existed then */
     localStorage.setItem('lunchsorted', JSON.stringify(d));
   });
@@ -1741,8 +1792,8 @@ try {
   for (let i = 0; i < 5; i++) {
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
     await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(250); await goShuffle(page);
-    restedDrawn += await page.evaluate(id => JSON.parse(localStorage.getItem('lunchsorted')).kids[0]
-      .week.days.filter(x => x.slots.main === id).length, reviewedFood);
+    restedDrawn += await page.evaluate(id => { const t = new Date(); t.setHours(0,0,0,0); const iso = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+      return JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.filter(x => x.d >= iso && x.slots.main === id).length; }, reviewedFood);   /* a day that has gone keeps what was packed */
   }
   check('the draw leaves a resting food out', restedDrawn === 0, restedDrawn);
   await page.evaluate(id => {
@@ -1767,8 +1818,8 @@ try {
   let restedRedrawn = 0;
   for (let i = 0; i < 5; i++) {
     await page.click('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0'); await page.waitForTimeout(200); await goShuffle(page);
-    restedRedrawn += await page.evaluate(id => JSON.parse(localStorage.getItem('lunchsorted')).kids[0]
-      .week.days.filter(x => x.slots.main === id).length, reviewedFood);
+    restedRedrawn += await page.evaluate(id => { const t = new Date(); t.setHours(0,0,0,0); const iso = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+      return JSON.parse(localStorage.getItem('lunchsorted')).kids[0].week.days.filter(x => x.d >= iso && x.slots.main === id).length; }, reviewedFood);
   }
   check('and so does a single re-draw', restedRedrawn === 0, restedRedrawn);
   await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].eaten = {}; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
@@ -1787,6 +1838,10 @@ try {
     [...document.querySelectorAll('#view .item')].filter(e => e.dataset.act === 'pane' || e.dataset.act === 'help')
       .map(e => e.querySelector('.nm').textContent).filter(t => t !== 'Subscription').join('|') === 'This phone|Household|Lunchbox|Contact support'),
     await page.evaluate(() => [...document.querySelectorAll('#view .item .nm')].map(e => e.textContent)));
+  await openPane(page, 'household');
+  await page.click('[data-act="go-signin"]'); await page.waitForTimeout(400);
+  check('Sign in on the Household page opens the sign-in card itself, with the email field ready', await page.evaluate(() => document.activeElement && document.activeElement.id === 'signinEmail') && !(await page.$('#paneTitle')));
+  await page.click('[data-act="tab"][data-tab="setup"]'); await page.waitForTimeout(250);
   check('signed out, the first row offers this phone rather than an account there is none of', await page.evaluate(() => {
     const r = document.querySelector('#view .item[data-pane="account"]');
     return !!r && r.querySelector('.nm').textContent === 'This phone' && /Backup/.test(r.querySelector('.meta').textContent);
@@ -1883,7 +1938,7 @@ try {
     return {on: !!(k.settings.slots && k.settings.slots.snack && k.settings.slots.drink),
       snacks: k.foods.filter(f => f.c==='snack' && !f.deletedAt).length,
       drinks: k.foods.filter(f => f.c==='drink' && !f.deletedAt).length,
-      filled: k.week.days.every(dy => dy.slots.snack && dy.slots.drink)};
+      filled: (() => { const t = new Date(); t.setHours(0,0,0,0); const iso = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); return k.week.days.filter(dy => dy.d >= iso).every(dy => dy.slots.snack && dy.slots.drink); })()};
   });
   check('switching a compartment on seeds it and fills this week', slotState.on && slotState.snacks > 0 && slotState.drinks > 0 && slotState.filled, slotState);
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
@@ -1936,7 +1991,9 @@ try {
     const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0], ts = new Date().toISOString();
     k.foods.push({id:'t_dairy', kidId:k.id, n:'Test cheese stick', c:'side', t:['protein','soft'], a:'dairy', al:['dairy'], createdAt:ts, updatedAt:ts, deletedAt:null});
     k.settings.avoidAllergens = ['nuts'];
-    k.week.days[0].slots.side = 't_dairy'; k.week.days[0].lock.side = true;
+    const tt = new Date(); tt.setHours(0,0,0,0); const tiso = tt.getFullYear()+'-'+String(tt.getMonth()+1).padStart(2,'0')+'-'+String(tt.getDate()).padStart(2,'0');
+    const live = k.week.days.find(x => x.d >= tiso) || k.week.days[0];   /* a day still ahead: one that has gone is never rewritten */
+    live.slots.side = 't_dairy'; live.lock.side = true;
     d.activeKidId = k.id;
     localStorage.setItem('lunchsorted', JSON.stringify(d));
   });
@@ -1944,8 +2001,9 @@ try {
   await openGear(page); await page.waitForTimeout(200);
   await page.click('[data-act="allergen"][data-k="dairy"]'); await page.waitForTimeout(300);
   const afterRule = await page.evaluate(() => {
-    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
-    return {side: k.week.days[0].slots.side, locked: k.week.days[0].lock.side};
+    const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; const t = new Date(); t.setHours(0,0,0,0); const iso = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+    const live = k.week.days.find(x => x.d >= iso) || k.week.days[0];
+    return {side: live.slots.side, locked: live.lock.side};
   });
   check('a rule change clears a locked compartment that now breaks it and draws again',
     afterRule.side !== 't_dairy' && afterRule.side !== null && !afterRule.locked, afterRule);
@@ -1962,8 +2020,22 @@ try {
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
   check('a food typed into the avoid list is out of the week after a reload', await page.evaluate(name => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
-    return k.settings.avoidText === name && !k.week.days.some(d => { const f = k.foods.find(x => x.id === d.slots.side); return f && f.n === name; }); }, avoidTarget), avoidTarget);
-  await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].settings.avoidText = ''; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+    const t = new Date(); t.setHours(0,0,0,0); const iso = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+    return k.settings.avoidText === name && !k.week.days.some(d => { if (d.d < iso) return false; const f = k.foods.find(x => x.id === d.slots.side); return f && f.n === name; }); }, avoidTarget), avoidTarget);   /* a day that has gone keeps what was packed */
+  /* the avoid list matches whole words: "ham" keeps ham out and lets graham crackers in */
+  await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0], t = new Date().toISOString();
+    ['Graham crackers|side', 'Ham & cheese sandwich|main', 'Peaches|fruit', 'Sugar snap peas|side', 'Goldfish crackers|side'].forEach(x => { const [n, c] = x.split('|'); if (!k.foods.some(f => f.n === n && !f.deletedAt)) k.foods.push({id:'test_'+n.replace(/\W+/g, '_').toLowerCase(), kidId:k.id, n, c, t:[], a:'snacks', al:[], createdAt:t, updatedAt:t, deletedAt:null}); });
+    k.settings.avoidText = 'ham, pea'; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+  await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
+  await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(300);
+  const avoidRows = await page.$$eval('#view .item', a => Object.fromEntries(a.map(e => [ (e.querySelector('.nm') || {}).textContent || '', /on your avoid list/.test(e.textContent) ]).filter(x => x[0])));
+  check('"ham" and "pea" on the avoid list keep out ham and peas, whole words, and let graham crackers and peaches through',
+    avoidRows['Ham & cheese sandwich'] === true && avoidRows['Sugar snap peas'] === true && avoidRows['Graham crackers'] === false && avoidRows['Peaches'] === false, avoidRows);
+  /* a bank food a household still carries under its old name is the bank's food: ticked in the idea bank, not "one of your own" */
+  await page.click('[data-act="ideas"]'); await page.waitForTimeout(400);
+  check('a food kept under the bank\'s old name is ticked in the idea bank under its new one', await page.$eval('[data-act="add-idea"][data-name="Cheddar fish crackers"]', b => b.getAttribute('aria-pressed') === 'true' && b.classList.contains('ticked')));
+  await page.click('#sheetClose'); await page.waitForTimeout(300);
+  await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0]; k.foods = k.foods.filter(f => !/^test_/.test(f.id)); k.settings.avoidText = ''; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
   await page.goto(BASE+'/app/'); await page.waitForTimeout(400);
   await openGear(page); await page.waitForTimeout(200);
 
@@ -2995,8 +3067,10 @@ try {
     await until(pj, () => /go back there and type the code/.test(document.querySelector('#view').textContent));
     const stillEmpty = (await db.query(`SELECT h.doc FROM households h JOIN users u ON u.id = h.owner_user_id WHERE u.email = 'ivy-parent@example.com'`)).rows[0];
     check('a link opened in another browser signs it in, says the lunches are elsewhere, offers sign-out, and does not push an empty household', !!stillEmpty && stillEmpty.doc === null && (await pj.$$eval('#obName', a => a.length)) === 1 && (await pj.$$eval('[data-act="signout"]', a => a.length)) === 1);
+    await pi.evaluate(() => localStorage.setItem('lunchsorted-after', 'pantry'));   /* they were checking the pantry when the sign-in was asked for */
     await pi.fill('#signinCode', code); await pi.click('[data-act="signin-code"]');
-    const codeIn = await until(pi, () => !document.querySelector('#signinCode') && !!document.querySelector('.tin'));
+    const codeIn = await until(pi, () => !document.querySelector('#signinCode') && (!!document.querySelector('.tin') || /What to buy/.test(document.querySelector('#view').textContent)));
+    check('the typed code lands the parent back where they were, as the link does', await until(pi, () => { const t = document.querySelector('nav.tabs button[aria-current="true"]'); return !!t && t.getAttribute('data-tab') === 'shop'; }), await pi.$eval('nav.tabs button[aria-current="true"]', e => e.getAttribute('data-tab')).catch(() => 'no tab'));
     const pushed = await until(pi, () => fetch('/api/household').then(r => r.json()).then(j => !!j.doc && j.doc.kids.some(k => k.name === 'Ivy')));
     check('the code still works after the link was spent elsewhere, and typed where the week was built it makes that copy the household', codeIn && pushed, [codeIn, pushed, await pi.textContent('#toast').catch(() => '')]);
     await pj.reload(); await pj.waitForLoadState('load');
@@ -3312,7 +3386,7 @@ try {
   }
   stripeCalls.length = 0; globalThis.__LS_STRIPE_NO_TAX = true;
   await pb.click('[data-act="buy"][data-plan="year"]'); await pb.waitForURL(/checkout\.stripe\.com/); 
-  check('when Stripe Tax is not set up yet, the checkout is retried without it and still opens', pb.url().startsWith('https://checkout.stripe.com/') && stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length === 2 && stripeCalls[1].params['automatic_tax[enabled]'] === 'false');
+  check('when Stripe Tax is not set up yet, the checkout is retried without it and still opens', pb.url().startsWith('https://checkout.stripe.com/') && stripeCalls.filter(c => c.path === '/v1/checkout/sessions').length === 2 && stripeCalls.filter(c => c.path === '/v1/checkout/sessions')[1].params['automatic_tax[enabled]'] === 'false');
   globalThis.__LS_STRIPE_NO_TAX = false;
   const anon = await fetch(NODE_BASE+'/api/billing/checkout', { method: 'POST', body: '{}' });
   check('a stranger cannot open a checkout', anon.status === 401);
@@ -3863,6 +3937,21 @@ try {
   await openPane(pa, 'plan');
   const otherPortal = await pa.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('the other parent sees the plan but cannot open the payer\'s billing', otherPortal === 403 && (await pa.$$eval('[data-act="portal"]', a => a.length)) === 0, otherPortal);
+  {
+    /* one checkout at a time for a household: the other parent's, still open, is refused; a parent's own is closed at Stripe and replaced */
+    const entRow = (await db.query(`SELECT plan, source, status, stripe_subscription_id FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
+    await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'none', stripe_subscription_id = NULL WHERE household_id = ${patState.household.id}`);
+    const patId = (await db.query(`SELECT id FROM users WHERE email = 'pat@example.com'`)).rows[0].id;
+    await db.query(`INSERT INTO rate_events (key) VALUES ('checkout:${patState.household.id}:${patId}:cs_test_1')`);
+    const otherCheckout = await pa.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.json().then(j => ({status: r.status, body: j}))));
+    check('while one parent\'s checkout is open, the other parent\'s is refused, and told why', otherCheckout.status === 409 && otherCheckout.body.open === true && /paying right now/.test(otherCheckout.body.error), otherCheckout);
+    stripeCalls.length = 0;
+    const patAgain = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
+    const marks = (await db.query(`SELECT key FROM rate_events WHERE key LIKE 'checkout:${patState.household.id}:%'`)).rows.map(r => r.key);
+    check('the same parent trying again closes the earlier checkout at Stripe, gets a fresh one, and one open checkout is on record', patAgain === 200 && stripeCalls.some(c => c.path === '/v1/checkout/sessions/cs_test_1/expire') && stripeCalls.some(c => c.path === '/v1/checkout/sessions') && marks.length === 1, [patAgain, stripeCalls.map(c => c.path), marks]);
+    await db.query(`DELETE FROM rate_events WHERE key LIKE 'checkout:${patState.household.id}:%'`);
+    await db.query(`UPDATE entitlements SET plan = '${entRow.plan}', source = '${entRow.source}', status = '${entRow.status}', stripe_subscription_id = ${entRow.stripe_subscription_id ? "'" + entRow.stripe_subscription_id + "'" : 'NULL'} WHERE household_id = ${patState.household.id}`);
+  }
   await ctxA.close();
   /* deleting the account stops the money */
   stripeCalls.length = 0;
@@ -4547,6 +4636,16 @@ try {
   await page.waitForTimeout(700);
   check('the app opens with no network', (await page.$$eval('.tin', a => a.length)) > 0);
   await ctx.setOffline(false);
+  {
+    /* a new build's worker taking control: the page reloads itself, but not while a sheet is open */
+    await page.click('[data-act="help"]'); await page.waitForTimeout(300);
+    await page.evaluate(() => { window.__stillHere = 1; navigator.serviceWorker.dispatchEvent(new Event('controllerchange')); });
+    await page.waitForTimeout(2200);
+    check('a new build taking control waits while a sheet is open', await page.evaluate(() => window.__stillHere === 1 && !!document.querySelector('.sheet.open')));
+    await sheetDone(page);
+    const reloaded = await until(page, () => window.__stillHere !== 1, undefined, 6000);
+    check('and reloads the page the moment the sheet is put away, with the lunches still there', reloaded && (await page.$$eval('.tin', a => a.length)) > 0);
+  }
 
   /* --------------------------------------------------------- the website */
   const site = await ctx.newPage();

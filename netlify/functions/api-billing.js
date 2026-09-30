@@ -1,4 +1,4 @@
-import { sql, json, fail, siteUrl, throttled, milestone } from '../lib/db.js';
+import { sql, json, fail, siteUrl, throttled, milestone, recentKeys, mark, unmark } from '../lib/db.js';
 import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
@@ -58,6 +58,7 @@ async function applyEvent(ev) {
     if (obj.payment_status !== 'paid' && obj.payment_status !== 'no_payment_required') return 'unpaid';   /* a bank debit still clearing: the succeeded event follows */
     const hid = await household(obj.client_reference_id || (obj.metadata && obj.metadata.household_id));
     if (!hid) return 'no household';
+    await unmark(`checkout:${hid}:`);                     /* paid: the household's checkout is no longer open */
     const cust = idOf(obj.customer);
     const paidBy = Number(obj.metadata && obj.metadata.user_id) || null;
     const plan = PLANS[obj.metadata && obj.metadata.plan] || (obj.mode === 'payment' ? 'lifetime' : 'household');
@@ -234,6 +235,16 @@ export default async function handler(req, context) {
       /* a monthly or yearly household switches between the two in Manage billing, not with a second subscription */
       if (held && h.plan === 'household' && h.status === 'active') return fail('This household already has the Household plan; change how it is billed in Manage billing', 409);
       if (held && h.plan === 'household' && h.status === 'past_due') return fail('The Household plan is waiting on a payment; update the card in Manage billing', 409);
+      /* one checkout at a time for a household: both parents paying on the last day would leave one
+         subscription cancelling the other with no refund. Another member's checkout, still open, is
+         refused; this member's own is closed at Stripe and replaced, so backing out and trying again works. */
+      const open = await recentKeys(`checkout:${h.id}:`, 1800);
+      if (open.some(k => k.split(':')[2] !== String(user.id))) return fail('Someone in your household is paying right now; the plan switches on when they finish', 409, { open: true });
+      for (const k of open) {
+        const sid = k.split(':').slice(3).join(':');
+        if (sid) { try { await stripe('POST', `/checkout/sessions/${sid}/expire`, {}); } catch (e) { console.error('billing: could not close the earlier checkout', sid, e.message); } }
+      }
+      if (open.length) await unmark(`checkout:${h.id}:`);
       const params = {
         mode: 'subscription',
         line_items: [{ price: prices()[plan], quantity: 1 }],
@@ -268,6 +279,7 @@ export default async function handler(req, context) {
         session = await stripe('POST', '/checkout/sessions', params);
       }
       console.log(`billing: checkout household=${h.id} plan=${plan} tax=${params.automatic_tax.enabled} client=${body.client === 'ios' ? 'ios' : 'web'}`);
+      await mark(`checkout:${h.id}:${user.id}:${session.id}`);
       await milestone(h.id, 'checkout');
       return json({ url: session.url });
     }
