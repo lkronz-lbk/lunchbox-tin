@@ -676,7 +676,7 @@ try {
       const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
       const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
       return f && f.n; }, wDay);
-    check('Shuffle all leaves a write-in where the parent put it', survived === 'Leftover spaghetti', survived);
+    check('Plan the week leaves a write-in where the parent put it', survived === 'Leftover spaghetti', survived);
 
     /* and a reload rebuilds it from the whitelist still flagged once */
     await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(400);
@@ -694,7 +694,7 @@ try {
       const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
       const f = k.foods.find(x => x.id === k.week.days.find(y => y.d === d).slots.main);
       return f && f.n; }, wDay);
-    check('Shuffle this one replaces a write-in, and says which words it took', gone !== 'Leftover spaghetti'
+    check('Shuffle on the compartment replaces a write-in, and says which words it took', gone !== 'Leftover spaghetti'
       && /Leftover spaghetti/.test(await page.textContent('#toast')), gone);
     check('and the sheet gets out of the way, so the Undo can actually be tapped', !(await page.$('.sheet.open')));
     await tapUndoOn(page, 'and the toast is still up to tap that Undo on'); await page.waitForTimeout(350);
@@ -1228,14 +1228,14 @@ try {
   check('the lead box drew a week at all, so the comparison means something',
     align.leadDrew > 0, align);
   check('planning the week gives both boxes the same foods', align.boxes === 2 && align.same > 0, align);
-  /* with matching on, Shuffle all on Week is the household's draw too */
+  /* with matching on, Plan the week on Week is the household's draw too */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(500); await goShuffle(page);
-  check('Shuffle all with Match the boxes on draws every box, and says so', /Weeks drawn/.test(await page.textContent('#toast')) && /boxes match|compartments? differ/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+  check('Plan the week with Match the boxes on draws every box, and says so in the new words', /Weeks planned/.test(await page.textContent('#toast')) && /boxes match|compartments? differ/.test(await page.textContent('#toast')) && !/drawn/.test(await page.textContent('#toast')), await page.textContent('#toast'));
   /* the sheet: pick boxes, the rest keep theirs, and Undo puts it all back */
   const weeksBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week.days.map(d => d.slots))));
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300);
-  check('with two boxes, Shuffle all asks whose, all on, and says matching is on',
+  check('with two boxes, Plan the week asks whose, all on, and says matching is on',
     (await page.$$eval('#shKids .tg[aria-pressed="true"]', a => a.length)) === 2 && /Matching is on/.test(await page.textContent('#sheetBody')));
   await page.click('#shKids .tg >> nth=0'); await page.waitForTimeout(100);          /* leave the first box out */
   await page.click('[data-act="shuffle-go"]'); await page.waitForTimeout(500);
@@ -1251,8 +1251,9 @@ try {
   /* ------------------------------------------- planning the week after */
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
   check('the week header offers Next beside the title, one labelled button',
-    (await page.$$eval('[data-act="week-ahead"]', a => a.length)) === 1 && /^Next \u203a$/.test((await page.textContent('[data-act="week-ahead"]')).trim()));
-  check('and the date, Next and Shuffle all share one line on a phone', await page.evaluate(() => {
+    (await page.$$eval('[data-act="week-ahead"]', a => a.length)) === 1 && (await page.getAttribute('[data-act="week-ahead"]', 'aria-label')) === 'Next week'
+    && await page.$eval('[data-act="week-ahead"]', b => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44));
+  check('and the date, Next and Plan the week share one line on a phone', await page.evaluate(() => {
     const mid = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
     const t = document.querySelector('.view-title'), n = document.querySelector('[data-act="week-ahead"]'), p = document.querySelector('[data-act="plan-kid"]');
     return !!(t && n && p) && Math.abs(mid(t) - mid(n)) < 12 && Math.abs(mid(n) - mid(p)) < 12
@@ -1260,10 +1261,10 @@ try {
       && p.getBoundingClientRect().left > n.getBoundingClientRect().left;
   }));
   check('every control in the week header is a 44px target',
-    await page.$$eval('.titlerow .btn', a => a.every(b => b.getBoundingClientRect().height >= 44)));
-  check('the week draw and a day\'s draw are named as a pair, the day\'s the smaller',
-    /^Shuffle all$/.test((await page.textContent('[data-act="plan-kid"]')).trim())
-    && /^Shuffle day$/.test((await page.textContent('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0')).trim())
+    await page.$$eval('.titlerow .btn, .titlerow .iconbtn', a => a.length >= 2 && a.every(b => b.getBoundingClientRect().height >= 44 && b.getBoundingClientRect().width >= 44)));
+  check('the whole week is Plan the week and a day is Shuffle, the day\'s the smaller, and neither says draw',
+    /^Plan the week$/.test((await page.textContent('[data-act="plan-kid"]')).trim())
+    && /^Shuffle$/.test((await page.textContent('.daycard:not(.past) [data-act="shuffle-day"] >> nth=0')).trim())
     && await page.evaluate(() => {
       const a = document.querySelector('[data-act="plan-kid"]'), d = document.querySelector('.daycard:not(.past) [data-act="shuffle-day"]');
       return d.getBoundingClientRect().width < a.getBoundingClientRect().width && d.getBoundingClientRect().height >= 44;
@@ -1272,7 +1273,7 @@ try {
   await page.click('[data-act="week-ahead"][data-v="1"]'); await page.waitForTimeout(300);
   const nextTitle = await page.$eval('.view-title', e => e.textContent.trim());
   check('the arrow shows the week after, unplanned, with a button to plan it',
-    nextTitle !== thisWeekTitle && /^Week of /.test(nextTitle) && /Plan it/.test(await page.textContent('#view')) && /Nothing planned for next week yet/.test(await page.textContent('#view')) && /^\u2039 This$/.test((await page.textContent('[data-act="week-ahead"]')).trim()), {thisWeekTitle, nextTitle});
+    nextTitle !== thisWeekTitle && /^Week of /.test(nextTitle) && /Plan next week/.test(await page.textContent('#view')) && /Nothing planned for next week yet/.test(await page.textContent('#view')) && (await page.getAttribute('[data-act="week-ahead"]', 'aria-label')) === 'Back to this week', {thisWeekTitle, nextTitle});
   const curBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => JSON.stringify(k.week)));
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300); await goShuffle(page);
   const aheadPlan = await page.evaluate(() => JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => ({days: k.next ? k.next.days.length : 0, start: k.next && k.next.start, packDays: k.settings.days.length, weekStart: k.week.start})));
@@ -1319,7 +1320,7 @@ try {
       was.length === 2 && nowDone.length === 2 && nowDone.every(v => v === !was[0]), {dupe, was, nowDone});
   }
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(250);
-  check('and coming back to Week lands on this week', /^Next \u203a$/.test((await page.textContent('[data-act="week-ahead"]')).trim()));
+  check('and coming back to Week lands on this week', (await page.getAttribute('[data-act="week-ahead"]', 'aria-label')) === 'Next week');
   /* when this week has gone, the week after becomes this week */
   const rolled = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem('lunchsorted'));
@@ -1472,6 +1473,11 @@ try {
   await page.goto(BASE+'/app/');
   await page.waitForTimeout(500);
   check("the morning after, it asks how the box went", (await page.$$eval('.review', a => a.length)) === 1);
+  check('All eaten is the first thing on the card, one tap, and Skip waits at the foot saying what it does', await page.evaluate(() => {
+    const c = document.querySelector('.review'), all = c.querySelector('[data-act="eat-all"]'), skip = c.querySelector('[data-act="eat-skip"]'), seg = c.querySelector('.seg');
+    return !!(all && skip && seg) && all.classList.contains('primary') && !!(all.compareDocumentPosition(seg) & Node.DOCUMENT_POSITION_FOLLOWING)
+      && !!(seg.compareDocumentPosition(skip) & Node.DOCUMENT_POSITION_FOLLOWING) && /nothing counted/.test(skip.textContent) && all.getBoundingClientRect().height >= 44;
+  }));
   const reviewedFood = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0]; return k.week.days[0].slots.main; });
   await page.click('.review .seg button[data-cat="main"][data-r="left"]');
@@ -1516,7 +1522,7 @@ try {
   await page.click('[data-act="tab"][data-tab="foods"]');
   await page.waitForTimeout(250);
   check('a food that keeps coming home says so in plain words, with a date',
-    /came home twice — taking a break until [A-Z][a-z]{2} \d{1,2}/.test(await page.textContent('#view')), (await page.textContent('#view')).match(/came home[^<]{0,60}/));
+    /came home twice · on hold until [A-Z][a-z]{2} \d{1,2}/.test(await page.textContent('#view')) && !/resting|taking a break/.test(await page.textContent('#view')), (await page.textContent('#view')).match(/came home[^<]{0,60}/));
   let restedDrawn = 0;
   for (let i = 0; i < 5; i++) {
     await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
@@ -1563,10 +1569,20 @@ try {
   }
   /* Contact support is the same door as the "?" in the corner */
   await page.click('.topbar [data-act="help"], #who [data-act="help"]'); await page.waitForTimeout(300);
-  const fromCorner = await page.textContent('#sheetBody');
+  const helpOrder = () => page.evaluate(() => {
+    const b = document.querySelector('#sheetBody'), q = b.querySelector('details'), m = b.querySelector('a[data-feedback]');
+    return { questions: [...b.querySelectorAll('details summary')].map(e => e.textContent).join('|'), mailFirst: !!(q && m) && !!(m.compareDocumentPosition(q) & Node.DOCUMENT_POSITION_FOLLOWING),
+      asQuestion: q ? [getComputedStyle(q.querySelector('summary')).textTransform, Math.round(parseFloat(getComputedStyle(q.querySelector('summary')).fontSize))] : null };
+  });
+  const fromCorner = await helpOrder();
+  check('the help sheet\'s questions render as questions, not as section labels', !!fromCorner.asQuestion && fromCorner.asQuestion[0] === 'none' && fromCorner.asQuestion[1] === 15, fromCorner.asQuestion);
+  check('and from the ? the answers come first, the mail buttons under them', !fromCorner.mailFirst && /Something is wrong/.test(await page.textContent('#sheetBody')));
+  check('and no answer says draw, resting or kept', !/\bdraws?\b|\bdrawn\b|\bresting\b|\bkept\b(?!\s+(?:\w+\s+)?out\b|\s+(?:on|there|for)\b)/i.test(await page.textContent('#sheetBody')), (await page.textContent('#sheetBody')).match(/[^.]*\b(draws?|drawn|resting|kept)\b[^.]*/i));
   await sheetDone(page); await page.waitForTimeout(250);
   await page.click('#view .item[data-act="help"]'); await page.waitForTimeout(300);
-  check('Contact support opens the same help sheet as the "?" in the corner', (await page.textContent('#sheetBody')) === fromCorner && /Something is wrong/.test(fromCorner));
+  const fromSupport = await helpOrder();
+  check('Contact support opens the same help sheet as the "?" in the corner', fromSupport.questions === fromCorner.questions && /Something is wrong/.test(await page.textContent('#sheetBody')));
+  check('and there the two mail buttons come first, above the answers', fromSupport.mailFirst);
   await sheetDone(page); await page.waitForTimeout(250);
   /* Lunchboxes is the settings, reached without leaving Account */
   await openPane(page, 'box');
@@ -1773,7 +1789,7 @@ try {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0], t = new Date(); t.setHours(0,0,0,0);
     const day = k.week.days.find(x => new Date(x.d + 'T00:00:00') >= t) || k.week.days[0];
     return day.lock.side === false && !!day.slots.side; }));
-  check('and says so', /no longer kept/i.test(await page.textContent('#toast')));
+  check('and says so, in the word a parent sees', /unlocked/i.test(await page.textContent('#toast')) && !/kept/i.test(await page.textContent('#toast')), await page.textContent('#toast'));
   await backdropTap(page); await page.waitForTimeout(300);
 
   /* an in-place re-draw leaves the days already gone exactly as they were */
@@ -2626,6 +2642,14 @@ try {
   await p2.click('[data-act="tab"][data-tab="setup"]'); await p2.waitForTimeout(250);
   await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids[0].name = 'Ollie Unsent'; d.kids[0].updatedAt = new Date().toISOString(); localStorage.setItem('lunchsorted', JSON.stringify(d)); });
   await p2.reload(); await p2.waitForLoadState('load'); await openPane(p2, 'account'); await until(p2, () => !!document.querySelector('[data-act="signout"]'));
+  await p2.click('[data-act="signout"]'); await p2.waitForTimeout(250);
+  check('Sign out asks first: the first tap arms the button, says what goes, and clears nothing',
+    /Tap again to sign out/.test(await p2.textContent('[data-act="signout"]')) && /clears this phone/.test(await p2.textContent('#toast'))
+    && (await p2.$$eval('[data-act="disarm"]', a => a.length)) === 1
+    && await p2.evaluate(() => !!JSON.parse(localStorage.getItem('lunchsorted')).onboardedAt), await p2.textContent('[data-act="signout"]'));
+  await p2.click('[data-act="disarm"]'); await p2.waitForTimeout(200);
+  check('and Stay stands it down', /^Sign out$/.test((await p2.textContent('[data-act="signout"]')).trim()));
+  await p2.click('[data-act="signout"]'); await p2.waitForTimeout(200);
   await p2.click('[data-act="signout"]'); await until(p2, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));
   const cleared = await p2.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); return !d.onboardedAt && !d.kids.some(k => k.foods.length) && !d.kids.some(k => k.name === 'Ollie'); });
   const onServer = (await db.query(`SELECT h.doc FROM households h JOIN household_members m ON m.household_id = h.id JOIN users u ON u.id = m.user_id WHERE u.email = 'sam@example.com'`)).rows[0];
@@ -2790,6 +2814,18 @@ try {
   check('no banner nags in week one', (await pb.$$eval('.banner', a => a.filter(b => /three weeks/.test(b.textContent)).length)) === 0);
   await setBorn(19); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
   check('with three days left the app says when everything ends, once', /three weeks of everything end on [A-Z][a-z]{2} \d{1,2}/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="upgrade"][data-why="keep"]', a => a.length)) >= 1);
+  /* the filled button on a banner used to take the banner's own ink: brown on green in light, orange on green in dark */
+  const bannerContrast = () => pb.evaluate(() => {
+    const b = document.querySelector('.banner .btn.primary'); if(!b) return 0;
+    const lum = c => { const m = c.match(/\d+(\.\d+)?/g).slice(0, 3).map(v => { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]; };
+    const cs = getComputedStyle(b), a = lum(cs.color), bg = lum(cs.backgroundColor);
+    return Math.round(((Math.max(a, bg) + 0.05) / (Math.min(a, bg) + 0.05)) * 10) / 10;
+  });
+  const lightC = await bannerContrast();
+  await pb.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark')); await pb.waitForTimeout(50);
+  const darkC = await bannerContrast();
+  await pb.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+  check('and the banner\'s filled button can be read in both themes', lightC >= 4.5 && darkC >= 4.5, [lightC, darkC]);
   await pb.click('[data-act="trial-dismiss"]'); await pb.waitForTimeout(200); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
   check('and Later means later', !/three weeks of everything end/.test(await pb.textContent('#view')));
   await setBorn(30); await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
@@ -3113,13 +3149,26 @@ try {
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
   await until(pb, () => /payment failed/i.test(document.querySelector('#view').textContent));
   check('a failed payment says so with the date, keeps the plan for now, and makes Manage billing the main button', /update the card in Manage billing, or the Household plan ends on Jan 15, 2027/i.test(await pb.textContent('#view')) && await pb.$eval('[data-act="portal"]', b => b.classList.contains('primary')) && (await pb.$$eval('[data-act="upgrade"]:not([data-why="forever"])', a => a.length)) === 0);
+  await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(150); await pb.click('[data-act="tab"][data-tab="pack"]'); await pb.waitForTimeout(250);
+  check('a failed renewal gets its own banner on Pack, with Manage billing as the one button that fixes it',
+    /did not go through/.test(await pb.textContent('#view')) && (await pb.$$eval('.banner [data-act="portal"]', a => a.length)) === 1 && !/three weeks/.test(await pb.textContent('#view')), (await pb.textContent('#view')).slice(0, 200));
+  await pb.click('.banner [data-act="trial-dismiss"]'); await pb.waitForTimeout(200);
+  check('and OK puts it away', (await pb.$$eval('.banner', a => a.filter(b => /did not go through/.test(b.textContent)).length)) === 0);
   const pastDueYear = await pb.evaluate(() => fetch('/api/billing/checkout', {method:'POST', headers:{'content-type':'application/json'}, body:'{"plan":"year"}'}).then(r => r.status));
   check('and a second yearly checkout is refused while the first is unpaid', pastDueYear === 409);
   await hook(subEv('evt_4', 'customer.subscription.deleted', t0 + 3, { status: 'canceled' }));
   check('when the subscription ends the household is free again', (await ent()).plan === 'free' && (await ent()).status === 'canceled' && (await ent()).cust === 'cus_pat');
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
   await until(pb, () => /Your plan\s*Free/.test(document.querySelector('#view').textContent));
+  check('an ended plan has its own words on the Subscription page, never "your three weeks are up"',
+    /Ended/.test(await pb.textContent('#view')) && /The plan has ended/.test(await pb.textContent('#view')) && !/three weeks are up/.test(await pb.textContent('#view')), (await pb.textContent('#view')).slice(0, 300));
   const portalStill = (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1;
+  await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200);
+  check('and the Subscription row reads Ended', /Subscription\s*Ended/.test(await pb.textContent('#view')), (await pb.textContent('#view')).match(/Subscription\s*[^\n]{0,30}/));
+  await pb.click('[data-act="tab"][data-tab="pack"]'); await pb.waitForTimeout(250);
+  check('Pack says the plan ended, once, in its own words', /Household plan has ended/.test(await pb.textContent('#view')) && !/three weeks are up/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="trial-dismiss"][data-stage="plan-ended"]', a => a.length)) === 1);
+  await pb.click('[data-act="trial-dismiss"][data-stage="plan-ended"]'); await pb.waitForTimeout(200);
+  check('and OK puts it away for good, with no "three weeks" banner behind it', (await pb.$$eval('.banner', a => a.filter(b => /plan has ended|three weeks/.test(b.textContent)).length)) === 0);
   await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(200); await pb.click('[data-act="box-settings"]'); await pb.waitForTimeout(250);
   await pb.click('[data-act="add-kid"]'); await pb.waitForTimeout(350);
   check('and the second lunchbox is gated again, with Manage billing still there for the invoices', (await pb.$$eval('#nkName', a => a.length)) === 0 && portalStill);

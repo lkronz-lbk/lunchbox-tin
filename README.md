@@ -34,9 +34,12 @@ throwing app script cannot leave it up forever. From there:
 - **Week** — draws a main, side, fruit and sweet per pack day and *assigns* them to days
   by a deterministic pairing score (texture contrast, protein coverage, heavy/light
   balance, tangy against savory); each compartment carries the words the pairing used
-  (crunchy, soft, protein, tangy, sweet, salty, juicy, hearty, light), two at most. Keep a
-  compartment and it survives the next shuffle; shuffling that one compartment on purpose
-  un-keeps it. Every compartment that can change shows a small swap arrow; a kept one, a lock.
+  (crunchy, soft, protein, tangy, sweet, salty, juicy, hearty, light), two at most. Lock a
+  compartment and it survives the next plan or shuffle; shuffling that one compartment on purpose
+  unlocks it. Every compartment that can change shows a small swap arrow; a locked one, a lock.
+  The words on screen: **Plan the week** plans the whole week (again), **Shuffle** changes one day
+  or one compartment, a food that came home twice is **on hold**, a held compartment is **locked**;
+  "draw", "resting" and "kept" are the code's words and never a parent's.
   **Write something in** on the compartment sheet takes a name and nothing else — tonight's
   leftovers going into tomorrow's box. It is one compartment on one day: kept, so a shuffle
   leaves it alone; not on the food list (`food.once`, which `foodsOf` filters out), so it is
@@ -62,8 +65,8 @@ throwing app script cannot leave it up forever. From there:
   its own food list say otherwise. Shuffling one box, or swapping one compartment, changes that
   box alone. Turn it off under Account → Lunchboxes (**Match the boxes**), or the gear. Pack, Week and Foods carry the
   lunchboxes as folder tabs, one tap each; on Pack each tab shows whether that box is packed or
-  still owes an answer, and one line names who is left to pack. With matching on, Shuffle all
-  on Week is the household draw; with more than one box, Shuffle all on Week and a day's Shuffle first ask
+  still owes an answer, and one line names who is left to pack. With matching on, Plan the week
+  on Week is the household draw; with more than one box, Plan the week on Week and a day's Shuffle first ask
   whose boxes (a day's starts with the box on screen), leave the rest untouched, and offer Undo; the
   "Plan the week" banner draws everything with no sheet. A food added from the
   idea bank or by hand goes into every lunchbox unless you say otherwise; a box whose rules keep
@@ -245,13 +248,14 @@ throwing app script cannot leave it up forever. From there:
   custom foods get a picture too. A household that packs the night before (Account →
   Lunchboxes → **When do you pack?**) sees tomorrow's box from 3pm.
 - **Did they eat it?** — from 3pm on a pack day, or the morning after, the Pack view asks about
-  that box: ate it / some / came home, per compartment, or "All eaten". Outcomes are
+  that box: "All eaten" first, one tap at the top of the card, then ate it / some / came home per
+  compartment; "Skip: nothing counted" at the foot records nothing and stops asking. Outcomes are
   stored against the food, so they survive re-plans. "Answer later" replaces the card with a one-line "Answer now" until the next
   3pm or the next open; a red dot on the Pack tab says an answer is owed, and the iPhone app can
   remind at 3pm (Account → Lunchboxes → **Remind us at three**, off until switched on). From 3pm today's box has gone:
   no re-draw, swap, kid's pick, shopping line or merge touches it. The draw leans toward foods that get
-  eaten, and anything that came home twice running is rested for three weeks. Outgoing weeks
-  are archived (`kid.past`) so Monday can still ask about Friday.
+  eaten, and anything that came home twice running is put on hold for three weeks (`resting` in
+  the code; **on hold** on every screen). Outgoing weeks are archived (`kid.past`) so Monday can still ask about Friday.
 - **Safety** — anything pasted in or read from storage is rebuilt from a whitelist before it
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and, signed out, "Erase everything"
@@ -282,7 +286,9 @@ throwing app script cannot leave it up forever. From there:
   tab with a Done button that comes back to the row it left. **Account** (or **This phone**
   signed out): who this phone is signed in as, sign out, leave the household, backup and
   copy-out/paste-in transfer between phones, clear the plans, delete the account, and
-  — only on a phone that has never signed in — erase everything.
+  — only on a phone that has never signed in — erase everything. Sign out and Leave ask first,
+  like every other control that clears the phone: the first tap arms the button and says what
+  goes, the second does it, and Stay stands it down.
   **Household**: the people, your name, and the two invites. **Subscription** (only where
   Stripe is configured, and never for a caretaker): the plan, what it costs while there is
   something to pay, the date it
@@ -398,7 +404,7 @@ nothing to offer). `SMOKE_TODAY=2026-09-14 npm test` pins another day.
 
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
 onboarding, the week draw and its trait words, packing, the kid's pick, the after-school review
-and resting, the school rules re-checking a live plan, compartments switching on and off,
+and holds, the school rules re-checking a live plan, compartments switching on and off,
 anchoring, the shopping list, recipes (the two the app ships, an ingredient claimed by the step
 that means it, cook mode, the measures and the scaling,
 reading a page's markup, the page reader refusing anything but the public web, a pasted caption,
@@ -438,13 +444,17 @@ the visual identity.
    `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
    sheet and a Home Screen widget.
 
-- **Help** — the ? at the top of every tab opens a sheet: twenty-one one-line answers, "Ask a
+- **Help** — the ? at the top of every tab opens a sheet: the short answers, "Ask a
   question" (the feedback email with the build and phone filled in) and "More answers", which
-  is `public/help.html`, the longer FAQ on the site (linked from the site footer).
+  is `public/help.html`, the longer FAQ on the site (linked from the site footer). Opened from
+  **Contact support** on the Account tab the two mail buttons come first, above the answers;
+  from the ? the answers come first. The sheet and the page say the same things in the same
+  words, and the page carries no price.
 - **For search engines and assistants** — the home page carries Organization and WebApplication
   JSON-LD (its plan prices rewritten from Stripe by `price.js`, like the prices on the page); `help.html` carries a
   FAQPage whose answers are the page's own paragraphs word for word, with no price, and the smoke
-  suite fails if the two drift apart: edit the page, then regenerate the block. `public/llms.txt`
+  suite fails if the two drift apart: edit the page, then `node scripts/faq.mjs` rewrites the block
+  from the page (`--check` only reports). `public/llms.txt`
   is the one-page summary for assistants; `public/404.html` is the page for any path not there.
 
 ### Migrations are frozen once applied
@@ -816,7 +826,7 @@ it back needs no migration.
 Free, for good, is one lunchbox, the week's plan, the shopping list, the pack list, and the
 built-in idea bank to build the food list from. The **Household** plan (yearly or
 monthly) is the part that remembers and shares: a food written in the parent's own words,
-kid's pick, the after-school review and resting, a pantry that carries over, every lunchbox, the
+kid's pick, the after-school review and its holds, a pantry that carries over, every lunchbox, the
 other parent's phone and a caretaker's pack list. **Every household gets all of it for its
 first 21 days**, no card, counted from the account document's `createdAt` (the same clock on
 every phone and on the server), and then drops to free with the premium pieces locked in
@@ -824,8 +834,13 @@ place, not hidden: the kid's-pick button, the review card, the pantry check and 
 own" on Foods stay on screen with a lock and open the plan sheet. During the three weeks the
 same pieces wear a small "Household plan" tag so it is clear what is being tried; three days
 before the end a banner says when, and once after it says what changed, each dismissable
-once. With no `STRIPE_*` variables in a deploy nothing is gated or tagged and the app is
-exactly the free one.
+once. A household whose paid plan has ended — cancelled, refunded, lapsed, or a first charge
+that failed — is never told its three weeks are up: the banner, the Subscription row and the
+plan page say the plan has ended and when (`planEnded()`, from the entitlement row's `canceled`
+status, or an App Store row more than three days past its end), and a renewal that failed while
+Stripe or Apple retry it gets its own banner with the one button that fixes it (Manage billing,
+or Manage in the App Store), dismissable once per failure. With no `STRIPE_*` variables in a
+deploy nothing is gated or tagged and the app is exactly the free one.
 Nothing is ever taken away: a household whose plan or trial ends keeps every lunchbox,
 member, check, outcome and food it has, and cannot add more. A food already on the list is
 drawn, shopped for and packed exactly as before; only the writing of a new one is gated, and

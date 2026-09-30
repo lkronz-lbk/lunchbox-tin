@@ -95,7 +95,7 @@ h2.view-title{font-family:var(--f-display);font-size:26px;font-weight:700;line-h
 .spread{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .titlerow{display:flex;align-items:center;column-gap:4px;row-gap:10px;flex-wrap:wrap}
 @media (max-width:519px){.titlerow h2.view-title{font-size:22px}}
-.titlerow .btn{flex:none}
+.titlerow .btn,.titlerow .iconbtn{flex:none}
 .titlerow .btn:last-child{margin-left:auto}
 .muted{color:var(--ink-2)}
 .hint{font-size:13px;color:var(--ink-3)}
@@ -273,6 +273,9 @@ input[type=search]::-webkit-search-decoration,input[type=search]::-webkit-search
 .banner .btn{border-color:var(--warn);color:var(--warn)}
 .banner.good .btn{border-color:var(--accent);color:var(--accent)}
 .banner.hot .btn{border-color:var(--hot);color:var(--hot)}
+/* a filled button on a banner keeps its own ink: the rule above would put the banner's
+   colour on the accent fill, which is brown on green in light and orange on green in dark */
+.banner .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .betabar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 14px;padding:6px 6px 6px 13px;border-radius:var(--r-md);background:var(--hot-soft);color:var(--hot);font-size:13px;font-weight:600}
 .betabar .btn{min-height:40px;padding:0 12px;font-size:13px;border-color:var(--hot);color:var(--hot);background:transparent}
 .banner{background:var(--warn-soft);color:var(--warn);border-radius:var(--r-md);padding:11px 13px;font-size:13.5px;
@@ -406,11 +409,13 @@ body.first-run #view{flex:1;display:flex;flex-direction:column;min-height:0}
 .kidmode{position:fixed;inset:0;z-index:60;background:var(--ground);display:flex;flex-direction:column;
   overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .kidmode .top .exit{margin-left:auto}
+.more summary{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);cursor:pointer;min-height:44px;display:flex;align-items:center}
+/* a help question is a question, not a section label: this rule has to come after .more
+   summary, at the same specificity, or every one of them renders as 10.5px uppercase mono */
 .faq summary{font-family:var(--f-body);font-size:15px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink);border-top:1px solid var(--line);justify-content:space-between}
 .faq:first-child summary{border-top:0}
-.faq summary::after{content:'+';font-weight:500;color:var(--ink-3);font-size:18px}
-.faq[open] summary::after{content:'\2212'}
-.more summary{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);cursor:pointer;min-height:44px;display:flex;align-items:center}
+.faq summary::after{content:'\203A';font-weight:500;color:var(--ink-3);font-size:18px}
+.faq[open] summary::after{content:'\2304'}
 .kidmode .top{display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:calc(12px + var(--sat)) 16px 6px}
 .kidmode .body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;
@@ -732,6 +737,7 @@ var SCHEMA = 2;
 /* ---------------------------------------------------------------- icons */
 var I = {
   chev:'<path d="M9 5l7 7-7 7"/>',
+  chevl:'<path d="M15 5l-7 7 7 7"/>',
   pack:'<path d="M4 8h16v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 8V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3"/><path d="M9.5 14l1.8 1.8L15 12"/>',
   week:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M8 17.5h3M14 14h2"/>',
   shop:'<path d="M4 7h16l-1.3 12.1a2 2 0 0 1-2 1.9H7.3a2 2 0 0 1-2-1.9z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/>',
@@ -1491,6 +1497,16 @@ function paid(){
   return !(e.source === 'apple' && e.currentPeriodEnd && Date.parse(e.currentPeriodEnd) + 3 * 86400000 < Date.now());
 }
 function billingOn(){ return !!(Account.billing && Account.billing.enabled) && !isHelper(); }
+/* a plan the household once had and has no longer: cancelled, refunded, lapsed, or a first charge
+   that failed. Its words are its own; "your three weeks are up" is for a household that never bought */
+function planEnded(){
+  var e = Account.entitlement; if(!e || paid()) return false;
+  /* an App Store plan more than three days past its end reads as over here before Apple's word comes, so the row still says active */
+  return e.status === 'canceled' || (e.source === 'apple' && e.plan !== 'free' && (e.status === 'active' || e.status === 'past_due'));
+}
+function planEndedOn(){ var e = Account.entitlement, d = e && e.currentPeriodEnd ? new Date(e.currentPeriodEnd) : null; return d && !isNaN(d) && d.getTime() <= Date.now() ? fmtDay(d) : ''; }
+/* a renewal Stripe or Apple could not take: the plan is still on while they retry, and the fix is one tap away */
+function paymentFailed(){ var e = Account.entitlement; return paid() && e.status === 'past_due'; }
 /* the first three weeks are the whole product, no card asked: the trial runs from the day the
    household was made, on this phone or any other, and ends the same day everywhere */
 var TRIAL_DAYS = 21, TRIAL_SEEN_KEY = 'lunchsorted-trial-seen';
@@ -1536,13 +1552,29 @@ function trialLine(){
 }
 function trialSeen(){ try{ return localStorage.getItem(TRIAL_SEEN_KEY) || ''; }catch(e){ return ''; } }
 function trialBanner(){
-  if(!billingOn() || paid() || !S.onboardedAt) return '';
-  var left = trialDaysLeft(), seen = trialSeen();
+  if(!billingOn() || !S.onboardedAt) return '';
+  var e = Account.entitlement || {}, seen = trialSeen();
+  if(paymentFailed()){
+    var dueStage = 'due:'+(e.currentPeriodEnd || '');
+    if(seen === dueStage) return '';
+    var fix = e.source === 'apple' ? (iapOn() ? '<button class="btn sm primary" data-act="iap-manage">Manage in the App Store</button>' : '')
+      : (e.portal && !native() ? '<button class="btn sm primary" data-act="portal">Manage billing</button>' : '');
+    return '<div class="banner wrap"><span>The last payment for the Household plan did not go through.'+(fix ? '' : e.source === 'apple' ? ' Update how you pay in iPhone Settings.' : ' Whoever paid can update the card in Manage billing.')+'</span>'
+      + '<span class="row" style="gap:8px">'+fix+'<button class="btn sm ghost" data-act="trial-dismiss" data-stage="'+esc(dueStage)+'">OK</button></span></div>';
+  }
+  if(paid()) return '';
+  var left = trialDaysLeft();
+  /* a plan that ended inside the first three weeks leaves the trial running, and the trial's own words hold */
+  if(planEnded() && left === 0){
+    if(seen === 'plan-ended') return '';                  /* and never "your three weeks are up" after it */
+    return '<div class="banner wrap"><span>Your Household plan has ended'+(planEndedOn() ? ' \u2014 '+esc(planEndedOn()) : '')+'. What you added stays; the lunches, the list and the idea bank are free for good.</span>'
+      + '<span class="row" style="gap:8px"><button class="btn sm primary" data-act="upgrade" data-why="keep">Household plan</button><button class="btn sm ghost" data-act="trial-dismiss" data-stage="plan-ended">OK</button></span></div>';
+  }
   if(left > 0 && left <= 3 && seen !== 'soon' && seen !== 'ended')
-    return '<div class="banner wrap"><span>Your three weeks of everything end '+esc(trialWhen())+'. The lunches stay; writing in your own foods, kid\u2019s pick, the after-school review and the pantry pause.</span>'
+    return '<div class="banner wrap"><span>Your three weeks of everything end '+esc(trialWhen())+'. The lunches stay either way.</span>'
       + '<span class="row" style="gap:8px"><button class="btn sm primary" data-act="upgrade" data-why="keep">Keep everything</button><button class="btn sm ghost" data-act="trial-dismiss" data-stage="soon">Later</button></span></div>';
   if(left === 0 && seen !== 'ended')
-    return '<div class="banner wrap"><span>Your three weeks are up. Lunches, the list and the idea bank stay free; your own foods, kid\u2019s pick, the review and the pantry are waiting.</span>'
+    return '<div class="banner wrap"><span>Your three weeks are up. What you added stays; the lunches, the list and the idea bank are free for good.</span>'
       + '<span class="row" style="gap:8px"><button class="btn sm primary" data-act="upgrade" data-why="keep">Household plan</button><button class="btn sm ghost" data-act="trial-dismiss" data-stage="ended">OK</button></span></div>';
   return '';
 }
@@ -1634,7 +1666,7 @@ function upgradeSheet(why){
         : why === 'recipe' ? 'Keeping a recipe of your own \u2014 written out, pasted in, or read off a page \u2014 is part of the Household plan. The two the app comes with stay free to cook from, and every recipe you have kept stays yours.'
         : why === 'food' ? 'Writing a food in your own words \u2014 on the list or straight into one box \u2014 or bringing one in from a recipe page, is part of the Household plan. Everything you have added stays, and the idea bank \u2014 recipes and all \u2014 is free.'
         : why === 'kidpick' ? 'Letting them pick their own box is part of the Household plan.'
-        : why === 'review' ? 'The after-school review — what came home, what to rest — is part of the Household plan.'
+        : why === 'review' ? 'What came home — the question once the box is home — is part of the Household plan.'
         : why === 'pantry' ? 'A pantry that remembers what you already have is part of the Household plan.'
         : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.'+(chargeLater() ? ' Nothing is charged until '+esc(fmtDay(chargeLater()))+', and the year or month runs from then.' : ' It starts, and is charged, the day you buy.') : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
         : 'The Household plan is everything the free planner is not.')+'</p>';
@@ -1858,7 +1890,7 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
 var WHATS_NEW = {build:'lunchsorted-v25', text:'New: write tonight\u2019s leftovers straight into tomorrow\u2019s box, and hand the phone over once to let them pick the whole week.',
   steps:[
-    ['Write one in', 'Tap a compartment on Week and Write something in. Whatever you type goes into that one box on that one day \u2014 kept, so a shuffle leaves it alone; off the food list, so it is never drawn again; and off the shopping list, because it is already in your fridge.'],
+    ['Write one in', 'Tap a compartment on Week and Write something in. Whatever you type goes into that one box on that one day \u2014 locked, so a shuffle leaves it alone; off the food list, so it never comes up again; and off the shopping list, because it is already in your fridge.'],
     ['One line, not a form', 'A write-in asks for the name and nothing else \u2014 at six in the morning that is all there is time for. So the name is all we can check it against: if it trips a rule it goes in flagged, but nuts or dairy hiding inside \u201cleftover pasta\u201d are yours to catch. The compartment carries a pencil and the day says Written in, so you can see which ones are yours.'],
     ['The whole week in one sitting', 'With \u201cThey pick their box each day\u201d on, Week carries Let them pick the week. They choose the next box, then the one after, until there is nothing left to hold up against anything. Each tap saves as it happens, so stopping halfway keeps what they picked.'],
     ['Still one box in the morning', 'Pack keeps the single-box version, where it has always been, for the day you would rather ask on the day. And a compartment you wrote in yourself never trades \u2014 Monday\u2019s leftovers would not keep till Thursday.']
@@ -2663,7 +2695,7 @@ function eatLabel(kid, foodId){
   if(!st.n) return '';
   if(st.resting){
     var back = addDays(parseISO(eatHistory(kid, foodId)[0].d), 21);
-    return 'came home '+(st.streakLeft===2 ? 'twice' : st.streakLeft+' times')+' \u2014 taking a break until '+MON[back.getMonth()]+' '+back.getDate();
+    return 'came home '+(st.streakLeft===2 ? 'twice' : st.streakLeft+' times')+' \u00b7 on hold until '+MON[back.getMonth()]+' '+back.getDate();
   }
   if(st.last === 'ate') return (st.n > 1 && st.score > 0.8) ? 'eats it' : 'ate it last time';
   if(st.last === 'some') return 'ate some last time';
@@ -2826,7 +2858,7 @@ function rulesChanged(kid){
   var r = enforceRules(kid); if(!r.n) return;
   var who = kids().length > 1 ? (kid.name || 'Lunchbox')+': ' : '';
   toast(who + r.n + (r.n===1 ? ' compartment broke the rules' : ' compartments broke the rules')
-    + (r.empty ? ' \u2014 nothing else fits, check Foods' : ' \u2014 drawn again'));
+    + (r.empty ? ' \u2014 nothing else fits, check Foods' : ' \u2014 swapped'));
 }
 /* Fill one category's empty days across a week: draw, then arrange against each
    day's main. Used by the weekly plan and by Setup when a slot is switched on
@@ -2988,12 +3020,12 @@ function alignOn(){ return !(S.align && S.align.on === false) && kids().length >
    has little to match on, and the parent is told what would change that. */
 function planAllToast(subset, undo, ahead){
   var r = planAll(subset, ahead); render();
-  var wk = ahead ? 'Next week' : 'Weeks', say = function(m){ toast(m.replace(/^Weeks?/, ahead ? 'Next week' : (r.boxes > 1 ? 'Weeks' : 'Week')), undo); };
+  var say = function(m){ toast(m.replace(/^Weeks?/, ahead ? 'Next week' : (r.boxes > 1 ? 'Weeks' : 'Week')), undo); };
   if(r.short.length){ say('No '+r.short.join(' or ').toLowerCase()+' available \u2014 check Foods'); return; }
-  if(!r.aligned){ say('Weeks drawn'); return; }
-  if(!r.swaps){ say('Weeks drawn \u2014 all boxes match'); return; }
+  if(!r.aligned){ say('Weeks planned'); return; }
+  if(!r.swaps){ say('Weeks planned \u2014 all boxes match'); return; }
   var thin = r.total && r.swaps * 2 > r.total;
-  say('Weeks drawn \u2014 '+r.swaps+(r.swaps===1 ? ' compartment differs' : ' compartments differ')
+  say('Weeks planned \u2014 '+r.swaps+(r.swaps===1 ? ' compartment differs' : ' compartments differ')
     + (thin ? '. Add shared foods to match more.' : ' for the rules'));
 }
 /* One draw for the whole household. The fullest food list leads, because it
@@ -3021,17 +3053,16 @@ function planAll(subset, ahead){
    One lunchbox needs no sheet, only the Undo. */
 function shuffleSheet(dayStr, ahead){
   var ks = kids(), l = dayStr ? dayLabel(dayStr) : null, me = activeKid();
-  var planning = ahead && !me.next;
   var h = '<div class="field"><label>'+(l ? esc(l.full)+'\u2019s box for' : (ahead ? 'Next week for' : 'The week for'))+'</label><div class="toggles" id="shKids">'
     + ks.map(function(k){ return '<button class="tg" data-nf="k" data-v="'+esc(k.id)+'" aria-pressed="'+(dayStr ? k === me : true)+'">'+esc(k.name)+'</button>'; }).join('')
     + '</div></div>'
     + '<p class="hint" id="shHint" style="margin:0">'+shuffleHint(dayStr ? 1 : ks.length)+'</p>'
-    + '<button class="btn primary wide" data-act="shuffle-go"'+(dayStr ? ' data-day="'+esc(dayStr)+'"' : '')+(ahead ? ' data-ahead="1"' : '')+'>'+svg('dice',16)+(planning ? 'Plan' : 'Shuffle')+'</button>';
-  openSheet(l ? 'Shuffle '+l.full : (planning ? 'Plan next week' : (ahead ? 'Shuffle next week' : 'Shuffle the week')), h);
+    + '<button class="btn primary wide" data-act="shuffle-go"'+(dayStr ? ' data-day="'+esc(dayStr)+'"' : '')+(ahead ? ' data-ahead="1"' : '')+'>'+svg(dayStr ? 'swap' : 'dice',16)+(dayStr ? 'Shuffle' : ahead ? 'Plan next week' : 'Plan the week')+'</button>';
+  openSheet(l ? 'Shuffle '+l.full : (ahead ? 'Plan next week' : 'Plan the week'), h);
 }
 function shuffleHint(n){
-  if(alignOn() && n > 1) return 'Matching is on \u2014 the boxes checked are drawn from the same foods. Others keep what they have.';
-  return 'Others keep what they have.';
+  if(alignOn() && n > 1) return 'Matching is on: the boxes checked share the same foods. The rest stay as they are.';
+  return 'The rest stay as they are.';
 }
 function snapshotWeeks(ks){
   return ks.map(function(k){ return {id:k.id, week:JSON.parse(JSON.stringify(k.week)), next:JSON.parse(JSON.stringify(k.next || null)),
@@ -3594,8 +3625,9 @@ function reviewCard(kid, d){
     + ''
     + '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary sm" data-act="upgrade" data-why="review">Get the Household plan</button>'
     + '<button class="btn ghost sm" data-act="review-later" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">Not now</button></div></div>';
-  var h = '<div class="card review">'+head
-    + '<button class="btn ghost sm" data-act="eat-skip" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">Skip</button></div>';
+  /* the common answer first, one tap, above the fold; the way out sits at the foot and says what it does */
+  var h = '<div class="card review">'+head+'</div>'
+    + '<button class="btn primary wide" data-act="eat-all" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">'+svg('check',16)+'All eaten</button>';
   ALL_CATS.forEach(function(c){
     var f = boxFood(kid, d.slots[c.k]); if(!f) return;
     var cur = row[c.k] ? row[c.k].r : '';
@@ -3606,7 +3638,7 @@ function reviewCard(kid, d){
              + '" aria-pressed="'+(cur === op[0] ? 'true' : 'false')+'">'+op[1]+'</button>'; }).join('')
       +  '</div></div>';
   });
-  return h + '<button class="btn wide" data-act="eat-all" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">'+svg('check',16)+'All eaten</button></div>';
+  return h + '<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost sm" data-act="eat-skip" data-kid="'+esc(kid.id)+'" data-day="'+esc(d.d)+'">Skip: nothing counted</button></div></div>';
 }
 
 /* ----------------------------------------------------------- kid's pick */
@@ -3768,7 +3800,7 @@ function viewPack(){
   var day = nextPackDay(kid);
   if(!day)
     return top + '<p class="view-sub">Pack list</p><h2 class="view-title">No plan yet</h2>'
-      + '<div class="empty"><p>Draw a week and this page is the morning&#8217;s box.</p>'
+      + '<div class="empty"><p>Plan the week and this page is the morning&#8217;s box.</p>'
       + '<button class="btn primary" data-act="plan-all">'+svg('dice',18)+'Plan the week</button></div></div>';
 
   var h = top;
@@ -3860,21 +3892,22 @@ function viewWeek(){
   var ahead = UI.weekAhead === 1, wk = ahead ? kid.next : kid.week;
   var ws = ahead ? nextStart(kid) : (kid.week ? parseISO(kid.week.start) : anchorWeek(kid));
   var n = wk ? wk.days.length : packDaysSorted(kid).length;
-  var nav = '<button class="btn ghost sm" data-act="week-ahead" data-v="'+(ahead ? 0 : 1)+'" aria-label="'+(ahead ? 'Back to this week' : 'Show next week')+'">'+(ahead ? '\u2039 This' : 'Next \u203a')+'</button>';
+  /* one glyph, 44px, with its spoken name: the header holds the title, this and Plan the week on one line at 375px */
+  var nav = '<button class="iconbtn" data-act="week-ahead" data-v="'+(ahead ? 0 : 1)+'" aria-label="'+(ahead ? 'Back to this week' : 'Next week')+'">'+svg(ahead ? 'chevl' : 'chev', 20)+'</button>';
   var h = '<div class="stack">'+kidPager()+'<div>'
     + '<p class="view-sub">'+(ahead ? 'Next week' : (NUMWORD[n]||n)+' lunch'+(n===1?'':'es'))+(multi ? ' · '+esc(kid.name) : '')+'</p>'
     + '<div class="titlerow"><h2 class="view-title">Week of '+esc(MON[ws.getMonth()]+' '+ws.getDate())+'</h2>'+nav
-    + (isHelper() ? '' : '<button class="btn primary sm" data-act="plan-kid">'+svg('dice',15)+(ahead && !wk ? 'Plan it' : 'Shuffle all')+'</button>')+'</div></div>'
+    + (isHelper() ? '' : '<button class="btn primary sm" data-act="plan-kid">'+svg('dice',15)+(ahead ? 'Plan next week' : 'Plan the week')+'</button>')+'</div></div>'
     + (ahead ? '' : planBanner() + weekPickRow(kid));
   if(!wk)
-    return h + '<div class="empty"><p>'+(ahead ? 'Nothing planned for next week yet.' : 'Shuffle all draws the week.')+'</p></div></div>';
+    return h + '<div class="empty"><p>'+(ahead ? 'Nothing planned for next week yet.' : 'Nothing planned yet.')+'</p></div></div>';
 
   wk.days.forEach(function(day){
     var l = dayLabel(day.d);
     h += '<div class="daycard'+(l.diff<0?' past':'')+'"><div class="dayhead"><div class="dayname">'+esc(l.full)
       +  '<em>'+esc(l.date)+(l.rel?' · '+esc(l.rel):(l.diff<0?' · gone':''))+'</em></div>'
-      +  (dayGone(day) || isHelper() ? '' : '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'">'
-      +  svg('dice',14)+'Shuffle day</button>')+'</div>'
+      +  (dayGone(day) || isHelper() ? '' : '<button class="btn ghost sm" data-act="shuffle-day" data-kid="'+esc(kid.id)+'" data-day="'+esc(day.d)+'" aria-label="Shuffle '+esc(l.full)+'">'
+      +  svg('swap',14)+'Shuffle</button>')+'</div>'
       +  tinHTML(kid, day, 'week') + '<div class="spread" style="gap:8px;flex-wrap:wrap">' + chipsHTML(kid, day) + '</div></div>';
   });
   return h + '</div>';
@@ -3899,7 +3932,7 @@ function viewShop(){
 
   var toBuy = rows.filter(function(r){ return !r.have; }).length;
   h += '<div class="spread"><span class="count">'+toBuy+' to buy'+(gated() ? '' : ' · '+(rows.length-toBuy)+' already home')+'</span>'
-    +  '<span class="row" style="gap:6px">'+(canShare() ? '<button class="btn ghost sm" data-act="send-list" aria-label="Send the list">'+svg('share',16)+'</button>' : '')
+    +  '<span class="row" style="gap:6px">'+(canShare() ? '<button class="btn ghost sm" data-act="send-list" aria-label="Send the list">'+svg('share',16)+'Send</button>' : '')
     +  '<button class="btn ghost sm" data-act="copy-list">Copy</button></span></div>'
     +  (gated() || premiumTag() ? '<p class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>'+(gated() ? 'A pantry that remembers is part of the Household plan.' : 'Check off what is already home.')+'</span>'+premiumTag()+'</p>' : '');
   var groups = nullMap();
@@ -4085,7 +4118,7 @@ function viewBox(){
   var all = '';
   if(many && !isHelper()){
     all += '<div class="switch"><div><div class="t">Match the boxes</div>'
-      +  '<div class="d">Shuffle all draws every box from the same foods where its rules allow. Boxes can only match on foods both lists have.</div></div>'
+      +  '<div class="d">Plan the week fills every box from the same foods where its rules allow. Boxes can only match on foods both lists have.</div></div>'
       +  '<button class="sw" data-act="align" aria-pressed="'+!(S.align && S.align.on === false)+'" aria-label="Match the boxes"></button></div>';
   }
   if(nativePlugin('LocalNotifications') && !isHelper() && !gated()){
@@ -4176,8 +4209,8 @@ function viewSetup(){
     +  (syncLine() ? '<p class="hint" style="margin:6px 0 0" id="syncLine">'+esc(syncLine())+'</p>' : '')+'</div>';   /* only one of these renders at a time: the tab, or the Account page */
   if(Account.join) h += '<div class="card stack" style="gap:12px">'+joinBlock()+'</div>';
   if(!signedIn()) h += signInCard();
-  var row = function(pane, act, label, caption){
-    return '<button class="item" data-act="'+act+'"'+(pane ? ' data-pane="'+pane+'"' : '')+'>'
+  var row = function(pane, act, label, caption, support){
+    return '<button class="item" data-act="'+act+'"'+(pane ? ' data-pane="'+pane+'"' : '')+(support ? ' data-support="1"' : '')+'>'
       +  '<span class="grow"><span class="nm">'+label+'</span>'
       +  (caption ? '<span class="meta">'+esc(caption)+'</span>' : '')+'</span>'
       +  '<span class="go">'+svg('chev',16)+'</span></button>';
@@ -4188,7 +4221,7 @@ function viewSetup(){
     +  row('household', 'pane', 'Household', !signedIn() ? 'Just this phone' : people > 1 ? people+' people' : 'Just you')
     +  (billingOn() && !isHelper() ? row('plan', 'pane', 'Subscription', planLabel()) : '')
     +  (isHelper() ? '' : row('box', 'pane', many > 1 ? 'Lunchboxes' : 'Lunchbox', many > 1 ? many+' lunchboxes' : (kid ? kid.name : '')))
-    +  row('', 'help', 'Contact support', 'Answers, and how to reach us')
+    +  row('', 'help', 'Contact support', 'Answers, and how to reach us', true)
     +  '</div>';
   return h+'</div>';
 }
@@ -4207,8 +4240,9 @@ function paneAccount(){
     h += '<div class="card stack" style="gap:12px">'
       +  '<div class="kv"><span>Signed in as</span><span style="overflow-wrap:anywhere;white-space:normal;text-align:right">'+esc(Account.user.email)+'</span></div>'
       +  '<p class="hint" style="margin:0" id="syncLine">'+esc(syncLine())+'</p>'
-      +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="signout">Sign out</button>'
-      +  (Account.me && Account.me.role !== 'owner' ? '<button class="btn danger sm" data-act="leave">Leave this household</button>' : '')+'</div>'
+      +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn '+(UI.armed==='signout' ? 'danger' : 'ghost')+' sm" data-act="signout">'+(UI.armed==='signout' ? 'Tap again to sign out' : 'Sign out')+'</button>'
+      +  (Account.me && Account.me.role !== 'owner' ? '<button class="btn danger sm" data-act="leave">'+(UI.armed==='leave' ? 'Tap again to leave' : 'Leave this household')+'</button>' : '')
+      +  (UI.armed==='signout' || UI.armed==='leave' ? '<button class="btn ghost sm" data-act="disarm">Stay</button>' : '')+'</div>'
       +  '</div>';
   }
   h += '<div><div class="sect-head"><h3>'+(signedIn() ? 'Backup' : 'Move to another phone')+'</h3></div><div class="card stack" style="gap:12px">'
@@ -4318,10 +4352,10 @@ function panePlan(){
   var cost = planCost();
   if(cost) h += '<div class="kv"><span>Cost</span><span>'+esc(cost)+'</span></div>';
   h += '<div class="kv"><span>'
-    +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : firstChargeAhead() ? 'First charged' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
+    +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : firstChargeAhead() ? 'First charged' : paid() ? 'Renews' : trialing() ? 'Free until' : planEnded() ? 'Ended' : 'Plan')
     +  '</span><span>'
     +  esc(paid() ? (e.plan === 'lifetime' ? 'Paid once, never renews' : d || 'Yearly')
-        : trialing() ? (trialEnd() ? fmtDay(trialEnd()) : planLabel()) : 'Not on')
+        : trialing() ? (trialEnd() ? fmtDay(trialEnd()) : planLabel()) : planEnded() ? (planEndedOn() || 'The Household plan') : 'Not on')
     +  '</span></div>';
   var apple = e.source === 'apple';
   if(lapsing && apple) h += '<p class="hint" style="margin:0;color:var(--warn)">Apple could not take the last payment. '+(iapOn() ? 'Tap Manage in the App Store to update how you pay' : 'Update how you pay in iPhone Settings \u2192 your name \u2192 Subscriptions')+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
@@ -4344,6 +4378,9 @@ function panePlan(){
         : e.portal ? 'Cancel it any time in Manage billing. '+(firstChargeAhead() ? 'Cancel before '+esc(fmtDay(firstChargeAhead()))+' and nothing is charged. ' : '')
         : 'Whoever paid can cancel it in Manage billing on their own phone, or write to us and we will do it. ')
       +  'It works until '+esc(d || 'the end of the period')+', then '+freeAgain+'</p></div>';
+  } else if(planEnded()){
+    h += '<div class="card stack" style="gap:10px"><h3>The plan has ended</h3>'
+      +  '<p class="hint" style="margin:0">'+(e.source === 'apple' || !e.portal || native() ? '' : 'If a payment did not go through, Manage billing has the card. ')+'Either way '+freeAgain+'</p></div>';
   }
   /* the plan belongs to the household, not to the phone, so it needs a sign-in and
      this is the page that has to say so — with the button, not just the sentence */
@@ -4442,7 +4479,7 @@ function planDate(){
 }
 function planLabel(){
   var e = Account.entitlement;
-  if(!paid()){ if(Account.settling) return 'Switching on\u2026'; if(!trialing()) return 'Not on'; var n = trialCalendarDays(); return n <= 0 ? 'On until tonight' : n === 1 ? 'On until tomorrow' : 'On for '+n+' more days'; }
+  if(!paid()){ if(Account.settling) return 'Switching on\u2026'; if(!trialing() && planEnded()) return 'Ended'+(planEndedOn() ? ' '+planEndedOn() : ''); if(!trialing()) return 'Not on'; var n = trialCalendarDays(); return n <= 0 ? 'On until tonight' : n === 1 ? 'On until tomorrow' : 'On for '+n+' more days'; }
   if(e.plan === 'lifetime') return 'Forever';
   if(e.status === 'past_due') return 'Payment failed';
   var d = planDate();
@@ -4469,8 +4506,8 @@ function slotSheet(kidId, dayStr, cat){
   var pool = foodsOf(kid).filter(function(f){ return f.c===cat; });
   var main = boxFood(kid, day.slots.main);   /* the "goes well with" line names what is in the box */
   var h = '<div class="row" style="gap:8px;flex-wrap:wrap">'
-    + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'">'
-    + svg('dice',15)+'Shuffle this one</button>'
+    + '<button class="btn sm" data-act="sheet-shuffle" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'" aria-label="Shuffle the '+esc(c.label.toLowerCase())+'">'
+    + svg('swap',15)+'Shuffle</button>'
     + '<button class="tg" data-act="sheet-lock" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'"'
     + ' aria-pressed="'+(!!day.lock[cat])+'">'+svg('lock',15)+'Don&#8217;t change this one</button></div>';
   /* whatever is in the compartment, if it is something you make rather than buy. On its
@@ -4488,8 +4525,8 @@ function slotSheet(kidId, dayStr, cat){
     var w3 = ' data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'"';
     h += (inSlot && inSlot.once)
       ? '<div class="wrote-in"><span class="hint">'+svg('pencil',13)
-        + (day.lock[cat] ? 'Written in &mdash; kept, and off the shopping list.'
-                         : 'Written in &mdash; off the shopping list. A shuffle can change it.')+'</span>'
+        + (day.lock[cat] ? 'Written in · locked · off the shopping list'
+                         : 'Written in · off the shopping list · a shuffle can change it')+'</span>'
         + '<div class="row" style="gap:8px;flex-wrap:wrap">'
         + '<button class="btn sm" data-act="write-in"'+w3+'>Change it</button>'
         + '<button class="btn ghost sm" data-act="write-clear"'+w3+'>Clear it</button></div></div>'
@@ -4527,7 +4564,7 @@ function writeInSheet(kidId, dayStr, cat){
   var l = dayLabel(dayStr);
   var h = '<div class="field"><label for="wiName">What is going in?</label>'
     + '<input type="text" id="wiName" placeholder="Leftover spaghetti" autocomplete="off" enterkeyhint="done" maxlength="80" value="'+esc(cur)+'"></div>'
-    + '<p class="hint" style="margin:0">'+esc(l.full)+' only. We have just the name, so check the school&#8217;s rules yourself.</p>'
+    + '<p class="hint" style="margin:0">'+esc(l.full)+' only · locked · off the shopping list. The rules see only the name.</p>'
     + '<button class="btn primary wide" data-act="write-save" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'">'
     + (cur ? 'Save it' : 'Put it in')+'</button>';
   openSheet(l.full+' \u00b7 '+c.label, h);
@@ -4679,10 +4716,10 @@ function takeOffWarning(name, rows){
   });
   return 'That takes '+name+' off '+(kids().length < 2 ? 'the list' : listNames(boxes)+'\u2019s list'+(boxes.length > 1 ? 's' : ''))
     + (mine ? ', and it is one of your own \u2014 it waits under Taken off' : '')
-    + (planned ? (planned > 1 ? '. The '+planned+' boxes already drawn keep it' : '. The box already drawn keeps it') : '');
+    + (planned ? (planned > 1 ? '. The '+planned+' boxes already planned keep it' : '. The box already planned keeps it') : '');
 }
 function undoneLine(name, r){
-  var kept = r.stillIn ? (r.stillIn > 1 ? ' \u2014 the '+r.stillIn+' boxes already drawn keep it' : ' \u2014 the box already drawn keeps it') : '';
+  var kept = r.stillIn ? (r.stillIn > 1 ? ' \u2014 the '+r.stillIn+' boxes already planned keep it' : ' \u2014 the box already planned keeps it') : '';
   if(kids().length < 2) return name+' taken off the list'+kept;
   return name+' taken off '+listNames(r.removed)+'\u2019s list'+(r.removed.length > 1 ? 's' : '')+kept;
 }
@@ -5224,44 +5261,49 @@ function betaBar(){
   if(!isTester() || isHelper()) return '';
   return '<div class="betabar"><span>Beta tester \u00b7 found something?</span>' + siteLink('/feedback.html', 'Send feedback') + '</div>';
 }
-function helpSheet(){
+function helpSheet(fromSupport){
   var qa = [
-    ['How does it pick the week?', 'From the foods on your list, matched so each box goes together. Shuffle day redraws one day, or tap a compartment to change one thing.'],
-    ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings \u2014 the sliders at the top, or Account \u2192 Lunchboxes. Foods it skips are marked on the Foods tab.'],
-    ['How do I add a food, or take one off?', 'On Foods, tap Ideas and tap what they\u2019ll eat \u2014 as many as you like, the list stays where you are. Add all on a heading takes a whole compartment. Tap a checked one to take it off: one you just added goes on one tap, one that was already there asks for a second. With more than one lunchbox the checkmark also means every list the rules allow \u2014 tap one and it says which box the rules kept it out of. The trash can on the Foods tab works too. Everything offers Undo. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
-    ['I took a food off \u2014 what about this week?', 'The boxes already drawn keep it, marked off the list, so nothing you were going to pack goes blank on you \u2014 and it stays on the shopping list, because you still have that box to pack. It is never drawn again, and the next Shuffle all or Plan the week puts something else there; a compartment you kept, you change yourself. Foods you wrote yourself wait under Taken off at the foot of the Foods tab, with Put back.'],    ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with \u2014 a Mediterranean quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
-    ['Can I bring a recipe in from somewhere else?', 'Recipes \u2192 Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read \u2014 copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox\u2019s food list is offered after. Keeping one of your own is part of the Household plan.'],
-    ['Can it walk me through cooking one?', 'Open a recipe and tap Cook it step by step. One step fills the screen, and What you need under it lists only what that step needs, with a box to check as each one goes in. The whole recipe is one tap away at the top. Nothing you check is saved, so it never reaches the other parent\u2019s phone.'],
-    ['Can I see it in grams, or in cups?', 'Open a recipe and tap Metric \u2014 or US, for one that came in written in grams; it converts both ways. A cup of flour is weighed in grams, broth is poured in milliliters, the oven carries its Celsius, and a spoonful of salt is left as a spoonful. The + and \u2212 make more or less and scale every amount.'],
-    ['Where does the shopping list come from?', 'Every planned box, as what to buy. Copy it, or send it to Notes.'],
-    ['I have more than one kid \u2014 do I set it all up twice?', 'No. Add a lunchbox each. Shuffle all draws them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top \u2014 in the settings too.'],
-    ['Can I plan the week after?', 'Yes. On Week, tap Next beside the date; Plan it draws the week. Shop lists it under Next week, and it becomes this week on its own.'],
-    ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a \u201c!\u201d. The rule still applies to every draw.'],
-    ['Tonight\u2019s leftovers are going in tomorrow \u2014 can I just write that in?', 'Yes. On Week, tap the compartment and Write something in. It goes in that one box on that one day, kept so Shuffle day and Shuffle all leave it alone, off the food list so it is never drawn into another week, and off the shopping list because it is already in your fridge. We have only the name to go on. If the name trips a rule it goes in flagged, like any food you used anyway \u2014 but a name that says nothing about what is in it tells us nothing, so check that one yourself. For the same reason the day stops claiming anything about protein or an ice pack. A compartment you wrote in is never traded away by the kid\u2019s pick: on Each part it is skipped, and on Whole box that whole day is, because the box trades as one. Writing your own foods in is part of the Household plan.'],
-    ['Where do they pick their box?', 'On Pack, on the next box with nothing in the bag \u2014 today\u2019s, or the next day under Coming up. Switch it on with \u201cThey pick their box each day\u201d in the lunchbox settings. Tapping the day itself goes to Week.'],
-    ['Can they pick the whole week at once?', 'Yes. Switch on \u201cThey pick their box each day\u201d in the lunchbox settings, and Week carries Let them pick the week. It hands the phone over once: they choose the next box, then the one after, until there is nothing left to choose between. Every choice saves as it is made, so you can stop early and keep what they picked. Pack still has the one-box version for the morning.'],
+    ['How does it plan the week?', 'From the foods on your list, matched so each box goes together, leaning toward what came back eaten. Plan the week does the whole week; Shuffle on a day changes that day; tap a compartment to change one thing.'],
+    ['Why did a food stop showing up?', 'A school rule or allergen in the lunchbox settings — the sliders at the top, or Account → Lunchboxes — or it came home twice in a row and is on hold. Foods says which, on the food.'],
+    ['How do I add a food, or take one off?', 'On Foods, tap Ideas and tap what they’ll eat — as many as you like, the list stays where you are. Add all on a heading takes a whole compartment. Tap a checked one to take it off: one you just added goes on one tap, one that was already there asks for a second. With more than one lunchbox the checkmark also means every list the rules allow — tap one and it says which box the rules kept it out of. The trash can on the Foods tab works too. Everything offers Undo. Add your own, at the bottom, writes one in your own words and is part of the Household plan.'],
+    ['I took a food off — what about this week?', 'The boxes already planned keep it, marked off the list, so nothing you were going to pack goes blank on you — and it stays on the shopping list, because you still have that box to pack. It never comes up again, and the next Plan the week or Shuffle puts something else there; a compartment you locked, you change yourself. Foods you wrote yourself wait under Taken off at the foot of the Foods tab, with Put back.'],
+    ['What does locking a compartment do?', 'Tap a compartment on Week and choose Don\u2019t change this one: Plan the week and Shuffle then leave it alone. A food you write in is locked; a rule you turn on can still take a locked food out, and says so.'],
+    ['What does on hold mean?', 'A food that came home twice in a row sits out for three weeks, then comes back. A list too short to fill the week may still use it.'],
+    ['Where are the recipes?', 'On the Recipes tab, all in one list for the whole household. Yours first, then two the app comes with — a Mediterranean quinoa salad and a bean and avocado wrap, both kid-tested for the USDA and free to cook from. For anything else, Import a recipe brings in the one you already trust. They reach you where you need them: a Recipe tag on the Foods list, the compartment on Week, and named under the box on Pack.'],
+    ['Can I bring a recipe in from somewhere else?', 'Recipes → Import a recipe. Paste the address of a recipe page and the app reads it for you, which needs you signed in because the reading happens on our server. A reel or a pin has no recipe to read — copy the words under it and paste those in, which never leaves the phone. It is kept on the Recipes tab; putting it on a lunchbox’s food list is offered after. Keeping one of your own is part of the Household plan.'],
+    ['Can it walk me through cooking one?', 'Open a recipe and tap Cook it step by step. One step fills the screen, and What you need under it lists only what that step needs, with a box to check as each one goes in. The whole recipe is one tap away at the top. Nothing you check is saved, so it never reaches the other parent’s phone.'],
+    ['Can I see it in grams, or in cups?', 'Open a recipe and tap Metric — or US, for one that came in written in grams; it converts both ways. A cup of flour is weighed in grams, broth is poured in milliliters, the oven carries its Celsius, and a spoonful of salt is left as a spoonful. The + and − make more or less and scale every amount.'],
+    ['Where does the shopping list come from?', 'Every planned box, as what to buy, by aisle. Copy it, or Send it to Notes, Reminders or a text.'],
+    ['I have more than one kid — do I set it all up twice?', 'No. Add a lunchbox each. Plan the week gives them the same lunches where their own rules allow it, a food you add goes into every box unless you say otherwise, and each has a tab along the top — in the settings too.'],
+    ['Can I plan the week after?', 'Yes. On Week, tap the \u203a beside the date, then Plan next week. Shop lists it under Next week, and it becomes this week on its own.'],
+    ['Can I put in a food a rule says no to?', 'Yes. Tap the compartment, tap the food, and it goes in flagged with a “!”. The rule still applies whenever the week is planned.'],
+    ['Tonight’s leftovers are going in tomorrow — can I just write that in?', 'Yes. On Week, tap the compartment and Write something in. It goes in that one box on that one day: locked, so Shuffle and Plan the week leave it alone; off the food list, so it never comes up in another week; and off the shopping list, because it is already in your fridge. Only the name is checked against the rules. If it trips one it goes in flagged, like any food you used anyway — but a name that says nothing about what is in it tells us nothing, so check that one yourself. For the same reason the day stops claiming anything about protein or an ice pack. A compartment you wrote in is never traded away by the kid’s pick. Writing your own foods in is part of the Household plan.'],
+    ['Where do they pick their box?', 'On Pack, on the next box with nothing in the bag — today’s, or the next day under Coming up. Switch it on with “They pick their box each day” in the lunchbox settings. Tapping the day itself goes to Week.'],
+    ['Can they pick the whole week at once?', 'Yes. Switch on “They pick their box each day” in the lunchbox settings, and Week carries Let them pick the week. It hands the phone over once: they choose the next box, then the one after, until there is nothing left to choose between. Every choice saves as it is made, so you can stop early and keep what they picked. Pack still has the one-box version for the morning.'],
     ['Do I need an account?', 'No. Sign in to share with the other parent and keep a backup.'],
-    ['We both changed the same thing \u2014 whose wins?', 'The later change, thing by thing: a food, a compartment on a day, a checkmark. A day that has gone is never rewritten. Tap Undo after the other phone has changed that compartment and it leaves theirs alone and says so.'],
-    ['How do I sign in? There\u2019s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
-    ['I have a new phone \u2014 how do I get my lunches back?', 'Tap Already signed up? Sign in on the first screen, before you answer the questions, and use the same email as before. Already past that? Account \u2192 Email me a sign-in link does the same. Your lunchboxes, foods, rules and week come back \u2014 as long as you were signed in on the old phone. If you never were, nothing ever left it: copy them across while you still have it.'],
-    ['How do I clear a phone?', 'Signed out, Erase everything on the Account tab. Signed in the lunches are the household\u2019s \u2014 Sign out leaves them behind, and Delete my account and data ends the account itself. Clear the plans keeps your foods.'],
-    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from and its two recipes to cook from. Foods in your own words, recipes of your own, kid\u2019s pick, the after-school review, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
-    ['Why can\u2019t I add my own food?', 'Your three weeks are up. Every food you added is still on the list and still gets planned; adding another in your own words, writing one into a box, or keeping a recipe of your own is part of the Household plan. The idea bank, and the recipes that come with it, stay free.']
+    ['We both changed the same thing — whose wins?', 'The later change, thing by thing: a food, a compartment on a day, a checkmark. A day that has gone is never rewritten. Tap Undo after the other phone has changed that compartment and it leaves theirs alone and says so.'],
+    ['How do I sign in? There’s no password.', 'We email a link and a short code. Tap the link, or type the code on the Account tab. Either works once, for fifteen minutes.'],
+    ['I have a new phone — how do I get my lunches back?', 'Tap Already signed up? Sign in on the first screen, before you answer the questions, and use the same email as before. Already past that? Account → Email me a sign-in link does the same. Your lunchboxes, foods, rules and week come back — as long as you were signed in on the old phone. If you never were, nothing ever left it: copy them across while you still have it.'],
+    ['How do I clear a phone?', 'Signed out, Erase everything on the Account tab. Signed in the lunches are the household’s — Sign out leaves them behind and asks first, and Delete my account and data ends the account itself. Clear the plans keeps your foods.'],
+    ['What is free?', 'Planning, the shopping list and packing, for one lunchbox, with the whole idea bank to fill it from and its two recipes to cook from. Foods in your own words, recipes of your own, kid’s pick, what came home, a pantry that remembers, more lunchboxes and sharing are the Household plan, free for three weeks.'],
+    ['Why can’t I add my own food?', 'Your three weeks are up, or the plan has ended. Every food you added is still on the list and still gets planned; adding another in your own words, writing one into a box, or keeping a recipe of your own is part of the Household plan. The idea bank, and the recipes that come with it, stay free.']
   ];
   if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', native()
-    ? 'Account tab \u2192 Subscription: the plan, the date it renews or ends, and Manage in the App Store to change or cancel it; refunds are Apple\u2019s. Paid but not on? Restore purchases, under the prices. A plan bought on the website is changed there, at lunchsorted.app.'
-    : 'Account tab \u2192 Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel. A plan bought in the iPhone app is changed in the App Store.']);
-  var h = '<div class="stack" style="gap:4px">' + qa.map(function(q){
+    ? 'Account tab → Subscription: the plan, the date it renews or ends, and Manage in the App Store to change or cancel it; refunds are Apple’s. Paid but not on? Restore purchases, under the prices. A plan bought on the website is changed there, at lunchsorted.app.'
+    : 'Account tab → Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel. A plan bought in the iPhone app is changed in the App Store.']);
+  var answers = '<div class="stack" style="gap:4px">' + qa.map(function(q){
     return '<details class="more faq"><summary>'+esc(q[0])+'</summary><p class="muted" style="margin:0 0 12px;font-size:14px">'+esc(q[1])+'</p></details>';
-  }).join('') + '</div>'
-    /* Contact support on the Account tab opens this sheet, so reporting a bug
-       has to be reachable from it: the scaffolded mail, not just a question. */
-    + '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:14px">'
+  }).join('') + '</div>';
+  /* Contact support on the Account tab opens this sheet, so reporting a bug has to be
+     reachable from it: the scaffolded mail, not just a question. Opened that way the two
+     buttons come first; from the ? the answers do, and the buttons wait under them. */
+  var support = '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:'+(fromSupport ? 0 : 14)+'px">'
     + '<a class="btn primary" href="'+esc(feedbackMail())+'" data-feedback>Something is wrong</a>'
     + '<a class="btn" href="'+esc(feedbackMail('question'))+'" data-feedback>Ask a question</a></div>'
-    + '<p class="hint" style="margin:8px 0 0">Both open an email to hello@lunchsorted.app with the details we need already in it.</p>'
-    + '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:12px">' + siteLink('/feedback.html', 'Send feedback')
+    + '<p class="hint" style="margin:8px 0 '+(fromSupport ? 14 : 0)+'px">Both open an email to hello@lunchsorted.app with the details we need already in it.</p>';
+  var links = '<div class="row" style="flex-wrap:wrap;gap:8px;margin-top:12px">' + siteLink('/feedback.html', 'Send feedback')
     + siteLink('/help.html', 'More answers') + '</div>';
+  var h = fromSupport ? support + answers + links : answers + support + links;
   openSheet('Help', h);
 }
 function addKidSheet(){
@@ -5418,7 +5460,7 @@ document.addEventListener('click', function(ev){
   var kid = activeKid();
   /* a caretaker sees the plan and checks the list off on this phone; changing the plan is for a parent */
   if(isHelper() && HELPER_OK.indexOf(act) < 0){ toast('Only a parent can change the plan'); return; }
-  if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='delete-account' && act!=='member-remove' && act!=='disarm' && !(act==='add-idea' && String(UI.armed).indexOf('idea:') === 0) && UI.armed) UI.armed = '';
+  if(act!=='clear-all' && act!=='del-kid' && act!=='clear-week' && act!=='delete-account' && act!=='member-remove' && act!=='signout' && act!=='leave' && act!=='disarm' && !(act==='add-idea' && String(UI.armed).indexOf('idea:') === 0) && UI.armed) UI.armed = '';
   if(act!=='delete-account' && UI.deleteTyped) UI.deleteTyped = '';   /* typing is an input event, so it can never clear itself */
 
   /* did they eat it? */
@@ -5439,7 +5481,7 @@ document.addEventListener('click', function(ev){
     touch(ek); save();
     if(reviewComplete(ek, ed)) delete UI.reviewEdit[ek.id];
     render();
-    if(act!=='eat-skip' && reviewComplete(ek, ed)) toast('Noted — the next draw learns from it');
+    if(act!=='eat-skip' && reviewComplete(ek, ed)) toast('Noted');
     return;
   }
   if(act==='eat-change'){
@@ -5553,7 +5595,7 @@ document.addEventListener('click', function(ev){
     var on = !(S.align && S.align.on === false);
     S.align = {on: !on, updatedAt: now()};
     save(); render();
-    toast(S.align.on ? 'Matched next time you plan the week' : 'Drawn on their own next time you plan the week');
+    toast(S.align.on ? 'The boxes match from the next plan' : 'Each box is planned on its own');
     return;
   }
   if(act==='plan-kid'){
@@ -5563,7 +5605,7 @@ document.addEventListener('click', function(ev){
     var snap1 = snapshotWeeks([kid]);
     prunePantry();
     var short = planWeek(kid, null, ahead1); render();
-    toast(short.length ? 'No '+short.join(' or ').toLowerCase()+' available — check Foods' : (ahead1 ? 'Next week drawn' : 'Week drawn'), function(){ restoreWeeks(snap1); });
+    toast(short.length ? 'No '+short.join(' or ').toLowerCase()+' available — check Foods' : (ahead1 ? 'Next week planned' : 'Week planned'), function(){ restoreWeeks(snap1); });
     return;
   }
   if(act==='shuffle-go'){
@@ -5578,7 +5620,7 @@ document.addEventListener('click', function(ev){
     closeSheet();
     if(dayS){
       var did = shuffleDayFor(picked, dayS); render();
-      toast(did.length ? dayLabel(dayS).full+' shuffled for '+listNames(did) : 'Nothing else to draw for '+dayLabel(dayS).full, did.length ? undoS : null);
+      toast(did.length ? dayLabel(dayS).full+' shuffled for '+listNames(did) : 'Nothing else on the list for '+dayLabel(dayS).full, did.length ? undoS : null);
     } else planAllToast(picked, undoS, aheadS);
     return;
   }
@@ -5588,7 +5630,7 @@ document.addEventListener('click', function(ev){
     if(kids().length > 1){ shuffleSheet(dS); return; }     /* whose box? the sheet asks, starting with this one */
     var snap3 = snapshotWeeks([k3]);
     if(shuffleDayFor([k3], dS).length){ render(); toast(dayLabel(dS).full+' shuffled', function(){ restoreWeeks(snap3); }); }
-    else toast('Nothing else to draw for '+dayLabel(dS).full);
+    else toast('Nothing else on the list for '+dayLabel(dS).full);
     return;
   }
   if(act==='slot'){ slotSheet(el.getAttribute('data-kid'), el.getAttribute('data-day'), el.getAttribute('data-cat')); return; }
@@ -5607,7 +5649,7 @@ document.addEventListener('click', function(ev){
       if(wi4) closeSheet(); else slotSheet(k4.id, day4.d, cat);
       render();
       if(wi4) toast(wi4.n+' was written in \u2014 shuffled away', slotUndo(k4, day4, cat, was4, wi4));
-      else if(wasKept) toast('Shuffled \u2014 it is no longer kept');
+      else if(wasKept) toast('Shuffled and unlocked');
     }
     else { putWriteInBack(wi4); toast('Nothing else in that category'); }
     return;
@@ -5691,9 +5733,9 @@ document.addEventListener('click', function(ev){
     if(dayc.kidPick) delete dayc.kidPick[catc];
     setOverride(dayc, catc, null);
     fc.deletedAt = now(); touch(fc);
-    var drew = reshuffleSlot(kc, dayc, catc);      /* the compartment goes back to what a draw would give it */
+    reshuffleSlot(kc, dayc, catc);                 /* the compartment goes back to what a draw would give it */
     touch(weekOf(kc, dayc.d) || kc.week); touch(kc); save(); closeSheet(); render();
-    toast(fc.n+' cleared'+(drew ? ' \u2014 drawn again' : ''), slotUndo(kc, dayc, catc, wasc, fc));
+    toast(fc.n+' cleared', slotUndo(kc, dayc, catc, wasc, fc));
     return;
   }
 
@@ -5752,7 +5794,7 @@ document.addEventListener('click', function(ev){
 
   /* foods */
   if(act==='ideas'){ ideasSheet(); return; }
-  if(act==='help'){ helpSheet(); return; }
+  if(act==='help'){ helpSheet(!!el.getAttribute('data-support')); return; }
   if(act==='whats-new'){
     var wn = '<div class="card stack" style="gap:14px">' + WHATS_NEW.steps.map(function(st, i){
       return '<div class="switch" style="align-items:flex-start"><span class="count" style="min-width:22px;margin-top:2px">'+(i+1)+'</span><div><div class="t">'+esc(st[0])+'</div><div class="d">'+esc(st[1])+'</div></div></div>';
@@ -5882,7 +5924,7 @@ document.addEventListener('click', function(ev){
   if(act==='seed'){
     var added = seedLibrary(kid, 'some');
     planWeek(kid); UI.tab = 'week';
-    save(); render(); window.scrollTo(0,0); toast(added+' foods added and the week drawn'); return;
+    save(); render(); window.scrollTo(0,0); toast(added+' foods added and the week planned'); return;
   }
   if(act==='add-own'){ if(gated()){ upgradeSheet('food'); return; } addOwnSheet(); return; }
   if(act==='save-own'){
@@ -6244,7 +6286,10 @@ document.addEventListener('click', function(ev){
     }).catch(offline);
     return;
   }
-  if(act==='signout'){ UI.deleteTyped = ''; Store.markAccount(false);
+  if(act==='signout'){
+    /* the one tap that empties this phone: it asks first, like every other clearing control */
+    if(UI.armed !== 'signout'){ UI.armed = 'signout'; render(); toast('That clears this phone \u2014 sign in again to get the lunches back'); return; }
+    UI.armed = ''; UI.deleteTyped = ''; Store.markAccount(false);
     /* the household lives on the server; signing out sends anything unsent, then leaves this
        phone blank, the way a signed-out app should be. Signing in again brings it all back. */
     clearTimeout(Account.timer);
@@ -6252,7 +6297,7 @@ document.addEventListener('click', function(ev){
     flush.then(function(){ return api('POST', '/api/auth/logout'); }).then(function(){
       Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; Account.linkSent = ''; Account.status = 'idle'; Account.first = false; Account.elsewhere = false; Account.entitlement = null; Account.household = null;
       Store.forget(); S = newAccount(); DEVICE.memberId = S.members[0].id; UI.tab = 'pack'; UI.obEmail = false;
-      save(); render(); window.scrollTo(0,0); toast('Signed out \u2014 this phone is clear. Sign in again to get the lunches back.');
+      save(); render(); window.scrollTo(0,0); toast('Signed out');
     }).catch(offline);
     return;
   }
@@ -6356,6 +6401,8 @@ document.addEventListener('click', function(ev){
     return;
   }
   if(act==='leave'){
+    if(UI.armed !== 'leave'){ UI.armed = 'leave'; render(); toast('That leaves the lunches with the household and clears this phone'); return; }
+    UI.armed = '';
     api('POST', '/api/household/leave').then(function(r){
       if(r.status !== 200){ toast(r.error || 'Could not leave'); return; }
       /* the lunches were the household's: this phone starts fresh, signed in to its own empty household */
@@ -6407,7 +6454,7 @@ document.addEventListener('click', function(ev){
   if(act==='review-now'){ delete UI.reviewLater[el.getAttribute('data-kid')]; render(); return; }
   if(act==='review-later-all'){                            /* this box: the card is inside its own tab */
     var rdL = reviewDay(kid); if(rdL) UI.reviewLater[kid.id] = {d:rdL.d, at:Date.now()};
-    render(); window.scrollTo(0,0); toast('Answer from Pack whenever you like'); return;
+    render(); window.scrollTo(0,0); toast('It waits on Pack'); return;
   }
   if(act==='trial-dismiss'){ try{ localStorage.setItem(TRIAL_SEEN_KEY, el.getAttribute('data-stage') || 'soon'); }catch(e){} render(); return; }
   if(act==='undo'){ if(UI.undo){ var fn = UI.undo; UI.undo = null; fn(); } return; }

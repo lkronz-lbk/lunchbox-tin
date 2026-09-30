@@ -1,3 +1,12 @@
+> **Superseded, 2026-09-29. Do not paste this reply.** It was written for the build that handed
+> the purchase to Safari. Since v24 the iPhone app sells the Household plan through the App Store
+> (StoreKit, `ios/App/App/StoreKitPlugin.swift`, `/api/apple`) and never opens a web checkout, so
+> sections 4 and 8 below say the opposite of what the reviewer's phone shows. The listing's Payments
+> note and review notes in `store/listing.md` are current; take the wording from there. The
+> screen-recording script (section 1) also names controls that have since been renamed: Shuffle all
+> is now **Plan the week**, Shuffle day is **Shuffle**, and the lunchbox settings open from the
+> sliders icon labelled Lunchbox settings, not "the gear".
+
 # Reply to App Review
 
 The rejection is the standard information request for a developer account with no
