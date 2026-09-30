@@ -5486,6 +5486,7 @@ document.addEventListener('click', function(ev){
       return iapLink(r).then(function(res){
         done();
         if(res.status === 200 && paid()){
+          IAP.lastError = null;
           closeSheet();
           render(); toast('Welcome to the Household plan'); resumeAfter(); return;
         }

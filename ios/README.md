@@ -18,7 +18,10 @@ What the shell adds, and where:
   web with no way to buy it in the app; 3.1.3(b) allows that only when the same plan
   is also an in-app purchase. The plugin buys with the household's token, hands the
   page Apple's signed transaction, and the page sends it to `/api/apple/link`; the
-  transaction is finished only once the server has it. The products are
+  transaction is finished only once the server has it. App Review tests this iPhone
+  app on an iPad too, and rejected 1.0 (6) there because StoreKit, not told where to
+  show its payment sheet, refused the purchase: the plugin now passes its own view
+  controller (iOS 18.2 and later) or window scene (iOS 17 and later). The products are
   `app.lunchsorted.household.annual` and `.month`. There is no forever product on sale.
 - **Stripe, never.** The iPhone app does not open Stripe, to buy or to manage: a
   household paying on the website is told to change it at lunchsorted.app, and the
