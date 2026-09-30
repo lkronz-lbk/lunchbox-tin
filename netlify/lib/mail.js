@@ -9,21 +9,59 @@ const FROM = () => process.env.MAIL_FROM || 'Lunch Sorted <hello@mail.lunchsorte
 const REPLY_TO = 'hello@lunchsorted.app';
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-export async function send(msg) {
+/* the key alone, as Resend gives it: re_, then letters, digits and underscores. The build
+   (scripts/migrate.mjs) refuses the deploy over anything more, a line break pasted with it above all,
+   in words that name the variable and never what it holds, and the last good deploy stays live */
+export function resendKey() {
+  const key = process.env.RESEND_API_KEY || '';
+  if (key && !/^re_[A-Za-z0-9_]+$/.test(key)) throw new Error('RESEND_API_KEY must be re_, then letters, digits and underscores only; look for a space or a line break pasted with it');
+  return key;
+}
+
+/* Resend's own words about a refusal are kept for the log, but cut short, with every secret the send
+   holds blanked out by value, wherever it sits and however an answer might have escaped what is
+   around it: the key, each run of four or more characters of it between spaces, and the sign-in
+   link's token and code the caller passes. So is anything else shaped like a key, or like a link's
+   token (a reminder's stop link). Its error answers never quote any of them; this makes sure of it */
+const scrub = (s, secrets) => {
+  let out = String(s);
+  for (const secret of secrets) for (const piece of [secret, ...secret.split(/\s+/)]) if (piece.length >= 4) out = out.split(piece).join('…');
+  return out.replace(/re_[A-Za-z0-9_]+/g, 're_…').replace(/\bt=[^&\s"'<>\\]+/g, 't=…').slice(0, 300);
+};
+
+export async function send(msg, secrets = []) {
   if (globalThis.__LS_MAIL) { globalThis.__LS_MAIL.push(msg); return { captured: true }; }
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
+  const raw = process.env.RESEND_API_KEY || '';
+  if (!raw) {
     if (siteEnv() === 'production') throw new Error('RESEND_API_KEY is not set');
     console.log(`[mail] to ${msg.to}: ${msg.subject}\n${msg.text}`);
     return { logged: true };
   }
+  /* gentler than the build: here a refusal would stop every sign-in link, and a variable scoped to
+     Functions alone never met the build. So whitespace around the key is dropped, and only a key that
+     could never work is refused, before fetch sees it and in words of our own: nothing left, or a
+     character still in it that fetch will not put in a header, which is a line break, any other
+     control character but tab, or one beyond Latin-1. fetch refuses a line break in words that quote
+     the header whole, and the rest without saying why, so the log would read as if no answer came.
+     Anything else goes to Resend, which refuses what is not a key in its own words */
+  const key = raw.trim();
+  if (!key) throw new Error('RESEND_API_KEY holds only spaces or line breaks, so nothing was sent; paste the key alone');
+  if (/[^\t\x20-\x7e\x80-\xff]/.test(key)) throw new Error('RESEND_API_KEY has a line break or a character no request can carry in it, so nothing was sent; paste the key alone');
   /* a slow mail service must never hold a sign-in past the function's own limit */
-  const res = await fetch('https://api.resend.com/emails', {
+  const init = {
     method: 'POST', signal: AbortSignal.timeout(4000),
     headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
     body: JSON.stringify({ from: FROM(), to: [msg.to], reply_to: REPLY_TO, subject: msg.subject, text: msg.text, html: msg.html })
-  });
-  if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
+  };
+  const doFetch = globalThis.__LS_RESEND_FETCH || fetch;
+  /* no answer (the network failed, fetch refused the request, or the four seconds ran out), or an
+     error answer that could not be read, is told in fixed words of our own. fetch's own error can
+     quote a header it refused to send, and one of these headers is the key, so its message, its stack
+     and the error itself (as a cause) stay here */
+  let res, text;
+  try { res = await doFetch('https://api.resend.com/emails', init); if (!res.ok) text = await res.text(); }
+  catch { throw new Error(`${res ? 'Resend answered with an error, but the answer could not be read' : 'No answer from Resend'} (fetch's own error is left out, as it can quote the key)`); }
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${scrub(text, [key, ...secrets.filter(Boolean).map(String)])}`);
   return {};
 }
 
@@ -42,7 +80,7 @@ export async function sendMagicLink(to, link, code) {
     subject: 'Your Lunch Sorted sign-in link',
     text: `Tap to sign in to Lunch Sorted:\n\n${link}\n\nUsing the app from your home screen? Open it and type this code instead:\n\n${code}\n\nBoth work once and expire in 15 minutes. If you did not ask for this, ignore this email.` + foot().text,
     html: `<p>Tap to sign in to Lunch Sorted:</p>${btn(link, 'Sign in to Lunch Sorted')}<p>Using the app from your home screen? Open it and type this code instead:</p><p style="font:600 22px ui-monospace,monospace;letter-spacing:.08em">${esc(code)}</p><p style="color:#3E4D45;font-size:13px">Both work once and expire in 15 minutes. If you did not ask for this, ignore this email.</p>` + foot().html
-  });
+  }, [(String(link).match(/[?&]t=([^&#]+)/) || [])[1], code]);   /* the two secrets in it, blanked should Resend ever quote them back */
   return r.logged || r.captured ? { devLink: link, devCode: code } : {};
 }
 
