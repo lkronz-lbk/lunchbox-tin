@@ -5,12 +5,18 @@ import { siteEnv } from './db.js';
    price lookup) and one signature check do not need the SDK. The key comes from
    the deploy context, never from a request. Production must hold a live key and
    every other context a test key, so a mis-scoped variable fails the deploy
-   instead of charging a real card from a branch. */
+   instead of charging a real card from a branch. A key pasted with more than the
+   key fails it too, before any of it can reach a header or the log. */
 const API = 'https://api.stripe.com/v1';
 
 export function stripeKey() {
   const key = process.env.STRIPE_SECRET_KEY || '';
   if (!key) return '';
+  /* the key alone: anything pasted with it, a line break above all, can make fetch refuse the
+     authorization header with a message that quotes the header whole, and every caller logs the
+     message. So it fails the deploy here, as a key in the wrong context does, in words that name
+     the variable and never what it holds */
+  if (!/^(sk|rk)_(live|test)_[A-Za-z0-9]+$/.test(key)) throw new Error('STRIPE_SECRET_KEY must be sk_ or rk_, then live_ or test_, then letters and digits only; look for a space or a line break pasted with it');
   const env = siteEnv();
   const live = /^(sk|rk)_live_/.test(key);
   if (env === 'production' && !live) throw new Error('STRIPE_SECRET_KEY in production is not a live key');
@@ -23,8 +29,8 @@ export function prices() {
      household, the beta testers' free ones included. A refund goes by the plan, not the price. */
   return { year: process.env.STRIPE_PRICE_YEAR || '', lifetime: process.env.STRIPE_PRICE_LIFETIME || '', month: process.env.STRIPE_PRICE_MONTH || '' };
 }
-/* read on every household request, so a mis-scoped key must disable billing, not sync:
-   the build (scripts/migrate.mjs) is where it fails the deploy */
+/* read on every household request, so a key stripeKey() refuses (the wrong context, or more than
+   the key) must disable billing, not sync: the build (scripts/migrate.mjs) is where it fails the deploy */
 export function billingEnabled() {
   const p = prices();
   try { return !!(stripeKey() && p.year); }
@@ -53,8 +59,13 @@ export async function stripe(method, path, params, idempotencyKey) {
   if (method === 'GET') { const q = encode(params); if (q) url += '?' + q; }
   else { headers['content-type'] = 'application/x-www-form-urlencoded'; body = encode(params); }
   const doFetch = globalThis.__LS_STRIPE_FETCH || fetch;
-  const res = await doFetch(url, { method, headers, body });
-  const text = await res.text();
+  /* no answer, or one that could not be read, is told in fixed words of our own. fetch's own error
+     can quote a header it refused to send, and one of these headers is the key, so its message, its
+     stack and the error itself (as a cause) stay here: nothing a header problem says can reach the
+     log. Which of the two it was matters after a POST: once Stripe has answered, it may have acted */
+  let res, text;
+  try { res = await doFetch(url, { method, headers, body }); text = await res.text(); }
+  catch { throw new Error(`${res ? 'Stripe answered, but the answer could not be read' : 'No answer from Stripe'} (fetch's own error is left out, as it can quote the key)`); }
   let data = {}; try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) {
     const err = new Error((data.error && data.error.message) || `Stripe ${res.status}`);

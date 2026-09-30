@@ -37,7 +37,8 @@ const { default: billingHandler } = await import('../netlify/functions/api-billi
 const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
 const { default: betaHandler } = await import('../netlify/functions/beta.js');
 const { default: recipeHandler } = await import('../netlify/functions/api-recipe.js');
-const { default: errorsHandler, ipBucket } = await import('../netlify/functions/api-errors.js');
+const { default: errorsHandler, ipBucket, ROWS_AN_HOUR, EACH_AN_HOUR } = await import('../netlify/functions/api-errors.js');
+const { ipKey, ERRORS_KEPT } = await import('../netlify/lib/db.js');
 const { default: appleHandler } = await import('../netlify/functions/api-apple.js');
 const appleLib = await import('../netlify/lib/apple.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
@@ -407,7 +408,7 @@ try {
       await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
       await page.reload(); await page.waitForTimeout(600);
       const onQuestions = await page.evaluate(t => !!document.querySelector('.ob')
-        && !!t && !document.getElementById('view').textContent.includes(t)
+        && (!t || !document.getElementById('view').textContent.includes(t))   /* a build with no note has no text to keep off */
         && !document.querySelector('[data-act="whats-new"]'), NOTE_TEXT);
       await page.click('[data-act="ob-signin"]'); await page.waitForTimeout(300);
       const onSignIn = await page.evaluate(() => !!document.querySelector('.ob')
@@ -508,6 +509,165 @@ try {
       return !!k.packed[dt][c].by && !!k.packed[dt][c].at;
     return false;
   }));
+
+  /* -------------------------------------------- where the cursor is left */
+  {
+    /* A sheet says it is a dialog, so the cursor goes into it as it opens and comes back to
+       what opened it as it closes. Before, a parent on VoiceOver or a keyboard was left on
+       the row behind the sheet, and at the top of the page once it had gone. A phone of its
+       own, so nothing here moves the week the rest of the run reads. Every step waits for the
+       sheet it needs and steps over what never came: a regression fails its own checks rather
+       than spending Playwright's thirty seconds and the rest of the run. */
+    const cf = await phone(); const pf = await cf.newPage(); pf.on('pageerror', e => errors.push(String(e.message)));
+    await pf.goto(BASE+'/app/'); await pf.waitForTimeout(400);
+    await pf.fill('#obName', 'Fern'); await pf.click('[data-act="ob-go"]'); await pf.waitForTimeout(400);
+    await pf.click('[data-act="ob-later"]'); await pf.waitForTimeout(300);
+    /* what has the cursor, whether a ring is drawn round it, and where the page is */
+    const cursor = () => pf.evaluate(() => { const a = document.activeElement || document.body,
+      o = {tag: a.tagName, id: a.id, inSheet: !!a.closest('#sheet'), first: a === document.querySelector('#view h2, #view h3'), ring: getComputedStyle(a).outlineStyle !== 'none', y: window.scrollY};
+      [...a.attributes].forEach(x => { if (x.name.indexOf('data-') === 0) o[x.name.slice(5)] = x.value; }); return o; });
+    /* a tap inside the open sheet, or false when there is nothing there to tap */
+    const tapIn = async sel => { const h = await pf.$('#sheet.open ' + sel); if (!h) return false; try { await h.click({timeout: 3000}); return true; } catch { return false; } };
+    /* a sheet a failed step left open would lie over every tap that follows */
+    const clear = async () => { if (await pf.$('#sheet.open')) { await pf.click('#sheetClose'); await pf.waitForTimeout(300); } };
+    await pf.click('[data-act="help"]');
+    let up = await sheetIsOpen(pf), c = await cursor();
+    check('a sheet takes the cursor as it opens: focus is on its title, not on the button behind it', up && c.id === 'sheetTitle', c);
+    up = await sheetDone(pf); await pf.waitForTimeout(300); c = await cursor();
+    check('and Done gives it back to the button that opened the sheet', up && c.act === 'help' && !c.inSheet && !c.ring, c);
+    await pf.click('[data-act="help"]'); up = await backdropTap(pf); await pf.waitForTimeout(300); c = await cursor();
+    check('as does a tap on the backdrop', up && c.act === 'help' && !c.inSheet, c);
+    await clear(); await pf.click('[data-act="tab"][data-tab="shop"]'); await pf.waitForTimeout(250);
+    const lineKey = await pf.getAttribute('[data-act="line-open"] >> nth=1', 'data-key', {timeout: 3000}).catch(() => null);
+    if (lineKey) { await pf.click('[data-act="line-open"] >> nth=1'); up = await sheetDone(pf); await pf.waitForTimeout(300); } else up = false;
+    c = await cursor();
+    check('a line’s sheet hands the cursor back to that line, not to the first one on the list', up && c.act === 'line-open' && c.key === lineKey, {c, lineKey});
+    /* The usual way out of a sheet is by choosing something, and that redraws the screen behind it: the
+       button that opened the sheet is gone, so the one drawn in its place is found by what it carries.
+       On a short screen the compartment is left straddling the top edge and tapped the way a thumb taps
+       in Safari: no focus of its own, and none of the scrolling a test's own click does first. So the
+       way back is the tap itself, and a focus() allowed to scroll would move the page. */
+    await clear(); await pf.setViewportSize({width:375, height:400});
+    await pf.click('[data-act="tab"][data-tab="week"]'); await pf.waitForTimeout(250);
+    const slotWas = await pf.evaluate(async () => {
+      const b = document.querySelector('#view [data-act="slot"][data-cat="side"]'); if (!b) return null;
+      const r = b.getBoundingClientRect();
+      window.scrollTo(0, Math.round(r.top + window.scrollY + r.height / 2));
+      await new Promise(f => setTimeout(f, 100));
+      const top = b.getBoundingClientRect().top;
+      b.click();
+      return {day: b.getAttribute('data-day'), cat: b.getAttribute('data-cat'), top, h: r.height};
+    });
+    up = !!slotWas && await sheetIsOpen(pf);
+    /* the button is marked first, so the check can tell the sheet was drawn again under the cursor */
+    await pf.evaluate(() => { const b = document.querySelector('#sheet.open [data-act="sheet-shuffle"]'); if (b) b.__drawnBefore = true; });
+    const shuffled = up && await tapIn('[data-act="sheet-shuffle"]'); await pf.waitForTimeout(250);
+    c = await cursor();
+    const redrawn = await pf.evaluate(() => { const a = document.activeElement; return !!a && a.getAttribute('data-act') === 'sheet-shuffle' && !a.__drawnBefore; });
+    check('a sheet redrawn by a tap inside it puts the cursor back on what was tapped, in the new sheet, not behind it', shuffled && (await sheetIsOpen(pf, 500)) && redrawn && c.inSheet, c);
+    const yOpen = c.y;
+    const picked = up && await tapIn('[data-act="pick"]'); await pf.waitForTimeout(300); c = await cursor();
+    check('choosing from a compartment’s sheet closes it, redraws the week, and leaves the cursor on that compartment with the page where it was',
+      picked && !(await pf.$('.sheet.open')) && c.act === 'slot' && c.day === slotWas.day && c.cat === slotWas.cat
+      && slotWas.top < 0 && slotWas.top > -slotWas.h && c.y === yOpen, {c, slotWas, yOpen});
+    /* The phone's keyboard has a Done key, and it is a key: the browser takes whoever pressed it for
+       someone moving by keyboard and rings whatever a script focuses next. The first version of this
+       left a ring on the compartment after every write-in. */
+    await clear(); await pf.click('#view [data-act="slot"][data-cat="fruit"] >> nth=0'); up = await sheetIsOpen(pf);
+    const wrote = up && await tapIn('[data-act="write-in"]');
+    const typing = wrote && await until(pf, () => document.activeElement && document.activeElement.id === 'wiName', null, 3000);
+    if (typing) { await pf.fill('#wiName', 'Leftover pasta'); await pf.press('#wiName', 'Enter'); await pf.waitForTimeout(300); }
+    c = await cursor();
+    check('a write-in saved with the keyboard’s own Done key puts the cursor back on its compartment, with no ring for a parent who never pressed Tab',
+      typing && !(await pf.$('.sheet.open')) && c.act === 'slot' && c.cat === 'fruit' && !c.ring, c);
+    /* A parent on a keyboard. After a key, the browser rings whatever a script focuses: this is the one
+       place a title could wear a ring, and a control handed back must wear one. */
+    await clear(); await pf.evaluate(() => window.scrollTo(0, 0));
+    await pf.focus('[data-act="help"]'); await pf.keyboard.press('Enter'); up = await sheetIsOpen(pf);
+    c = await cursor();
+    const titleQuiet = up && c.id === 'sheetTitle' && !c.ring;
+    await pf.keyboard.press('Tab');
+    const onDone = (await cursor()).id === 'sheetClose';
+    if (onDone) { await pf.keyboard.press('Enter'); await pf.waitForTimeout(300); }   /* Enter on anything else would press it */
+    c = await cursor();
+    check('a parent on a keyboard: Enter on the ? puts the cursor on the title with no ring, Tab reaches Done, and Enter there brings it back to the ?, ringed',
+      titleQuiet && onDone && c.act === 'help' && c.ring, {titleQuiet, onDone, c});
+    await clear();
+    await pf.click('[data-act="tab"][data-tab="setup"]'); await pf.waitForTimeout(250);
+    await pf.focus('[data-act="pane"][data-pane="account"]'); await pf.keyboard.press('Enter'); await pf.waitForTimeout(250);
+    c = await cursor();
+    check('and a page opened by Enter gives its own title the cursor, with no ring either', c.id === 'paneTitle' && !c.ring, c);
+    if (await pf.$('[data-act="pane-done"]')) { await pf.click('[data-act="pane-done"]'); await pf.waitForTimeout(250); }
+    /* One key held down repeats. On Done it would close the sheet and press whatever the cursor went
+       back to, which opens the sheet again: one press is one tap. */
+    await clear(); await pf.click('[data-act="tab"][data-tab="week"]'); await pf.waitForTimeout(250);
+    await pf.focus('[data-act="help"]'); await pf.keyboard.press('Enter'); up = await sheetIsOpen(pf);
+    await pf.focus('#sheetClose'); await pf.keyboard.down('Enter'); await pf.waitForTimeout(150);
+    await pf.keyboard.down('Enter'); await pf.waitForTimeout(150); await pf.keyboard.up('Enter'); await pf.waitForTimeout(250);
+    c = await cursor();
+    check('a held Enter on Done closes the sheet once, and the repeat does not open it again', up && !(await pf.$('.sheet.open')) && c.act === 'help', c);
+    await clear();
+    await pf.click('[data-act="kidsheet"]'); up = await sheetIsOpen(pf);
+    const adding = up && await tapIn('[data-act="add-kid"]');
+    const fieldTook = adding && await until(pf, () => document.activeElement && document.activeElement.id === 'nkName', null, 3000);
+    check('a sheet with a field of its own still puts the cursor in the field', fieldTook, await cursor());
+    up = await sheetDone(pf); await pf.waitForTimeout(300); c = await cursor();
+    check('and one sheet opened from another goes back to what opened the first of the two', adding && up && c.act === 'kidsheet' && !c.inSheet, c);
+    /* the field waits for the sheet to slide in; a sheet put away before then keeps where the cursor went back to */
+    await clear(); await pf.click('[data-act="kidsheet"]'); up = await sheetIsOpen(pf);
+    const quick = up && await tapIn('[data-act="add-kid"]');
+    /* the field must not have the cursor yet when Done is pressed, or this would test nothing */
+    const early = quick && await pf.evaluate(() => { const was = (document.activeElement || {}).id; document.getElementById('sheetClose').click(); return was !== 'nkName'; });
+    await pf.waitForTimeout(450); c = await cursor();
+    check('a sheet put away before its field has taken the cursor leaves the cursor where it went back to', early && !(await pf.$('.sheet.open')) && c.act === 'kidsheet' && !c.inSheet, {c, early});
+    /* Packed puts focus back on its button after the redraw, and a focus() left to scroll drags a
+       half-hidden button into view: the page jumped under the thumb, which is the one thing a tick
+       must never do. A screen short enough that Pack scrolls with one lunchbox, the button left
+       straddling the top edge, and a click that does no scrolling of its own. */
+    await clear(); await pf.setViewportSize({width:375, height:220});
+    await pf.click('[data-act="tab"][data-tab="pack"]'); await pf.waitForTimeout(250);
+    const jump = await pf.evaluate(async () => {
+      const b = document.querySelector('[data-act="pack-all"]'); if (!b) return null;
+      const r = b.getBoundingClientRect();
+      window.scrollTo(0, Math.round(r.top + window.scrollY + r.height / 2));
+      await new Promise(f => setTimeout(f, 100));
+      const top = b.getBoundingClientRect().top, y0 = window.scrollY;
+      b.click();
+      await new Promise(f => setTimeout(f, 250));
+      const a = document.activeElement;
+      return {top, y0, y1: window.scrollY, act: a && a.getAttribute('data-act'), pressed: a && a.getAttribute('aria-pressed')};
+    });
+    check('Packed leaves the page where it was, with the cursor back on the button', !!jump && jump.top < 0 && jump.top > -44 && jump.y1 === jump.y0 && jump.act === 'pack-all' && jump.pressed === 'true', jump);
+    /* the cook sheet does the same to its own controls: redrawn with its place kept, then the cursor
+       put back on what was pressed. With that half off the top of the sheet, the sheet moved. */
+    await clear(); await pf.setViewportSize({width:375, height:400});
+    await pf.click('[data-act="tab"][data-tab="recipes"]'); await pf.waitForTimeout(250);
+    await pf.click('#view [data-act="cook-recipe"] >> nth=0', {timeout: 5000}).catch(() => {}); up = await sheetIsOpen(pf);
+    const cookJump = up && await pf.evaluate(async () => {
+      const b = document.getElementById('sheetBody'), e = b.querySelector('[data-act="cook-makes"][data-v="1"]'); if (!e) return null;
+      b.scrollTop = Math.round(e.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop + e.getBoundingClientRect().height / 2);
+      await new Promise(f => setTimeout(f, 100));
+      const top = e.getBoundingClientRect().top - b.getBoundingClientRect().top, y0 = b.scrollTop;
+      e.click();
+      await new Promise(f => setTimeout(f, 250));
+      const a = document.activeElement;
+      return {top, y0, y1: b.scrollTop, act: a && a.getAttribute('data-act'), v: a && a.getAttribute('data-v')};
+    });
+    check('a cook control leaves the sheet where it was when it takes the cursor back', !!cookJump && cookJump.top < 0 && cookJump.top > -44 && cookJump.y1 === cookJump.y0 && cookJump.act === 'cook-makes' && cookJump.v === '1', cookJump);
+    await sheetDone(pf); await pf.waitForTimeout(300);
+    /* Add lunchbox takes the header's lunchbox button away (two boxes get the folder tabs), so there
+       is nothing to go back to. The first heading in the view takes the cursor, rather than nothing at all. */
+    await clear(); await pf.setViewportSize({width:375, height:812});
+    await pf.click('[data-act="tab"][data-tab="week"]'); await pf.waitForTimeout(250);
+    await pf.click('[data-act="kidsheet"]'); up = await sheetIsOpen(pf);
+    const adding2 = up && await tapIn('[data-act="add-kid"]');
+    const named = adding2 && await until(pf, () => document.activeElement && document.activeElement.id === 'nkName', null, 3000);
+    if (named) { await pf.fill('#nkName', 'Wren'); await tapIn('[data-act="save-kid"]'); await pf.waitForTimeout(400); }
+    c = await cursor();
+    check('when what opened a sheet has gone with what the sheet changed, the cursor lands on the first heading in the view, not nowhere',
+      named && !(await pf.$('.sheet.open')) && c.first && !c.inSheet && !c.ring, c);
+    await cf.close();
+  }
 
   /* ---------------------------------------------------------- kid's pick */
   check('nobody is offered the kid\'s pick until the lunchbox says the kid has a say', (await page.$$eval('[data-act="kid-start"]', a => a.length)) === 0);
@@ -2602,11 +2762,76 @@ try {
     check('one IPv6 prefix is one address to the throttle, and a mapped IPv4 is itself', ipBucket('2001:db8:1:2:3:4:5:6') === '2001:0db8:0001:0002::/64' && ipBucket('2001:db8::1') === '2001:0db8:0000:0000::/64' && ipBucket('::ffff:1.2.3.4') === '1.2.3.4' && ipBucket('1.2.3.4') === '1.2.3.4');
     const errGet = await fetch(NODE_BASE + '/api/errors'), errJunk = await fetch(NODE_BASE + '/api/errors', { method: 'POST', body: 'not json' });
     check('the error endpoint answers nothing to a GET and refuses junk', errGet.status === 404 && errJunk.status === 400, [errGet.status, errJunk.status]);
+    /* a flood from more addresses than the hourly caps can see stops at the table's ceiling, not the database's. The
+       filler is two hours old and each report comes from a fresh address, so only the ceiling can turn one away */
+    const flood = (message, ip) => errorsHandler(new Request('http://127.0.0.1/api/errors', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'error', message, build: 'lunchsorted-v3' }) }), { ip });
+    const marks = async ip => (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', ['err:' + ipKey(ipBucket(ip))])).rows[0].n;
+    const had = (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n;
+    await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '2 hours', 'lunchsorted-v3', 'error', 'smoke: filler ' || g FROM generate_series(1, $1::int) g`, [ERRORS_KEPT - had - 1]);
+    const lastRoom = await flood('smoke: the last report there is room for', '203.0.113.7');
+    const atCeiling = (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n;
+    check('the report that brings the error table to its ceiling is kept', lastRoom.status === 204 && atCeiling === ERRORS_KEPT, [lastRoom.status, atCeiling, ERRORS_KEPT]);
+    const pastIt = await flood('smoke: one past the ceiling', '203.0.113.8');
+    const past = (await db.query("SELECT count(*)::int AS n, count(*) FILTER (WHERE message = 'smoke: one past the ceiling')::int AS it FROM app_errors")).rows[0];
+    const pastTicks = await marks('203.0.113.8');
+    check('past the ceiling a report is still answered 204 and grows nothing, not even the throttle',
+      pastIt.status === 204 && past.n === ERRORS_KEPT && past.it === 0 && pastTicks === 0, [pastIt.status, past, pastTicks]);
+    /* a week after a flood its rows are off this week's list, and without this line the page would read as a quiet week */
+    const fullAdmin = await page.evaluate(() => fetch('/api/admin').then(r => r.text()));
+    const oldestKept = (await db.query('SELECT min(at) AS t FROM app_errors')).rows[0].t;
+    const roomFrom = new Date(new Date(oldestKept).getTime() + 30 * 86400000).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' });
+    check('and the numbers page says the table is full, and that room comes back thirty days after its oldest row',
+      /The table is full, so new reports are being dropped/.test(fullAdmin) && fullAdmin.includes('as the oldest pass thirty days, from about ' + roomFrom), [roomFrom, fullAdmin.match(/Broken screens this week[\s\S]{0,500}/)?.[0]]);
+    check('the limits are the ones the README gives: twenty an hour from one address, two hundred in all, ten thousand rows',
+      EACH_AN_HOUR === 20 && ROWS_AN_HOUR === 200 && ERRORS_KEPT === 10000, [EACH_AN_HOUR, ROWS_AN_HOUR, ERRORS_KEPT]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* everyone's hourly cap: filled to one short with rows from five minutes ago, the next report is kept and one more from a fresh address is not */
+    const inHour = async () => (await db.query("SELECT count(*)::int AS n FROM app_errors WHERE at > now() - interval '1 hour'")).rows[0].n;
+    await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '5 minutes', 'lunchsorted-v3', 'error', 'smoke: this hour ' || g FROM generate_series(1, $1::int) g`, [ROWS_AN_HOUR - (await inHour()) - 1]);
+    const hourLast = await flood('smoke: the last report this hour has room for', '203.0.113.9');
+    const hourFull = await inHour();
+    await flood('smoke: one past the hour', '203.0.113.10');
+    const hourPast = (await db.query("SELECT count(*)::int AS n FROM app_errors WHERE message = 'smoke: one past the hour'")).rows[0].n;
+    check('everyone\'s hourly cap keeps the report that reaches it, and one past it from a fresh address writes nothing',
+      hourLast.status === 204 && hourFull === ROWS_AN_HOUR && hourPast === 0 && (await marks('203.0.113.10')) === 0, [hourFull, ROWS_AN_HOUR, hourPast]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* one address's hourly cap, with everyone's far off */
+    for (let i = 1; i <= EACH_AN_HOUR + 1; i++) await flood('smoke: from one address, ' + i, '203.0.113.11');
+    const fromOne = (await db.query("SELECT count(*)::int AS n FROM app_errors WHERE message LIKE 'smoke: from one address, %'")).rows[0].n;
+    check('one address\'s hourly cap keeps what it allows and writes nothing for the report after',
+      fromOne === EACH_AN_HOUR && (await marks('203.0.113.11')) === EACH_AN_HOUR, [fromOne, EACH_AN_HOUR]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* what Postgres cannot hold goes to the database as U+FFFD: half an emoji at the start (sent alone) and at the end (left by
+       the cut at 300), and a NUL between. PGlite would store the halves as U+FFFD itself, so the check reads the values handed to
+       the driver, not the row, and asks TextEncoder rather than the server's own pattern whether each value is whole */
+    const REPLACED = String.fromCharCode(0xFFFD), NUL = String.fromCharCode(0), LOW_HALF = String.fromCharCode(0xDE00);
+    const realSql = globalThis.__LS_SQL; let sent = null;
+    globalThis.__LS_SQL = async (strings, ...vals) => { if (typeof strings !== 'string' && strings.join('').includes('INSERT INTO app_errors')) sent = vals; return realSql(strings, ...vals); };
+    try { await flood(LOW_HALF + 'x'.repeat(296) + NUL + 'y' + '\u{1F34E}', '203.0.113.12'); } finally { globalThis.__LS_SQL = realSql; }
+    const whole = v => new TextDecoder().decode(new TextEncoder().encode(v)) === v && !v.includes(NUL);
+    check('a NUL and half an emoji, sent alone or left by a cut, reach the database as U+FFFD, and nothing Postgres cannot hold does',
+      !!sent && sent.includes(REPLACED + 'x'.repeat(296) + REPLACED + 'y' + REPLACED) && sent.every(v => typeof v !== 'string' || whole(v)), sent && sent.filter(v => typeof v === 'string').map(v => JSON.stringify(v.slice(0, 2) + '...' + v.slice(-3))));
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* commonest first: a message seen twice outranks a later one seen once */
+    await db.query(`INSERT INTO app_errors (at, build, kind, message) VALUES (now() - interval '20 minutes', 'lunchsorted-v3', 'error', 'smoke: seen on two phones'), (now() - interval '20 minutes', 'lunchsorted-v3', 'error', 'smoke: seen on two phones'), (now(), 'lunchsorted-v3', 'error', 'smoke: seen once, later')`);
     const anonAdmin = await fetch(NODE_BASE + '/api/admin');
     const adminPage = await page.evaluate(() => fetch('/api/admin').then(r => r.text().then(t => ({ status: r.status, text: t, csp: r.headers.get('content-security-policy') }))));
     check('the numbers page asks a stranger to sign in, and shows the person in ADMIN_EMAILS real counts',
       anonAdmin.status === 401 && adminPage.status === 200 && /by the numbers/i.test(adminPage.text) && /households/.test(adminPage.text) && /default-src 'none'/.test(adminPage.csp), [anonAdmin.status, adminPage.status]);
     check('the numbers page lists the week\'s broken screens', /Broken screens/.test(adminPage.text) && /a synthetic break/.test(adminPage.text));
+    const twice = adminPage.text.indexOf('smoke: seen on two phones'), once = adminPage.text.indexOf('smoke: seen once, later');
+    check('the commonest is listed first, and the page says how full the table is without calling it full',
+      twice > -1 && once > twice && new RegExp('holds \\d[\\d,]* of the ' + ERRORS_KEPT.toLocaleString('en-US') + ' it keeps').test(adminPage.text) && !/The table is full/.test(adminPage.text), [twice, once]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
+    /* thirty-one messages seen twice fill the twenty commonest and more, and a new one seen once still shows, among the newest of the rest */
+    await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '30 minutes', 'lunchsorted-v3', 'error', 'smoke: seen twice, ' || (g % 31) FROM generate_series(0, 61) g`);
+    await db.query(`INSERT INTO app_errors (build, kind, message) VALUES ('lunchsorted-v3', 'error', 'smoke: new this minute')`);
+    const kinds = (await db.query("SELECT count(*)::int AS n FROM (SELECT 1 FROM app_errors WHERE at > now() - interval '7 days' GROUP BY message, build, place) g")).rows[0].n;
+    const mixed = await page.evaluate(() => fetch('/api/admin').then(r => r.text()));
+    const listedRows = ((mixed.match(/<table class="kv errs">[\s\S]*?<\/table>/) || [''])[0].match(/<tr>/g) || []).length;
+    check('past the twenty commonest, a new break seen once is still listed, after them, and the page says how many there were',
+      mixed.includes('smoke: new this minute') && mixed.indexOf('smoke: new this minute') > mixed.indexOf('smoke: seen twice, ') && listedRows === 30 && mixed.includes(kinds.toLocaleString('en-US') + ' distinct this week'), [kinds, listedRows]);
+    await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'");
     check('and shows the funnel, with this household signed up and planned', /The funnel/.test(adminPage.text) && /Planned a week<\/td><td>1 \/ 1/.test(adminPage.text) && /Signed up<\/td><td>1 \/ 1/.test(adminPage.text), adminPage.text.match(/The funnel[\s\S]{0,600}/)?.[0]);
     /* the one script that sorts the rosters is allowed by its own hash and nothing else */
     const inline = adminPage.text.match(/<script>([\s\S]*?)<\/script>/g) || [];
@@ -2651,8 +2876,21 @@ try {
   await p2.fill('#signinEmail', 'sam@example.com'); await p2.click('[data-act="signin-request"]');
   await until(p2, () => !!document.querySelector('#signinCode'));
   const devCode = await p2.evaluate(() => fetch('/api/auth/request', {method:'POST', headers:{'content-type':'application/json'}, body:'{"email":"sam@example.com"}'}).then(r => r.json()).then(j => j.devCode));
-  await p2.fill('#signinCode', devCode.toLowerCase()); await p2.press('#signinCode', 'Enter');
+  /* Enter in the code field presses Sign in, and a key held down repeats: each repeat was one more
+     try of the code, and the server allows eight a quarter of an hour, so a mistyped code held for
+     a moment locked the address out. The key is held here, with the first try held open so the
+     field is still there for every repeat, and the code goes once. */
+  let letGo = () => {}; const holding = new Promise(r => { letGo = r; });
+  let codeTries = 0; const holdCode = async route => { if (route.request().method() === 'POST') codeTries++; await holding; await route.continue(); };
+  await p2.route('**/api/auth/code', holdCode);
+  await p2.fill('#signinCode', devCode.toLowerCase()); await p2.focus('#signinCode');
+  await p2.keyboard.down('Enter'); await p2.keyboard.down('Enter'); await p2.keyboard.down('Enter'); await p2.keyboard.up('Enter');
+  await p2.waitForTimeout(250);
+  const tries = codeTries;
+  letGo();
   await until(p2, () => /Join their household/.test(document.querySelector('#view').textContent));
+  await p2.unroute('**/api/auth/code', holdCode);
+  check('a held Enter in the code field tries the code once, not once a repeat', tries === 1, tries);
   check('the code from the email signs in without leaving the app, and offers the household', /Join their household/.test(await p2.textContent('#view')) && await p2.evaluate(() => fetch('/api/household').then(r => r.status)) === 200);
   /* App Review's account: a standing code, no email, and the code is no good for anyone else */
   {
@@ -3186,8 +3424,10 @@ try {
   const bcfgOff = await page.evaluate(() => fetch('/api/billing').then(r => r.json()));
   check('with no Stripe in the deploy nothing is gated', bcfgOff.enabled === false);
   /* the key guard: a live key can never serve a branch, a test key can never serve production */
-  const guard = (env, key) => { const was = { e: process.env.SITE_ENV, k: process.env.STRIPE_SECRET_KEY }; process.env.SITE_ENV = env; process.env.STRIPE_SECRET_KEY = key;
-    let threw = false; try { stripeLib.stripeKey(); } catch { threw = true; } process.env.SITE_ENV = was.e; process.env.STRIPE_SECRET_KEY = was.k; return threw; };
+  const putEnv = (k, v) => { if (v === undefined) delete process.env[k]; else process.env[k] = v; };   /* unset goes back unset, not as 'undefined' */
+  const said = (env, key) => { const was = { e: process.env.SITE_ENV, k: process.env.STRIPE_SECRET_KEY }; process.env.SITE_ENV = env; process.env.STRIPE_SECRET_KEY = key;
+    try { stripeLib.stripeKey(); return null; } catch (e) { return String(e.message); } finally { putEnv('SITE_ENV', was.e); putEnv('STRIPE_SECRET_KEY', was.k); } };
+  const guard = (env, key) => said(env, key) !== null;
   {
     const { siteEnv } = await import('../netlify/lib/db.js');
     const was = process.env.SITE_ENV; delete process.env.SITE_ENV;
@@ -3208,6 +3448,60 @@ try {
     check('a staging link comes back to staging, and a production link never takes its host from the request', staging === 'https://dev--lunchsorted.netlify.app' && prod === 'https://lunchsorted.app', [staging, prod]);
   }
   check('a test key in production, or a live key anywhere else, refuses to start', guard('production', 'sk_test_x') && guard('staging', 'sk_live_x') && !guard('production', 'sk_live_x') && !guard('staging', 'sk_test_x'));
+  {
+    /* a key pasted with a line break or a space, before it, after it or inside it, is not a key:
+       refused in every context, so the build fails and the last good deploy stays live, and a
+       function handed one anyway takes billing as off. In the authorization header a line break
+       makes fetch refuse the request in words that quote the header, key and all, and every caller
+       logs those words (security review, 2026-09-30). The refusal names the variable, never the
+       value. A NUL would do the same, but the environment cannot hold one */
+    const hidden = (s) => !String(s).includes('Pasted42') && !/(sk|rk)_(live|test)_/.test(String(s));
+    const bad = [['production', 'sk_live_Pasted42\n'], ['staging', 'sk_test_Pasted42\n'], ['production', 'sk_live_Pasted42\r\n'], ['production', '\nsk_live_Pasted42'], ['production', 'sk_live_Past\ned42'], ['production', 'sk_live_Pasted42 ']].map(([env, key]) => said(env, key));
+    check('a key pasted with a line break or a space, wherever it falls, refuses to start in any context, in words that hold no key; the key alone starts',
+      bad.every(m => !!m && /^STRIPE_SECRET_KEY must be/.test(m) && hidden(m)) && said('production', 'sk_live_Pasted42') === null && said('staging', 'rk_test_Pasted42') === null, bad);
+    const logged = [], was = { ce: console.error, e: process.env.SITE_ENV, k: process.env.STRIPE_SECRET_KEY, y: process.env.STRIPE_PRICE_YEAR, w: stripeLib.billingEnabled.warned };
+    console.error = (...a) => { logged.push(a.map(String).join(' ')); };
+    process.env.SITE_ENV = 'production'; process.env.STRIPE_SECRET_KEY = 'sk_live_Pasted42\n'; process.env.STRIPE_PRICE_YEAR = 'price_year'; stripeLib.billingEnabled.warned = false;
+    let on = null;
+    try { on = stripeLib.billingEnabled(); }
+    finally { console.error = was.ce; stripeLib.billingEnabled.warned = was.w; putEnv('SITE_ENV', was.e); putEnv('STRIPE_SECRET_KEY', was.k); putEnv('STRIPE_PRICE_YEAR', was.y); }
+    check('a running function handed one anyway takes billing as off rather than throwing on every household request, and its one log line holds no key', on === false && logged.length === 1 && /^billing off: STRIPE_SECRET_KEY must be/.test(logged[0]) && hidden(logged[0]), logged);
+    const { spawnSync } = await import('node:child_process');
+    const build = (key) => spawnSync(process.execPath, [path.join(ROOT, '..', 'scripts', 'migrate.mjs')], { env: { SITE_ENV: 'production', STRIPE_SECRET_KEY: key }, encoding: 'utf8', timeout: 30000 });
+    const refused = build('sk_live_Pasted42\n'), built = build('sk_live_Pasted42');
+    check('and the build refuses the deploy over it, loudly, naming the variable and not the key; the key alone builds',
+      refused.status === 1 && /deploy refused: STRIPE_SECRET_KEY must be/.test(refused.stderr) && hidden(refused.stdout + refused.stderr) && built.status === 0 && /no database URL, skipping/.test(built.stdout),
+      { refused: [refused.status, refused.stderr], built: [built.status, built.stdout, built.stderr] });
+  }
+  {
+    /* and whatever fetch throws, what leaves stripe() is ours. The key here is whole: the hook spoils
+       the header on its way into the real fetch, as a line break pasted before the key would, and
+       points it at a port fetch never opens, so nothing leaves the machine */
+    const { inspect } = await import('node:util');
+    const KEY = 'sk_test_Spoiled42', shown = (e) => e ? [e.message, e.stack, inspect(e)].join('\n') : '';
+    const spoil = (url, init) => url.endsWith('/unread')
+      ? Promise.resolve(new Response(new ReadableStream({ start(c) { c.error(new TypeError('cut off: ' + init.headers.authorization)); } })))   /* an answer that breaks off, in the worst words */
+      : fetch('http://127.0.0.1:9/', { ...init, headers: { ...init.headers, authorization: init.headers.authorization.replace('Bearer ', 'Bearer \n') } });
+    const theirs = await spoil('https://api.stripe.com/v1/prices/price_year', { method: 'GET', headers: { authorization: 'Bearer ' + KEY } }).then(() => null, e => e);
+    const hook = globalThis.__LS_STRIPE_FETCH, was = { k: process.env.STRIPE_SECRET_KEY, y: process.env.STRIPE_PRICE_YEAR };
+    globalThis.__LS_STRIPE_FETCH = spoil; process.env.STRIPE_SECRET_KEY = KEY; process.env.STRIPE_PRICE_YEAR = 'price_year'; stripeLib.forgetPrices();
+    /* all four read the key and hand the request to fetch before their first await, so the key and
+       the hook go back at once, before a request from the open page can see either. The cancel is the
+       one a deleted account or a join makes, and it logs its own failure */
+    const direct = stripeLib.stripe('GET', '/prices/price_year').then(() => null, e => e), viaPrices = stripeLib.priceInfo().then(() => null, e => e), cancel = stripeLib.cancelSubscription('sub_spoiled'),
+      broken = stripeLib.stripe('POST', '/prices/unread', {}).then(() => null, e => e);
+    globalThis.__LS_STRIPE_FETCH = hook; putEnv('STRIPE_SECRET_KEY', was.k); putEnv('STRIPE_PRICE_YEAR', was.y);
+    const logged = [], ce = console.error; console.error = (...a) => { logged.push(a.map(String).join(' ')); ce.apply(console, a); };
+    let ours = null, asked = null, cut = null;
+    try { ours = await direct; asked = await viaPrices; await cancel; cut = await broken; } finally { console.error = ce; stripeLib.forgetPrices(); }
+    check('fetch\'s own refusal of that header quotes the key, as the security review found', shown(theirs).includes('Spoiled42'), theirs && theirs.message);
+    check('but what stripe() throws in its place names no part of it, in its message, its stack or anything it carries, and the prices read and the cancel say no more, in what they throw or log',
+      !!ours && /^No answer from Stripe/.test(ours.message) && !/Spoiled42|Bearer/.test(shown(ours)) && ours.cause === undefined && !!asked && !shown(asked).includes('Spoiled42') &&
+      logged.some(l => /^billing: could not cancel sub_spoiled No answer from Stripe/.test(l)) && !logged.some(l => l.includes('Spoiled42')),
+      { ours: ours && ours.message, asked: asked && asked.message, logged });
+    check('an answer that breaks off while it is read, after a POST Stripe may have acted on, is told apart from no answer, in fixed words of its own',
+      !!cut && /^Stripe answered, but the answer could not be read/.test(cut.message) && !/Spoiled42|Bearer/.test(shown(cut)) && cut.cause === undefined, cut && cut.message);
+  }
   const WH = 'whsec_test_secret';
   const sign = (body, t = Math.floor(Date.now() / 1000), secret = WH) => `t=${t},v1=${crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
   check('a webhook signature is checked against the raw body and the clock',
@@ -3349,9 +3643,14 @@ try {
   check('the after-school review is locked in place: the card says what it is, the answers wait for the plan, and nothing else asks', /How the box went is part of the Household plan\./.test(await pb.textContent('#view')) && !/How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="review-later-all"], .card.fold', a => a.length)) === 0 && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('[data-act="upgrade"][data-why="review"] .starmark', a => a.length)) === 1);
   await pb.click('[data-act="tab"][data-tab="shop"]'); await pb.waitForTimeout(250);
   check('the shopping list is still free, the pantry tick is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
+  const tickedKey2 = await pb.getAttribute('[data-act="have"]', 'data-key');
   await pb.click('[data-act="have"]'); await pb.waitForTimeout(300);
   check('a pantry tick opens the sheet instead', /pantry that remembers/.test(await pb.textContent('#sheetBody')) && await pb.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('lunchsorted')).pantry).length === 0));
-  await sheetDone(pb); await pb.waitForTimeout(300);
+  /* this tap returns before anything is redrawn, so nothing else was ever going to move the cursor */
+  check('and the sheet has the cursor, where it used to stay on the line behind a dialog', await pb.evaluate(() => !!document.activeElement && document.activeElement.id === 'sheetTitle'));
+  const putAway = await sheetDone(pb); await pb.waitForTimeout(300);
+  check('which goes back to the line that was ticked once the sheet is put away', putAway && await pb.evaluate(k => { const a = document.activeElement;
+    return !!a && a.getAttribute('data-act') === 'have' && a.getAttribute('data-key') === k && !a.closest('#sheet'); }, tickedKey2), tickedKey2);
   const bcfg = await pb.evaluate(() => fetch('/api/billing').then(r => r.json()));
   check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 1999 && bcfg.prices.month.amount === 299 && bcfg.prices.year.interval === 'year', bcfg);
   {
@@ -3479,12 +3778,29 @@ try {
       title: document.querySelector('#sheetTitle').textContent,
       view: document.querySelector('#view').textContent.replace(/\s+/g, ' ').slice(0, 160)
     })).catch(e => String(e))});
-  await sheetDone(pb); await pb.waitForTimeout(300);
+  /* Nobody tapped for this sheet. It takes the cursor all the same, and the browser, which has seen
+     no touch on this page and so rings whatever a script focuses, draws nothing round the title of
+     the sheet that sells the plan. */
+  check('that sheet has the cursor on its title, and no ring round it', await pb.evaluate(() => { const t = document.getElementById('sheetTitle');
+    return document.activeElement === t && getComputedStyle(t).outlineStyle === 'none'; }));
+  const mailDone = await sheetDone(pb); await pb.waitForTimeout(300);
+  /* the boot drew the page before the sheet came, so nothing had the cursor to go back to: the first heading in the view takes it */
+  check('and Done, with nothing that had the cursor to go back to, lands on the first heading in the view', mailDone && await pb.evaluate(() => { const a = document.activeElement;
+    return !!a && a === document.querySelector('#view h2, #view h3'); }));
   check('a signed-in parent who is not in ADMIN_EMAILS gets not-found from the numbers page', (await pb.evaluate(() => fetch('/api/admin').then(r => r.status))) === 404);
   const noCustomer = await pb.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);
   await until(pb, () => fetch('/api/household').then(r => r.json()).then(j => j.version >= 1));
   const patState = await pb.evaluate(() => fetch('/api/household').then(r => r.json()));
+  /* Subscription's rows as "label: value", read until they are the ones wanted or 15 seconds go by */
+  const planRows = async want => {
+    let rows = [];
+    for (const end = Date.now() + 15000; Date.now() < end; await pb.waitForTimeout(250)) {
+      rows = await pb.$$eval('#view .kv', a => a.map(r => Array.from(r.children).map(c => c.textContent.trim()).join(': ')));
+      if (JSON.stringify(rows) === JSON.stringify(want)) break;
+    }
+    return rows;
+  };
   /* ---- the beta link: free forever for the first BETA_CAP households, switched on from the app once signed in */
   {
     const entPat = async () => (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${patState.household.id}`)).rows[0];
@@ -3504,6 +3820,19 @@ try {
     await pb.click('[data-act="tab"][data-tab="foods"]'); await pb.waitForTimeout(250);
     check('on Foods too', !!(await pb.$('.betabar')));
     check('the beta page counts it', /1 spot left/.test(await (await fetch(NODE_BASE + '/beta')).text()));
+    /* nobody paid for it: no price, though Stripe has one for forever (as staging's does), and no word of buying it */
+    await pb.click('[data-act="tab"][data-tab="setup"]');
+    const betaCaption = await pb.textContent('[data-act="pane"][data-pane="plan"] .meta');
+    await openPane(pb, 'plan');
+    const betaRows = await planRows(['Your plan: Household, free forever']);
+    const lifePrice = await pb.evaluate(() => { try { return JSON.parse(localStorage.getItem('lunchsorted-billing')).prices.lifetime.amount; } catch (e) { return null; } });
+    const betaCard = await pb.$eval('#view .card', c => ({ controls: c.querySelectorAll('button, a').length, emptyRows: [...c.querySelectorAll('.row')].filter(r => !r.children.length).length }));
+    check('a beta household\'s Subscription says free forever, with no cost line and nothing about buying it, though Stripe has a forever price',
+      lifePrice === 7900 && betaCaption === 'Free forever' && JSON.stringify(betaRows) === JSON.stringify(['Your plan: Household, free forever']) && betaCard.controls === 0 && betaCard.emptyRows === 0,
+      { lifePrice, betaCaption, betaRows, betaCard });
+    await openPane(pb, 'account');
+    const betaGone = await pb.$$eval('#view li', a => a.map(l => l.textContent));
+    check('and the delete warning calls it the forever plan, not a purchase', betaGone.includes('The forever plan, which does not come back') && !betaGone.some(l => /purchase|paid/i.test(l)), betaGone);
     const again = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, already: j.already }))));
     check('claiming twice is fine and says so', again.status === 200 && again.already === true, again);
     await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', stripe_subscription_id = 'sub_beta_x' WHERE household_id = ${patState.household.id}`);
@@ -3559,6 +3888,57 @@ try {
     const invites = await pb.$$eval('[data-act="invite"], [data-act="invite-helper"]', a => a.length);
     check('days added to a household\'s trial by hand reopen it: the server allows the invite and the app offers both invites again',
       inviteExtended === 200 && st.household.trialExtraDays === 30 && invites === 2, [inviteExtended, st.household && st.household.trialExtraDays, invites]);
+    {
+      /* A sheet the server opens after a tap goes back to whatever had the cursor when it came, and that
+         must never be a button waiting for its second tap, or Delete once DELETE has been typed. The
+         invite is held until the button is ready and has the cursor (where a parent on a keyboard
+         would leave it), then refused, as an out-of-date plan would be. Without the guard, Done hands
+         the cursor to the button, and one Enter clears every plan, or deletes the account. Enter is
+         pressed only once the cursor is known to be safe, so a failure fails its own check and does
+         not clear the household every later check reads. */
+      const isInvite = u => u.pathname === '/api/household/invite';
+      const refusedWith = async (ready, act) => {
+        let release = () => {}; const gate = new Promise(r => { release = r; });
+        const refuse = async route => { await gate; await route.fulfill({status: 402, contentType: 'application/json', body: JSON.stringify({error: 'Sharing is part of the Household plan'})}); };
+        const out = {};
+        await pb.route(isInvite, refuse);
+        try {
+          await openPane(pb, 'household');
+          out.asked = !!(await pb.$('[data-act="invite"]'));
+          if (out.asked) await pb.click('[data-act="invite"]', {timeout: 5000});
+          await openPane(pb, 'account');
+          out.ready = await ready();
+          out.onIt = await pb.evaluate(w => { const a = document.activeElement; return !!a && a.getAttribute('data-act') === w; }, act);
+        } finally { release(); }
+        out.came = out.asked && await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetTitle').textContent), null, 5000);
+        out.closed = !!out.came && await sheetDone(pb); await pb.waitForTimeout(300);
+        out.where = await pb.evaluate(() => { const a = document.activeElement || document.body; return {tag: a.tagName, id: a.id, act: a.getAttribute('data-act')}; });
+        await pb.unroute(isInvite, refuse);
+        return out;
+      };
+      const weeks = () => pb.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => !!k.week)));
+      const weeksWere = await weeks();
+      const armedCase = await refusedWith(async () => {
+        const b = await pb.$('[data-act="clear-week"]'); if (!b) return false;
+        await b.click();
+        if (!/Tap again to clear/.test(await pb.textContent('[data-act="clear-week"]'))) return false;
+        await pb.focus('[data-act="clear-week"]'); return true;
+      }, 'clear-week');
+      if (armedCase.where.id === 'paneTitle') { await pb.keyboard.press('Enter'); await pb.waitForTimeout(300); }
+      check('a sheet the server opens after a tap never hands the cursor to a button waiting for its second tap: Done lands on the page\u2019s title, and Enter clears nothing',
+        armedCase.ready && armedCase.onIt && armedCase.came && armedCase.closed && armedCase.where.id === 'paneTitle' && /true/.test(weeksWere) && (await weeks()) === weeksWere, {armedCase, weeksWere});
+      if (await pb.$('[data-act="pane-done"]')) { await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200); }   /* any other tap takes the arming off */
+      const deleteCase = await refusedWith(async () => {
+        if (!(await pb.$('#deleteConfirm'))) return false;
+        await pb.fill('#deleteConfirm', 'DELETE');
+        const on = await pb.evaluate(() => { const b = document.querySelector('[data-act="delete-account"]'); return !!b && !b.disabled; });
+        if (on) await pb.focus('[data-act="delete-account"]');
+        return on;
+      }, 'delete-account');
+      check('nor to Delete once DELETE has been typed: Done lands on the page\u2019s title', deleteCase.ready && deleteCase.onIt && deleteCase.came && deleteCase.closed && deleteCase.where.id === 'paneTitle', deleteCase);
+      if (await pb.$('#deleteConfirm')) await pb.fill('#deleteConfirm', '');
+      if (await pb.$('[data-act="pane-done"]')) { await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200); }   /* and any other tap forgets the typed word */
+    }
     await db.query(`UPDATE households SET trial_extra_days = 0 WHERE id = ${hid}`);
     await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
   }
@@ -3742,6 +4122,28 @@ try {
   await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
   const forever = await until(pb, () => /Household, forever/.test(document.querySelector('#view').textContent));
   check('Subscription says forever and offers no upgrade', forever && (await pb.$$eval('[data-act="upgrade"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="portal"]', a => a.length)) === 1);
+  const boughtRows = await planRows(['Your plan: Household, forever', 'Cost: $79, once', 'Bought: Paid once, never renews']);
+  await pb.click('[data-act="tab"][data-tab="setup"]');
+  const boughtCaption = await pb.textContent('[data-act="pane"][data-pane="plan"] .meta');
+  check('and forever bought through Stripe keeps its words: what it cost, and that it was paid once',
+    boughtCaption === 'Forever' && JSON.stringify(boughtRows) === JSON.stringify(['Your plan: Household, forever', 'Cost: $79, once', 'Bought: Paid once, never renews']), { boughtCaption, boughtRows });
+  await openPane(pb, 'account');
+  check('and the delete warning still calls it the forever purchase', (await pb.$$eval('#view li', a => a.map(l => l.textContent))).includes('The forever purchase, which does not come back'),
+    await pb.$$eval('#view li', a => a.map(l => l.textContent)));
+  /* the beta link opened by a household that bought forever: the claim says it already has it, and the
+     beta's banner, "yours, free forever", is not for a plan that was paid for. The suite has spent Pat's
+     five claims an hour already, and this one would take the last of the twenty billing requests an hour
+     that backing out of Stripe needs further down, so both counters start again here. The banner used to
+     arrive with the pull that follows the toast, so the view is watched for two seconds after it */
+  await db.query(`DELETE FROM rate_events WHERE key IN ('beta:${patState.me.userId}', 'billing:${patState.me.userId}')`);
+  await pb.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pb.waitForLoadState('load');
+  const boughtClaim = await until(pb, () => /already yours/.test(document.querySelector('#toast').textContent));
+  let boughtView = '';
+  for (const end = Date.now() + 2000; Date.now() < end && !/The beta is on/.test(boughtView); await pb.waitForTimeout(200))
+    boughtView = (await pb.textContent('#view')).replace(/\s+/g, ' ');
+  check('the beta link opened by a household that bought forever says it already has it, and never calls it free',
+    boughtClaim && !/The beta is on/.test(boughtView) && (await ent()).source === 'stripe' && (await ent()).plan === 'lifetime',
+    { toast: await pb.textContent('#toast'), view: boughtView.slice(0, 200) });
   /* a yearly household that buys forever stops its subscription so nobody pays twice */
   await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_old', event_at=NULL WHERE household_id=${patState.household.id}`);
   stripeCalls.length = 0;
@@ -3820,6 +4222,21 @@ try {
   /* a beta tester: forever, on a 100%-off code, nothing charged; the admin page lists them by email */
   await hook({ id: 'evt_tester', type: 'checkout.session.completed', created: t0 + 9.5, data: { object: { id: 'cs_test_t', mode: 'payment', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
   check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
+  {
+    /* that row carries forever's price id, as a sale's does, so the id alone cannot tell a code from a purchase.
+       Its checkout left a Stripe customer, and Manage billing stays for it: a subscription Stripe was still
+       retrying when the beta was claimed can go on charging, and nothing else in the app reaches it */
+    const [{ stripe_price_id: codePrice }] = (await db.query(`SELECT stripe_price_id FROM entitlements WHERE household_id = ${patState.household.id}`)).rows;
+    await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
+    const codeRows = await planRows(['Your plan: Household, free forever']);
+    const codeApp = await pb.evaluate(() => fetch('/api/household').then(r => r.json()).then(j => {
+      let lifeId = null; try { lifeId = JSON.parse(localStorage.getItem('lunchsorted-billing')).prices.lifetime.id; } catch (e) {}
+      return { portal: j.entitlement.portal, lifeId, manage: document.querySelectorAll('#view [data-act="portal"]').length };
+    }));
+    check('and Subscription quotes it no price and says nothing of buying it, though its row carries forever\'s price id; Manage billing stays, for the Stripe customer its checkout left',
+      codePrice === 'price_life' && codeApp.lifeId === 'price_life' && codeApp.portal === true && codeApp.manage === 1 && JSON.stringify(codeRows) === JSON.stringify(['Your plan: Household, free forever']),
+      { codePrice, codeApp, codeRows });
+  }
   {
     const { testers, standard } = (await adminStats()).roster;
     /* the backfill in migration 0005 runs once, against a database that is empty in this
@@ -4010,6 +4427,10 @@ try {
     await notify('DID_RENEW', txn({ expiresDate: Date.now() + 365 * DAY }), { originalTransactionId: '2000000000000100', autoRenewStatus: 1 });
     await notify('EXPIRED', txn({ expiresDate: Date.now() - DAY }), null);
     check('and the yearly one it replaced, which Apple lets run until it is cancelled in Settings, cannot lower it', (await row()).plan === 'lifetime' && (await row()).status === 'active', await row());
+    await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
+    const appleRows = await planRows(['Your plan: Household, forever', 'Cost: Through the App Store', 'Bought: Paid once, never renews']);
+    check('and on the website its Subscription keeps a purchase\'s words: bought once, through the App Store',
+      JSON.stringify(appleRows) === JSON.stringify(['Your plan: Household, forever', 'Cost: Through the App Store', 'Bought: Paid once, never renews']), appleRows);
     await notify('REFUND', txn({ productId: 'app.lunchsorted.household.forever', originalTransactionId: '2000000000000200', transactionId: '2000000000000200', type: 'Non-Consumable', expiresDate: undefined, revocationDate: Date.now() }), null);
     check('a forever purchase Apple refunds is undone', (await row()).plan === 'free' && (await row()).status === 'canceled', await row());
 
@@ -4284,6 +4705,19 @@ try {
       const { default: cronHandler } = await import('../netlify/functions/cron-trial.js');
       const stray = await cronHandler(new Request('http://x/cron', { method: 'POST', body: '{}' }));
       check('the job refuses to run for anything but the schedule on the published deploy', stray.status === 404);
+      /* on the published deploy the job then sweeps: a month-old error report and a two-day-old throttle mark go, younger ones
+         stay. The suite's test key leaves production without billing, so the emails before it send nothing */
+      await db.query(`INSERT INTO app_errors (at, build, kind, message) VALUES (now() - interval '31 days', 'lunchsorted-v3', 'error', 'smoke: a month old'), (now() - interval '29 days', 'lunchsorted-v3', 'error', 'smoke: not yet a month')`);
+      await db.query(`INSERT INTO rate_events (key, at) VALUES ('smoke:two days old', now() - interval '2 days'), ('smoke:two hours old', now() - interval '2 hours')`);
+      const leftover = async () => (await db.query("SELECT message AS k FROM app_errors WHERE build = 'lunchsorted-v3' UNION ALL SELECT key FROM rate_events WHERE key LIKE 'smoke:%'")).rows.map(r => r.k).sort().join();
+      const seeded = await leftover(), mailsBefore = mails.length, wasEnv = process.env.SITE_ENV;
+      process.env.SITE_ENV = 'production';
+      let swept; try { swept = await cronHandler(new Request('http://x/cron', { method: 'POST', body: '{"next_run":"x"}' })); } finally { process.env.SITE_ENV = wasEnv; }
+      const stayed = await leftover();
+      check('on the published deploy the daily job also sweeps: a month-old error report and a two-day-old throttle mark go, younger ones stay',
+        swept.status === 200 && seeded === 'smoke: a month old,smoke: not yet a month,smoke:two days old,smoke:two hours old' && stayed === 'smoke: not yet a month,smoke:two hours old' && mails.length === mailsBefore,
+        [swept.status, seeded, stayed, mails.length - mailsBefore]);
+      await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'"); await db.query("DELETE FROM rate_events WHERE key LIKE 'smoke:%'");
       const { default: testerHandler } = await import('../netlify/functions/cron-tester.js');
       const strayT = await testerHandler(new Request('http://x/cron', { method: 'POST', body: '{"next_run":"x"}' }));
       check('and so does the beta-week job, even with a schedule-shaped body, off the published deploy', strayT.status === 404);

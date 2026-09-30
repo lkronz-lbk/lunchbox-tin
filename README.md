@@ -281,8 +281,10 @@ throwing app script cannot leave it up forever. From there:
   correct, because the school rules go by them.
 - **Pack** — the next school day's box with ice-pack, sealed-container and no-protein
   flags, and one **Packed** check per box that fills every compartment at once (the packed
-  rows stay per compartment underneath, so sync and the other phone are unchanged). The
-  compartments there are not buttons: only Week changes a box, and only Week shows the swap
+  rows stay per compartment underneath, so sync and the other phone are unchanged), and puts
+  the cursor back on itself, or on the line a second box folds into, without scrolling under a
+  thumb (Sheets and the cursor, below). The compartments there are not buttons: only Week
+  changes a box, and only Week shows the swap
   arrows. **Kid's pick** lives here, behind the lunchbox's "They pick their box
   each day" switch (Household plan), for the next box not yet in the bag. Two ways, chosen
   under "How they pick" and both trading within the week already shopped for, so nothing
@@ -355,6 +357,28 @@ throwing app script cannot leave it up forever. From there:
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and, signed out, "Erase everything"
   are two-tap, deleting a food offers Undo, and the shopping checks survive a plan clear.
+- **Sheets and the cursor** — every sheet is a dialog, so the cursor (keyboard and
+  screen-reader focus) goes to the sheet's title as it opens and, as it closes, back to the
+  control whose tap opened it, found again by what it carries once the screen behind has been
+  redrawn (`openSheet`, `sheetGone`). A handler that places the cursor itself wins, and a sheet
+  opened from inside another goes back to what opened the first. A sheet redrawn by a tap
+  inside it puts the cursor back on what was tapped, or on the title if the redraw took that
+  away, disabled it or left something waiting for a second tap. A tap counts only while its
+  own handler runs, so a sheet that opens later (the emailed link, the return from signing in,
+  a refused invite) goes back to whatever had the cursor when it opened; when nothing did, or
+  the opener went with what the sheet changed, the cursor lands on the first heading in the
+  view: the page's title on every tab but Pack, which has none, and there whatever card or box
+  comes first (the morning question, when it is waiting above the box). The cursor is never
+  handed to a button waiting for its second tap, nor to Delete once DELETE has been typed, and
+  nothing behind the kid's-pick screen takes it; a sheet that arrives while the child has the
+  phone gets it when the phone is handed back. A held Enter acts once, wherever it is pressed
+  (a sign-in code is tried once, not once a repeat); only a text box (new lines) and the
+  servings stepper (one more each repeat) take its repeats. The focus a sheet, a tick, Packed
+  or a page's Done hands back goes through `focusQuietly`: for a parent on a thumb it neither
+  scrolls nor wears a ring; for a parent using the keyboard since the last touch (Tab, or a key
+  that moves or presses outside a text field) it is ringed and scrolled into view. A heading
+  that takes the cursor wears no ring either way. Tab can still leave an open sheet, and
+  Escape does not close one (Owed, below).
 - **A parent may override a rule** for one compartment: pick a flagged food from the
   compartment sheet and it goes in, rule named, with Undo. The compartment carries a `!`, the day
   an *Against the rules* chip, and the rules sweep leaves it alone. The override is recorded
@@ -515,7 +539,7 @@ UI per context (`production`, `staging`, `preview`), and the code falls back to 
 deploy context. That is the seam that
 matters: production reads its own database and its live Stripe key, and neither can reach
 a branch deploy or a pull request preview. The build refuses a Stripe key scoped to the
-wrong context.
+wrong context, or pasted with anything more than the key.
 
 **Netlify setup, once:** Site configuration → Build & deploy → Branches and deploy
 contexts → add `dev` as a branch deploy, and leave Deploy Previews on.
@@ -533,7 +557,8 @@ plans is the same week whatever day it runs on (a Thursday used to leave the kid
 nothing to offer). `SMOKE_TODAY=2026-09-14 npm test` pins another day.
 
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
-onboarding, the week draw and the compact tin, packing, the kid's pick, what came home
+onboarding, the week draw and the compact tin, packing, where the cursor is left around a
+sheet and after Packed, the kid's pick, what came home
 and holds, the school rules re-checking a live plan, compartments switching on and off,
 anchoring, the shopping list, recipes (the two the app ships, an ingredient claimed by the step
 that means it, cook mode, the measures and the scaling,
@@ -687,8 +712,15 @@ so App Store Connect has to follow in the same sitting:
       entered for 1.0 (6) describe v24's controls ("shuffle the week", "the gear").
 - [x] **The build.** `main` went from v24 (no note) to v25 on 2026-09-30: Phase A with its own
       note, and PR #36, which had tagged v25 on its branch with no note and was never served on
-      its own. No phone had read a v25 note, so there is no `seenAs`. The next build that
-      changes the app is v26.
+      its own. No phone had read a v25 note, so v25 carries no `seenAs`. The next build that
+      changes the app is v26: the sheet focus fixes, which carry v25's note forward with
+      `seenAs:'lunchsorted-v25'`. That is the one hop `seenAs` allows, so the build after v26
+      writes a note of its own or says nothing, and drops `seenAs` either way. v27 carries it once more even so:
+      Subscription, its caption on the Account tab and the delete warning stop calling the
+      beta's free forever a purchase, and the beta link stops telling a household that bought
+      forever that it is free, a fix, and a phone that skipped v25 and v26 still has to hear
+      about the avoid list. `seenAs` still names v25, so a phone that read the note on v26, or
+      was set up on v26, sees it again; a `seenAs` naming both builds would end that.
 - [x] **Migrations `0009_milestones_errors` and `0010_trial_extra_days`** applied themselves on
       the `main` deploy (the build command runs `scripts/migrate.mjs`): 0009 backfills
       `signed_up` exactly and `paid` approximately, and was applied on the staging branch as
@@ -718,6 +750,12 @@ out by deleting it in the commit that does it.
   and local `dev` have them; the new yearly, $19.99, carries the mark.
 - **Liz: Apple's Small Business Program** answer comes by email. The 15% rate starts from
   approval, not before.
+- **Liz, before `main` takes PR #39: production's `STRIPE_SECRET_KEY`** must be the key alone,
+  and the variable needs the Builds scope as well as Functions, a separate setting on it. A
+  trailing space or line break works today, since fetch trims it, but from then on it refuses
+  main's deploy (the live one stays up). Pasting the key again from Stripe settles it without
+  anyone reading it; if Stripe no longer shows the live key, that means rolling it, with the old
+  one kept valid until `main` has deployed with the new one.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
   Store"; change it the same day (to the store link once it is live).
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
@@ -764,6 +802,11 @@ out by deleting it in the commit that does it.
 - **Tests for what the sheet says about charging later.** Nothing checks the web sheet's
   "Nothing is charged until DATE" or the pane's "First charged" and "Cancel before DATE";
   the server's `chargeLater` is checked, the copy is not.
+- **Escape, and a sheet that keeps the cursor inside it.** A sheet takes the cursor but does not
+  hold it: Tab walks out of an open sheet into the page behind, Escape does nothing, and the page
+  behind the kid's-pick screen can be reached the same way. Escape should do what Done does, and
+  `inert` go on the page while a sheet or the kid's screen is up: B10 in the UX plan, with the
+  First week and planning deploy.
 - **Known edges, watched, not fixed:** a purchase made on a phone whose state is stale, after
   the household has started paying on the web, is refused and the parent told to ask Apple
   for a refund; a subscription restarted from iPhone Settings while the web is billing; a
@@ -941,8 +984,9 @@ writes the same one.
   nothing else about it is special.
   `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each as the
   build command; every statement is idempotent, so a half-applied file is harmless.
-  Housekeeping (expired links, sessions and invites, old rate-limit rows) rides along with
-  about one request in twenty-five.
+  Housekeeping (`sweep()` in `netlify/lib/db.js`: expired links, sessions and invites,
+  rate-limit rows past a day, error reports past thirty days) rides along with about one
+  throttled call in twenty-five, and runs once a day in production after the trial emails.
 - **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
   drive three browser contexts through sign-in by link and by code, a forged sign-in form,
   invite, joining with lunches of one's own, an edit on each phone, an uncheck round trip,
@@ -1075,12 +1119,23 @@ the idea bank stays free so a free list is never stuck with what it has.
   it on nor stops the website selling the plan. The phone finishes a transaction only once the
   server has answered; one that arrives before the account has loaded waits until it has.
 - **In the app**, the Account tab carries a **Subscription** row whose caption is the same
-  one-line state (Free, On for N more days, Renews DATE, Ends DATE, Payment failed, Forever,
-  Switching on…). The page behind it names the plan, what it costs — matched from the price
+  one-line state (Not on, On for N more days, On until tomorrow or tonight, Renews DATE, First
+  charged DATE, Ends DATE, Ended with or without its date, Payment failed, Yearly for a paid
+  plan with no date yet, Forever, Free forever, Switching on…).
+  The page behind it names the plan, what it costs — matched from the price
   id the entitlement carries, so a monthly household is not quoted the yearly price — the
   date it renews or ends, and a card saying how to stop it, which differs for a parent who
-  cannot open the portal. Straight after checkout it says only that it is switching on and
-  the plan is switching on, because the webhook has not landed and every other row would
+  cannot open the portal. Forever is priced, and "Paid once", only where Stripe or the App
+  Store took the money (`source`), since a code's row can carry forever's price id too: the
+  beta's, from the link or a 100%-off code, reads "Household, free forever" and no other row,
+  its caption is Free forever, the delete warning calls it the forever plan, not the forever
+  purchase, and opening the beta link again never puts up the beta's banner over a forever
+  already held. Manage billing stays on the web, for the owner or whoever paid, wherever the
+  row has a Stripe customer, the beta's included: a claim does not yet cancel a subscription
+  Stripe is still retrying (a first charge that failed), which can go on charging, and nothing
+  else in the app reaches it (the iPhone app never opens Stripe at all). Straight
+  after checkout it says only that the plan is switching on, because the webhook has not
+  landed and every other row would
   still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
   "Manage billing", or "Manage in the App Store" for a plan Apple bills (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan
@@ -1097,17 +1152,26 @@ the idea bank stays free so a free list is never stuck with what it has.
   the webhook has landed; a caretaker sees none of this.
 - **Environment**, per deploy context, test keys everywhere but production:
   `STRIPE_SECRET_KEY` (production refuses a test key, every other context refuses a live
-  one), `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
+  one, and every context refuses anything more than the key, such as a line break pasted with
+  it: `sk_` or `rk_`, `live_` or `test_`, then letters and digits only. A refusal fails the
+  deploy, the last good one staying live, and names the variable, never the value. Scope the
+  key to Builds as well as Functions, since the build cannot refuse what it cannot see: a
+  function handed a bad key takes billing as off, so every gate lifts and nothing can be bought,
+  on the web or in the iPhone app, and it makes no Stripe call, so a deleted household's
+  subscription goes on charging; sync carries on),
+  `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
   button when set, and `STRIPE_PRICE_LIFETIME`, best left unset now that forever is off sale: all
   it does is quote that price on the Subscription pane of every forever household, the beta
   testers' free ones included (a refund goes by the plan, not the price). `STRIPE_TAX=0` turns
   automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
+  A request that gets no answer, or an answer that cannot be read, is logged in fixed words, never
+  fetch's own, which can quote the authorization header, key and all.
 - **Email.** Sign-in asks for the address at the end of onboarding, once the week is built
   (skippable; offline or already signed in, the step does not appear). A first sign-in gets
   one welcome email. A scheduled function (`cron-trial.js`, 14:00 UTC daily, runs only on the
-  published deploy) emails the owner and adults of a household whose three weeks end in about
+  published deploy, and runs the housekeeping sweep after) emails the owner and adults of a household whose three weeks end in about
   three days, and again the day after they end: one email per household per kind, claimed in
   `notices` before sending so a retried run never sends twice; paid households never; anyone
   who tapped the stop link never (`users.mail_ok`, via a per-user token at
@@ -1143,10 +1207,22 @@ the idea bank stays free so a free list is never stuck with what it has.
   another site, adds the browser's user-agent string and the time, blanks anything shaped like
   an email address (a Safari or Firefox stack frame, written name@address, is not one and is
   kept), cuts every field before and after it reads it (the user-agent arrives outside the 8 KB
-  the body is held to), and writes the row in one statement that also enforces twenty an hour from
-  one address (a /64 counts as one on IPv6) and a thousand an hour in all, keeping the stack only
-  on the first copy of a distinct error each hour. The sweep drops rows past thirty days. `/admin`
-  lists the week's thirty commonest under **Broken screens**; the stacks are in `app_errors`.
+  the body is held to), makes a NUL or half an emoji (left by a cut, or sent alone) U+FFFD, since
+  Postgres would refuse the whole report for either, and writes the row in one
+  statement that also enforces twenty an hour from one address (a /64 counts as one on IPv6), two
+  hundred an hour in all and ten thousand rows in the table, give or take the few that arrive at the
+  same moment, keeping the stack only on the first copy of a distinct error each hour. The hour's
+  two hundred are first come, first kept, so a flood from ten addresses can spend them, and a count
+  on `/admin` is a floor. The ten thousand keeps a flood from filling the database (512 MB on the
+  Neon plan, and a full one refuses sign-ins, syncs and payments): that many rows measured 35 MB in
+  plain text and 99 MB at the worst, every field the body carries in three-byte letters, which its
+  8 KB allows. Past it a report is answered as usual and nothing is written, not even the
+  throttle's mark, for any build, a real breakage's too, until rows go: the sweep drops rows past
+  thirty days (it rides about one throttled call in twenty-five, and runs daily in production
+  after the trial emails), and deleting a flood's rows by hand makes room at once. `/admin` lists
+  under **Broken screens** the week's twenty commonest, then the ten newest of the rest, and how
+  many there were when that is not all; says how full the table is; and says when it is full and
+  from when room comes back. The stacks are in `app_errors`.
 - **The numbers**, at `/admin`, for the emails in `ADMIN_EMAILS` (comma-separated) and nobody
   else: households, on trial, lapsed, paying by plan, sign-ins, reminder emails sent, invites.
   Counts from the database; a stranger is asked to sign in, a signed-in parent who is not

@@ -502,6 +502,8 @@ ul.steping{list-style:none;margin:0;padding:0;background:var(--surface);border:1
 ul.steping li+li .item{border-top:1px solid var(--line)}
 ul.steping .item .nm{font-family:var(--f-mono);font-size:14.5px;font-variant-numeric:tabular-nums}
 .cookstep:focus{outline:none}
+/* a heading takes the cursor when its sheet or its page opens, or when there is nothing else to go back to, and presses nothing, so it wears no ring; nor does focus handed back to a parent who is not using the keyboard (focusQuietly) */
+#sheetTitle:focus,#view h2:focus,#view h3:focus,.noring:focus-visible{outline:none}
 .btn.sm.step{min-width:44px;padding:0 10px;font-size:17px}
 /* a label a screen reader reads and a sighted parent does not need, because the
    placeholder beside it says the same thing */
@@ -602,7 +604,7 @@ textarea.codebox:not([readonly]){font-size:16px}   /* a parent types into this o
 <div class="backdrop" id="backdrop"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <div class="grab"></div>
-  <header><h3 id="sheetTitle"></h3><button class="btn ghost sm" id="sheetClose">Done</button></header>
+  <header><h3 id="sheetTitle" tabindex="-1"></h3><button class="btn ghost sm" id="sheetClose">Done</button></header>
   <div class="body" id="sheetBody"></div>
 </div>
 <div id="kid" hidden></div>
@@ -736,7 +738,7 @@ window.LSMerge = (function(){
 (function(){
 "use strict";
 
-var APP_BUILD = 'lunchsorted-v25';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v27';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 
 /* ---- when the planner's own code breaks, it tells our server and nothing else: what the
    error said, where in this file, which build, and which browser; never a lunch, a food or a
@@ -1552,7 +1554,7 @@ function claimBeta(){
   claimBeta.busy = true; claimBeta.tries = (claimBeta.tries || 0) + 1; claimBeta.failed = false;
   api('POST', '/api/billing/beta', {code:code}).then(function(r){
     claimBeta.busy = false;
-    if(r.status === 200){ betaForget(); UI.notice = BETA_ON; toast(r.already ? 'Lunch Sorted is already yours, for good' : 'Lunch Sorted is yours, free forever'); Sync.pull().then(render); return; }
+    if(r.status === 200){ betaForget(); if(!r.already) UI.notice = BETA_ON; toast(r.already ? 'Lunch Sorted is already yours, for good' : 'Lunch Sorted is yours, free forever'); Sync.pull().then(render); return; }   /* already: forever may have been bought, and the beta's banner calls it free */
     if(r.status === 409){ betaForget(); UI.notice = r.paying ? 'This household already pays for the Household plan, so the beta link is not for it.' : 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
     if(r.status === 404){ betaForget(); UI.notice = 'That beta link is not right. Ask for a fresh one.'; render(); return; }
     claimBeta.failed = true; render();                             /* a hiccup: the code stays, the banner offers another go */
@@ -1564,6 +1566,10 @@ function paid(){
   /* an App Store plan more than three days past its end is over, as the server also decides, even if Apple's word never came */
   return !(e.source === 'apple' && e.currentPeriodEnd && Date.parse(e.currentPeriodEnd) + 3 * 86400000 < Date.now());
 }
+/* forever that nobody paid for: the beta link or a 100%-off code (source 'code'), or 'comp', which the
+   server still recognizes though nothing writes it. Only Stripe and the App Store take money, so only
+   their forever is called bought, or priced */
+function foreverGiven(){ var e = Account.entitlement; return paid() && e.plan === 'lifetime' && e.source !== 'stripe' && e.source !== 'apple'; }
 function billingOn(){ return !!(Account.billing && Account.billing.enabled) && !isHelper(); }
 /* a plan the household once had and has no longer: cancelled, refunded, lapsed, or a first charge
    that failed. Its words are its own; "your three weeks are up" is for a household that never bought */
@@ -1985,9 +1991,24 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    The recipe steps have been seen. The first screen getting the header the rest of the app had,
    the questions fitting on one screen, the mark that fills in while the app wakes and the dark
    theme's borders brought over 3:1 ship in the same build without a line: nothing gained or lost.
+   v26 is a sheet taking the cursor as it opens and giving it back as it closes, and Packed no
+   longer moving the page under the thumb: a fix, nothing a parent would call new, so it carries
+   v25's note forward rather than spend the banner on itself. seenAs names v25: a phone that read
+   the walk-through at v25, or was set up on v25, is left alone, and one that never opened v25
+   still hears it. That is the one hop seenAs allows. The build after v26 writes a note of its
+   own, or says nothing (text:''), and drops seenAs.
+   v27 stops calling the beta's free forever a purchase: Subscription had quoted it forever's
+   price and "Paid once", the Account tab's caption said only Forever, the delete warning
+   called it the forever purchase, and opening the beta link again told a household that had
+   bought forever that it was free. A fix, nothing a parent would call new, so it carries v25's
+   note once more, which the line above did not plan: a phone that skipped v25 and v26 still
+   has to hear that the avoid list matches whole words. seenAs holds one build and names v25,
+   where most phones read it, so a phone that read it on v26, or was set up on v26, is shown it
+   again. A seenAs that named both would end that, at the price of changing csp.mjs and the
+   smoke checks that read it.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v25', text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
+var WHATS_NEW = {build:'lunchsorted-v27', seenAs:'lunchsorted-v25', text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
   steps:[
     ['Check your avoid list', 'Under Anything else in the lunchbox settings, a word now has to be the whole word: \u201cham\u201d keeps ham out and lets graham crackers in. It no longer catches a longer word it sits inside \u2014 \u201cmelon\u201d misses watermelon, \u201cnut\u201d misses walnut \u2014 so write each of those out.'],
     ['Lock what worked', 'Shuffle all is now Plan the week; Shuffle day is the crossed arrows beside each day. Every day on Week has a lock: tap it and Plan the week leaves that day alone. The lock on a compartment\u2019s sheet holds one compartment, and shows on the tin. A food you pick by hand is locked where you put it, and the message says so.'],
@@ -2043,7 +2064,7 @@ function closePane(){
   var was = UI.pane, y = UI.paneScroll || 0;
   UI.pane = ''; render(); window.scrollTo(0, y);
   var row = document.querySelector('#view .item[data-pane="'+was+'"]') || document.querySelector('#who [data-act="box-settings"]');
-  if(row) row.focus({preventScroll:true});   /* focus() scrolls by default, which would fight the restore above */
+  if(row) focusQuietly(row);   /* under a thumb without scrolling, which would fight the restore above */
 }
 /* Put focus back on the row that was just tapped. render() replaces the whole view, so
    the button that was pressed is gone and focus falls to the body — on VoiceOver that is
@@ -2051,13 +2072,13 @@ function closePane(){
    does twenty times in a row. Every attribute that picks the row out is matched on its
    value rather than built into the selector: a food’s name is a parent’s own words and
    may carry a quote, and nothing here has to be sanitized on the way in.
-   preventScroll for the same reason as closePane above. */
+   focusQuietly for the same reason as closePane above. */
 function focusBack(root, act, attrs){
   var rows = root ? [].slice.call(root.querySelectorAll('[data-act="'+act+'"]')) : [];
   var row = rows.filter(function(r){
     return Object.keys(attrs).every(function(k){ return r.getAttribute(k) === attrs[k]; });
   })[0];
-  if(row) row.focus({preventScroll:true});
+  if(row) focusQuietly(row);
 }
 /* where a bug report says the parent was */
 function paneLabel(){ return UI.pane && PANES[UI.pane] ? (UI.pane === 'box' ? 'lunchbox settings' : PANES[UI.pane].toLowerCase()) : UI.tab; }
@@ -3621,16 +3642,105 @@ var sheetEl = document.getElementById('sheet'),
     bodyEl  = document.getElementById('sheetBody'),
     titleEl = document.getElementById('sheetTitle');
 var sheetState = null;
+/* A sheet is a dialog and says so, so the cursor goes into it as it opens and comes back
+   out as it closes. Left where it was, a parent on VoiceOver or a keyboard sat on the row
+   behind a dialog that had just said nothing behind it could be reached, and was dropped
+   at the top of the page once the sheet had gone.
+   Going in, focus lands on the title: it names the sheet, and landing there presses
+   nothing. A sheet redrawn by a tap inside it puts the cursor back on what was tapped, if
+   the redraw kept it, and on the title if not, so it is never left behind the sheet; a
+   handler that wants it somewhere else, or in a field, puts it there next.
+   Coming out, it goes back to the control whose tap opened the sheet — found again by what
+   it carries, since render() has usually rebuilt it by then — unless whoever closed the
+   sheet has already put the cursor somewhere. A sheet closed for another in the same tap
+   hands its way back on to that one. A tap counts only while its own handler runs, so a
+   sheet that opens later (the emailed link, a refused invite) goes back to whatever had the
+   cursor when it opened. With nothing to go back to (nothing had it, or the opener went
+   with what the sheet changed) it goes to the first heading in the view. Never onto a
+   button waiting for its second tap, or onto Delete once DELETE has been typed: one Enter
+   would finish it.
+   Under a thumb nothing here scrolls the page (focusQuietly). */
+var lastAct = null, sheetFrom = null, sheetGoing = false, keyboarding = false;
+function dataOf(el){
+  var at = {};
+  [].forEach.call(el.attributes, function(a){ if(a.name.indexOf('data-') === 0) at[a.name] = a.value; });
+  return at;
+}
+/* every control under root that carries the same values: matched on the values themselves,
+   never built into a selector, for the reason focusBack gives */
+function carrying(root, at){
+  if(!at['data-act']) return [];
+  return [].filter.call(root.querySelectorAll('[data-act]'), function(r){
+    return Object.keys(at).every(function(n){ return r.getAttribute(n) === at[n]; });
+  });
+}
+function focusTwins(m){ return carrying(document, m.at).filter(function(r){ return !sheetEl.contains(r); }); }
+function focusMark(el){
+  if(!el || !el.getAttribute || el === document.body || sheetEl.contains(el)) return null;
+  var m = {el:el, id:el.id || '', at:dataOf(el), nth:0};
+  m.nth = Math.max(0, focusTwins(m).indexOf(el));   /* Foods can carry two idea-bank buttons: this is the one that was tapped */
+  return m;
+}
+function focusFind(m){
+  if(!m) return null;
+  if(document.contains(m.el)) return m.el;
+  if(m.id) return document.getElementById(m.id);
+  var twins = focusTwins(m);
+  return twins[m.nth] || twins[0] || null;
+}
+/* The focus a sheet, a tick, Packed or a page's Done hands back goes through here. A ring
+   is for a parent using the keyboard, and the browser's own guess is wrong on a phone: the
+   keyboard's Done key counts as a key, and Safari leaves a field focused when a button is
+   tapped, so whatever a script focuses next is ringed. So the ring shows only for a parent
+   who has used the keyboard since the last touch (the keydown listener), and only for them
+   is the page scrolled to what has the cursor: under a thumb it stays exactly where it was. */
+function focusQuietly(el){
+  el.focus({preventScroll:!keyboarding});
+  if(keyboarding || document.activeElement !== el) return;
+  el.classList.add('noring');
+  el.addEventListener('blur', function(){ el.classList.remove('noring'); }, {once:true});
+}
+/* a sheet's own field takes the cursor once the sheet has slid in, unless the sheet has gone
+   again by then: a field in a closed sheet would take back what sheetGone has just placed */
+function focusFieldSoon(id){ setTimeout(function(){ var el = document.getElementById(id); if(el && sheetEl.classList.contains('open')) el.focus(); }, 220); }
 function openSheet(title, html, state){
+  var was = sheetEl.classList.contains('open'), other = !was || titleEl.textContent !== title;
+  /* both read before the body is replaced, while a control in the last sheet still counts as
+     inside it: what was tapped in a sheet now being redrawn, and the way back out of a new one */
+  var tapped = was && lastAct && bodyEl.contains(lastAct) ? dataOf(lastAct) : null;
+  if(!was && !sheetGoing) sheetFrom = focusMark(lastAct) || focusMark(document.activeElement);
   titleEl.textContent = title; bodyEl.innerHTML = html; sheetState = state || null;
   sheetEl.classList.add('open'); backEl.classList.add('open'); bodyEl.scrollTop = 0;
   document.body.style.overflow = 'hidden';
+  if(UI.kid) return;                 /* it came while the child has the phone: it waits under their screen, and kid-exit gives it the cursor */
+  var again = tapped && !UI.armed ? carrying(bodyEl, tapped)[0] : null;   /* never onto a button the redraw has just armed */
+  if(again && !again.disabled){ focusQuietly(again); return; }
+  if(other && document.activeElement === titleEl) titleEl.blur();   /* another sheet under a cursor that never left the title: let go, so that taking it again is heard */
+  if(!sheetEl.contains(document.activeElement)) titleEl.focus({preventScroll:true});
 }
-function closeSheet(){ if(typeof IAP !== 'undefined' && IAP.inFlight){ IAP.inFlight = false; Account.buying = false; } sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
+function closeSheet(){ var wasOpen = sheetEl.classList.contains('open'); if(typeof IAP !== 'undefined' && IAP.inFlight){ IAP.inFlight = false; Account.buying = false; } sheetEl.classList.remove('open'); sheetEl.classList.remove('cooking'); backEl.classList.remove('open'); sheetState = null; UI.pendingImport = null; UI.cook = null; UI.importTo = null; UI.recipeDraft = null; UI.foodRecipeId = null;
   UI.ideaAdded = null;                          /* "tap it again" means the tap you just made, and the sitting ends here */
   if(String(UI.armed).indexOf('idea:') === 0) UI.armed = '';
   UI.recipeFetch = (UI.recipeFetch || 0) + 1;   /* a page still being read is no longer wanted: its answer is dropped */ if(!UI.kid) document.body.style.overflow = '';
+  /* after the tap that closed it has finished: a render() or a focus of its own comes first */
+  if(wasOpen && !sheetGoing){ sheetGoing = true; Promise.resolve().then(sheetGone); }
   if(UI.ideasDirty){ UI.ideasDirty = false; render(); } }
+function sheetGone(){
+  sheetGoing = false;
+  if(sheetEl.classList.contains('open')) return;          /* another sheet took its place, and its way back with it */
+  var m = sheetFrom, a = document.activeElement, el = null; sheetFrom = null;
+  if(a && a !== document.body && !sheetEl.contains(a)) return;   /* whoever closed the sheet has placed the cursor */
+  if(!UI.kid){                                                   /* nothing behind the child's screen takes it */
+    /* not onto a button waiting for its second tap, nor onto Delete once DELETE is typed: no tap
+       that opens a sheet leaves either behind, so this sheet came by itself, and one Enter
+       would finish what the parent had only started. Else the first heading in the view: the
+       morning question on Pack, the page's title elsewhere. */
+    el = ((UI.armed || deleteArmed()) ? null : focusFind(m)) || document.querySelector('#view h2, #view h3');
+  }
+  if(!el){ if(a && a !== document.body) a.blur(); return; }     /* not left inside a sheet that has gone */
+  if(el.tabIndex < 0 && !el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');   /* a title can take the cursor once asked to */
+  focusQuietly(el);
+}
 /* A food added from the bank changes the Foods tab, and the sheet covers the Foods tab.
    Twelve taps used to be twelve rebuilds of a screen nobody could see, each one throwing
    away the eaten-history index behind it; the tab is redrawn once, as the sheet goes. */
@@ -4648,7 +4758,7 @@ function paneAccount(){
       +  (owner
           ? '<li>Every lunchbox, food, plan, photo and answer, from our servers and from this phone</li>'
             + (others.length ? '<li>'+esc(andList(others))+'’s sign-in to this household — whatever is already on their phone stays on it</li>' : '')
-            + (paid() ? '<li>'+(Account.entitlement.source === 'apple' ? 'The Household plan here. Apple\u2019s billing is not: cancel it first '+(iapOn() ? 'in Subscription \u2192 Manage in the App Store' : 'on your iPhone, in Settings \u2192 your name \u2192 Subscriptions')+', or Apple keeps charging' : Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The plan, which stops at once')+'</li>' : '')
+            + (paid() ? '<li>'+(Account.entitlement.source === 'apple' ? 'The Household plan here. Apple\u2019s billing is not: cancel it first '+(iapOn() ? 'in Subscription \u2192 Manage in the App Store' : 'on your iPhone, in Settings \u2192 your name \u2192 Subscriptions')+', or Apple keeps charging' : foreverGiven() ? 'The forever plan, which does not come back' : Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The plan, which stops at once')+'</li>' : '')
           : '<li>Your place in this household, and the lunches from this phone</li>')
       +  '</ul>'
       +  (owner ? '' : '<p class="hint" style="margin:0">The household and its lunches stay'+(others.length ? ' with '+esc(andList(others)) : '')+'. To keep your place and only clear this phone, sign out instead.</p>')
@@ -4713,11 +4823,13 @@ function panePlan(){
     return '<div class="card stack" style="gap:10px"><h3>Thank you</h3>'
       +  '<p class="hint" style="margin:0">Switching the Household plan on now — it takes a few seconds.</p></div>';
   }
+  var given = foreverGiven();
   var h = '<div class="card stack" style="gap:12px">'
-    +  '<div class="kv"><span>Your plan</span><span>'+esc(lapsing ? 'Household — payment failed' : paid() ? (e.plan === 'lifetime' ? 'Household, forever' : 'Household') : trialing() ? 'Household, free trial' : 'Free')+'</span></div>';
+    +  '<div class="kv"><span>Your plan</span><span>'+esc(lapsing ? 'Household — payment failed' : given ? 'Household, free forever' : paid() ? (e.plan === 'lifetime' ? 'Household, forever' : 'Household') : trialing() ? 'Household, free trial' : 'Free')+'</span></div>';
   var cost = planCost();
   if(cost) h += '<div class="kv"><span>Cost</span><span>'+esc(cost)+'</span></div>';
-  h += '<div class="kv"><span>'
+  /* free forever was not bought and never renews, so the line above is the whole answer */
+  if(!given) h += '<div class="kv"><span>'
     +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : firstChargeAhead() ? 'First charged' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
     +  '</span><span>'
     +  esc(paid() ? (e.plan === 'lifetime' ? 'Paid once, never renews' : d || 'Yearly')
@@ -4726,10 +4838,10 @@ function panePlan(){
   var apple = e.source === 'apple';
   if(lapsing && apple) h += '<p class="hint" style="margin:0;color:var(--warn)">Apple could not take the last payment. '+(iapOn() ? 'Tap Manage in the App Store to update how you pay' : 'Update how you pay in iPhone Settings \u2192 your name \u2192 Subscriptions')+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
   else if(lapsing) h += '<p class="hint" style="margin:0;color:var(--warn)">The last payment did not go through. '+(e.portal ? 'Update the card in Manage billing'+(native() ? ' at lunchsorted.app' : '') : 'Whoever paid can update the card in Manage billing'+(native() ? ' at lunchsorted.app' : ''))+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
-  h += '<div class="row" style="gap:8px;flex-wrap:wrap">'
-    +  (paid() ? '' : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
+  var btns = (paid() ? '' : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
     +  (apple ? (iapOn() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="iap-manage">Manage in the App Store</button>' : '')
-        : e.portal && !native() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '')+'</div></div>';
+        : e.portal && !native() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '');   /* a free forever keeps it: a subscription Stripe was still retrying when the beta was claimed can charge, and this reaches it */
+  h += (btns ? '<div class="row" style="gap:8px;flex-wrap:wrap">'+btns+'</div>' : '')+'</div>';   /* an empty row would still take the card's gap, under a lone line */
   /* what free looks like, said once, in the two places a parent is about to meet it */
   var freeAgain = 'one lunchbox, the week, the shopping list, the pack list and the idea bank stay free. What you have added stays.';
   if(trialing()){
@@ -4762,7 +4874,8 @@ function planCost(){
   /* a household whose three weeks are over is not waiting for a trial to end */
   if(!paid()) return trialing() && pr.year && !native() ? money(pr.year)+' a year, '+(chargeLater() ? 'from '+fmtDay(chargeLater()) : 'from the day you buy') : '';
   if(e.source === 'apple') return 'Through the App Store';            /* Apple's price is Apple's to say; the website's may differ */
-  if(e.plan === 'lifetime') return pr.lifetime ? money(pr.lifetime)+', once' : '';
+  /* forever is quoted, by price id as the year and month are, only to a household that bought it: a 100%-off code's row carries that id too */
+  if(e.plan === 'lifetime') return !foreverGiven() && pr.lifetime && pr.lifetime.id && pr.lifetime.id === e.price ? money(pr.lifetime)+', once' : '';
   var k = ['year','month'].filter(function(n){ return pr[n] && pr[n].id && pr[n].id === e.price; })[0];
   /* a household on an earlier price (the founding one, after a rise) is quoted nothing rather than someone else's */
   return k ? money(pr[k])+' a '+k+(firstChargeAhead() ? ', from '+fmtDay(firstChargeAhead()) : '') : '';
@@ -4847,7 +4960,7 @@ function planDate(){
 function planLabel(){
   var e = Account.entitlement;
   if(!paid()){ if(Account.settling) return 'Switching on\u2026'; if(!trialing() && planEnded()) return 'Ended'+(planEndedOn() ? ' '+planEndedOn() : ''); if(!trialing()) return 'Not on'; var n = trialCalendarDays(); return n <= 0 ? 'On until tonight' : n === 1 ? 'On until tomorrow' : 'On for '+n+' more days'; }
-  if(e.plan === 'lifetime') return 'Forever';
+  if(e.plan === 'lifetime') return foreverGiven() ? 'Free forever' : 'Forever';
   if(e.status === 'past_due') return 'Payment failed';
   var d = planDate();
   return d ? (e.cancelAtPeriodEnd ? 'Ends ' : firstChargeAhead() ? 'First charged ' : 'Renews ') + d : 'Yearly';
@@ -4937,7 +5050,7 @@ function writeInSheet(kidId, dayStr, cat){
     + '<button class="btn primary wide" data-act="write-save" data-kid="'+esc(kid.id)+'" data-day="'+esc(dayStr)+'" data-cat="'+cat+'">'
     + (cur ? 'Save it' : 'Put it in')+'</button>';
   openSheet(l.full+' \u00b7 '+c.label, h);
-  setTimeout(function(){ var el = document.getElementById('wiName'); if(el) el.focus(); }, 220);
+  focusFieldSoon('wiName');
 }
 /* Which lunchboxes an added food lands in. One lunchbox: no question asked.
    Several: all of them until the parent says otherwise, because the same food
@@ -5211,7 +5324,7 @@ function addOwnSheet(pre){
     + '<button class="btn primary wide" id="nfSave" data-act="save-own" style="white-space:normal;height:auto;min-height:48px;padding:10px 16px">'+esc(addOwnLabel())+'</button>'
     + ((pre.recipe && !pre.recipeId) ? '<button class="btn ghost wide" data-act="recipe-import">Read a different one</button>' : '');
   openSheet(pre.recipeId ? 'Add it to the list' : pre.recipe ? 'Check it over' : 'Add your own', h);
-  setTimeout(function(){ var el = document.getElementById('nfName'); if(el && !pre.n) el.focus(); }, 220);
+  if(!pre.n) focusFieldSoon('nfName');
 }
 
 /* ======================================================= importing a recipe
@@ -5397,7 +5510,7 @@ function recipeReview(rec){
     + (tf || gated() ? '' : '<button class="btn wide" data-act="recipe-save" data-then="food">Keep it, and add the food</button>')
     + '<button class="btn ghost wide" data-act="recipe-import">Read a different one</button></div>';
   openSheet('Check it over', h);
-  if(!name) setTimeout(function(){ var el = document.getElementById('rsName'); if(el) el.focus(); }, 220);
+  if(!name) focusFieldSoon('rsName');
 }
 /* the food this recipe would make, with everything the app can work out filled in */
 function recipeToFood(r){
@@ -5690,7 +5803,7 @@ function addKidSheet(){
     + '<input type="text" id="nkName" placeholder="Sam" autocomplete="off" maxlength="40"></div>'
     + '<button class="btn primary wide" data-act="save-kid">Add lunchbox</button>';
   openSheet('Add a lunchbox', h);
-  setTimeout(function(){ var el = document.getElementById('nkName'); if(el) el.focus(); }, 220);
+  focusFieldSoon('nkName');
 }
 function importSheet(){
   var h = '<p class="hint" style="margin:0">Paste what you copied on the other phone. This <b>replaces</b> '
@@ -5827,6 +5940,8 @@ document.addEventListener('input', function(ev){
 document.addEventListener('click', function(ev){
   var el = ev.target.closest('[data-act],[data-nf]');
   if(!el || !S) return;
+  lastAct = el;                                 /* what a sheet opened by this tap goes back to */
+  Promise.resolve().then(function(){ if(lastAct === el) lastAct = null; });   /* by this tap: a sheet that opens later was not opened by it */
 
   var nf = el.getAttribute('data-nf');
   if(nf){
@@ -5865,7 +5980,7 @@ document.addEventListener('click', function(ev){
     render();
     if(act!=='eat-skip' && doneE) toast('Noted');
     /* the answer given, focus goes to the next card if one opened, else to Change on the line this one became */
-    if(doneE){ var nx = document.querySelector('#view [data-act="eat-all"]') || document.querySelector('#view [data-act="eat-change"][data-kid="'+ek.id+'"]'); if(nx) nx.focus({preventScroll:true}); }
+    if(doneE){ var nx = document.querySelector('#view [data-act="eat-all"]') || document.querySelector('#view [data-act="eat-change"][data-kid="'+ek.id+'"]'); if(nx) focusQuietly(nx); }
     else focusBack(document.getElementById('view'), act, {'data-kid':ek.id, 'data-day':ed.d, 'data-cat':el.getAttribute('data-cat') || '', 'data-r':el.getAttribute('data-r') || ''});
     return;
   }
@@ -5891,7 +6006,9 @@ document.addEventListener('click', function(ev){
   if(act==='kid-exit'){
     UI.kid = null;
     if(SYNC_OWED){ SYNC_OWED = false; Sync.schedule(); kidReminderSync(); }   /* everything the run chose, in one push */
-    render(); toast('Handed back'); return;
+    render(); toast('Handed back');
+    if(sheetEl.classList.contains('open')) titleEl.focus({preventScroll:true});   /* a sheet that came while the child had the phone has been waiting under their screen */
+    return;
   }
 
   /* first run */
@@ -6163,7 +6280,7 @@ document.addEventListener('click', function(ev){
     if(!was && FOLD_SECOND && stackedPack() && kids()[0] !== k7) UI.boxOpen[k7.id] = false;   /* packed: the second box folds back to its line */
     touch(k7); save(); render();
     var pb = document.querySelector('[data-act="pack-all"][data-kid="'+k7.id+'"]') || document.querySelector('[data-act="box-open"][data-kid="'+k7.id+'"]');   /* folded: focus lands on the line the box became */
-    if(pb) pb.focus();
+    if(pb) focusQuietly(pb);                       /* the page stays where the thumb left it, as after every other tap */
     if(was){
       var prev = JSON.parse(JSON.stringify(row)), kid7Id = k7.id;
       /* ids and a day string, never the records: a sync inside the toast rebuilds them all */
@@ -6524,7 +6641,7 @@ document.addEventListener('click', function(ev){
   var cookAgain = function(a, v){
     cookSheet(true);
     var back = bodyEl.querySelector('[data-act="'+a+'"][data-v="'+v+'"]');
-    if(back && !back.disabled) back.focus();
+    if(back && !back.disabled) back.focus({preventScroll:true});   /* the sheet kept its place (cookSheet(true)); focus must not move it */
   };
   if(act==='cook-units'){
     if(!UI.cook) return;
@@ -6919,11 +7036,11 @@ document.addEventListener('click', function(ev){
   }
   if(act==='box-open'){
     var bo = el.getAttribute('data-kid'); UI.boxOpen[bo] = true; render();
-    var pbo = document.querySelector('[data-act="pack-all"][data-kid="'+bo+'"]'); if(pbo) pbo.focus({preventScroll:true});   /* the line is gone; the box's own control takes the focus */
+    var pbo = document.querySelector('[data-act="pack-all"][data-kid="'+bo+'"]'); if(pbo) focusQuietly(pbo);   /* the line is gone; the box's own control takes the focus */
     return;
   }
   if(act==='gone-open'){ goneSheet(el.getAttribute('data-kid'), el.getAttribute('data-day')); return; }
-  if(act==='star-ok'){ try{ localStorage.setItem(STAR_SEEN_KEY, '1'); }catch(e){} render(); var st1 = document.querySelector('#view .star'); if(st1) st1.focus({preventScroll:true}); return; }
+  if(act==='star-ok'){ try{ localStorage.setItem(STAR_SEEN_KEY, '1'); }catch(e){} render(); var st1 = document.querySelector('#view .star'); if(st1) focusQuietly(st1); return; }
   if(act==='day-lock'){
     var kD = kidById(el.getAttribute('data-kid')), dD = kD && findWeekDay(kD, el.getAttribute('data-day'));
     if(!kD || !dD) return;
@@ -6967,12 +7084,27 @@ document.addEventListener('change', function(ev){
   }
 });
 document.addEventListener('keydown', function(ev){
+  /* A held Enter repeats, and each repeat would act again: press Done and then whatever the cursor
+     went back to, arm "Tap again" and confirm it before anyone could read it, try a sign-in code
+     until the address is locked out. One press acts once. Only a text box (new lines) and a
+     stepper (servings, one more each repeat) take the repeats: neither closes nor arms anything. */
+  var rt = ev.target || {};
+  if(ev.key === 'Enter' && ev.repeat && rt.tagName !== 'TEXTAREA' && !(rt.closest && rt.closest('.step'))){ ev.preventDefault(); return; }
+  /* The keyboard is in use: Tab anywhere, or a key that moves or presses outside a text field
+     (typing, and the phone keyboard's own Done key, land in the field; VoiceOver's scrub arrives
+     as Escape and counts for nothing). See focusQuietly: a ring it held back shows again at once. */
+  var kt = rt.tagName || '';
+  if(ev.key === 'Tab' || (/^(Enter| |Arrow|Page|Home|End)/.test(ev.key) && !/^(INPUT|TEXTAREA|SELECT)$/.test(kt))){
+    keyboarding = true;
+    if(document.activeElement && document.activeElement.classList) document.activeElement.classList.remove('noring');
+  }
   if(ev.key !== 'Enter') return;
   var id = ev.target && ev.target.id;
   if(id === 'signinEmail'){ ev.preventDefault(); var b = document.querySelector('[data-act="signin-request"]'); if(b) b.click(); }
   if(id === 'signinCode'){ ev.preventDefault(); var c = document.querySelector('[data-act="signin-code"]'); if(c) c.click(); }
   if(id === 'wiName'){ ev.preventDefault(); var w = document.querySelector('[data-act="write-save"]'); if(w) w.click(); }
 });
+document.addEventListener('pointerdown', function(){ keyboarding = false; }, true);   /* a touch or a click: not on the keyboard any more */
 document.addEventListener('input', function(ev){
   if(!S) return;
   var kid = activeKid();
