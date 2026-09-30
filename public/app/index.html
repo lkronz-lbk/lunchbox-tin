@@ -1583,7 +1583,9 @@ function trialStart(){
   if(!born) return since;
   return since && since > born ? since : born;
 }
-function trialEnd(){ var b = trialStart(); return b ? new Date(b.getTime() + TRIAL_DAYS * 86400000) : null; }
+/* days the server says were added to this household's three weeks by hand; never set on the phone */
+function trialExtraDays(){ var n = Number(Account.household && Account.household.trialExtraDays); return isFinite(n) && n > 0 ? Math.floor(n) : 0; }
+function trialEnd(){ var b = trialStart(); return b ? new Date(b.getTime() + (TRIAL_DAYS + trialExtraDays()) * 86400000) : null; }
 function trialDaysLeft(){ var e = trialEnd(); return e ? Math.max(0, Math.ceil((e.getTime() - Date.now()) / 86400000)) : 0; }
 /* the calendar view of the same clock, for words: days between today and the last day */
 function trialCalendarDays(){ var e = trialEnd(); if(!e) return 0; var a = new Date(e); a.setHours(0,0,0,0); var t = today(); return Math.round((a - t) / 86400000); }

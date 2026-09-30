@@ -233,7 +233,7 @@ export async function stats(now = Date.now()) {
   byPlan.year = paid.length - byPlan.lifetime - byPlan.month;
   const pastDue = paid.filter(e => e.status === 'past_due').length, ending = paid.filter(e => e.cape).length;
   /* trials: computed the way the app and the reminder job compute them */
-  const hs = await q`SELECT h.id, h.created_at, h.doc->>'createdAt' AS doc_created, e.plan, e.status, e.source,
+  const hs = await q`SELECT h.id, h.created_at, h.trial_extra_days, h.doc->>'createdAt' AS doc_created, e.plan, e.status, e.source,
       e.cancel_at_period_end AS cape, e.stripe_price_id AS price, e.event_at
     FROM households h LEFT JOIN entitlements e ON e.household_id = h.id ORDER BY h.id DESC LIMIT 5000`;
   let trialing = 0, lapsed = 0, endingSoon = 0; const capped = hs.length === 5000;

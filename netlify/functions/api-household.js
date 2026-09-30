@@ -1,7 +1,7 @@
 import { sql, json, fail, siteUrl, throttled, milestone } from '../lib/db.js';
 import { currentUser, createInvite, consumeInvite, peekInvite } from '../lib/auth.js';
 import { billingEnabled, cancelSubscription } from '../lib/stripe.js';
-import { trialing, chargeLaterUntil } from '../lib/trial.js';
+import { trialing, chargeLaterUntil, extraDays } from '../lib/trial.js';
 import { lapsed } from '../lib/apple.js';
 
 /* The household is the unit: one document, one version, everyone signed in
@@ -20,11 +20,11 @@ const now = () => new Date().toISOString();
 /* the document is only fetched when the caller will use it; a push tests emptiness alone */
 async function membership(userId, withDoc) {
   const rows = withDoc
-    ? await sql()`SELECT h.id, h.name, h.owner_user_id, h.doc, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id, h.created_at,
+    ? await sql()`SELECT h.id, h.name, h.owner_user_id, h.doc, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id, h.created_at, h.trial_extra_days,
                          (SELECT array_agg(kind) FROM milestones ms WHERE ms.household_id = h.id) AS milestones
                   FROM household_members m JOIN households h ON h.id = m.household_id WHERE m.user_id = ${userId}`
     : await sql()`SELECT h.id, h.name, h.owner_user_id, (h.doc IS NULL) AS doc_empty, h.version, m.role, m.member_id,
-                         e.plan, e.status, e.source, e.current_period_end, e.stripe_subscription_id, h.created_at, h.doc->>'createdAt' AS doc_created,
+                         e.plan, e.status, e.source, e.current_period_end, e.stripe_subscription_id, h.created_at, h.trial_extra_days, h.doc->>'createdAt' AS doc_created,
                          (SELECT array_agg(kind) FROM milestones ms WHERE ms.household_id = h.id) AS milestones
                   FROM household_members m JOIN households h ON h.id = m.household_id LEFT JOIN entitlements e ON e.household_id = h.id
                   WHERE m.user_id = ${userId}`;
@@ -103,7 +103,7 @@ async function state(user) {
     stripe_price_id AS price, apple_account_token AS "appleToken",
     (stripe_customer_id IS NOT NULL AND (${h.owner_user_id} = ${user.id} OR paid_by = ${user.id})) AS portal FROM entitlements WHERE household_id = ${h.id}`;
   return {
-    household: { id: h.id, name: h.name, createdAt: h.created_at },
+    household: { id: h.id, name: h.name, createdAt: h.created_at, trialExtraDays: extraDays(h) },
     me: { userId: user.id, email: user.email, role: h.role, memberId: h.member_id },
     members: helper ? members.map(m => ({ userId: m.userId, role: m.role, memberId: m.memberId, name: m.name || (m.userId === user.id ? m.email : 'A parent') })) : members,
     doc: helper ? helperView(h.doc) : h.doc, version: h.version,
@@ -114,7 +114,7 @@ async function state(user) {
     /* the day a plan bought on the website now would first be charged, when that is the end of the
        three weeks: the same rule, clock and cut-off as checkout's (api-billing.js), so the sheet
        never promises what Stripe will not do */
-    chargeLater: helper ? null : chargeLaterUntil({ created_at: h.created_at, doc_created: h.doc && h.doc.createdAt })
+    chargeLater: helper ? null : chargeLaterUntil({ created_at: h.created_at, doc_created: h.doc && h.doc.createdAt, trial_extra_days: h.trial_extra_days })
   };
 }
 
