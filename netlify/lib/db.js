@@ -116,16 +116,47 @@ export function clientIp(req, context) {
   return (context && context.ip) || req.headers.get('x-nf-client-connection-ip') || req.headers.get('x-forwarded-for') || '';
 }
 
-/* the connection address is only ever used hashed, and only for a day */
-export function ipKey(ip) {
-  return ip ? createHash('sha256').update(String(ip)).digest('hex').slice(0, 24) : '';
+/* A connection or an email address becomes a throttle's key only as a digest, and only for a day. It
+   keeps the address out of rate_events, and it keeps the row small whatever the caller sends: about
+   170 bytes, where a key holding an address of 320 three-byte letters made a row of 3 KB (both
+   measured on Postgres 18, PGlite). */
+export function digest(s) {
+  return createHash('sha256').update(String(s)).digest('hex').slice(0, 24);
 }
 
-/* housekeeping that rides along with the throttle, and runs once a day with the trial job in
-   production: nothing personal outlives its use */
-export async function sweep() {
+/* one key a connection; on IPv6 one key a /64, the block a home connection is given whole, or every
+   address in it would be a fresh key */
+export function ipBucket(ip) {
+  ip = String(ip || '').trim();
+  const v4 = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  if (v4) return v4[1];
+  if (!ip.includes(':')) return ip;
+  const [head, tail = ''] = ip.split('::');
+  const h = head ? head.split(':') : [], t = tail ? tail.split(':') : [];
+  const groups = h.concat(Array(Math.max(0, 8 - h.length - t.length)).fill('0'), t);
+  return groups.slice(0, 4).map(g => g.toLowerCase().padStart(4, '0')).join(':') + '::/64';
+}
+export function ipKey(ip) {
+  return ip ? digest(ipBucket(ip)) : '';
+}
+
+/* Housekeeping that rides along with the throttle, and runs once a day with the trial job in
+   production: nothing personal outlives its use. The rate rows go a batch at a time, because a
+   flood leaves a whole day of them due at once, and one DELETE of that many could outrun a
+   function's time limit and be rolled back, leaving them all, or hold up the request that is paying
+   for it. rate_events has no id, so a batch is picked by ctid. A request clears one batch; the daily
+   run passes a deadline and keeps going until a batch comes back short or the deadline passes. Every
+   other table here is limited where its rows are written: by the day's sign-in emails, the error
+   table's ceiling, or a signed-in parent's hourly limits. */
+export const SWEEP_BATCH = 20000;
+export async function sweep(deadline = 0) {
   const q = sql();
-  await q`DELETE FROM rate_events WHERE at < now() - interval '1 day'`;
+  for (;;) {
+    const [{ n }] = await q`
+      WITH gone AS (DELETE FROM rate_events WHERE ctid = ANY (ARRAY(SELECT ctid FROM rate_events WHERE at < now() - interval '1 day' LIMIT ${SWEEP_BATCH})) RETURNING 1)
+      SELECT count(*)::int AS n FROM gone`;
+    if (n < SWEEP_BATCH || Date.now() >= deadline) break;
+  }
   await q`DELETE FROM magic_links WHERE expires_at < now() - interval '1 day'`;
   await q`DELETE FROM sessions WHERE expires_at < now()`;
   await q`DELETE FROM invites WHERE expires_at < now() - interval '30 days' OR used_at < now() - interval '30 days'`;

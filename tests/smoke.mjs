@@ -31,14 +31,14 @@ const db = new PGlite();
 const mails = []; globalThis.__LS_MAIL = mails;
 globalThis.__LS_SQL = async (strings, ...vals) => typeof strings === 'string' ? (await db.query(strings)).rows : (await db.sql(strings, ...vals)).rows;
 await migrate(globalThis.__LS_SQL);
-const { default: authHandler } = await import('../netlify/functions/api-auth.js');
+const { default: authHandler, LINKS_FROM_ONE, LINKS_TO_ONE, LINKS_A_DAY, CODE_TRIES } = await import('../netlify/functions/api-auth.js');
 const { default: householdHandler } = await import('../netlify/functions/api-household.js');
 const { default: billingHandler } = await import('../netlify/functions/api-billing.js');
 const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
 const { default: betaHandler } = await import('../netlify/functions/beta.js');
 const { default: recipeHandler } = await import('../netlify/functions/api-recipe.js');
-const { default: errorsHandler, ipBucket, ROWS_AN_HOUR, EACH_AN_HOUR } = await import('../netlify/functions/api-errors.js');
-const { ipKey, ERRORS_KEPT } = await import('../netlify/lib/db.js');
+const { default: errorsHandler, ROWS_AN_HOUR, EACH_AN_HOUR } = await import('../netlify/functions/api-errors.js');
+const { ipKey, ipBucket, digest, ERRORS_KEPT } = await import('../netlify/lib/db.js');
 const { default: appleHandler } = await import('../netlify/functions/api-apple.js');
 const appleLib = await import('../netlify/lib/apple.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
@@ -2856,7 +2856,7 @@ try {
     /* a flood from more addresses than the hourly caps can see stops at the table's ceiling, not the database's. The
        filler is two hours old and each report comes from a fresh address, so only the ceiling can turn one away */
     const flood = (message, ip) => errorsHandler(new Request('http://127.0.0.1/api/errors', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'error', message, build: 'lunchsorted-v3' }) }), { ip });
-    const marks = async ip => (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', ['err:' + ipKey(ipBucket(ip))])).rows[0].n;
+    const marks = async ip => (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', ['err:' + ipKey(ip)])).rows[0].n;
     const had = (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n;
     await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '2 hours', 'lunchsorted-v3', 'error', 'smoke: filler ' || g FROM generate_series(1, $1::int) g`, [ERRORS_KEPT - had - 1]);
     const lastRoom = await flood('smoke: the last report there is room for', '203.0.113.7');
@@ -2998,6 +2998,61 @@ try {
   }
   const codeAgain = await p2.evaluate(c => fetch('/api/auth/code', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({email:'sam@example.com', code:c})}).then(r => r.status), devCode);
   check('a code works once', codeAgain === 410, codeAgain);
+  {
+    /* What a stranger can make the sign-in routes write is bounded, and no row there names an address. Straight to the
+       handler, each call from a connection of its own, so the suite's own 127.0.0.1 keeps its hourly twenty */
+    const auth = (route, body, ip, headers = {}) => authHandler(new Request('http://127.0.0.1/api/auth/' + route, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }), { ip });
+    const marks = async () => (await db.query('SELECT count(*)::int AS n FROM rate_events')).rows[0].n;
+    const wide = n => Array.from({ length: n }, () => String.fromCodePoint(0x4E00 + crypto.randomInt(20000))).join('');   /* three bytes a letter */
+    const before = await marks(), answers = [];
+    for (let i = 0; i < 200; i++) answers.push((await auth('code', { email: wide(60) + i + '@' + wide(200) + '.com', code: 'ABCD-EFGH' }, i % 2 ? `2001:db8:${i.toString(16)}::1` : `203.0.113.${i}`)).status);
+    check('two hundred invented addresses in three-byte letters, from as many connections, write nothing through the code route and are each told the code is wrong',
+      (await marks()) === before && answers.every(s => s === 410), [(await marks()) - before, [...new Set(answers)]]);
+    /* an address with a code waiting: each try counts, from whichever connection, and the ninth is turned away, the right code too */
+    const asked = await (await auth('request', { email: 'guess@example.com' }, '198.51.100.7')).json();
+    const tries = [];
+    for (let i = 0; i <= CODE_TRIES; i++) tries.push((await auth('code', { email: 'guess@example.com', code: 'ZZZZ-ZZZ' + (i % 8 + 2) }, `198.51.100.${10 + i}`)).status);
+    const right = await auth('code', { email: 'guess@example.com', code: asked.devCode }, '198.51.100.99');
+    check('an address with a code waiting gets eight tries a quarter hour, however many connections they come from, and the ninth is turned away, the right code too',
+      !!asked.devCode && tries.slice(0, CODE_TRIES).every(s => s === 410) && tries[CODE_TRIES] === 429 && right.status === 429, [tries, right.status]);
+    const keys = (await db.query('SELECT key FROM rate_events')).rows.map(r => r.key);
+    check('the counts are kept under a digest of the address, and no mark in the table carries an address, the suite\'s own sign-ins included',
+      keys.filter(k => k === 'code:' + digest('guess@example.com')).length === CODE_TRIES && keys.includes('link:' + digest('liz@example.com')) && keys.includes('link:' + digest('sam@example.com')) && !keys.some(k => k.includes('@')),
+      keys.filter(k => k.includes('@')).slice(0, 3));
+    /* one IPv6 /64 is one connection: twenty let through from twenty of its addresses, the twenty-first turned away, the next /64 still goes */
+    const sent = [];
+    for (let i = 1; i <= LINKS_FROM_ONE; i++) sent.push((await auth('request', { email: `six${i}@example.com` }, `2001:db8:77:1:${i.toString(16)}::1`)).status);
+    const had = await marks();
+    const past = await auth('request', { email: 'six-past@example.com' }, '2001:db8:77:1:ffff:ffff:ffff:ffff');
+    const grew = (await marks()) - had;
+    const nextBlock = await auth('request', { email: 'six-next@example.com' }, '2001:db8:77:2::1');
+    check('an IPv6 /64 is one connection to the sign-in limit: twenty from twenty of its addresses, then one turned away without a row written, and the next /64 still goes',
+      sent.every(s => s === 200) && past.status === 429 && grew === 0 && nextBlock.status === 200, [sent, past.status, grew, nextBlock.status]);
+    const thrice = [];
+    for (let i = 0; i < LINKS_TO_ONE; i++) thrice.push((await auth('request', { email: 'thrice@example.com' }, `192.0.2.${10 + i}`)).status);
+    const had2 = await marks();
+    const fourth = await auth('request', { email: 'thrice@example.com' }, '192.0.2.99');
+    check('three links a quarter hour to one address, and a fourth is turned away without a row written',
+      thrice.every(s => s === 200) && fourth.status === 429 && (await marks()) === had2, [thrice, fourth.status]);
+    /* the day's links spent (filler from twenty-three hours ago): turned away with no row, no link and no email */
+    const spentNow = (await db.query("SELECT count(*)::int AS n FROM rate_events WHERE key = 'link:all'")).rows[0].n;
+    await db.query("INSERT INTO rate_events (key, at) SELECT 'link:all', now() - interval '23 hours' FROM generate_series(1, $1::int)", [LINKS_A_DAY - spentNow]);
+    const links = async () => (await db.query('SELECT count(*)::int AS n FROM magic_links')).rows[0].n;
+    const [m0, l0, e0] = [await marks(), await links(), mails.length];
+    const busy = await auth('request', { email: 'late@example.com' }, '192.0.2.200');
+    check('once the day\'s sign-in emails are spent a request is turned away, and writes no row, no link and no email',
+      busy.status === 503 && (await marks()) === m0 && (await links()) === l0 && mails.length === e0, [busy.status, (await marks()) - m0]);
+    await db.query("DELETE FROM rate_events WHERE key = 'link:all' AND at < now() - interval '22 hours'");
+    /* the link's own route counts nothing, and a stranger's page posting from its visitors' browsers is turned away first */
+    const m1 = await marks();
+    const bogus = await auth('verify', { token: 'x'.repeat(43), kind: 'native' }, '192.0.2.201');
+    const formElsewhere = await authHandler(new Request('http://127.0.0.1/api/auth/verify', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 't=abc' }), { ip: '192.0.2.202' });
+    const crossSite = await auth('request', { email: 'csrf@example.com' }, '192.0.2.203', { 'sec-fetch-site': 'cross-site' });
+    check('the link\'s own route writes no row, for a token nobody was sent or a form from elsewhere, and a sign-in request from another site is refused before anything is written',
+      bogus.status === 410 && formElsewhere.status === 403 && crossSite.status === 403 && (await marks()) === m1, [bogus.status, formElsewhere.status, crossSite.status]);
+    check('the sign-in limits are the ones the README gives: three links a quarter hour to an address, twenty an hour from a connection, two thousand a day, eight tries of a code',
+      LINKS_TO_ONE === 3 && LINKS_FROM_ONE === 20 && LINKS_A_DAY === 2000 && CODE_TRIES === 8, [LINKS_TO_ONE, LINKS_FROM_ONE, LINKS_A_DAY, CODE_TRIES]);
+  }
   await p2.click('[data-act="join-accept"]');
   await until(p2, () => /you share their lunches/i.test(document.querySelector('#toast').textContent) || /Parent/.test(document.querySelector('#view').textContent));
   await until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.members.length === 2));
@@ -3501,6 +3556,8 @@ try {
   check('leaving the page throws the typed word away rather than leaving it armed',
     (await page.inputValue('#deleteConfirm')) === '' && await page.$eval('[data-act="delete-account"]', b => b.disabled));
   await page.fill('#deleteConfirm', 'DELETE'); await page.waitForSelector('[data-act="delete-account"]:not([disabled])');
+  const lizMarks = async () => (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', ['link:' + digest('liz@example.com')])).rows[0].n;
+  const lizHad = await lizMarks();
   await page.click('[data-act="delete-account"]'); await until(page, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));   /* the fresh document lands after the save debounce */
   const afterDelete = await page.evaluate(() => fetch('/api/household').then(r => r.status));
   check('deleting the account signs out, removes the household from the server, and starts this phone over',
@@ -3508,6 +3565,7 @@ try {
     await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length)));
   const rowsLeft = await db.query(`SELECT (SELECT count(*)::int FROM households) AS h, (SELECT count(*)::int FROM users WHERE email='liz@example.com') AS u`);
   check('and the rows are really gone', rowsLeft.rows[0].u === 0, rowsLeft.rows[0]);
+  check('and so are the sign-in counts kept under a digest of the address', lizHad > 0 && (await lizMarks()) === 0, [lizHad, await lizMarks()]);
   await page.evaluate(raw => localStorage.setItem('lunchsorted', raw), goodDoc);
   await page.goto(BASE+'/app/'); await page.waitForTimeout(500);
 
@@ -5266,6 +5324,15 @@ try {
       check('the job refuses to run for anything but the schedule on the published deploy', stray.status === 404);
       /* on the published deploy the job then sweeps: a month-old error report and a two-day-old throttle mark go, younger ones
          stay. The suite's test key leaves production without billing, so the emails before it send nothing */
+      /* a flood leaves a day of rate rows due at once: the request that pays for housekeeping deletes one batch, and the daily
+         run below keeps going until they are gone. Math.random is held off the one-in-twenty-five in between, so no other
+         request's housekeeping runs while the batch is counted */
+      const { sweep: sweepNow, SWEEP_BATCH } = await import('../netlify/lib/db.js');
+      await db.query("INSERT INTO rate_events (key, at) SELECT 'flood:old', now() - interval '2 days' FROM generate_series(1, $1::int)", [2 * SWEEP_BATCH + 5]);
+      const floodLeft = async () => (await db.query("SELECT count(*)::int AS n FROM rate_events WHERE key = 'flood:old'")).rows[0].n;
+      const realRandom = Math.random; Math.random = () => 0.5 + realRandom() / 2;
+      let oneBatch; try { await sweepNow(); oneBatch = await floodLeft(); } finally { Math.random = realRandom; }
+      check('a request that pays for housekeeping deletes one batch of old rate rows, not the whole day', oneBatch === SWEEP_BATCH + 5, [oneBatch, SWEEP_BATCH]);
       await db.query(`INSERT INTO app_errors (at, build, kind, message) VALUES (now() - interval '31 days', 'lunchsorted-v3', 'error', 'smoke: a month old'), (now() - interval '29 days', 'lunchsorted-v3', 'error', 'smoke: not yet a month')`);
       await db.query(`INSERT INTO rate_events (key, at) VALUES ('smoke:two days old', now() - interval '2 days'), ('smoke:two hours old', now() - interval '2 hours')`);
       const leftover = async () => (await db.query("SELECT message AS k FROM app_errors WHERE build = 'lunchsorted-v3' UNION ALL SELECT key FROM rate_events WHERE key LIKE 'smoke:%'")).rows.map(r => r.k).sort().join();
@@ -5276,6 +5343,7 @@ try {
       check('on the published deploy the daily job also sweeps: a month-old error report and a two-day-old throttle mark go, younger ones stay',
         swept.status === 200 && seeded === 'smoke: a month old,smoke: not yet a month,smoke:two days old,smoke:two hours old' && stayed === 'smoke: not yet a month,smoke:two hours old' && mails.length === mailsBefore,
         [swept.status, seeded, stayed, mails.length - mailsBefore]);
+      check('and the daily run keeps going until a day of old rate rows is gone', (await floodLeft()) === 0, await floodLeft());
       await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'"); await db.query("DELETE FROM rate_events WHERE key LIKE 'smoke:%'");
       const { default: testerHandler } = await import('../netlify/functions/cron-tester.js');
       const strayT = await testerHandler(new Request('http://x/cron', { method: 'POST', body: '{"next_run":"x"}' }));

@@ -1014,6 +1014,18 @@ writes the same one.
   A browser the link signs in that has never built a week says so and points back to the
   code, and never pushes its empty household over the phone that did. Sessions are HttpOnly cookies for 180 days; links, codes and
   sessions are stored as hashes. No passwords anywhere.
+- **Limits on signing in** (`netlify/functions/api-auth.js`): a sign-in email goes out at most three
+  times a quarter hour to one address, twenty times an hour from one connection (a /64 counts as
+  one on IPv6) and two thousand times a day in all, and a request from another site is refused. A
+  code gets eight tries a quarter hour for one address, and a try counts only while a code for that
+  address is waiting, since only then can one be right. The link's own button counts nothing: its
+  token is 32 random bytes. Each count sits in `rate_events` under a digest of the address, never
+  the address, and is written only when the request is let through, so one turned away writes
+  nothing and a stranger inventing addresses cannot fill the database: a day of let-through requests
+  takes about 12 MB at worst (every address 320 three-byte letters), and the code tries they allow
+  about 3 MB. The two thousand is the one limit a stranger could spend for everyone, with five IPv4
+  addresses for a day or one IPv6 /48; it stops new sign-in emails, App Review's standing code
+  among them, and never a parent already signed in.
 - **Households** (`/api/household`): one document per household with a version number.
   `PUT` with the version you last saw; if the server has moved on you get `409` with its
   copy, merge, and try again. The merge rules are the first script block in
@@ -1093,9 +1105,13 @@ writes the same one.
   as `migrate failed:`, naming the migration file when one was running.
   Housekeeping (`sweep()` in `netlify/lib/db.js`: expired links, sessions and invites,
   rate-limit rows past a day, error reports past thirty days) rides along with about one
-  throttled call in twenty-five, and runs once a day in production after the trial emails.
+  throttled call in twenty-five, and runs once a day in production after the trial emails. The
+  rate-limit rows go twenty thousand at a time, since a flood leaves a whole day of them due at
+  once: the call that rides along takes one batch, and the daily run keeps on until they are gone
+  or twenty seconds have passed.
 - **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
-  drive three browser contexts through sign-in by link and by code, a forged sign-in form,
+  drive three browser contexts through sign-in by link and by code, the sign-in limits and what
+  they write, a forged sign-in form,
   invite, joining with lunches of one's own, an edit on each phone, an uncheck round trip,
   a helper's refused push, sign-out and delete, plus the merge rules on their own.
 
