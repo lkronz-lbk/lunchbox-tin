@@ -957,7 +957,8 @@ monthly) is the part that remembers and shares: a food written in the parent's o
 kid's pick, what came home and its holds, a pantry that carries over, every lunchbox, the
 other parent's phone and a caretaker's pack list. **Every household gets all of it for its
 first 21 days**, no card, counted from the account document's `createdAt` (the same clock on
-every phone and on the server), and then drops to free with the premium pieces locked in
+every phone and on the server; a household's `trial_extra_days`, set by hand in the database
+and never by the app, lengthens it, and the app is sent the number), and then drops to free with the premium pieces locked in
 place, not hidden: the kid's-pick button, the review card, the pantry check and "Add your
 own" on Foods stay on screen and open the plan sheet, which says why you arrived. The plan is a
 green ★ (`starBtn`, `planLock`): beside a plan feature during the three weeks, a 44px hit area

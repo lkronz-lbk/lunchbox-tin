@@ -3403,6 +3403,20 @@ try {
     check('the server takes the earlier of the document\'s birthday and its own row, so a phone can only shorten its trial, and a household older than billing starts its three weeks the day billing began',
       a.toISOString() === old && b.toISOString() === old && c.toISOString() === fresh && d.toISOString() === fresh, [a, b, c, d]);
   }
+  {
+    /* days added by hand in the database lengthen the three weeks, on the server and on the phone alike */
+    const hid = patState.household.id;
+    await db.query(`UPDATE households SET trial_extra_days = 30 WHERE id = ${hid}`);
+    const inviteExtended = await pb.evaluate(() => fetch('/api/household/invite', {method:'POST', headers:{'content-type':'application/json'}, body:'{}'}).then(r => r.status));
+    const st = await pb.evaluate(() => fetch('/api/household').then(r => r.json()));
+    await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
+    await openPane(pb, 'household');
+    const invites = await pb.$$eval('[data-act="invite"], [data-act="invite-helper"]', a => a.length);
+    check('days added to a household\'s trial by hand reopen it: the server allows the invite and the app offers both invites again',
+      inviteExtended === 200 && st.household.trialExtraDays === 30 && invites === 2, [inviteExtended, st.household && st.household.trialExtraDays, invites]);
+    await db.query(`UPDATE households SET trial_extra_days = 0 WHERE id = ${hid}`);
+    await pb.reload(); await pb.waitForLoadState('load'); await pb.waitForTimeout(300);
+  }
   await openPane(pb, 'household');
   check('with the three weeks over, both invites wear the star and open the plan', (await pb.$$eval('[data-act="invite"], [data-act="invite-helper"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="share"]', a => a.length)) === 2);
   await pb.click('[data-act="upgrade"][data-why="share"]'); await pb.waitForTimeout(300);

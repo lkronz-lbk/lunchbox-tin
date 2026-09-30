@@ -2,7 +2,8 @@
    document's own birthday and the server row's, so a phone can shorten its trial by editing
    the document but never lengthen it, floored at the day billing began (BILLING_SINCE) so a
    household older than billing gets its three weeks too. The app computes the same from the
-   same two dates. */
+   same two dates. A household's trial_extra_days, set by hand in the database, lengthens its
+   three weeks; the app is sent the same number. */
 export const TRIAL_DAYS = 21;
 export const stampOrNull = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d : null; };
 export function trialStart(h) {
@@ -12,9 +13,10 @@ export function trialStart(h) {
   if (!born) return since;
   return since && since > born ? since : born;
 }
+export function extraDays(h) { const n = Number(h && h.trial_extra_days); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; }
 export function trialEnd(h) {
   const start = trialStart(h);
-  return start ? new Date(start.getTime() + TRIAL_DAYS * 86400000) : null;
+  return start ? new Date(start.getTime() + (TRIAL_DAYS + extraDays(h)) * 86400000) : null;
 }
 /* a plan bought on the website inside the three weeks is first charged the day they end
    (api-billing.js checkout), which Stripe allows only more than 48 hours out; this is the one

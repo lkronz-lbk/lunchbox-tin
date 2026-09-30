@@ -20,7 +20,7 @@ const HANDLED = new Set(['checkout.session.completed', 'checkout.session.async_p
 
 async function membership(userId) {
   const rows = await sql()`
-    SELECT h.id, h.owner_user_id, h.created_at, h.doc->>'createdAt' AS doc_created, m.role, e.plan, e.status, e.source, e.current_period_end, e.stripe_customer_id, e.stripe_subscription_id, e.paid_by
+    SELECT h.id, h.owner_user_id, h.created_at, h.trial_extra_days, h.doc->>'createdAt' AS doc_created, m.role, e.plan, e.status, e.source, e.current_period_end, e.stripe_customer_id, e.stripe_subscription_id, e.paid_by
     FROM household_members m JOIN households h ON h.id = m.household_id
     LEFT JOIN entitlements e ON e.household_id = h.id WHERE m.user_id = ${userId}`;
   return rows[0] || null;

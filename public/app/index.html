@@ -1482,7 +1482,7 @@ var Store = {
   hadAccount:function(){ try{ return localStorage.getItem(Store.HAD_KEY) === '1'; }catch(e){ return false; } },
   markAccount:function(on){ try{ if(on) localStorage.setItem(Store.HAD_KEY, '1'); else localStorage.removeItem(Store.HAD_KEY); }catch(e){} },
   forget:function(){
-    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, Store.HAD_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', 'lunchsorted-later', SEEN_KEY, BETA_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
+    try{ [Store.KEY, Store.LEGACY_KEY, Store.DEVICE_KEY, Store.PRIOR_DEVICE_KEY, Store.HAD_KEY, 'lunchsorted-join', 'lunchsorted-billing', 'lunchsorted-after', 'lunchsorted-trial-seen', 'lunchsorted-trial-extra', 'lunchsorted-later', SEEN_KEY, BETA_KEY].concat(Store.PRIOR_KEYS, Store.backupKeys())
       .forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   }
 };
@@ -1583,7 +1583,13 @@ function trialStart(){
   if(!born) return since;
   return since && since > born ? since : born;
 }
-function trialEnd(){ var b = trialStart(); return b ? new Date(b.getTime() + TRIAL_DAYS * 86400000) : null; }
+/* days the server says were added to this household's three weeks by hand; never set on the phone.
+   The last answer is kept, so a cold start before the first sync does not end a trial the server still runs */
+function trialExtraDays(){
+  var v = Account.household ? Account.household.trialExtraDays : (function(){ try{ return localStorage.getItem('lunchsorted-trial-extra'); }catch(e){ return 0; } })();
+  var n = Number(v); return isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+function trialEnd(){ var b = trialStart(); return b ? new Date(b.getTime() + (TRIAL_DAYS + trialExtraDays()) * 86400000) : null; }
 function trialDaysLeft(){ var e = trialEnd(); return e ? Math.max(0, Math.ceil((e.getTime() - Date.now()) / 86400000)) : 0; }
 /* the calendar view of the same clock, for words: days between today and the last day */
 function trialCalendarDays(){ var e = trialEnd(); if(!e) return 0; var a = new Date(e); a.setHours(0,0,0,0); var t = today(); return Math.round((a - t) / 86400000); }
@@ -1805,6 +1811,7 @@ function applyState(st){
   Store.markAccount(true);   /* so an offline boot knows this phone belongs to a household */
   Account.user = {id:st.me.userId, email:st.me.email}; Account.me = st.me; Account.members = st.members || [];
   Account.entitlement = st.entitlement || null; Account.version = st.version || 0; Account.household = st.household || null; Account.chargeLater = st.chargeLater || null;
+  try{ localStorage.setItem('lunchsorted-trial-extra', String((Account.household && Account.household.trialExtraDays) || 0)); }catch(e){}
   if(IAP.queue.length){ var waiting = IAP.queue.splice(0); setTimeout(function(){ waiting.forEach(iapArrived); }, 0); }
   /* ahead of the sheet, for a household it may open for; while the App Store is not answering, not on every sync */
   if(iapOn() && !paid() && !IAP.products && !isHelper() && Date.now() - (IAP.triedAt || 0) > 600000){ IAP.triedAt = Date.now(); iapProducts(); }
