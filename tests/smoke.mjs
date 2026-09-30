@@ -507,6 +507,123 @@ try {
     return false;
   }));
 
+  /* -------------------------------------------- where the cursor is left */
+  {
+    /* A sheet says it is a dialog, so the cursor goes into it as it opens and comes back to
+       what opened it as it closes. Before, a parent on VoiceOver or a keyboard was left on
+       the row behind the sheet, and at the top of the page once it had gone. A phone of its
+       own, so nothing here moves the week the rest of the run reads. */
+    const cf = await phone(); const pf = await cf.newPage(); pf.on('pageerror', e => errors.push(String(e.message)));
+    await pf.goto(BASE+'/app/'); await pf.waitForTimeout(400);
+    await pf.fill('#obName', 'Fern'); await pf.click('[data-act="ob-go"]'); await pf.waitForTimeout(400);
+    await pf.click('[data-act="ob-later"]'); await pf.waitForTimeout(300);
+    /* what has the cursor, whether a ring is drawn round it, and where the page is */
+    const cursor = () => pf.evaluate(() => { const a = document.activeElement || document.body,
+      o = {tag: a.tagName, id: a.id, inSheet: !!a.closest('#sheet'), ring: getComputedStyle(a).outlineStyle !== 'none', y: window.scrollY};
+      [...a.attributes].forEach(x => { if (x.name.indexOf('data-') === 0) o[x.name.slice(5)] = x.value; }); return o; });
+    await pf.click('[data-act="help"]');
+    let up = await sheetIsOpen(pf), c = await cursor();
+    check('a sheet takes the cursor as it opens: focus is on its title, not on the button behind it, and a title wears no ring', up && c.id === 'sheetTitle' && !c.ring, c);
+    up = await sheetDone(pf); await pf.waitForTimeout(300); c = await cursor();
+    check('and Done gives it back to the button that opened the sheet', up && c.act === 'help' && !c.inSheet && !c.ring, c);
+    await pf.click('[data-act="help"]'); up = await backdropTap(pf); await pf.waitForTimeout(300); c = await cursor();
+    check('as does a tap on the backdrop', up && c.act === 'help' && !c.inSheet, c);
+    await pf.click('[data-act="tab"][data-tab="shop"]'); await pf.waitForTimeout(250);
+    const lineKey = await pf.getAttribute('[data-act="line-open"] >> nth=1', 'data-key');
+    await pf.click('[data-act="line-open"] >> nth=1'); up = await sheetDone(pf); await pf.waitForTimeout(300); c = await cursor();
+    check('a line’s sheet hands the cursor back to that line, not to the first one on the list', up && c.act === 'line-open' && c.key === lineKey, {c, lineKey});
+    /* The usual way out of a sheet is by choosing something, and that redraws the screen behind it: the
+       button that opened the sheet is gone, so the one drawn in its place is found by what it carries.
+       On a short screen the compartment is left straddling the top edge and tapped the way a thumb taps
+       in Safari: no focus of its own, and none of the scrolling a test's own click does first. So the
+       way back is the tap itself, and a focus() allowed to scroll would move the page. */
+    await pf.setViewportSize({width:375, height:400});
+    await pf.click('[data-act="tab"][data-tab="week"]'); await pf.waitForTimeout(250);
+    const slotWas = await pf.evaluate(async () => {
+      const b = document.querySelector('#view [data-act="slot"][data-cat="side"]'), r = b.getBoundingClientRect();
+      window.scrollTo(0, Math.round(r.top + window.scrollY + r.height / 2));
+      await new Promise(f => setTimeout(f, 100));
+      const top = b.getBoundingClientRect().top;
+      b.click();
+      return {day: b.getAttribute('data-day'), cat: b.getAttribute('data-cat'), top, h: r.height};
+    });
+    up = await sheetIsOpen(pf);
+    await pf.click('#sheet [data-act="sheet-shuffle"]'); await pf.waitForTimeout(250); c = await cursor();
+    check('a sheet redrawn by a tap inside it puts the cursor back on what was tapped, not behind the sheet', up && (await sheetIsOpen(pf, 500)) && c.act === 'sheet-shuffle' && c.inSheet, c);
+    const yOpen = c.y;
+    await pf.click('#sheet [data-act="pick"] >> nth=0'); await pf.waitForTimeout(300); c = await cursor();
+    check('choosing from a compartment’s sheet closes it, redraws the week, and leaves the cursor on that compartment with the page where it was',
+      up && !(await pf.$('.sheet.open')) && c.act === 'slot' && c.day === slotWas.day && c.cat === slotWas.cat
+      && slotWas.top < 0 && slotWas.top > -slotWas.h && c.y === yOpen, {c, slotWas, yOpen});
+    /* The phone's keyboard has a Done key, and it is a key: the browser takes whoever pressed it for
+       someone moving by keyboard and rings whatever a script focuses next. A compartment wore a ring
+       after every write-in. */
+    await pf.click('#view [data-act="slot"][data-cat="fruit"] >> nth=0'); await sheetIsOpen(pf);
+    await pf.click('#sheet [data-act="write-in"]');
+    const typing = await until(pf, () => document.activeElement && document.activeElement.id === 'wiName', null, 3000);
+    await pf.fill('#wiName', 'Leftover pasta'); await pf.press('#wiName', 'Enter'); await pf.waitForTimeout(300); c = await cursor();
+    check('a write-in saved with the keyboard’s own Done key puts the cursor back on its compartment, with no ring for a parent who never pressed Tab',
+      typing && !(await pf.$('.sheet.open')) && c.act === 'slot' && c.cat === 'fruit' && !c.ring, c);
+    await pf.evaluate(() => window.scrollTo(0, 0));
+    await pf.focus('[data-act="help"]'); await pf.keyboard.press('Enter'); up = await sheetIsOpen(pf);
+    await pf.keyboard.press('Tab');
+    const onDone = (await cursor()).id === 'sheetClose';
+    if (onDone) { await pf.keyboard.press('Enter'); await pf.waitForTimeout(300); }   /* Enter on anything else would press it */
+    c = await cursor();
+    check('a parent who is moving by keyboard does get it: Enter on the ?, Tab to Done, Enter, and the ? is ringed', up && onDone && c.act === 'help' && c.ring, {onDone, c});
+    if (await pf.$('.sheet.open')) { await pf.click('#sheetClose'); await pf.waitForTimeout(300); }   /* a miss must not leave Help over everything the next step taps */
+    await pf.click('[data-act="kidsheet"]'); await sheetIsOpen(pf);
+    await pf.click('#sheet [data-act="add-kid"]');
+    const fieldTook = await until(pf, () => document.activeElement && document.activeElement.id === 'nkName', null, 3000);
+    check('a sheet with a field of its own still puts the cursor in the field', fieldTook, await cursor());
+    up = await sheetDone(pf); await pf.waitForTimeout(300); c = await cursor();
+    check('and one sheet opened from another goes back to what opened the first of the two', up && c.act === 'kidsheet' && !c.inSheet, c);
+    /* Packed puts focus back on its button after the redraw, and a focus() left to scroll drags a
+       half-hidden button into view: the page jumped under the thumb, which is the one thing a tick
+       must never do. A screen short enough that Pack scrolls with one lunchbox, the button left
+       straddling the top edge, and a click that does no scrolling of its own. */
+    await pf.setViewportSize({width:375, height:220});
+    await pf.click('[data-act="tab"][data-tab="pack"]'); await pf.waitForTimeout(250);
+    const jump = await pf.evaluate(async () => {
+      const r = document.querySelector('[data-act="pack-all"]').getBoundingClientRect();
+      window.scrollTo(0, Math.round(r.top + window.scrollY + r.height / 2));
+      await new Promise(f => setTimeout(f, 100));
+      const b = document.querySelector('[data-act="pack-all"]'), top = b.getBoundingClientRect().top, y0 = window.scrollY;
+      b.click();
+      await new Promise(f => setTimeout(f, 250));
+      const a = document.activeElement;
+      return {top, y0, y1: window.scrollY, act: a && a.getAttribute('data-act'), pressed: a && a.getAttribute('aria-pressed')};
+    });
+    check('Packed leaves the page where it was, with the cursor back on the button', jump.top < 0 && jump.top > -44 && jump.y1 === jump.y0 && jump.act === 'pack-all' && jump.pressed === 'true', jump);
+    /* the cook sheet does the same to its own controls: redrawn with its place kept, then the cursor
+       put back on what was pressed. With that half off the top of the sheet, the sheet moved. */
+    await pf.setViewportSize({width:375, height:400});
+    await pf.click('[data-act="tab"][data-tab="recipes"]'); await pf.waitForTimeout(250);
+    await pf.click('#view [data-act="cook-recipe"] >> nth=0'); await sheetIsOpen(pf);
+    const cookJump = await pf.evaluate(async () => {
+      const b = document.getElementById('sheetBody'), e = b.querySelector('[data-act="cook-makes"][data-v="1"]');
+      b.scrollTop = Math.round(e.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop + e.getBoundingClientRect().height / 2);
+      await new Promise(f => setTimeout(f, 100));
+      const top = e.getBoundingClientRect().top - b.getBoundingClientRect().top, y0 = b.scrollTop;
+      e.click();
+      await new Promise(f => setTimeout(f, 250));
+      const a = document.activeElement;
+      return {top, y0, y1: b.scrollTop, act: a && a.getAttribute('data-act'), v: a && a.getAttribute('data-v')};
+    });
+    check('a cook control leaves the sheet where it was when it takes the cursor back', cookJump.top < 0 && cookJump.top > -44 && cookJump.y1 === cookJump.y0 && cookJump.act === 'cook-makes' && cookJump.v === '1', cookJump);
+    await sheetDone(pf); await pf.waitForTimeout(300);
+    /* Add lunchbox takes the header's lunchbox button away (two boxes get the folder tabs), so there
+       is nothing to go back to. The page's own title takes the cursor, rather than nothing at all. */
+    await pf.setViewportSize({width:375, height:812});
+    await pf.click('[data-act="tab"][data-tab="week"]'); await pf.waitForTimeout(250);
+    await pf.click('[data-act="kidsheet"]'); await sheetIsOpen(pf);
+    await pf.click('#sheet [data-act="add-kid"]'); await until(pf, () => document.activeElement && document.activeElement.id === 'nkName', null, 3000);
+    await pf.fill('#nkName', 'Wren'); await pf.click('#sheet [data-act="save-kid"]'); await pf.waitForTimeout(400); c = await cursor();
+    check('when what opened a sheet has gone with what the sheet changed, the cursor lands on the page’s own title, not nowhere',
+      !(await pf.$('.sheet.open')) && c.tag === 'H2' && !c.inSheet && !c.ring, c);
+    await cf.close();
+  }
+
   /* ---------------------------------------------------------- kid's pick */
   check('nobody is offered the kid\'s pick until the lunchbox says the kid has a say', (await page.$$eval('[data-act="kid-start"]', a => a.length)) === 0);
   await openGear(page); await page.waitForTimeout(250);
@@ -3347,9 +3464,14 @@ try {
   check('the after-school review is locked in place: the card says what it is, the answers wait for the plan, and nothing else asks', /How the box went is part of the Household plan\./.test(await pb.textContent('#view')) && !/How did .*box go\?/.test(await pb.textContent('#view')) && (await pb.$$eval('[data-act="review-later-all"], .card.fold', a => a.length)) === 0 && (await pb.$$eval('[data-act="eat-set"]', a => a.length)) === 0 && (await pb.$$eval('[data-act="upgrade"][data-why="review"]', a => a.length)) === 1 && (await pb.$$eval('[data-act="upgrade"][data-why="review"] .starmark', a => a.length)) === 1);
   await pb.click('[data-act="tab"][data-tab="shop"]'); await pb.waitForTimeout(250);
   check('the shopping list is still free, the pantry tick is not', (await pb.$$eval('[data-act="have"]', a => a.length)) > 0 && /part of the Household plan/.test(await pb.textContent('#view')));
+  const tickedKey2 = await pb.getAttribute('[data-act="have"]', 'data-key');
   await pb.click('[data-act="have"]'); await pb.waitForTimeout(300);
   check('a pantry tick opens the sheet instead', /pantry that remembers/.test(await pb.textContent('#sheetBody')) && await pb.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('lunchsorted')).pantry).length === 0));
+  /* this tap returns before anything is redrawn, so nothing else was ever going to move the cursor */
+  check('and the sheet has the cursor, where it used to stay on the line behind a dialog', await pb.evaluate(() => !!document.activeElement && document.activeElement.id === 'sheetTitle'));
   await sheetDone(pb); await pb.waitForTimeout(300);
+  check('which goes back to the line that was ticked once the sheet is put away', await pb.evaluate(k => { const a = document.activeElement;
+    return !!a && a.getAttribute('data-act') === 'have' && a.getAttribute('data-key') === k && !a.closest('#sheet'); }, tickedKey2), tickedKey2);
   const bcfg = await pb.evaluate(() => fetch('/api/billing').then(r => r.json()));
   check('the plans and their prices come from Stripe, not the app', bcfg.enabled === true && bcfg.prices.year.amount === 1999 && bcfg.prices.month.amount === 299 && bcfg.prices.year.interval === 'year', bcfg);
   {
@@ -3443,7 +3565,33 @@ try {
       title: document.querySelector('#sheetTitle').textContent,
       view: document.querySelector('#view').textContent.replace(/\s+/g, ' ').slice(0, 160)
     })).catch(e => String(e))});
+  /* Nobody tapped for this sheet. It takes the cursor all the same, and the browser, which has seen
+     no touch on this page and so rings whatever a script focuses, draws nothing round the title of
+     the sheet that sells the plan. */
+  check('that sheet has the cursor on its title, and no ring round it', await pb.evaluate(() => { const t = document.getElementById('sheetTitle');
+    return document.activeElement === t && getComputedStyle(t).outlineStyle === 'none'; }));
   await sheetDone(pb); await pb.waitForTimeout(300);
+  {
+    /* And with no tap to go back to, it must not go back to whatever was tapped last. "Tap again to
+       clear", armed while the household was still loading, would be one Enter from clearing every
+       plan. The boot's own answer is held for two seconds so there is time to arm it. */
+    const isHousehold = u => u.pathname === '/api/household';
+    const hold = async route => { if(route.request().method() === 'GET') await new Promise(r => setTimeout(r, 2000)); await route.continue(); };
+    const weeks = () => pb.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('lunchsorted')).kids.filter(k => !k.deletedAt).map(k => !!k.week)));
+    await pb.route(isHousehold, hold);
+    await pb.goto(BASE+'/app/?upgrade=1'); await pb.waitForLoadState('load');
+    await openPane(pb, 'account');
+    const weeksWere = await weeks();
+    await pb.click('[data-act="clear-week"]');
+    const armed = /Tap again to clear/.test(await pb.textContent('[data-act="clear-week"]'));
+    const came = await until(pb, () => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetTitle').textContent));
+    await pb.unroute(isHousehold, hold);
+    await sheetDone(pb); await pb.waitForTimeout(300);
+    const where = await pb.evaluate(() => { const a = document.activeElement || document.body; return {tag: a.tagName, act: a.getAttribute('data-act'), text: (a.textContent || '').slice(0, 30)}; });
+    check('a sheet that arrives by itself does not hand the cursor to a button waiting for its second tap', armed && came && /true/.test(weeksWere)
+      && where.act !== 'clear-week' && /Tap again to clear/.test(await pb.textContent('[data-act="clear-week"]')) && (await weeks()) === weeksWere, {armed, came, where, weeksWere});
+    await pb.click('[data-act="pane-done"]'); await pb.waitForTimeout(200);   /* any other tap takes the arming off */
+  }
   check('a signed-in parent who is not in ADMIN_EMAILS gets not-found from the numbers page', (await pb.evaluate(() => fetch('/api/admin').then(r => r.status))) === 404);
   const noCustomer = await pb.evaluate(() => fetch('/api/billing/portal', {method:'POST'}).then(r => r.status));
   check('there is no billing to manage before anything is bought', noCustomer === 404, noCustomer);

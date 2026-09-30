@@ -281,7 +281,8 @@ throwing app script cannot leave it up forever. From there:
   correct, because the school rules go by them.
 - **Pack** — the next school day's box with ice-pack, sealed-container and no-protein
   flags, and one **Packed** check per box that fills every compartment at once (the packed
-  rows stay per compartment underneath, so sync and the other phone are unchanged). The
+  rows stay per compartment underneath, so sync and the other phone are unchanged), and takes
+  the cursor back without moving the page. The
   compartments there are not buttons: only Week changes a box, and only Week shows the swap
   arrows. **Kid's pick** lives here, behind the lunchbox's "They pick their box
   each day" switch (Household plan), for the next box not yet in the bag. Two ways, chosen
@@ -355,6 +356,17 @@ throwing app script cannot leave it up forever. From there:
   becomes state, so a bad import can never brick the app; a save the app can't read is kept
   under a dated backup key rather than overwritten; "Clear the plans" and, signed out, "Erase everything"
   are two-tap, deleting a food offers Undo, and the shopping checks survive a plan clear.
+- **Sheets and the cursor** — every sheet is a dialog, so keyboard and screen-reader focus goes
+  to the sheet's title as it opens and, as it closes, back to the control whose tap opened it
+  (found again by what it carries, once the screen behind has been redrawn). A handler that
+  places focus itself wins. A sheet redrawn by a tap inside it puts the cursor back on what was
+  tapped. With nothing to go back to — the opener went with what the sheet changed, or the
+  sheet opened with no tap (the emailed link, the return from signing in, a refused invite) —
+  it lands on the page's title: never on whatever was tapped last, and never on a button
+  waiting for its second tap. Nothing behind the kid's-pick screen takes it; a sheet that
+  arrives while the child has the phone gets it when the phone is handed back. Focus put back
+  by script never scrolls, a title wears no ring, and a control is ringed only for a parent
+  who has pressed Tab since the last touch. There is no focus trap and no Escape yet.
 - **A parent may override a rule** for one compartment: pick a flagged food from the
   compartment sheet and it goes in, rule named, with Undo. The compartment carries a `!`, the day
   an *Against the rules* chip, and the rules sweep leaves it alone. The override is recorded
@@ -532,7 +544,8 @@ plans is the same week whatever day it runs on (a Thursday used to leave the kid
 nothing to offer). `SMOKE_TODAY=2026-09-14 npm test` pins another day.
 
 `tests/smoke.mjs` starts its own static server and drives a real browser: first-run
-onboarding, the week draw and the compact tin, packing, the kid's pick, what came home
+onboarding, the week draw and the compact tin, packing, where the cursor is left around a
+sheet and after Packed, the kid's pick, what came home
 and holds, the school rules re-checking a live plan, compartments switching on and off,
 anchoring, the shopping list, recipes (the two the app ships, an ingredient claimed by the step
 that means it, cook mode, the measures and the scaling,
