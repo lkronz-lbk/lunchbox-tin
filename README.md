@@ -644,12 +644,14 @@ row can be behind: a first charge that failed when the three weeks ended leaves 
 ended while Stripe goes on retrying the card, and a retry that went through afterwards would
 bill the forever every year. One Stripe says is paid for, or a renewal it is retrying, is
 refused as a paying household is; one that has ended, or that Stripe has no record of (taken on
-trust), is left; anything else is cancelled first. If Stripe cannot be reached, or billing is
-off in that context, the claim waits (503) and the app offers another go. The forever is written
-only over the row as it was read, so a checkout that lands meanwhile wins, and whoever claims is
-not made the payer, whose card the portal shows. A household that checks out with a
-100%-off Stripe code (TESTER) is written the same way and kept so through later Stripe events,
-a refund of an earlier charge among them; `/admin` lists them under
+trust), is left; anything else is cancelled first. If Stripe cannot be reached, cannot be
+asked from that context (no key, or one the build refuses), or does not say what state the
+subscription is in, the claim waits (503) and the app offers another go. The forever is written
+only while the row still carries the subscription the claim read, so a checkout that lands
+meanwhile wins, and one the claim overtakes is cancelled and refunded (Billing, the webhook).
+Whoever claims is not made the payer, whose card the portal shows. A household that checks out
+with a 100%-off Stripe code (TESTER) is written the same way and kept so through later Stripe
+events, a refund of an earlier charge among them; `/admin` lists them under
 "Beta testers", a row a person rather than a row a household, beside the "Standard users"
 roster of everyone else.
 
@@ -813,8 +815,9 @@ out by deleting it in the commit that does it.
   claim now cancels the one on the row, and a checkout paid onto a forever is cancelled and
   refunded. What it still reaches there: the invoices of anything bought before; the open
   invoice a failed first charge leaves, which Stripe stops collecting when the subscription is
-  cancelled but does not void; and a subscription an earlier checkout replaced, if cancelling it
-  failed. Taking it away is an app change with a build of its own: the portal button in
+  cancelled but does not void; and a subscription an earlier checkout replaced, or a checkout
+  paid onto the forever, if cancelling it failed (the log says CANCEL BY HAND). Taking it away
+  is an app change with a build of its own: the portal button in
   `panePlan()` (`!foreverGiven()`), the comment beside it, and the smoke check "and
   Subscription quotes it no price".
 - **Liz: the new terms and privacy wording** (September 2026) went live with v25 on
@@ -1145,7 +1148,10 @@ the idea bank stays free so a free list is never stuck with what it has.
   lifetime purchase is never lowered by a subscription ending, and a yearly or monthly
   checkout paid once the household has forever (one left open in a tab while the beta was
   claimed) is cancelled and refunded, as one paid once the App Store holds the plan is, the
-  log saying CANCEL or REFUND BY HAND for whatever Stripe refused; buying forever on top of a
+  log saying CANCEL or REFUND BY HAND for whatever Stripe refused. That holds whichever
+  reaches the row first: neither a yearly checkout's write nor a subscription's own events
+  land on a forever claimed after they read the row, however Stripe's stamp and our clock
+  stand, and a lapsed App Store forever holds nothing; buying forever on top of a
   yearly plan stops the yearly plan at its period end; a fresh yearly checkout replaces an
   unpaid one; a forever purchase refunded in full is undone (a yearly refund is paired with
   canceling the subscription in the dashboard), but only one bought through Stripe
