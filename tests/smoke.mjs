@@ -4094,6 +4094,20 @@ try {
   await openPane(pb, 'account');
   check('and the delete warning still calls it the forever purchase', (await pb.$$eval('#view li', a => a.map(l => l.textContent))).includes('The forever purchase, which does not come back'),
     await pb.$$eval('#view li', a => a.map(l => l.textContent)));
+  /* the beta link opened by a household that bought forever: the claim says it already has it, and the
+     beta's banner, "yours, free forever", is not for a plan that was paid for. The suite has spent Pat's
+     five claims an hour already, and this one would take the last of the twenty billing requests an hour
+     that backing out of Stripe needs further down, so both counters start again here. The banner used to
+     arrive with the pull that follows the toast, so the view is watched for two seconds after it */
+  await db.query(`DELETE FROM rate_events WHERE key IN ('beta:${patState.me.userId}', 'billing:${patState.me.userId}')`);
+  await pb.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pb.waitForLoadState('load');
+  const boughtClaim = await until(pb, () => /already yours/.test(document.querySelector('#toast').textContent));
+  let boughtView = '';
+  for (const end = Date.now() + 2000; Date.now() < end && !/The beta is on/.test(boughtView); await pb.waitForTimeout(200))
+    boughtView = (await pb.textContent('#view')).replace(/\s+/g, ' ');
+  check('the beta link opened by a household that bought forever says it already has it, and never calls it free',
+    boughtClaim && !/The beta is on/.test(boughtView) && (await ent()).source === 'stripe' && (await ent()).plan === 'lifetime',
+    { toast: await pb.textContent('#toast'), view: boughtView.slice(0, 200) });
   /* a yearly household that buys forever stops its subscription so nobody pays twice */
   await db.query(`UPDATE entitlements SET plan='household', status='active', stripe_subscription_id='sub_old', event_at=NULL WHERE household_id=${patState.household.id}`);
   stripeCalls.length = 0;
@@ -4173,8 +4187,9 @@ try {
   await hook({ id: 'evt_tester', type: 'checkout.session.completed', created: t0 + 9.5, data: { object: { id: 'cs_test_t', mode: 'payment', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_pat', client_reference_id: String(patState.household.id), metadata: { plan: 'lifetime' } } } });
   check('a forever plan on a 100%-off code is marked as a code, not a sale', (await ent()).plan === 'lifetime' && (await ent()).source === 'code', await ent());
   {
-    /* that row carries forever's price id, as a sale's does, so the id alone cannot tell a code from a purchase;
-       and the checkout left a Stripe customer, so the server offers the portal, where there is nothing to bill */
+    /* that row carries forever's price id, as a sale's does, so the id alone cannot tell a code from a purchase.
+       Its checkout left a Stripe customer, and Manage billing stays for it: a subscription Stripe was still
+       retrying when the beta was claimed can go on charging, and nothing else in the app reaches it */
     const [{ stripe_price_id: codePrice }] = (await db.query(`SELECT stripe_price_id FROM entitlements WHERE household_id = ${patState.household.id}`)).rows;
     await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
     const codeRows = await planRows(['Your plan: Household, free forever']);
@@ -4182,8 +4197,8 @@ try {
       let lifeId = null; try { lifeId = JSON.parse(localStorage.getItem('lunchsorted-billing')).prices.lifetime.id; } catch (e) {}
       return { portal: j.entitlement.portal, lifeId, manage: document.querySelectorAll('#view [data-act="portal"]').length };
     }));
-    check('and Subscription quotes it no price, says nothing of buying it, and offers no Manage billing, though its row carries forever\'s price id and a Stripe customer',
-      codePrice === 'price_life' && codeApp.lifeId === 'price_life' && codeApp.portal === true && codeApp.manage === 0 && JSON.stringify(codeRows) === JSON.stringify(['Your plan: Household, free forever']),
+    check('and Subscription quotes it no price and says nothing of buying it, though its row carries forever\'s price id; Manage billing stays, for the Stripe customer its checkout left',
+      codePrice === 'price_life' && codeApp.lifeId === 'price_life' && codeApp.portal === true && codeApp.manage === 1 && JSON.stringify(codeRows) === JSON.stringify(['Your plan: Household, free forever']),
       { codePrice, codeApp, codeRows });
   }
   {

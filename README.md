@@ -1112,16 +1112,23 @@ the idea bank stays free so a free list is never stuck with what it has.
   it on nor stops the website selling the plan. The phone finishes a transaction only once the
   server has answered; one that arrives before the account has loaded waits until it has.
 - **In the app**, the Account tab carries a **Subscription** row whose caption is the same
-  one-line state (Free, On for N more days, Renews DATE, Ends DATE, Payment failed, Forever,
-  Free forever, Switching on…). The page behind it names the plan, what it costs — matched from the price
+  one-line state (Not on, On for N more days, On until tomorrow or tonight, Renews DATE, First
+  charged DATE, Ends DATE, Ended with or without its date, Payment failed, Yearly for a paid
+  plan with no date yet, Forever, Free forever, Switching on…).
+  The page behind it names the plan, what it costs — matched from the price
   id the entitlement carries, so a monthly household is not quoted the yearly price — the
   date it renews or ends, and a card saying how to stop it, which differs for a parent who
-  cannot open the portal. Forever is priced, "Paid once" and given Manage billing only where
-  Stripe or the App Store took the money (`source`), since a code's row can carry forever's
-  price id and a Stripe customer too: the beta's, from the link or a 100%-off code, reads
-  "Household, free forever" and nothing else, its caption is Free forever, and the delete
-  warning calls it the forever plan, not the forever purchase. Straight after checkout it
-  says only that the plan is switching on, because the webhook has not landed and every other row would
+  cannot open the portal. Forever is priced, and "Paid once", only where Stripe or the App
+  Store took the money (`source`), since a code's row can carry forever's price id too: the
+  beta's, from the link or a 100%-off code, reads "Household, free forever" and no other row,
+  its caption is Free forever, the delete warning calls it the forever plan, not the forever
+  purchase, and opening the beta link again never puts up the beta's banner over a forever
+  already held. Manage billing stays on the web, for the owner or whoever paid, wherever the
+  row has a Stripe customer, the beta's included: a claim does not yet cancel a subscription
+  Stripe is still retrying (a first charge that failed), which can go on charging, and nothing
+  else in the app reaches it (the iPhone app never opens Stripe at all). Straight
+  after checkout it says only that the plan is switching on, because the webhook has not
+  landed and every other row would
   still read Free. It also offers "Get the Household plan" ("Keep the Household plan" during the trial), and
   "Manage billing", or "Manage in the App Store" for a plan Apple bills (the main button when a
   payment has failed). A second lunchbox or an invite on a free household opens the plan

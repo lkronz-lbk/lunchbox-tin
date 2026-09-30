@@ -1554,7 +1554,7 @@ function claimBeta(){
   claimBeta.busy = true; claimBeta.tries = (claimBeta.tries || 0) + 1; claimBeta.failed = false;
   api('POST', '/api/billing/beta', {code:code}).then(function(r){
     claimBeta.busy = false;
-    if(r.status === 200){ betaForget(); UI.notice = BETA_ON; toast(r.already ? 'Lunch Sorted is already yours, for good' : 'Lunch Sorted is yours, free forever'); Sync.pull().then(render); return; }
+    if(r.status === 200){ betaForget(); if(!r.already) UI.notice = BETA_ON; toast(r.already ? 'Lunch Sorted is already yours, for good' : 'Lunch Sorted is yours, free forever'); Sync.pull().then(render); return; }   /* already: forever may have been bought, and the beta's banner calls it free */
     if(r.status === 409){ betaForget(); UI.notice = r.paying ? 'This household already pays for the Household plan, so the beta link is not for it.' : 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
     if(r.status === 404){ betaForget(); UI.notice = 'That beta link is not right. Ask for a fresh one.'; render(); return; }
     claimBeta.failed = true; render();                             /* a hiccup: the code stays, the banner offers another go */
@@ -1568,7 +1568,7 @@ function paid(){
 }
 /* forever that nobody paid for: the beta link or a 100%-off code (source 'code'), or 'comp', which the
    server still recognizes though nothing writes it. Only Stripe and the App Store take money, so only
-   their forever is called bought, priced, or given Manage billing */
+   their forever is called bought, or priced */
 function foreverGiven(){ var e = Account.entitlement; return paid() && e.plan === 'lifetime' && e.source !== 'stripe' && e.source !== 'apple'; }
 function billingOn(){ return !!(Account.billing && Account.billing.enabled) && !isHelper(); }
 /* a plan the household once had and has no longer: cancelled, refunded, lapsed, or a first charge
@@ -4840,7 +4840,7 @@ function panePlan(){
   else if(lapsing) h += '<p class="hint" style="margin:0;color:var(--warn)">The last payment did not go through. '+(e.portal ? 'Update the card in Manage billing'+(native() ? ' at lunchsorted.app' : '') : 'Whoever paid can update the card in Manage billing'+(native() ? ' at lunchsorted.app' : ''))+(d ? ', or the Household plan ends on '+esc(d) : '')+'.</p>';
   var btns = (paid() ? '' : trialing() ? '<button class="btn primary sm" data-act="upgrade" data-why="keep">Keep the Household plan</button>' : '<button class="btn primary sm" data-act="upgrade" data-why="keep">Get the Household plan</button>')
     +  (apple ? (iapOn() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="iap-manage">Manage in the App Store</button>' : '')
-        : e.portal && !native() && !given ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '');   /* free forever has nothing to bill, though a code's checkout left a Stripe customer */
+        : e.portal && !native() ? '<button class="btn '+(lapsing ? 'primary' : 'ghost')+' sm" data-act="portal">Manage billing</button>' : '');   /* a free forever keeps it: a subscription Stripe was still retrying when the beta was claimed can charge, and this reaches it */
   h += (btns ? '<div class="row" style="gap:8px;flex-wrap:wrap">'+btns+'</div>' : '')+'</div>';   /* an empty row would still take the card's gap, under a lone line */
   /* what free looks like, said once, in the two places a parent is about to meet it */
   var freeAgain = 'one lunchbox, the week, the shopping list, the pack list and the idea bank stay free. What you have added stays.';
