@@ -3,7 +3,11 @@ import { neon, NeonDbError } from '@neondatabase/serverless';
 
 /* One tagged-template query function. Neon in production; the test suite
    injects an in-process Postgres through the global hook. Call as
-   sql`SELECT ...` or, for a statement built as a string, sql(text). */
+   sql`SELECT ...` or, for a statement built as a string, sql(text). Statements
+   that must see each other's work go together through sql().transaction(q =>
+   [q`...`, q`...`]): one transaction, one round trip, read committed, so each
+   statement sees what committed before it began, a lock the one before it took
+   included. The results come back as an array, one list of rows a statement. */
 let _client, _clientFor;
 /* Which deploy this is. SITE_ENV is set per context in the Netlify UI; the values in
    netlify.toml reach the build only, never a running function, so Netlify's own CONTEXT
@@ -84,6 +88,9 @@ export function sql() {
     const secrets = secretsOf(url);
     /* the driver's query runs again each time it is awaited; this one runs once */
     _client = (strings, ...vals) => (typeof strings === 'string' ? client.query(strings) : client(strings, ...vals)).then(undefined, e => { throw told(e, secrets); });
+    /* the statements fn returns are the driver's own, made with the query function it is given, and what the
+       driver says about them is told in the same fixed words */
+    _client.transaction = (fn) => client.transaction(fn, { isolationLevel: 'ReadCommitted' }).then(undefined, e => { throw told(e, secrets); });
     _clientFor = url;
   }
   return _client;
@@ -116,16 +123,49 @@ export function clientIp(req, context) {
   return (context && context.ip) || req.headers.get('x-nf-client-connection-ip') || req.headers.get('x-forwarded-for') || '';
 }
 
-/* the connection address is only ever used hashed, and only for a day */
-export function ipKey(ip) {
-  return ip ? createHash('sha256').update(String(ip)).digest('hex').slice(0, 24) : '';
+/* A connection or an email address becomes a throttle's key only as a digest, and only for a day. It
+   keeps the address out of rate_events, and it keeps the row small whatever the caller sends: about
+   170 bytes, where a key holding the longest address allowed, in three-byte letters, made a row of
+   3 KB (both measured on Postgres 18, PGlite). */
+export function digest(s) {
+  return createHash('sha256').update(String(s)).digest('hex').slice(0, 24);
 }
 
-/* housekeeping that rides along with the throttle, and runs once a day with the trial job in
-   production: nothing personal outlives its use */
-export async function sweep() {
+/* one key a connection; on IPv6 one key a /64, the block a home connection is given whole, or every
+   address in it would be a fresh key */
+export function ipBucket(ip) {
+  ip = String(ip || '').trim();
+  const v4 = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  if (v4) return v4[1];
+  if (!ip.includes(':')) return ip;
+  const [head, tail = ''] = ip.split('::');
+  const h = head ? head.split(':') : [], t = tail ? tail.split(':') : [];
+  const groups = h.concat(Array(Math.max(0, 8 - h.length - t.length)).fill('0'), t);
+  return groups.slice(0, 4).map(g => g.toLowerCase().padStart(4, '0')).join(':') + '::/64';
+}
+export function ipKey(ip) {
+  return ip ? digest(ipBucket(ip)) : '';
+}
+
+/* Housekeeping that rides along with the throttle, and runs once a day with the trial job in
+   production: nothing personal outlives its use. The rate rows go a batch at a time, because a
+   flood leaves a whole day of them due at once, and one DELETE of that many could outrun a
+   function's time limit and be rolled back, leaving them all, or hold up the request that is paying
+   for it. rate_events has no id, so a batch is picked by ctid, passing over rows another sweep has
+   locked: two sweeps at once share the rows rather than one waiting on the other and stopping short.
+   A request clears one batch; the daily run passes a deadline and keeps going until a batch comes
+   back short or the deadline passes, the first batch whatever the time. The other tables' deletes
+   are not batched: what comes due in them each day is held down where their rows are written (the
+   day's sign-in emails, the error table's ceiling, a signed-in parent's hourly limits). */
+export const SWEEP_BATCH = 20000;
+export async function sweep(deadline = 0) {
   const q = sql();
-  await q`DELETE FROM rate_events WHERE at < now() - interval '1 day'`;
+  for (;;) {
+    const [{ n }] = await q`
+      WITH gone AS (DELETE FROM rate_events WHERE ctid = ANY (ARRAY(SELECT ctid FROM rate_events WHERE at < now() - interval '1 day' LIMIT ${SWEEP_BATCH} FOR UPDATE SKIP LOCKED)) RETURNING 1)
+      SELECT count(*)::int AS n FROM gone`;
+    if (n < SWEEP_BATCH || Date.now() >= deadline) break;
+  }
   await q`DELETE FROM magic_links WHERE expires_at < now() - interval '1 day'`;
   await q`DELETE FROM sessions WHERE expires_at < now()`;
   await q`DELETE FROM invites WHERE expires_at < now() - interval '30 days' OR used_at < now() - interval '30 days'`;
@@ -161,10 +201,16 @@ export async function recentKeys(prefix, windowSeconds) {
 export async function mark(key) { await sql()`INSERT INTO rate_events (key) VALUES (${key})`; }
 export async function unmark(prefix) { await sql()`DELETE FROM rate_events WHERE key LIKE ${prefix + '%'} AND at > now() - interval '1 hour'`; }   /* older marks are invisible already; the window keeps the delete on the (at) index under any collation */
 
+/* about one request in twenty-five pays for housekeeping: every throttled call, and every sign-in request
+   let through (api-auth.js), so a flood's rows go on a deploy with no daily run as well */
+export async function housekeep() {
+  if (Math.random() < 0.04) await sweep();
+}
+
 /* sliding-window throttle backed by the database */
 export async function throttled(key, limit, windowSeconds) {
   const q = sql();
-  if (Math.random() < 0.04) await sweep();               /* about one request in twenty-five pays for housekeeping */
+  await housekeep();
   const [{ n }] = await q`SELECT count(*)::int AS n FROM rate_events WHERE key = ${key} AND at > now() - make_interval(secs => ${windowSeconds})`;
   if (n >= limit) return true;
   await q`INSERT INTO rate_events (key) VALUES (${key})`;

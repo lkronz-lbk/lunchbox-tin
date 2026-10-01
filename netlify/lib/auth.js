@@ -4,6 +4,8 @@ import { sql } from './db.js';
 export const COOKIE = 'ls_session';
 const SESSION_DAYS = 180;
 const LINK_MINUTES = 15;
+/* the wrong tries one sign-in code takes before it is spent, counted on its own link row (migration 0011) */
+export const CODE_TRIES = 8;
 
 const hash = (s) => createHash('sha256').update(String(s)).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
@@ -30,12 +32,18 @@ export async function createMagicLink(email, fixedCode) {
   return { token, code };
 }
 export async function consumeMagicCode(email, code) {
-  /* the code is its own secret: spending the link does not spend it, and the reverse */
+  /* the code is its own secret: spending the link does not spend it, and the reverse. One statement tries
+     it against every code waiting for the address: the one it matches is spent, and each it misses counts
+     a wrong try, CODE_TRIES at most, after which even the right code is refused. The row lock counts tries
+     arriving together one at a time; a try with no code waiting changes nothing, and every way of failing
+     gives the caller the same null */
+  const h = hash(email + ':' + normalizeCode(code));
   const rows = await sql()`
-    UPDATE magic_links SET code_used_at = now()
-    WHERE email = ${email} AND code_hash = ${hash(email + ':' + normalizeCode(code))} AND code_used_at IS NULL AND expires_at > now()
-    RETURNING email`;
-  return rows[0] ? rows[0].email : null;
+    UPDATE magic_links SET code_used_at = CASE WHEN code_hash = ${h} THEN now() END,
+                           code_tries = code_tries + CASE WHEN code_hash = ${h} THEN 0 ELSE 1 END
+    WHERE email = ${email} AND code_used_at IS NULL AND expires_at > now() AND code_tries < ${CODE_TRIES}
+    RETURNING code_used_at IS NOT NULL AS hit`;
+  return rows.some(r => r.hit) ? email : null;
 }
 
 /* The verify page sets a short-lived cookie and puts the same nonce in its form.

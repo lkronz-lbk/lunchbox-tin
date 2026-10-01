@@ -488,7 +488,8 @@ forward).
 - [x] Import the repo into Netlify, attach the domain; `dev` as a branch deploy, previews on.
 - [x] Neon project with `production` and `staging` branches; `NETLIFY_DATABASE_URL` and
       `STAGING_DATABASE_URL` scoped to their contexts.
-- [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set.
+- [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set. (Production's
+      key also needs the Builds scope before `main` takes the Resend key check: see Owed.)
 - [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price is best left out of the variables (Billing, below); a webhook endpoint per mode,
       keys, secrets and price ids scoped per context (Billing, below).
 - [ ] Confirm HTTPS covers `www.lunchsorted.app` as well as the apex.
@@ -542,7 +543,10 @@ matters: production reads its own database and its live Stripe key, and neither 
 a branch deploy or a pull request preview. The build refuses a Stripe key scoped to the
 wrong context, and a Stripe or Resend key or a database address pasted with anything more
 than itself, as long as the variable has the Builds scope: a build cannot check a variable it
-cannot see, and it names the keys it could.
+cannot see, and it names the keys it could. A production build (Netlify's own `CONTEXT`, which a
+local run does not have, whatever `SITE_ENV` says) also refuses to go out without a Resend key it
+can see, absent or not scoped to Builds, as it cannot tell which: a deploy without one could
+send no sign-in link.
 
 **Netlify setup, once:** Site configuration → Build & deploy → Branches and deploy
 contexts → add `dev` as a branch deploy, and leave Deploy Previews on.
@@ -801,17 +805,23 @@ out by deleting it in the commit that does it.
   `migrate:` lines where a refusal says `deploy refused:`.
 - **Liz: `RESEND_API_KEY`, the key alone in every context, before `main` takes the Resend key
   check.** Each value is `re_` then letters, digits and underscores, with nothing pasted around
-  it, and the variable needs the Builds scope as well as Functions: without it the build never
-  sees the key and the check does nothing. A build that goes through names the keys it could see
-  (`migrate: keys the build can see, each the key alone: …`), so a key missing from that line
-  has no Builds scope. With the scope, anything more refuses the deploy, even a
-  space or a line break after the key, which sends mail today; the last good deploy stays live
-  with the key it was built with, and keeps sending. Nobody could read the keys, so each
-  context's next deploy is the first time the pattern meets its key: this check's deploy
-  preview, then dev's, then main's. Resend never shows a key twice, so a refused key means a new
-  one with the old one's permission, and the old one deleted only after a deploy with the new
-  value has gone through (`migrate:` lines in its build log, where a refusal says `deploy
-  refused:`); if a new key is refused too, the pattern in `resendKey()` is what to fix.
+  it, and the variable needs the Builds scope as well as Functions. In Production that is now
+  enforced: a production build that cannot see the key, whether it is absent or scoped to
+  Functions alone (the build cannot tell which, though only an absent key stops the mail),
+  refuses the deploy (`deploy refused: RESEND_API_KEY is absent from this production build, or
+  not scoped to Builds`), and the live one stays up. Only main's own deploy runs that check, as
+  no preview or dev deploy is a production build, so confirm it in the Netlify UI first: the
+  variable has a value in the Production context, and Builds is among its scopes. Elsewhere the
+  build never sees an unscoped key and the check does nothing. A build that goes through names
+  the keys it could see (`migrate: keys the build can see, each the key alone: …`), so a key
+  missing from that line has no Builds scope. With the scope, anything more refuses the deploy,
+  even a space or a line break after the key, which sends mail today; the last good deploy stays
+  live with the key it was built with, and keeps sending. Nobody could read the keys, so for
+  their shape each context's next deploy is the first time the pattern meets its key: this
+  check's deploy preview, then dev's, then main's. Resend never shows a key twice, so a refused
+  key means a new one with the old one's permission, and the old one deleted only after a deploy
+  with the new value has gone through (`migrate:` lines in its build log, where a refusal says
+  `deploy refused:`); if a new key is refused too, the pattern in `resendKey()` is what to fix.
   Production's key belongs to Production alone: a deploy preview runs any branch's code.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
   Store"; change it the same day (to the store link once it is live).
@@ -1004,6 +1014,33 @@ writes the same one.
   A browser the link signs in that has never built a week says so and points back to the
   code, and never pushes its empty household over the phone that did. Sessions are HttpOnly cookies for 180 days; links, codes and
   sessions are stored as hashes. No passwords anywhere.
+- **Limits on signing in** (`netlify/functions/api-auth.js`): a sign-in email goes out at most three
+  times a quarter hour to one address, twenty times an hour from one connection (a /64 counts as
+  one on IPv6) and two thousand times a day in all, and a request from another site is refused. A
+  request any of the three already refuses is answered from one plain count, waiting on nothing and
+  writing nothing; one that may go through is counted again in one transaction behind one lock, so
+  requests arriving together are counted one at a time, and its counts are written only when all
+  three still have room. A request waits at most 50 ms on that lock, then is answered as busy, so
+  a burst cannot hold the database's connections or outlast a function's ten seconds. Each count
+  sits in `rate_events` under a digest of the address, never the address, and a stranger
+  inventing addresses cannot fill the database: a day of let-through requests takes about
+  12 MB at worst (every address as long as allowed, in three-byte letters), and a request let
+  through pays for housekeeping one time in twenty-five, as a throttled call does, so those rows go
+  on a deploy with no daily run as well. A code gets eight tries: each code counts its own wrong
+  ones on its link row (migration 0011), and after eight even the right code is refused, with the
+  same answer as a wrong code or an expired one ("check it, or ask for a new email"), so nobody can
+  learn from it whether a link was asked for. A new email brings a new code with eight of its own,
+  and the link in the same email still works: a stranger who knows an address can spend the codes
+  waiting for it, never the link. The link's own button counts nothing: its token is 32 random
+  bytes. The two thousand is the one limit a stranger could spend
+  for everyone, with five IPv4 addresses for a day or a hundred IPv6 /64s at once, which one home
+  connection given a /56 holds. It stops new sign-in emails, never a parent already signed in, and
+  not App Review's address, which is sent no email and keeps a day's count of its own. The mail
+  provider's own daily cap binds first where it is lower, and takes the welcome, reminder and beta
+  emails with it: on 2026-09-30 the account was on Resend's free plan, a hundred a day, which one
+  connection spends in five hours, or five /64s at once. A send the provider refuses is answered
+  as the day's limit is ("Sign-in is busy"), and its counts stay, so it cannot be repeated past the
+  limits.
 - **Households** (`/api/household`): one document per household with a version number.
   `PUT` with the version you last saw; if the server has moved on you get `409` with its
   copy, merge, and try again. The merge rules are the first script block in
@@ -1045,8 +1082,11 @@ writes the same one.
 - **Environment**: production reads `NETLIFY_DATABASE_URL` (Netlify DB / Neon); branch
   deploys and previews read `STAGING_DATABASE_URL` and refuse to run without it, so they
   can never touch production data or migrate it. `RESEND_API_KEY` and `MAIL_FROM` send the
-  emails; without a key, production refuses, and any other deploy writes the whole email, the
-  sign-in link and code included, to its function log instead of sending it; a deploy with
+  emails; without a key, production refuses: its build (Netlify's `CONTEXT`) refuses the deploy
+  when it cannot see the key, absent or scoped to Functions alone, as it cannot tell which, and a
+  running function that has none refuses to send. Any
+  other deploy without a key writes the whole email, the sign-in link and code included, to its
+  function log instead of sending it; a deploy with
   `DEV_LINKS=1` (or the test suite, which captures every email) also returns the link and code
   to the caller. The key must be the key alone, `re_` then letters, digits and underscores: the
   build refuses the deploy over anything more, naming the variable, never the value, as long as
@@ -1061,8 +1101,8 @@ writes the same one.
   or an error answer it cannot read, is logged in fixed words, never fetch's own, which can
   quote the authorization header, key and all. `SITE_ENV` is set per context in the Netlify UI (and in `netlify.toml` for the build).
   `REVIEW_EMAIL` and `REVIEW_CODE` (production only, for App Review): that one address signs
-  in with that standing code and is sent no email; eight or more letters and digits, and
-  nothing else about it is special.
+  in with that standing code and is sent no email; eight or more letters and digits. It keeps a
+  day's count of its own (Limits on signing in, above), and nothing else about it is special.
   `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each as the
   build command; every statement is idempotent, so a half-applied file is harmless.
   Each database variable (`NETLIFY_DATABASE_URL`, or the older `NETLIFY_DB_URL` when it is
@@ -1080,11 +1120,16 @@ writes the same one.
   as `migrate failed:`, naming the migration file when one was running.
   Housekeeping (`sweep()` in `netlify/lib/db.js`: expired links, sessions and invites,
   rate-limit rows past a day, error reports past thirty days) rides along with about one
-  throttled call in twenty-five, and runs once a day in production after the trial emails.
+  throttled call or sign-in request let through in twenty-five, and runs once a day in production
+  after the trial emails. The
+  rate-limit rows go twenty thousand at a time, since a flood leaves a whole day of them due at
+  once: the call that rides along takes one batch, and the daily run keeps on until they are gone,
+  starting no further batch once twenty seconds have passed.
 - **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
   drive three browser contexts through sign-in by link and by code, a forged sign-in form,
   invite, joining with lunches of one's own, an edit on each phone, an uncheck round trip,
-  a helper's refused push, sign-out and delete, plus the merge rules on their own.
+  a helper's refused push, sign-out and delete, plus the merge rules, and the sign-in limits and
+  what they write, on their own.
 
 ## Billing
 
@@ -1338,8 +1383,8 @@ the idea bank stays free so a free list is never stuck with what it has.
   plain text and 99 MB at the worst, every field the body carries in three-byte letters, which its
   8 KB allows. Past it a report is answered as usual and nothing is written, not even the
   throttle's mark, for any build, a real breakage's too, until rows go: the sweep drops rows past
-  thirty days (it rides about one throttled call in twenty-five, and runs daily in production
-  after the trial emails), and deleting a flood's rows by hand makes room at once. `/admin` lists
+  thirty days (it rides about one throttled call or sign-in request let through in twenty-five,
+  and runs daily in production after the trial emails), and deleting a flood's rows by hand makes room at once. `/admin` lists
   under **Broken screens** the week's twenty commonest, then the ten newest of the rest, and how
   many there were when that is not all; says how full the table is; and says when it is full and
   from when room comes back. The stacks are in `app_errors`.

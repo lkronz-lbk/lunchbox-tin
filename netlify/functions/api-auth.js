@@ -1,4 +1,4 @@
-import { sql, json, fail, siteUrl, siteEnv, clientIp, ipKey, throttled } from '../lib/db.js';
+import { sql, json, fail, siteUrl, siteEnv, clientIp, ipKey, digest, housekeep } from '../lib/db.js';
 import { normalizeEmail, normalizeCode, createMagicLink, peekMagicLink, consumeMagicLink, consumeMagicCode, findOrCreateUser,
          createSession, sessionCookie, currentUser, destroySession, destroyAllSessions,
          verifyNonce, verifyCookie, verifyCookieFrom, sameOrigin, mailStopToken, stopMail } from '../lib/auth.js';
@@ -14,6 +14,43 @@ import { cancelSubscription } from '../lib/stripe.js';
    GET  /api/auth/me
    POST /api/auth/logout
    POST /api/auth/delete    {confirm:'DELETE'} -> the person and, if they own it, the household */
+
+/* What a stranger can make these routes write, and how a limit could be turned on real parents.
+   - /request answers to three limits: LINKS_FROM_ONE an hour from one connection (a /64 on IPv6),
+     LINKS_TO_ONE a quarter hour to one address, and LINKS_A_DAY for everyone. The counts live in
+     rate_events under a digest (db.js), so no address sits there in the clear and a row is the same
+     small size whatever was sent. A request any of them already refuses is answered from one plain
+     count, waiting on nothing and writing nothing; one that may go through counts again in one
+     transaction behind one lock, so requests arriving together are counted one at a time, and is
+     marked only when all three still have room. A burst that all passes the plain count queues on
+     the lock, a database connection each, so the wait is cut at 50 ms and answered as busy, a
+     parent caught in it included: past that it would hold the connections other routes need, and
+     outlast the ten seconds a function gets. The day's limit bounds what a flood can write, three marks
+     and a sign-in link a request let through: about 6 KB at worst (the longest address allowed, in
+     three-byte letters, sits in the link and two of its indexes), 12 MB a day, measured. A request
+     let through pays for housekeeping as a throttled call does (db.js), so those rows go on a
+     deploy with no daily run as well. The day's limit also bounds the sign-in emails a stranger can
+     make us send, and it is the lock a stranger could spend on everyone: that many requests let
+     through in a day stop every new sign-in email until the oldest are a day old. At twenty an hour
+     a connection that takes five IPv4 addresses for a day, a hundred for an hour, or a hundred IPv6
+     /64s at once, which one home connection given a /56 holds; five /64s keep it spent after that. A
+     parent already signed in is untouched (sessions last 180 days), and so is App Review's address,
+     which is sent no email and keeps a day's count of its own. Raising the number would raise the
+     mail a stranger can send in our name. The mail provider's own daily cap binds first where it is
+     lower, and takes the welcome, reminder and beta emails with it: Resend's free plan sends a
+     hundred a day (2026-09-30), which one connection spends in five hours, or five /64s at once. A
+     send the provider refuses is answered as the day's limit is, and its marks stay, so it cannot
+     be repeated past the limits.
+   - /code writes nothing to rate_events: each code counts its own wrong tries on its link row
+     (CODE_TRIES, auth.js), exactly, and a try at an address with no code waiting changes nothing.
+     Every failure gets the same answer, which says what to do next, so a stranger cannot learn from
+     it whether someone asked for a link. Eight tries against a code of 40 bits is the guard against
+     guessing, and a new email brings a new code with eight of its own. A stranger who knows an
+     address can spend the codes waiting for it, never the link in the same email.
+   - /verify counts nothing: a link's token is 32 random bytes, which no number of tries finds, and a
+     count would be a row for every request anyone sent.
+   Exported for the smoke suite, which holds them to the README's words. */
+export const LINKS_FROM_ONE = 20, LINKS_TO_ONE = 3, LINKS_A_DAY = 2000;
 
 const PAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -42,15 +79,18 @@ async function welcome(user, req, beta) {
 }
 
 /* REVIEW_EMAIL + REVIEW_CODE: the address App Review signs in with, and its standing code. Empty means no such account. */
+let reviewWarned = false, cutLogged = 0;
 function reviewAccount(email) {
   const raw = process.env.REVIEW_EMAIL || '';
   if (!raw) return '';
   const who = normalizeEmail(raw), code = normalizeCode(process.env.REVIEW_CODE || '');
   const admins = (process.env.ADMIN_EMAILS || '').split(',').map(normalizeEmail).filter(Boolean);
-  /* a misconfiguration must show in the logs the first time it is tried, not as a surprise from Apple */
-  if (!who) { console.error('REVIEW_EMAIL is not an email address; the review account is off'); return ''; }
-  if (code.length < 8) { console.error('REVIEW_CODE needs eight or more letters and digits; the review account is off'); return ''; }
-  if (admins.includes(who)) { console.error('REVIEW_EMAIL is in ADMIN_EMAILS; a standing code must not open /admin, so the review account is off'); return ''; }
+  /* a misconfiguration must show in the logs the first time it is tried, not as a surprise from Apple; once an
+     instance, since every sign-in request asks, a stranger's turned-away ones included */
+  const off = !who ? 'REVIEW_EMAIL is not an email address; the review account is off'
+    : code.length < 8 ? 'REVIEW_CODE needs eight or more letters and digits; the review account is off'
+    : admins.includes(who) ? 'REVIEW_EMAIL is in ADMIN_EMAILS; a standing code must not open /admin, so the review account is off' : '';
+  if (off) { if (!reviewWarned) { reviewWarned = true; console.error(off); } return ''; }
   return email === who ? code : '';
 }
 
@@ -63,17 +103,44 @@ export default async function handler(req, context) {
       if (body.website) return json({ ok: true });                       /* honeypot: pretend */
       const email = normalizeEmail(body.email);
       if (!email) return fail('That does not look like an email address');
-      const ip = ipKey(clientIp(req, context));
-      /* cheapest filter first, and a rejected request writes nothing further */
-      if (ip && await throttled('link-ip:' + ip, 20, 60 * 60)) return fail('Too many sign-in requests from here; try again in an hour.', 429);
-      if (await throttled('link:' + email, 3, 15 * 60)) return fail('A link was sent recently. Check your inbox, or try again in a few minutes.', 429);
-      if (await throttled('link:all', 2000, 24 * 60 * 60)) return fail('Sign-in is busy right now; try again later.', 503);
+      /* a stranger's page could otherwise post here from every visitor's browser, and spend the day's links from their connections */
+      if (!sameOrigin(req, siteUrl(req))) return fail('Not allowed', 403);
       /* App Review's tester has no inbox of ours: one address, named in the environment, signs in with a
          fixed code and gets no email. The code is still only accepted for that address, still expires. */
       const review = reviewAccount(email);
+      /* the three limits (see the top of the file): one plain count first, then, for a request that may go
+         through, the lock and the same count again, which marks only if all three still have room. A
+         connection whose address is unknown, never the case on Netlify, shares one count */
+      const conn = 'link-ip:' + ipKey(clientIp(req, context)), addr = 'link:' + digest(email), day = review ? 'link:review' : 'link:all';
+      const limits = (q, mark) => q`
+        WITH here AS (SELECT count(*) < ${LINKS_FROM_ONE} AS ok FROM rate_events WHERE key = ${conn} AND at > now() - interval '1 hour'),
+             them AS (SELECT count(*) < ${LINKS_TO_ONE} AS ok FROM rate_events WHERE key = ${addr} AND at > now() - interval '15 minutes'),
+             everyone AS (SELECT count(*) < ${LINKS_A_DAY} AS ok FROM rate_events WHERE key = ${day} AND at > now() - interval '1 day'),
+             tick AS (INSERT INTO rate_events (key)
+                      SELECT k FROM here, them, everyone, (VALUES (${conn}::text), (${addr}::text), (${day}::text)) AS v(k)
+                      WHERE ${mark}::boolean AND here.ok AND them.ok AND everyone.ok RETURNING key)
+        SELECT here.ok AS here, them.ok AS them, everyone.ok AS everyone FROM here, them, everyone`;
+      let [room] = await limits(sql(), false);
+      if (room.here && room.them && room.everyone) {
+        try { room = (await sql().transaction(q => [q`SET LOCAL lock_timeout = '50ms'`, q`SELECT pg_advisory_xact_lock(hashtext('api-auth request'))`, limits(q, true)]))[2][0]; }
+        catch (e) {
+          if (!e || e.code !== '55P03') throw e;
+          /* the wait was cut: a burst is turning parents away, which the log says once a minute an instance, never once a request */
+          if (Date.now() - cutLogged > 60000) { cutLogged = Date.now(); console.error('api-auth: sign-in requests queued past 50 ms on the lock and were answered as busy'); }
+          return fail('Sign-in is busy right now; try again later.', 503);
+        }
+      }
+      if (!room.here) return fail('Too many sign-in requests from here; try again in an hour.', 429);
+      if (!room.them) return fail('A link was sent recently. Check your inbox, or try again in a few minutes.', 429);
+      if (!room.everyone) return fail('Sign-in is busy right now; try again later.', 503);
       const { token, code } = await createMagicLink(email, review || undefined);
       const link = `${siteUrl(req)}/api/auth/verify?t=${token}${body.beta === true ? '&b=1' : ''}`;   /* the app says a beta code is waiting; only the welcome's wording rides on it */
-      const sent = review ? { ok: true } : await sendMagicLink(email, link, code);
+      /* the mail provider refusing the send (its daily cap, most likely) is answered as the day's limit is */
+      const sent = review ? { ok: true } : await sendMagicLink(email, link, code).catch(e => { console.error('api-auth: the sign-in email was refused', e.message); return null; });
+      /* a request let through pays for housekeeping one time in twenty-five, after its email has gone; a sweep that
+         fails is logged, and the sign-in goes on */
+      await housekeep().catch(e => console.error('api-auth: housekeeping', e.message));
+      if (!sent) return fail('Sign-in is busy right now; try again later.', 503);
       /* the link and code come back to the caller only where a deploy has opted in (the test suite) */
       const show = sent.devLink && (siteEnv() === 'test' || process.env.DEV_LINKS === '1');
       return json({ ok: true, ...(show ? { devLink: sent.devLink, devCode: sent.devCode } : {}) });
@@ -100,8 +167,6 @@ export default async function handler(req, context) {
     }
 
     if (req.method === 'POST' && action === 'verify') {
-      const ip = ipKey(clientIp(req, context));
-      if (ip && await throttled('verify-ip:' + ip, 20, 15 * 60)) return fail('Too many attempts; try again in a few minutes', 429);
       const ctype = req.headers.get('content-type') || '';
       let token, kind = 'web', beta = false;
       if (ctype.includes('application/json')) { const b = await req.json().catch(() => ({})); token = b.token; kind = b.kind === 'native' ? 'native' : 'web'; beta = b.beta === true; }
@@ -132,9 +197,9 @@ export default async function handler(req, context) {
       const email = normalizeEmail(body.email);
       if (!email) return fail('That does not look like an email address');
       if (!sameOrigin(req, siteUrl(req))) return fail('Not allowed', 403);
-      if (await throttled('code:' + email, 8, 15 * 60)) return fail('Too many tries; ask for a new email.', 429);
+      /* the code counts its own tries (see the top of the file), and every way of failing gets this one answer */
       const ok = await consumeMagicCode(email, body.code);
-      if (!ok) return fail('That code is not right, or it has expired. Codes work once, for fifteen minutes.', 410);
+      if (!ok) return fail('That code is not right, or it has expired. Check it, or ask for a new email.', 410);
       const user = await findOrCreateUser(email);
       const session = await createSession(user.id, 'web');
       await welcome(user, req, body.beta === true);
@@ -184,8 +249,9 @@ export default async function handler(req, context) {
       await q`DELETE FROM invites WHERE created_by = ${user.id}`;
       await destroyAllSessions(user.id);
       await q`DELETE FROM magic_links WHERE email = ${user.email}`;
-      /* the throttle keys carry the address in the clear, so they have to go with it */
-      await q`DELETE FROM rate_events WHERE key IN (${'link:' + user.email}, ${'code:' + user.email})`;
+      /* the count kept for the address is a digest of it, which is still the address's, so it goes with it
+         (the counts from before digests, which held the address itself, went in migration 0011) */
+      await q`DELETE FROM rate_events WHERE key = ${'link:' + digest(user.email)}`;
       await q`DELETE FROM users WHERE id = ${user.id}`;
       return json({ ok: true }, 200, sessionCookie('', true));
     }

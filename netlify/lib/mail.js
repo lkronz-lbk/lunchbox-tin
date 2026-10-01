@@ -11,9 +11,14 @@ const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','
 
 /* the key alone, as Resend gives it: re_, then letters, digits and underscores. The build
    (scripts/migrate.mjs) refuses the deploy over anything more, a line break pasted with it above all,
-   in words that name the variable and never what it holds, and the last good deploy stays live */
+   in words that name the variable and never what it holds, and the last good deploy stays live.
+   Production's build must also see a key: a deploy without one could send no sign-in link. It cannot
+   tell a key that is absent from one scoped to Functions alone, which would still send, so it names
+   both. Netlify's own CONTEXT marks a production build, whatever SITE_ENV says: a local run of the
+   script, a preview and a branch deploy are not held to it */
 export function resendKey() {
   const key = process.env.RESEND_API_KEY || '';
+  if (!key && process.env.CONTEXT === 'production') throw new Error('RESEND_API_KEY is absent from this production build, or not scoped to Builds (the build cannot tell which); a deploy without it could send no sign-in link, so set it in Production with the Builds scope as well as Functions');
   if (key && !/^re_[A-Za-z0-9_]+$/.test(key)) throw new Error('RESEND_API_KEY must be re_, then letters, digits and underscores only; look for a space or a line break pasted with it');
   return key;
 }
