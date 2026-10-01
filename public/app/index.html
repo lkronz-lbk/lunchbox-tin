@@ -6900,14 +6900,17 @@ document.addEventListener('click', function(ev){
     skr.restore().then(function(r){
       var list = (r && r.transactions) || [];
       if(!list.length){ back(); toast('Nothing to restore on this Apple Account'); return; }
-      el.textContent = 'Checking your purchases\u2026';
+      el.textContent = 'Checking purchases\u2026';
       return Promise.all(list.map(iapLink)).then(function(rs){
         back();
-        if(paid() && rs.some(function(x){ return x.status === 200; })){ closeSheet(); render(); toast('Restored \u2014 the Household plan is on'); return; }
-        /* the sign-in has lapsed since the app opened: signed out here, as a pull would find, and the sheet asks for it */
+        /* by now the parent may have closed the plan sheet and opened another, which is left alone */
+        var onSheet = !!(sheetState && sheetState.plan);
+        if(paid() && rs.some(function(x){ return x.status === 200; })){ if(onSheet) closeSheet(); render(); toast('Restored \u2014 the Household plan is on'); return; }
+        /* the sign-in has lapsed since the app opened: signed out here, as a pull would find, and the sheet, if still up, asks for it */
         if(rs.some(function(x){ return x.status === 401; })){
           Account.user = null; Account.me = null; Account.status = 'idle'; renderSyncLine(); render();
-          upgradeSheet((prices[0] && prices[0].getAttribute('data-why')) || ''); toast('Sign in again to restore your purchases'); return;
+          if(onSheet) upgradeSheet((prices[0] && prices[0].getAttribute('data-why')) || '');
+          toast('Sign in again to restore your purchases'); return;
         }
         /* until the server has decided on every one, none is called ended or refused: the one it missed may be the plan still in force */
         if(!rs.every(iapDecided)){ toast('We could not check your purchases just now. Try again in a moment'); return; }

@@ -5174,13 +5174,13 @@ try {
          a second delivery meanwhile is turned away, and Apple's retry, an hour on, takes the hold over once
          it is ten minutes old (lapse() ages it). Each step below turns on renewal (cape) or off, to see it */
       const realSql = globalThis.__LS_SQL;
-      const failing = (texts, after = false) => { globalThis.__LS_SQL = async (strings, ...vals) => {
+      const failing = (texts, after = false) => { globalThis.__LS_SQL = Object.assign(async (strings, ...vals) => {
         const hit = typeof strings !== 'string' && texts.some(t => strings.join('').includes(t));
         if (hit && !after) throw new Error('neon went away');
         const rows = await realSql(strings, ...vals);
         if (hit) throw new Error('neon went away before it answered');
         return rows;
-      }; };
+      }, { transaction: realSql.transaction }); };
       const during = async (texts, work, after) => { failing(texts, after); try { return await work(); } finally { globalThis.__LS_SQL = realSql; } };
       const resend = async (n) => { const r = await fetch(NODE_BASE + '/api/apple/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedPayload: jws(Object.assign({}, n)) }) }); return { status: r.status, body: await r.json().catch(() => ({})) }; };
       const held = async (uuid) => ((await db.query('SELECT applying_since IS NOT NULL AS held FROM apple_events WHERE id = $1', [uuid])).rows[0] || {}).held;
@@ -5324,14 +5324,15 @@ try {
       /* fails: refuse any query carrying a value it matches; route: what the phone's request meets on its way;
          meanwhile: read while that request is still out */
       const restoreSays = async (transactions, { fails, route, meanwhile } = {}) => {
-        if (fails) globalThis.__LS_SQL = async (strings, ...vals) => { if (typeof strings !== 'string' && vals.some(fails)) throw new Error('neon went away'); return realSql(strings, ...vals); };
+        if (fails) globalThis.__LS_SQL = Object.assign(async (strings, ...vals) => { if (typeof strings !== 'string' && vals.some(fails)) throw new Error('neon went away'); return realSql(strings, ...vals); }, { transaction: realSql.transaction });
         if (route) await pn.route(LINK, route);
         try {
           await pn.evaluate(r => { window.__sk.restored = r; window.__sk.finished = []; document.getElementById('toast').textContent = ''; }, { transactions: transactions.map(handed) });
           await pn.click(RESTORE);
           const during = meanwhile ? await meanwhile() : undefined;
           await until(pn, (sel) => { const b = document.querySelector(sel); return !!document.getElementById('toast').textContent && !(b && b.disabled); }, RESTORE);
-          return { toast: await pn.textContent('#toast'), finished: await pn.evaluate(() => window.__sk.finished), row: await row(), during };
+          return { toast: await pn.textContent('#toast'), finished: await pn.evaluate(() => window.__sk.finished), row: await row(), during,
+            label: await pn.evaluate((sel) => { const b = document.querySelector(sel); return b ? b.textContent : null; }, RESTORE) };
         } finally { globalThis.__LS_SQL = realSql; if (route) await pn.unroute(LINK); }
       };
       const NOT_CHECKED = 'We could not check your purchases just now. Try again in a moment';
@@ -5346,9 +5347,9 @@ try {
         offline.toast === 'You are offline — try that when you have signal' && offline.asked === 0, offline);
       let letGo; const gate = new Promise(r => { letGo = r; });
       const down = await restoreSays([live], { fails: v => typeof v === 'string' && v.startsWith('apple:'), route: async r => { await gate; await r.continue(); },
-        meanwhile: async () => { const said = await until(pn, (sel) => document.querySelector(sel).textContent === 'Checking your purchases…', RESTORE); letGo(); return said; } });
-      check('a Restore the server answers only with 500 says the purchases could not be checked, not that the plans have ended, and leaves the purchase unfinished; while the server is asked the button says so',
-        down.toast === NOT_CHECKED && down.finished.length === 0 && down.row.plan === 'free' && down.during === true, down);
+        meanwhile: async () => { const said = await until(pn, (sel) => document.querySelector(sel).textContent === 'Checking purchases…', RESTORE); letGo(); return said; } });
+      check('a Restore the server answers only with 500 says the purchases could not be checked, not that the plans have ended, and leaves the purchase unfinished; while the server is asked the button says so, and after it is Restore purchases again',
+        down.toast === NOT_CHECKED && down.finished.length === 0 && down.row.plan === 'free' && down.during === true && down.label === 'Restore purchases', down);
       const lost = await restoreSays([live], { route: r => r.abort() });
       check('and so does one whose request never reaches the server, the phone still online',
         lost.toast === NOT_CHECKED && lost.finished.length === 0 && lost.row.plan === 'free', lost);
@@ -5358,14 +5359,21 @@ try {
       const over = await restoreSays([ended]);
       check('one the server decided on, every purchase in it ended, still says the plans on the Apple Account have ended',
         over.toast === 'The plans on this Apple Account have ended' && JSON.stringify(over.finished) === '["2000000000000910"]' && over.row.plan === 'free', over);
-      const lapsed = await restoreSays([live], { route: r => r.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"Not signed in"}' }) });
-      const signIn = await pn.$$eval('#sheetBody [data-act="go-signin"]', a => a.length);
-      check('one whose sign-in has lapsed signs this phone out and asks for it again in the same sheet, finishing nothing',
-        lapsed.toast === 'Sign in again to restore your purchases' && signIn === 1 && lapsed.finished.length === 0, { lapsed, signIn });
-      /* the session never ended, only that answer said so: a reload signs the phone back in */
-      await pn.reload(); await pn.waitForLoadState('load');
-      await openPlanSheet(pn);
-      await until(pn, (sel) => document.querySelectorAll(sel).length === 1, RESTORE);
+      const UNSIGNED = { status: 401, contentType: 'application/json', body: '{"error":"Not signed in"}' };
+      /* the session never ended, only those answers said so: a reload signs the phone back in */
+      const signedInAgain = async () => { await pn.reload(); await pn.waitForLoadState('load'); await openPlanSheet(pn); await until(pn, (sel) => document.querySelectorAll(sel).length === 1, RESTORE); };
+      let letOut; const outGate = new Promise(r => { letOut = r; });
+      const away = await restoreSays([live], { route: async r => { await outGate; await r.fulfill(UNSIGNED); },
+        meanwhile: async () => { await until(pn, (sel) => document.querySelector(sel).textContent === 'Checking purchases…', RESTORE); await pn.click('#sheetClose'); const shut = await until(pn, () => !window.sheetState); letOut(); return shut; } });
+      const awayOpen = await pn.evaluate(() => !!window.sheetState);
+      check('a lapsed sign-in found after the parent has closed the plan sheet leaves it closed, and still says why',
+        away.during === true && !awayOpen && away.toast === 'Sign in again to restore your purchases' && away.finished.length === 0, { away, awayOpen });
+      await signedInAgain();
+      const lapsed = await restoreSays([live], { route: r => r.fulfill(UNSIGNED) });
+      const signIn = await pn.$$eval('#sheetBody [data-act="go-signin"]', a => a.map(b => b.getAttribute('data-why')));
+      check('one whose sign-in has lapsed signs this phone out and asks for it again in the same sheet, keeping why it was opened, and finishes nothing',
+        lapsed.toast === 'Sign in again to restore your purchases' && JSON.stringify(signIn) === '["keep"]' && lapsed.finished.length === 0, { lapsed, signIn });
+      await signedInAgain();
       const back = await restoreSays([live]);
       check('and trying again once the server answers restores the plan, and finishes the purchase',
         back.toast === 'Restored — the Household plan is on' && JSON.stringify(back.finished) === '["2000000000000900"]' && back.row.plan === 'household' && back.row.source === 'apple' && back.row.otx === '2000000000000900', back);
