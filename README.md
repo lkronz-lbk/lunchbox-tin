@@ -1280,11 +1280,12 @@ the idea bank stays free so a free list is never stuck with what it has.
   it on nor stops the website selling the plan. The phone finishes a transaction only once the
   server has decided on it (200, 400 or 409); one that arrives before the account has loaded
   waits until it has. Offline, Restore says so and does not ask the App Store. Unless the plan
-  came on, a Restore with any purchase the server did not decide on (anything but 200, 400 or
-  409: no answer, a failure, too many tries) says the purchases could not be checked and to try
-  again, never that the plans have ended or that a purchase cannot be used. One answered 401, its
-  sign-in lapsed, stops being signed in, its lunches kept on the phone, and is asked to sign in
-  again.
+  came on, a Restore answered 401, its sign-in lapsed, stops being signed in, its lunches kept on
+  the phone, and is asked to sign in again; otherwise one with any purchase the server did not
+  decide on (anything else but 200, 400 or 409: no answer, a failure, too many tries) says the
+  purchases could not be checked and to try again, never that the plans have ended or that a
+  purchase cannot be used. A Restore's answer that lands after the parent has left the plan sheet
+  leaves alone whatever is open now.
 - **In the app**, the Account tab carries a **Subscription** row whose caption is the same
   one-line state (Not on, On for N more days, On until tomorrow or tonight, Renews DATE, First
   charged DATE, Ends DATE, Ended with or without its date, Payment failed, Yearly for a paid

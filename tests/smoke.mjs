@@ -5427,7 +5427,9 @@ try {
           const during = meanwhile ? await meanwhile() : undefined;
           await until(pn, (sel) => { const b = document.querySelector(sel); return !!document.getElementById('toast').textContent && !(b && b.disabled); }, RESTORE);
           return { toast: await pn.textContent('#toast'), finished: await pn.evaluate(() => window.__sk.finished), row: await row(), during,
-            label: await pn.evaluate((sel) => { const b = document.querySelector(sel); return b ? b.textContent : null; }, RESTORE) };
+            label: await pn.evaluate((sel) => { const b = document.querySelector(sel); return b ? b.textContent : null; }, RESTORE),
+            sheet: await pn.evaluate(() => document.querySelector('#sheet').classList.contains('open') ? document.querySelector('#sheetTitle').textContent : null),
+            signIn: await pn.$$eval('#sheetBody [data-act="go-signin"]', a => a.map(b => b.getAttribute('data-why'))) };
         } finally { globalThis.__LS_SQL = realSql; if (route) await pn.unroute(LINK); }
       };
       const NOT_CHECKED = 'We could not check your purchases just now. Try again in a moment';
@@ -5457,21 +5459,32 @@ try {
       const UNSIGNED = { status: 401, contentType: 'application/json', body: '{"error":"Not signed in"}' };
       /* the session never ended, only those answers said so: a reload signs the phone back in */
       const signedInAgain = async () => { await pn.reload(); await pn.waitForLoadState('load'); await openPlanSheet(pn); await until(pn, (sel) => document.querySelectorAll(sel).length === 1, RESTORE); };
-      let letOut; const outGate = new Promise(r => { letOut = r; });
-      const away = await restoreSays([live], { route: async r => { await outGate; await r.fulfill(UNSIGNED); },
-        meanwhile: async () => { await until(pn, (sel) => document.querySelector(sel).textContent === 'Checking purchases…', RESTORE); await pn.click('#sheetClose'); const shut = await until(pn, () => !window.sheetState); letOut(); return shut; } });
-      const awayOpen = await pn.evaluate(() => !!window.sheetState);
-      check('a lapsed sign-in found after the parent has closed the plan sheet leaves it closed, and still says why',
-        away.during === true && !awayOpen && away.toast === 'Sign in again to restore your purchases' && away.finished.length === 0, { away, awayOpen });
+      /* the answer held until the parent has left the plan sheet (closed it, and for one, opened Help): the page's
+         own sheet is read, as sheetIsOpen does, since the app's state lives inside its script */
+      const leaving = (andThen) => { let release; const gate = new Promise(r => { release = r; });
+        return { route: async r => { await gate; await (andThen ? r.fulfill(andThen) : r.continue()); },
+          meanwhile: async (help) => { await until(pn, (sel) => document.querySelector(sel).textContent === 'Checking purchases…', RESTORE); await pn.click('#sheetClose');
+            let left = await until(pn, () => !document.querySelector('#sheet').classList.contains('open'));
+            if (help) { await pn.click('[data-act="help"]'); left = left && await until(pn, () => document.querySelector('#sheet').classList.contains('open') && document.querySelector('#sheetTitle').textContent === 'Help'); }
+            release(); return left; } }; };
+      const out = leaving(UNSIGNED);
+      const away = await restoreSays([live], { route: out.route, meanwhile: () => out.meanwhile(false) });
+      check('a lapsed sign-in found after the parent has closed the plan sheet leaves it closed, draws no Sign in into it, and still says why',
+        away.during === true && away.sheet === null && away.signIn.length === 0 && away.toast === 'Sign in again to restore your purchases' && away.finished.length === 0, away);
       await signedInAgain();
       const lapsed = await restoreSays([live], { route: r => r.fulfill(UNSIGNED) });
-      const signIn = await pn.$$eval('#sheetBody [data-act="go-signin"]', a => a.map(b => b.getAttribute('data-why')));
       check('one whose sign-in has lapsed signs this phone out and asks for it again in the same sheet, keeping why it was opened, and finishes nothing',
-        lapsed.toast === 'Sign in again to restore your purchases' && JSON.stringify(signIn) === '["keep"]' && lapsed.finished.length === 0, { lapsed, signIn });
+        lapsed.toast === 'Sign in again to restore your purchases' && lapsed.sheet === 'The Household plan' && JSON.stringify(lapsed.signIn) === '["keep"]' && lapsed.finished.length === 0, lapsed);
       await signedInAgain();
+      const on = leaving(null);
+      const moved = await restoreSays([live], { route: on.route, meanwhile: () => on.meanwhile(true) });
+      check('a Restore that switches the plan on after the parent has moved on to Help leaves Help open, and says so',
+        moved.during === true && moved.sheet === 'Help' && moved.toast === 'Restored — the Household plan is on' && moved.row.plan === 'household' && JSON.stringify(moved.finished) === '["2000000000000900"]', moved);
+      await sheetDone(pn);
+      await fresh(); await signedInAgain();
       const back = await restoreSays([live]);
-      check('and trying again once the server answers restores the plan, and finishes the purchase',
-        back.toast === 'Restored — the Household plan is on' && JSON.stringify(back.finished) === '["2000000000000900"]' && back.row.plan === 'household' && back.row.source === 'apple' && back.row.otx === '2000000000000900', back);
+      check('and trying again once the server answers restores the plan, finishes the purchase, and closes the plan sheet',
+        back.toast === 'Restored — the Household plan is on' && back.sheet === null && JSON.stringify(back.finished) === '["2000000000000900"]' && back.row.plan === 'household' && back.row.source === 'apple' && back.row.otx === '2000000000000900', back);
     }
     await ctxN.close();
 
