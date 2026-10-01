@@ -758,6 +758,10 @@ so App Store Connect has to follow in the same sitting:
       `signed_up` exactly and `paid` approximately, and was applied on the staging branch as
       `0006_milestones_errors`; under its new number it ran there once more and changed nothing,
       since every statement in it is `IF NOT EXISTS` or `ON CONFLICT DO NOTHING`.
+- [ ] **Migration `0011_code_tries`** applies itself on v27's `main` deploy, the only one that
+      deploy runs: it adds `magic_links.code_tries` (metadata only, no rewrite) and deletes the
+      throttle rows whose keys still hold an email address. v26 never reads the column, so it
+      is safe while the build runs. `0012` (Apple notifications, #53) must reach `main` after it.
 - [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://example.com' https://lunchsorted.app/api/errors`
       answers 403 (a post from another site is refused, and writes nothing; before the function
       existed the same request answered 404, as a GET still does), the privacy page's "Last
@@ -851,9 +855,11 @@ out by deleting it in the commit that does it.
   claim now cancels the one on the row, and a checkout paid onto a forever is cancelled and
   refunded. What it still reaches there: the invoices of anything bought before; the open
   invoice a failed first charge leaves, which Stripe stops collecting when the subscription is
-  cancelled but does not void; and a subscription an earlier checkout replaced, or a checkout
-  paid onto the forever, if cancelling it failed (the log says "could not cancel" for the one,
-  CANCEL BY HAND for the other). Taking it away
+  cancelled but does not void; and a subscription the webhook could not cancel, CANCEL BY HAND
+  in the log: a checkout paid onto the forever, once Stripe stops delivering its event (about
+  three days on), or one an earlier checkout replaced, which is tried once. While a forever is
+  held, each is cancelled on its own next event, as is one a claim left before claims cancelled
+  them. Taking it away
   is an app change with a build of its own: the portal button in
   `panePlan()` (`!foreverGiven()`), the comment beside it, and the smoke check "and
   Subscription quotes it no price".
@@ -1226,25 +1232,52 @@ the idea bank stays free so a free list is never stuck with what it has.
   for `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
   `customer.subscription.created / updated / deleted` and `charge.refunded`; anything else
   is acknowledged and dropped. An event id is recorded once it has been applied, so Stripe's
-  retries are no-ops but a delivery that failed halfway is retried for real. Every write is
+  retries are no-ops but a delivery that failed halfway, or whose function was ended halfway, is
+  retried for real; applying one twice repeats nothing of the money (two copies at once can log
+  a REFUND BY HAND the other copy made good). Every Stripe call a request makes shares one
+  eight-second budget, inside Netlify's ten, so a hung Stripe never leaves a request half done:
+  the undo and the subscription events below hand their event back, and the other calls log
+  their failure and go on. Every write is
   one upsert that only applies when the event is not older than the last one applied, so
   two deliveries racing each other are ordered by Postgres. On checkout the subscription
   is read back from Stripe for its renewal date, so the plan line is complete at once. A
   lifetime purchase is never lowered by a subscription ending, and a yearly or monthly
   checkout paid once the household has forever (one left open in a tab while the beta was
-  claimed) is cancelled and refunded, as one paid once the App Store holds the plan is, the
-  log saying CANCEL or REFUND BY HAND for whatever Stripe refused. That holds whichever
+  claimed) is cancelled and refunded, as one paid once the App Store holds the plan is. If
+  Stripe refuses either, the event goes back to Stripe, which delivers it again, the log saying
+  CANCEL or REFUND BY HAND each time. A second go decides afresh from the row and repeats nothing
+  already done: a cancel made answers no such subscription; a refund carries an idempotency key,
+  so for its first day Stripe hands back the first answer, a refusal included, and after that a
+  refund made answers already refunded. That holds whichever
   reaches the row first: neither a yearly checkout's write nor a subscription's own events
   land on a forever claimed after they read the row, however Stripe's stamp and our clock
   stand, and a lapsed App Store forever holds nothing. One bought inside the three weeks took
   nothing at checkout, but undone more than 48 hours later (webhooks failing that long) its
-  first charge may have been taken since, and the log says CHECK BY HAND; buying forever on top of a
+  first charge may have been taken since, and the log says CHECK BY HAND. A subscription's own
+  event beside a plan held another way (a forever, or a plan the App Store holds; the website
+  sells over neither) reads the subscription at Stripe, since the event may be an old one. One
+  still able to charge, with no end set, is cancelled: one a beta claim left before claims
+  cancelled them, a first charge Stripe was still retrying when the household bought on the
+  iPhone, or a checkout's own (whose undo refunds it when it runs). The log says CHECK BY HAND
+  for its last charge, before the cancel. One winding down (set to end at its period end, with
+  nothing left to collect), or still incomplete, is left, and only the household's own is touched:
+  its metadata or its row names the household, not just the customer. An App Store plan past its end, inside the three days it is held while
+  Apple's word is awaited, is waited out rather than cancelled beside, its deleted event too, the
+  log saying CHECK BY HAND at each wait in case Stripe stops retrying first. If Stripe cannot say, or
+  will not cancel it, the event goes back to Stripe; buying forever on top of a
   yearly plan stops the yearly plan at its period end; a fresh yearly checkout replaces an
   unpaid one; a forever purchase refunded in full is undone (a yearly refund is paired with
   canceling the subscription in the dashboard), but only one bought through Stripe
   (`source = 'stripe'`): the beta's forever and a 100%-off code's charged nothing, so a charge of
   the same customer refunded later is an earlier one, and they stay. Deleting the account, or
-  an owner folding their household into another, cancels its subscription first.
+  an owner folding their household into another, cancels its subscription first, whatever the
+  row says of it (a first charge Stripe is still retrying reads as ended). Deleting goes ahead if
+  Stripe will not cancel it, the log saying CANCEL BY HAND, since the account is the parent's to
+  delete; a join waits instead (503, "Could not join just now"): the invite, spent first, is
+  given back, and nothing is let go (unless Stripe had cancelled it and only the answer was lost).
+  Leaving the old household and joining the new go together, in one transaction. Deleting a parent who paid for a household they do not own
+  cancels that household's subscription too: the card is theirs, and with their account gone
+  they could not stop it charging.
 - **Portal** (`POST /api/billing/portal`) opens Stripe's customer portal for the card,
   invoices and cancellation, and comes back to `/app/?portal=1`; the iPhone app never opens it. It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
@@ -1330,7 +1363,8 @@ the idea bank stays free so a free list is never stuck with what it has.
   key to Builds as well as Functions, since the build cannot refuse what it cannot see: a
   function handed a bad key takes billing as off, so every gate lifts and nothing can be bought,
   on the web or in the iPhone app, and it makes no Stripe call, so a deleted household's
-  subscription goes on charging and a beta claim over a subscription waits; sync carries on),
+  subscription goes on charging, and a beta claim over a subscription waits, as does a join by
+  an owner whose household has one; sync carries on),
   `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly
@@ -1338,8 +1372,9 @@ the idea bank stays free so a free list is never stuck with what it has.
   it does is quote that price on the Subscription pane of a household that bought forever through
   Stripe, matched by id (a free forever is never priced), and production has none; a refund goes
   by the plan and where it was bought, not the price. `STRIPE_TAX=0` turns
-  automatic tax off. Stripe is called over plain `fetch`; there is no SDK.
-  A request that gets no answer, or an answer that cannot be read, is logged in fixed words, never
+  automatic tax off. Stripe is called over plain `fetch`; there is no SDK, and the calls a
+  request makes give up together after eight seconds. A request that gets no answer, or an
+  answer that cannot be read, is logged in fixed words, never
   fetch's own, which can quote the authorization header, key and all.
 - **Email.** Sign-in asks for the address at the end of onboarding, once the week is built
   (skippable; offline or already signed in, the step does not appear). A first sign-in gets

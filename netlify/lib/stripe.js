@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { siteEnv } from './db.js';
 
 /* Stripe over plain fetch: three calls (a Checkout session, a portal session, a
@@ -8,6 +9,13 @@ import { siteEnv } from './db.js';
    instead of charging a real card from a branch. A key pasted with more than the
    key fails it too, before any of it can reach a header or the log. */
 const API = 'https://api.stripe.com/v1';
+
+/* one budget for every Stripe call a request makes: each call gets eight seconds or what is left of the
+   request's eight, whichever is less, so a request never runs into Netlify's own ten seconds with
+   something half done (a webhook's event, a household half folded). A call made with nothing left
+   gets the words for no answer at once. A budget inside another only ever shortens it */
+const budget = new AsyncLocalStorage();
+export const withinTime = (ms, work) => budget.run(Math.min(budget.getStore() ?? Infinity, Date.now() + ms), work);
 
 export function stripeKey() {
   const key = process.env.STRIPE_SECRET_KEY || '';
@@ -64,8 +72,10 @@ export async function stripe(method, path, params, idempotencyKey) {
      can quote a header it refused to send, and one of these headers is the key, so its message, its
      stack and the error itself (as a cause) stay here: nothing a header problem says can reach the
      log. Which of the two it was matters after a POST: once Stripe has answered, it may have acted */
+  const end = budget.getStore(), left = end === undefined ? 8000 : Math.min(8000, end - Date.now());
+  if (left <= 0) throw new Error("No answer from Stripe (the request's eight seconds had run out)");
   let res, text;
-  try { res = await doFetch(url, { method, headers, body }); text = await res.text(); }
+  try { res = await doFetch(url, { method, headers, body, signal: AbortSignal.timeout(left) }); text = await res.text(); }
   catch { throw new Error(`${res ? 'Stripe answered, but the answer could not be read' : 'No answer from Stripe'} (fetch's own error is left out, as it can quote the key)`); }
   let data = {}; try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) {

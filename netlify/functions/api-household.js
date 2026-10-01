@@ -1,6 +1,6 @@
 import { sql, json, fail, siteUrl, throttled, milestone } from '../lib/db.js';
-import { currentUser, createInvite, consumeInvite, peekInvite } from '../lib/auth.js';
-import { billingEnabled, cancelSubscription } from '../lib/stripe.js';
+import { currentUser, createInvite, consumeInvite, peekInvite, releaseInvite } from '../lib/auth.js';
+import { billingEnabled, cancelSubscription, withinTime } from '../lib/stripe.js';
 import { trialing, chargeLaterUntil, extraDays } from '../lib/trial.js';
 import { lapsed } from '../lib/apple.js';
 
@@ -127,7 +127,11 @@ function docLooksRight(doc) {
 }
 const MEMBER_ID = /^mem_[a-z0-9]{1,40}$/;
 
-export default async function handler(req) {
+/* every Stripe call a request here makes (a household folded into another cancels its subscription) shares one
+   eight-second budget, inside Netlify's ten (lib/stripe.js) */
+export default function handler(req) { return withinTime(8000, () => serve(req)); }
+
+async function serve(req) {
   const url = new URL(req.url);
   const parts = url.pathname.replace(/\/$/, '').split('/');
   const action = parts[parts.length - 1] === 'household' ? '' : parts[parts.length - 1];
@@ -196,16 +200,23 @@ export default async function handler(req) {
         const others = await q`SELECT count(*)::int AS n FROM household_members WHERE household_id = ${have.id} AND user_id <> ${user.id}`;
         if (others[0].n > 0) return fail('Other people are in your household. Remove them first, or ask for the invite from a different sign-in.', 409);
       }
-      /* the invite is spent first; only then is anything of the caller's own let go */
+      /* the invite is spent first; only then is anything of the caller's own let go. The household folded in goes,
+         and its subscription with it, whatever its row says (a first charge Stripe is still retrying reads as
+         ended). If Stripe cannot say it is cancelled, the invite is given back and the join waits, nothing let go */
       const used = await consumeInvite(String(body.code), user.id);
       if (!used) return fail('That invite has expired or was already used', 410);
-      if (have) {
-        await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
-        if (owned) { if (paid(have)) await cancelSubscription(have.stripe_subscription_id); await q`DELETE FROM households WHERE id = ${have.id}`; }
+      if (owned && !(await cancelSubscription(have.stripe_subscription_id))) {
+        await releaseInvite(String(body.code), user.id);
+        console.error('household: a join waits:', have.stripe_subscription_id, 'could not be cancelled');
+        return fail('Could not join just now. Try again in a moment.', 503);
       }
-      /* the phone says which member it is, so the name typed there and its ticks stay its own */
+      /* the phone says which member it is, so the name typed there and its ticks stay its own. Leaving the old household
+         and joining the new go together: should the household joined go in the meantime, the caller keeps their own */
       const memberId = (typeof body.memberId === 'string' && MEMBER_ID.test(body.memberId)) ? body.memberId : 'mem_' + Math.random().toString(36).slice(2, 10);
-      await q`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${used.household_id}, ${user.id}, ${used.role}, ${memberId})`;
+      await q.transaction(t => [
+        ...(have ? [t`DELETE FROM household_members WHERE user_id = ${user.id}`] : []),
+        ...(owned ? [t`DELETE FROM households WHERE id = ${have.id}`] : []),
+        t`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${used.household_id}, ${user.id}, ${used.role}, ${memberId})`]);
       await milestone(used.household_id, 'second_phone');
       return json(await state(user));
     }
