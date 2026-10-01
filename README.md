@@ -656,8 +656,11 @@ go. The forever is written only while the row still carries the subscription the
 so a checkout that lands meanwhile wins, and one the claim overtakes is cancelled and refunded
 (Billing, the webhook). A household that already holds the plan, forever or through the App
 Store, is told so as before; a Stripe subscription still on its row (one a sandbox purchase left,
-or that Stripe would not cancel when the purchase came) is cancelled first, as the App Store
-purchase does it (Billing, the App Store), and the log says CANCEL BY HAND if Stripe will not.
+or that Stripe would not cancel, or did not answer about in time, when the purchase came) is
+cancelled first, Stripe asked about it as the App Store purchase asks (Billing, the App Store),
+the answer waiting on Stripe as it does for the claim's own cancel, and the log says CANCEL BY HAND
+if Stripe will not. One Stripe says is paid for, or will not say, is left running instead, the
+log saying CHECK BY HAND: the App Store plan beside it may be a sandbox one, which cost nothing.
 Whoever claims is not made the payer, whose card the portal shows. A household that checks out
 with a 100%-off Stripe code (TESTER) is written the same way and kept so through later Stripe
 events, a refund of an earlier charge among them; `/admin` lists them under
@@ -1306,12 +1309,16 @@ the idea bank stays free so a free list is never stuck with what it has.
   the household beside Apple, which nothing in the iPhone app could stop. A sandbox purchase cost
   nothing and soon lapses, so it leaves the subscription alone. Stripe is asked first: one that has
   ended needs nothing more, and one Stripe calls active had a retry go through that the row never
-  heard of, so once it is cancelled the log says CHECK BY HAND. The subscription leaves the row once
-  Stripe says it can no longer charge. Cancelling stops Stripe collecting the invoice the failed
-  charge left open, but does not void it. The parent who has just paid waits on Stripe three
-  seconds at most: one Stripe will not cancel, or has not answered about by then, is left on the
-  row, the log saying CANCEL BY HAND, and the purchase goes through all the same; the next word
-  from Apple tries again, as does the beta link. A purchase is bound to one household at a time;
+  heard of, so the log says CHECK BY HAND before it is cancelled, as it does for one Stripe would not
+  say anything about. The row is read again once Stripe has answered, and one that no longer
+  carries the subscription beside a plan held another way is left as it is. The subscription
+  leaves the row once Stripe says it can no longer charge. Cancelling stops Stripe collecting the
+  invoice the failed charge left open, but does not void it. The parent who has just paid waits on
+  Stripe three seconds at most; a cancel not finished by then goes on behind the answer, Netlify
+  holding the function for it (`waitUntil`) five seconds more at most. One Stripe will not cancel,
+  or has not answered about by then, is left on the row, the log saying CANCEL BY HAND, and the
+  purchase goes through all the same; the next word from Apple tries again, as does the beta link.
+  A purchase is bound to one household at a time;
   one carrying another household's token is refused, one whose household has been deleted may be
   restored elsewhere, and one carrying none (Family Sharing, an offer code) is not taken. Forever
   is never lowered by a subscription running on beside it, since Apple cannot cancel one for us,

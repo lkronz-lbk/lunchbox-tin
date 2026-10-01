@@ -293,10 +293,11 @@ async function serve(req, context) {
       if (await throttled('beta:' + user.id, 5, 3600)) return fail('Too many tries in an hour; try again shortly', 429);
       if (!codeMatches(body.code)) return fail('That beta link is not right', 404);
       /* the plan held already, forever or through the App Store. A Stripe subscription still on the row (a first
-         charge Stripe is retrying reads as ended; a sandbox purchase leaves it, and so does a cancel Stripe refused
-         when the purchase came) would bill the household beside that plan: it is cancelled here, and the answer is
-         the same either way */
-      if ((foreverHeld(h) || appleLive(h)) && h.stripe_subscription_id && !(await cancelAndForget(h.id, h.stripe_subscription_id))) console.error('billing: CANCEL BY HAND', h.stripe_subscription_id, 'beside a plan held another way');
+         charge Stripe is retrying reads as ended; a sandbox purchase leaves it, and so does a cancel Stripe refused,
+         or did not answer in time, when the purchase came) would bill the household beside that plan: it is cancelled here, but not one Stripe
+         says is paid for, since the App Store plan beside it may be a sandbox one that cost nothing; that one is
+         left running for a person to look at (CHECK BY HAND). The answer is the same either way */
+      if ((foreverHeld(h) || appleLive(h)) && h.stripe_subscription_id && !(await cancelAndForget(h.id, h.stripe_subscription_id, { leavePaid: true }))) console.error('billing: CANCEL BY HAND', h.stripe_subscription_id, 'beside a plan held another way');
       if (foreverHeld(h)) return json({ ok: true, already: true });
       if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
       /* a household paying for the Household plan is a customer, not a tester: the card would go on being charged */

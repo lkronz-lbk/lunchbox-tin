@@ -1,5 +1,6 @@
 import { sql, milestone } from './db.js';
 import { stripe, cancelSubscription } from './stripe.js';
+import { appleLive } from './apple.js';
 
 /* The entitlement row is the only truth about a household's plan, and only a way of paying
    writes it: Stripe through its webhook, a beta tester's code through Stripe's checkout, and the
@@ -90,22 +91,36 @@ export async function writeApple(hid, at, v) {
   return row;
 }
 
+/* a row whose plan is held another way: forever (the beta's, a code's, a purchase's), or a live App Store plan */
+const heldElsewhere = (r) => !!r && (appleLive(r) || (r.plan === 'lifetime' && r.status === 'active' && r.source !== 'apple'));
+
 /* A Stripe subscription left on a row whose plan is now held another way: through the App Store, or
    forever. Neither writer refuses a row whose first charge failed when the three weeks ended, since it
    reads as ended while Stripe goes on retrying the card, and a retry that went through would bill the
-   household beside the plan it holds. Stripe is asked first, since the row can be behind it: one that
-   has ended, or that Stripe has no record of, needs nothing more; anything else is cancelled, and one
-   Stripe called active had a retry go through that the row never heard of, so the log asks for that
-   charge to be looked at. Once Stripe says it can no longer charge it leaves the row, so nothing asks
-   Stripe about it again; only that id is taken off, so a subscription written since stays. One Stripe
-   will not cancel stays on the row for the next try. Returns whether it can no longer charge. */
-export async function cancelAndForget(hid, sub) {
-  let was = null;
+   household beside the plan it holds.
+   - Stripe is asked first, since the row can be behind it: one that has ended, or that Stripe has no
+     record of, needs nothing more.
+   - The row is read again once Stripe has answered, which can be seconds later: one that no longer
+     carries this subscription beside a plan held another way is not this call's to cancel.
+   - Anything else is cancelled. One Stripe called active had a retry go through that the row never heard
+     of, and one Stripe would not say anything about may have, so the log asks for its charge to be looked
+     at (CHECK BY HAND) before the cancel, whatever comes of it. With leavePaid, one Stripe calls active, or
+     will not say, is left running instead, and the log asks for it to be looked at: the plan beside it may
+     be a sandbox one, which cost nothing.
+   Once Stripe says it can no longer charge it leaves the row, so nothing asks Stripe about it again; only
+   that id is taken off, so a subscription written since stays. One Stripe will not cancel stays on the row
+   for the next try. Returns false only when one it should cancel could not be cancelled. */
+export async function cancelAndForget(hid, sub, { leavePaid = false } = {}) {
+  let was;
   try { was = (await stripe('GET', `/subscriptions/${sub}`)).status; }
   catch (e) { if (e.status === 404 && e.code === 'resource_missing') was = 'canceled'; }
   if (was !== 'canceled' && was !== 'incomplete_expired') {
+    const [r] = await sql()`SELECT plan, status, source, current_period_end FROM entitlements WHERE household_id = ${hid} AND stripe_subscription_id = ${sub}`;
+    if (!heldElsewhere(r)) return true;
+    const said = typeof was === 'string', why = said ? 'Stripe says it is paid for, beside a plan held another way' : 'Stripe would not say whether it is paid for, beside a plan held another way';
+    if (leavePaid && (was === 'active' || !said)) { console.error('billing: CHECK BY HAND', sub, 'of household', hid + ':', why + '; left running'); return true; }
+    if (was === 'active' || !said) console.error('billing: CHECK BY HAND the last charge of', sub, 'of household', hid + ':', why + '; cancelling it');
     if (!(await cancelSubscription(sub))) return false;
-    if (was === 'active') console.error('billing: CHECK BY HAND the last charge of', sub, 'cancelled: it was charging beside a plan held another way');
   }
   await sql()`UPDATE entitlements SET stripe_subscription_id = NULL, updated_at = now() WHERE household_id = ${hid} AND stripe_subscription_id = ${sub}`;
   return true;
