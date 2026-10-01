@@ -739,7 +739,7 @@ window.LSMerge = (function(){
 (function(){
 "use strict";
 
-var APP_BUILD = 'lunchsorted-v27';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v28';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 
 /* ---- when the planner's own code breaks, it tells our server and nothing else: what the
    error said, where in this file, which build, and which browser; never a lunch, a food or a
@@ -1757,12 +1757,14 @@ function iapArrived(t){
   var wasPaid = paid();
   iapLink(t).then(function(r){ if(r.status === 200){ render(); if(!wasPaid && paid()) toast('Welcome to the Household plan'); } });
 }
-/* once the server has answered at all it has decided: a purchase it refuses (another household's,
-   or one for a household the website bills) will never be taken, so it is finished too. One it never
-   heard, offline or signed out, is left for StoreKit to hand back at the next launch. */
+/* once the server has answered 200, 400 or 409 it has decided: a purchase it refuses (another
+   household's, or one for a household the website bills) will never be taken, so it is finished too.
+   One it never decided on, offline, signed out or the server failing, is left for StoreKit to hand
+   back at the next launch. */
+function iapDecided(r){ return r.status === 200 || r.status === 400 || r.status === 409; }
 function iapLink(t){
   return api('POST', '/api/apple/link', {signedTransaction: t.jws}).then(function(r){
-    if(r.status === 200 || r.status === 400 || r.status === 409){ var sk = storeKit(); if(sk) sk.finish({transactionId: t.transactionId}).catch(function(){}); }
+    if(iapDecided(r)){ var sk = storeKit(); if(sk) sk.finish({transactionId: t.transactionId}).catch(function(){}); }
     if(r.status === 200 && r.entitlement) Account.entitlement = Object.assign({}, Account.entitlement || {}, r.entitlement);
     return r;
   }, function(){ return {status: 0}; });
@@ -2010,9 +2012,12 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    note once more, which the line above did not plan: a phone that skipped v25 and v26 still
    has to hear that the avoid list matches whole words. seenAs is a list for it, and names both
    v25 and v26, so a phone that read the note on either, or was set up on either, is left alone.
+   v28 is fixes again: Restore no longer says the plans have ended when our server never decided,
+   with "Checking purchases…" while it asks, and the server side of Apple's notifications. It
+   carries the same note, and seenAs gains v27, so no phone that has read it sees it twice.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v27', seenAs:['lunchsorted-v25','lunchsorted-v26'], text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
+var WHATS_NEW = {build:'lunchsorted-v28', seenAs:['lunchsorted-v25','lunchsorted-v26','lunchsorted-v27'], text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
   steps:[
     ['Check your avoid list', 'Under Anything else in the lunchbox settings, a word now has to be the whole word: \u201cham\u201d keeps ham out and lets graham crackers in. It no longer catches a longer word it sits inside \u2014 \u201cmelon\u201d misses watermelon, \u201cnut\u201d misses walnut \u2014 so write each of those out.'],
     ['Lock what worked', 'Shuffle all is now Plan the week; Shuffle day is the crossed arrows beside each day. Every day on Week has a lock: tap it and Plan the week leaves that day alone. The lock on a compartment\u2019s sheet holds one compartment, and shows on the tin. A food you pick by hand is locked where you put it, and the message says so.'],
@@ -6811,7 +6816,7 @@ document.addEventListener('click', function(ev){
   if(act==='disarm'){ UI.armed=''; render(); return; }
 
   /* account: every one of these talks to the server, so offline they say so and stop */
-  var ACCOUNT_ACTS = ['signin-request','signin-code','signout','invite','invite-helper','member-remove','leave','join-accept','delete-account','buy','portal'];
+  var ACCOUNT_ACTS = ['signin-request','signin-code','signout','invite','invite-helper','member-remove','leave','join-accept','delete-account','buy','portal','iap-restore'];
   if(ACCOUNT_ACTS.indexOf(act) > -1 && !navigator.onLine){ toast('You are offline \u2014 try that when you have signal'); return; }
   var offline = function(){ toast('Could not reach the server'); };
   if(act==='signin-request'){
@@ -6908,9 +6913,20 @@ document.addEventListener('click', function(ev){
     skr.restore().then(function(r){
       var list = (r && r.transactions) || [];
       if(!list.length){ back(); toast('Nothing to restore on this Apple Account'); return; }
+      el.textContent = 'Checking purchases\u2026';
       return Promise.all(list.map(iapLink)).then(function(rs){
         back();
-        if(paid() && rs.some(function(x){ return x.status === 200; })){ closeSheet(); render(); toast('Restored \u2014 the Household plan is on'); return; }
+        /* by now the parent may have closed the plan sheet and opened another, which is left alone */
+        var onSheet = !!(sheetState && sheetState.plan);
+        if(paid() && rs.some(function(x){ return x.status === 200; })){ if(onSheet) closeSheet(); render(); toast('Restored \u2014 the Household plan is on'); return; }
+        /* the sign-in has lapsed since the app opened: signed out here, as a pull would find, and the sheet, if still up, asks for it */
+        if(rs.some(function(x){ return x.status === 401; })){
+          Account.user = null; Account.me = null; Account.status = 'idle'; renderSyncLine(); render();
+          if(onSheet) upgradeSheet((prices[0] && prices[0].getAttribute('data-why')) || '');
+          toast('Sign in again to restore your purchases'); return;
+        }
+        /* until the server has decided on every one, none is called ended or refused: the one it missed may be the plan still in force */
+        if(!rs.every(iapDecided)){ toast('We could not check your purchases just now. Try again in a moment'); return; }
         var said = rs.filter(function(x){ return x.status === 400 || x.status === 409; })[0];
         toast(said ? iapRefused(said) : 'The plans on this Apple Account have ended');
       });
