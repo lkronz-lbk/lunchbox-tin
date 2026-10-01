@@ -62,7 +62,9 @@ a count of the days you have used it. We also keep six dates about the household
 first week was planned, the day it first came back in its second week, the day a second phone joined, the day you
 first went to pay and the day a plan was first paid for. Nothing else. The count is a single number and the six are
 dates: we do not keep a record of which days you used it, and nothing else you do inside the app is recorded. To
-limit sign-in abuse we keep that same hashed form of the connection address, for one day.</p>
+limit sign-in abuse we keep that same hashed form of the connection address, and a hashed form of each email address a
+sign-in link is asked for, for one day; the sign-in link itself, with the address it went to, is deleted a day after it
+expires.</p>
 <p> Signing out clears that phone; the household stays on our servers, and signing in again brings
 it back. Leaving a household
 leaves the lunches with it. <strong>Delete my account and data</strong>, under Account &rarr; Account and confirmed by typing DELETE, ends your sign-in and this email address; if you set the household up it also removes the household from our
