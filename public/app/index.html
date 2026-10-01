@@ -739,7 +739,7 @@ window.LSMerge = (function(){
 (function(){
 "use strict";
 
-var APP_BUILD = 'lunchsorted-v27';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v28';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 
 /* ---- when the planner's own code breaks, it tells our server and nothing else: what the
    error said, where in this file, which build, and which browser; never a lunch, a food or a
@@ -2012,9 +2012,12 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    note once more, which the line above did not plan: a phone that skipped v25 and v26 still
    has to hear that the avoid list matches whole words. seenAs is a list for it, and names both
    v25 and v26, so a phone that read the note on either, or was set up on either, is left alone.
+   v28 is fixes again: Restore no longer says the plans have ended when our server never decided,
+   with "Checking purchases…" while it asks, and the server side of Apple's notifications. It
+   carries the same note, and seenAs gains v27, so no phone that has read it sees it twice.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v27', seenAs:['lunchsorted-v25','lunchsorted-v26'], text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
+var WHATS_NEW = {build:'lunchsorted-v28', seenAs:['lunchsorted-v25','lunchsorted-v26','lunchsorted-v27'], text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
   steps:[
     ['Check your avoid list', 'Under Anything else in the lunchbox settings, a word now has to be the whole word: \u201cham\u201d keeps ham out and lets graham crackers in. It no longer catches a longer word it sits inside \u2014 \u201cmelon\u201d misses watermelon, \u201cnut\u201d misses walnut \u2014 so write each of those out.'],
     ['Lock what worked', 'Shuffle all is now Plan the week; Shuffle day is the crossed arrows beside each day. Every day on Week has a lock: tap it and Plan the week leaves that day alone. The lock on a compartment\u2019s sheet holds one compartment, and shows on the tin. A food you pick by hand is locked where you put it, and the message says so.'],
