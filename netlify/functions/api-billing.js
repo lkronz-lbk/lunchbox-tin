@@ -2,7 +2,7 @@ import { sql, json, fail, siteUrl, throttled, milestone, recentKeys, mark, unmar
 import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
 import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription, withinTime } from '../lib/stripe.js';
-import { write } from '../lib/entitlement.js';
+import { write, cancelAndForget } from '../lib/entitlement.js';
 import { appleLive, lapsed } from '../lib/apple.js';
 import { chargeLaterUntil } from '../lib/trial.js';
 
@@ -159,6 +159,17 @@ async function applyEvent(ev) {
       return kept + ', its subscription cancelled';
     }
     if (cur && cur.stripe_subscription_id && cur.stripe_subscription_id !== obj.id) return 'other subscription';   /* an older one of the same customer */
+    if (appleLive(cur)) {
+      /* the household pays Apple for the plan, and write() turns this news away. One still able to charge, with
+         no end set (an App Store purchase came while Stripe was retrying its first charge, and could not cancel it
+         then), would bill the household beside Apple: it is cancelled, and if the event says a charge went through
+         (active), the log asks for it to be looked at. If Stripe will not cancel it, the event goes back to Stripe
+         to be tried again */
+      if (ev.type === 'customer.subscription.deleted' || obj.cancel_at_period_end || ['canceled', 'incomplete_expired'].includes(obj.status)) return 'App Store kept';
+      if (!(await cancelAndForget(hid, obj.id))) throw new Error(`CANCEL BY HAND ${obj.id}: still able to charge beside the App Store`);
+      if (obj.status === 'active') console.error('billing: CHECK BY HAND the last charge of', obj.id, 'cancelled: it was charging beside the App Store');
+      return 'App Store kept, its subscription cancelled';
+    }
     const status = ev.type === 'customer.subscription.deleted' ? 'canceled' : subscriptionStatus(obj);
     const price = obj.items && obj.items.data && obj.items.data[0] && obj.items.data[0].price && obj.items.data[0].price.id;
     const ok = await write(hid, at, { plan: status === 'canceled' ? 'free' : 'household', source: status === 'canceled' ? 'none' : 'stripe', status,
@@ -292,6 +303,10 @@ async function serve(req, context) {
       const body = await req.json().catch(() => ({}));
       if (await throttled('beta:' + user.id, 5, 3600)) return fail('Too many tries in an hour; try again shortly', 429);
       if (!codeMatches(body.code)) return fail('That beta link is not right', 404);
+      /* the plan held already, forever or through the App Store. A Stripe subscription still on the row is one
+         an App Store purchase could not cancel when it came (a first charge Stripe was retrying reads as ended):
+         it is tried again here, and the answer is the same either way */
+      if ((foreverHeld(h) || appleLive(h)) && h.stripe_subscription_id && !(await cancelAndForget(h.id, h.stripe_subscription_id))) console.error('billing: CANCEL BY HAND', h.stripe_subscription_id, 'beside a plan held another way');
       if (foreverHeld(h)) return json({ ok: true, already: true });
       if (appleLive(h)) return fail('This household pays through the App Store on an iPhone; the plan is managed there', 409, { apple: true });
       /* a household paying for the Household plan is a customer, not a tester: the card would go on being charged */

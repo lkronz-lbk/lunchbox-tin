@@ -1,4 +1,5 @@
 import { sql, milestone } from './db.js';
+import { cancelSubscription } from './stripe.js';
 
 /* The entitlement row is the only truth about a household's plan, and only a way of paying
    writes it: Stripe through its webhook, a beta tester's code through Stripe's checkout, and the
@@ -85,4 +86,17 @@ export async function writeApple(hid, at, v) {
      TestFlight) cost nothing, so the caller does not mark it charged */
   if (ok && v.charged && (rows[0].status === 'active' || rows[0].status === 'past_due')) await milestone(hid, 'paid');
   return ok;
+}
+
+/* A Stripe subscription left on a row whose plan is now held another way: through the App Store, or
+   forever. Neither writer refuses a row whose first charge failed when the three weeks ended, since it
+   reads as ended while Stripe goes on retrying the card, and a retry that went through would bill the
+   household beside the plan it holds. It is cancelled, and once Stripe says it can no longer charge it
+   leaves the row, so nothing asks Stripe about it again; only that id is taken off, so a subscription
+   written since stays. One Stripe will not cancel stays on the row for the next try. Returns whether it
+   can no longer charge. */
+export async function cancelAndForget(hid, sub) {
+  if (!(await cancelSubscription(sub))) return false;
+  await sql()`UPDATE entitlements SET stripe_subscription_id = NULL, updated_at = now() WHERE household_id = ${hid} AND stripe_subscription_id = ${sub}`;
+  return true;
 }

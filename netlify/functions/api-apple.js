@@ -1,7 +1,7 @@
 import { sql, json, fail, throttled } from '../lib/db.js';
 import { currentUser } from '../lib/auth.js';
 import { verifyJws, stateOf, envOk, appleLive, BUNDLE_ID, PRODUCTS } from '../lib/apple.js';
-import { writeApple } from '../lib/entitlement.js';
+import { writeApple, cancelAndForget } from '../lib/entitlement.js';
 
 /* The iPhone app's way of paying. The phone buys through StoreKit and tells us straight away;
    Apple's servers tell us everything after, renewals and refunds included. Either way what
@@ -51,19 +51,26 @@ const owned = (txn) => !txn.inAppOwnershipType || txn.inAppOwnershipType === 'PU
 async function apply(hid, at, txn, renewal) {
   const st = stateOf(txn, renewal);
   if (!st) return 'unknown product';
-  const [cur] = await sql()`SELECT plan, status, source, current_period_end, apple_original_transaction_id AS original FROM entitlements WHERE household_id = ${hid}`;
+  const [cur] = await sql()`SELECT plan, status, source, current_period_end, apple_original_transaction_id AS original, stripe_subscription_id AS sub FROM entitlements WHERE household_id = ${hid}`;
   const original = String(txn.originalTransactionId);
   const other = cur && cur.original && cur.original !== original;
   /* both of these are enforced again in writeApple, race or no race; here they only name the outcome */
   if (other && appleLive(cur) && cur.plan === 'lifetime' && PRODUCTS[txn.productId] !== 'lifetime') return 'lifetime kept';
   if (other && appleLive(cur) && !LIVE.has(st.status)) return 'other purchase';
-  try {
-    const ok = await writeApple(hid, at, { ...st, original, product: txn.productId, charged: txn.environment === 'Production' });
-    return ok ? 'applied' : 'stale';
-  } catch (e) {
+  let ok;
+  try { ok = await writeApple(hid, at, { ...st, original, product: txn.productId, charged: txn.environment === 'Production' }); }
+  catch (e) {
     if (e && (e.code === '23505' || /unique|duplicate/i.test(e.message || ''))) return 'elsewhere';
     throw e;
   }
+  /* the household pays Apple for the plan now. A Stripe subscription still on the row is one writeApple did
+     not refuse: a first charge that failed when the three weeks ended reads as ended while Stripe goes on
+     retrying the card, and a retry that went through would bill the household beside Apple, with nothing
+     in the iPhone app to stop it. Apple cannot cancel one for us, but Stripe's can be cancelled, and is.
+     One Stripe will not cancel stays on the row for another go: the next word from Apple, the beta link,
+     or the subscription's own next event (api-billing.js). The purchase stands either way */
+  if (ok && LIVE.has(st.status) && cur && cur.sub && !(await cancelAndForget(hid, cur.sub))) console.error('apple: CANCEL BY HAND', cur.sub, 'billed beside an App Store purchase');
+  return ok ? 'applied' : 'stale';
 }
 
 async function entitlementOf(hid) {

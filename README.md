@@ -654,7 +654,10 @@ asked from that context (no key, or one the build refuses), does not say what st
 subscription is in, or will not cancel it, the claim waits (503) and the app offers another
 go. The forever is written only while the row still carries the subscription the claim read,
 so a checkout that lands meanwhile wins, and one the claim overtakes is cancelled and refunded
-(Billing, the webhook).
+(Billing, the webhook). A household that already holds the plan, forever or through the App
+Store, is told so as before; a Stripe subscription still on its row, one an App Store purchase
+could not cancel when it came, is cancelled first, and the log says CANCEL BY HAND if Stripe
+will not.
 Whoever claims is not made the payer, whose card the portal shows. A household that checks out
 with a 100%-off Stripe code (TESTER) is written the same way and kept so through later Stripe
 events, a refund of an earlier charge among them; `/admin` lists them under
@@ -1296,7 +1299,16 @@ the idea bank stays free so a free list is never stuck with what it has.
   Review and TestFlight buy there, but a sandbox forever lasts a day. The row is written by
   `writeApple()` in `lib/entitlement.js` on Apple's own clock; it never overwrites a plan the
   web holds live, as Stripe's writer never overwrites one Apple holds, and never sets `paid_by`,
-  which is Stripe's and opens its billing portal. A purchase is bound to one household at a time;
+  which is Stripe's and opens its billing portal. A purchase written over a row that still carries
+  a Stripe subscription cancels it (Liz, 2026-09-30): the row reads ended, or the write would have
+  been refused, but a first charge that failed when the three weeks ended reads that way while
+  Stripe goes on retrying the card, and a retry that went through would bill the household beside
+  Apple, which nothing in the iPhone app could stop. The subscription leaves the row once Stripe
+  says it can no longer charge. One Stripe will not cancel stays on the row, the log saying CANCEL
+  BY HAND, and the purchase goes through all the same; the next word from Apple tries again, and so
+  does the subscription's own next event while an App Store yearly or monthly plan holds the row,
+  which cancels one still able to charge, says CHECK BY HAND if a charge went through, and goes
+  back to Stripe if Stripe will not cancel it. A purchase is bound to one household at a time;
   one carrying another household's token is refused, one whose household has been deleted may be
   restored elsewhere, and one carrying none (Family Sharing, an offer code) is not taken. Forever
   is never lowered by a subscription running on beside it, since Apple cannot cancel one for us,
