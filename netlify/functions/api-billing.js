@@ -135,11 +135,13 @@ async function applyEvent(ev) {
          is refunded by its undo when that runs, but a retried undo decides afresh). If Stripe cannot say, or will
          not cancel it, the event goes back to Stripe to be tried again */
       const kept = foreverHeld(cur) ? 'lifetime kept' : 'the App Store holds it';
-      if (ev.type === 'customer.subscription.deleted') return kept;
       /* an App Store plan past its end, inside the three days it is held while Apple's word is awaited, may not be
-         renewed: the event goes back to Stripe, whose retries outlast the three days, rather than cancel a plan
-         the household could be left without */
-      if (cur.source === 'apple' && cur.current_period_end && Date.parse(cur.current_period_end) < Date.now()) throw new Error(`App Store plan past its end: ${obj.id} waits for Apple's word`);
+         renewed: the event goes back to Stripe rather than cancel beside a plan the household could be left
+         without, its deleted event too, so that once the plan lapses an older event cannot be written over the
+         ending. Stripe's retries only roughly outlast the three days, so each wait says BY HAND */
+      if (cur.source === 'apple' && cur.current_period_end && Date.parse(cur.current_period_end) < Date.now())
+        throw new Error(`CHECK BY HAND if Stripe stops retrying: ${obj.id} waits beside an App Store plan past its end`);
+      if (ev.type === 'customer.subscription.deleted') return kept;
       let now = null, noRecord = false;
       try { now = await stripe('GET', `/subscriptions/${obj.id}`); } catch (e) { if (!(e.status === 404 && e.code === 'resource_missing')) throw e; noRecord = true; }
       if (noRecord) return kept;

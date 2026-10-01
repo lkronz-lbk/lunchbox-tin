@@ -210,13 +210,13 @@ async function serve(req) {
         console.error('household: a join waits:', have.stripe_subscription_id, 'could not be cancelled');
         return fail('Could not join just now. Try again in a moment.', 503);
       }
-      if (have) {
-        await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
-        if (owned) await q`DELETE FROM households WHERE id = ${have.id}`;
-      }
-      /* the phone says which member it is, so the name typed there and its ticks stay its own */
+      /* the phone says which member it is, so the name typed there and its ticks stay its own. Leaving the old household
+         and joining the new go together: should the household joined go in the meantime, the caller keeps their own */
       const memberId = (typeof body.memberId === 'string' && MEMBER_ID.test(body.memberId)) ? body.memberId : 'mem_' + Math.random().toString(36).slice(2, 10);
-      await q`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${used.household_id}, ${user.id}, ${used.role}, ${memberId})`;
+      await q.transaction(t => [
+        ...(have ? [t`DELETE FROM household_members WHERE user_id = ${user.id}`] : []),
+        ...(owned ? [t`DELETE FROM households WHERE id = ${have.id}`] : []),
+        t`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${used.household_id}, ${user.id}, ${used.role}, ${memberId})`]);
       await milestone(used.household_id, 'second_phone');
       return json(await state(user));
     }

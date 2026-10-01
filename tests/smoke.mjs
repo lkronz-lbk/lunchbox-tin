@@ -4935,6 +4935,7 @@ try {
       /* an App Store plan past its end, inside the three days it is held while Apple's word is awaited: not cancelled beside */
       await db.query(`UPDATE entitlements SET current_period_end = now() - interval '1 day' WHERE household_id = ${patState.household.id}`);
       r.ended = await callsOf(() => hook(subEv('evt_beside_ended_apple', 'customer.subscription.updated', t0 + 9.1566, { id: 'sub_beside_ended_apple' }))); r.seenEnded = await seen('evt_beside_ended_apple');
+      r.endedDeleted = await callsOf(() => hook(subEv('evt_beside_ended_apple_gone', 'customer.subscription.deleted', t0 + 9.1567, { id: 'sub_beside_ended_apple', status: 'canceled' }))); r.seenEndedDeleted = await seen('evt_beside_ended_apple_gone');
     } finally { console.error = ce; globalThis.__LS_STRIPE_FETCH = stub; }
     await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', current_period_end = NULL WHERE household_id = ${patState.household.id}`);
     const logged = (re) => said.some(l => re.test(l));
@@ -4952,8 +4953,9 @@ try {
     check('a Stripe subscription still charging beside a plan the App Store holds is cancelled, and the App Store\'s plan stands',
       r.apple.status === 200 && JSON.stringify(r.apple.calls) === JSON.stringify(['GET sub_beside_apple', 'DELETE sub_beside_apple']) && logged(/^billing: CHECK BY HAND the last charge of sub_beside_apple /)
       && r.appleRow.source === 'apple' && r.appleRow.plan === 'household' && r.appleRow.status === 'active', r);
-    check('but beside an App Store plan past its end, still held while Apple\'s word is awaited, the event goes back to Stripe with nothing cancelled',
-      r.ended.status === 500 && r.seenEnded === 0 && !r.ended.calls.some(c => c.startsWith('DELETE')) && logged(/App Store plan past its end: sub_beside_ended_apple waits/), r);
+    check('but beside an App Store plan past its end, still held while Apple\'s word is awaited, the event goes back to Stripe with nothing cancelled, its deleted event too, each saying BY HAND',
+      r.ended.status === 500 && r.seenEnded === 0 && !r.ended.calls.some(c => c.startsWith('DELETE')) && r.endedDeleted.status === 500 && r.seenEndedDeleted === 0
+      && logged(/CHECK BY HAND if Stripe stops retrying: sub_beside_ended_apple waits beside an App Store plan past its end/), r);
   }
   {
     /* a webhook whose Stripe calls hang: one eight-second budget for them all, so the event goes back to Stripe, unmarked,
