@@ -77,7 +77,19 @@ async function body(req) {
   try { return JSON.parse(raw); } catch { return undefined; }
 }
 
+/* the last catch every other function has: anything thrown on the way (the database unreachable,
+   say) is logged here, and the phone or Apple is told only that something went wrong. As when a
+   throw got away, the phone leaves the purchase unfinished (it finishes one only on 200, 400 or
+   409), and Apple sends the notification again (it resends on anything but a success) */
 export default async function handler(req) {
+  try { return await route(req); }
+  catch (e) {
+    console.error('api-apple', e);
+    return fail('Something went wrong on our side', 500);
+  }
+}
+
+async function route(req) {
   const action = new URL(req.url).pathname.replace(/\/$/, '').split('/').pop();
   if (req.method !== 'POST' || !['link', 'notify'].includes(action)) return fail('Not found', 404);
 
