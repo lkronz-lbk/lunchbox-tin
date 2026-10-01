@@ -57,7 +57,7 @@ npm run contrast      # every text color on the site and in the planner, light a
 ```
 
 Run `npm run csp` before every commit that touches the app; `npm test` refuses a stale hash.
-Bump `VERSION` in `public/app/sw.js` and `APP_BUILD` in `public/app/index.html` on every deploy that changes the app, and write that build's `WHATS_NEW` line beside `APP_BUILD` (`npm run csp` refuses a stale one).
+Bump `VERSION` in `public/app/sw.js` and `APP_BUILD` in `public/app/index.html` on every deploy that changes the app, and write that build's `WHATS_NEW` line beside `APP_BUILD` (`npm run csp` refuses a stale one). The bump and the note are the release owner's (see Conventions); a feature branch leaves all three alone, and an app change folds into whatever build `dev` already carries unshipped.
 
 ## Before any change, on every machine
 
@@ -69,9 +69,9 @@ Never again:
 1. `git fetch origin` first, every session, before reading any code.
 2. Bring local `main` level: `git branch -f main origin/main` (or `git pull --ff-only` on it).
    Everything pushed from the phone must come back onto this machine.
-3. Build only on a branch that contains `origin/main`. If `dev` is behind, bring it level first
-   (`git merge --ff-only origin/main` from `dev`). If that refuses, `dev` has diverged: stop and
-   say so rather than build on it.
+3. Build only on your own branch made from `origin/dev`, which the release owner keeps
+   containing `origin/main`. If `origin/dev` does not contain `origin/main`, stop and tell the
+   release owner rather than build on it; never bring `dev` level yourself.
 4. **Work in your own worktree, not the shared checkout.** A branch is not isolation: every
    branch in one clone writes the same files on disk, so two sessions on two branches are still
    two writers on `public/app/index.html`. Several sessions run here at once — twelve on
@@ -122,8 +122,8 @@ Never again:
   change to a color, an opacity or a new screen.
 - Every entity carries `id`/`createdAt`/`updatedAt`; deletion is a `deletedAt` tombstone;
   event rows carry `at`/`by`. Imports and boot go through `normalizeAccount()`.
-- `dev` is the working branch; `main` deploys production; pull requests get previews.
-  Merging to `main` is Liz's call.
+- `dev` is the integration branch, fed only by pull requests; `main` deploys production;
+  pull requests get previews. Moving `dev` to `main` is Liz's call, made by the release owner.
 - One thread owns releases (Liz, 2026-09-30): the Claude Desktop session titled "Release owner"
   alone merges pull requests and pushes `dev` or `main`. Every other thread, the phone's
   included, builds on its own branch from `origin/dev`, runs `npm test` and the reviewers,
