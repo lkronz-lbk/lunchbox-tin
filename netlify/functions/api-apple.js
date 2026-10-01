@@ -1,7 +1,8 @@
 import { sql, json, fail, throttled } from '../lib/db.js';
 import { currentUser } from '../lib/auth.js';
 import { verifyJws, stateOf, envOk, appleLive, BUNDLE_ID, PRODUCTS } from '../lib/apple.js';
-import { writeApple } from '../lib/entitlement.js';
+import { writeApple, cancelAndForget } from '../lib/entitlement.js';
+import { withinTime } from '../lib/stripe.js';
 
 /* The iPhone app's way of paying. The phone buys through StoreKit and tells us straight away;
    Apple's servers tell us everything after, renewals and refunds included. Either way what
@@ -48,7 +49,7 @@ async function noteRevoked(txn) {
    someone else's purchase; the plan is shared through the household instead, so it is not taken */
 const owned = (txn) => !txn.inAppOwnershipType || txn.inAppOwnershipType === 'PURCHASED';
 
-async function apply(hid, at, txn, renewal) {
+async function apply(hid, at, txn, renewal, context) {
   const st = stateOf(txn, renewal);
   if (!st) return 'unknown product';
   const [cur] = await sql()`SELECT plan, status, source, current_period_end, apple_original_transaction_id AS original FROM entitlements WHERE household_id = ${hid}`;
@@ -57,13 +58,37 @@ async function apply(hid, at, txn, renewal) {
   /* both of these are enforced again in writeApple, race or no race; here they only name the outcome */
   if (other && appleLive(cur) && cur.plan === 'lifetime' && PRODUCTS[txn.productId] !== 'lifetime') return 'lifetime kept';
   if (other && appleLive(cur) && !LIVE.has(st.status)) return 'other purchase';
-  try {
-    const ok = await writeApple(hid, at, { ...st, original, product: txn.productId, charged: txn.environment === 'Production' });
-    return ok ? 'applied' : 'stale';
-  } catch (e) {
+  let row;
+  try { row = await writeApple(hid, at, { ...st, original, product: txn.productId, charged: txn.environment === 'Production' }); }
+  catch (e) {
     if (e && (e.code === '23505' || /unique|duplicate/i.test(e.message || ''))) return 'elsewhere';
     throw e;
   }
+  /* the household has paid Apple for the plan. A Stripe subscription still on the row is one writeApple did
+     not refuse: a first charge that failed when the three weeks ended reads as ended while Stripe goes on
+     retrying the card, and a retry that went through would bill the household beside Apple, with nothing in
+     the iPhone app to stop it. Apple cannot cancel one for us, but Stripe's can be cancelled, and is: for a
+     purchase paid for real that holds the row live, never a sandbox one (App Review, TestFlight), which cost
+     nothing and soon lapses. A parent who has just paid is waiting on this answer, so Stripe gets three
+     seconds, and a cancel not finished by then goes on behind the answer while Netlify holds the function
+     for it (waitUntil), inside the request's eight seconds for Stripe (handler, below), so its log line
+     lands inside the function's ten. One Stripe will not cancel, or has not answered about by then, is left
+     for the next word from Apple, the beta link, or the subscription's own next event (api-billing.js) to
+     try again. The purchase stands either way */
+  if (row && row.stripe_subscription_id && txn.environment === 'Production' && appleLive(row)) {
+    const sub = row.stripe_subscription_id, work = cancelAndForget(hid, sub);
+    const told = (done) => { if (!done) console.error('apple: CANCEL BY HAND', sub, done === null ? 'billed beside an App Store purchase (no answer from Stripe in time)' : 'billed beside an App Store purchase'); };
+    const done = await inTime(3000, work);
+    if (done === null && context && typeof context.waitUntil === 'function') context.waitUntil(work.then(told, e => console.error('apple: CANCEL BY HAND', sub, e.message)));
+    else told(done);
+  }
+  return row ? 'applied' : 'stale';
+}
+
+/* the work's own answer, or null if it has none after ms; the work itself is not stopped */
+function inTime(ms, work) {
+  let timer;
+  return Promise.race([work, new Promise(r => { timer = setTimeout(r, ms, null); })]).finally(() => clearTimeout(timer));
 }
 
 async function entitlementOf(hid) {
@@ -80,16 +105,17 @@ async function body(req) {
 /* the last catch every other function has: anything thrown on the way (the database unreachable,
    say) is logged here, and the phone or Apple is told only that something went wrong. As when a
    throw got away, the phone leaves the purchase unfinished (it finishes one only on 200, 400 or
-   409), and Apple sends the notification again (it resends on anything but a success) */
-export default async function handler(req) {
-  try { return await route(req); }
+   409), and Apple sends the notification again (it resends on anything but a success). Every Stripe
+   call a request makes shares one eight-second budget, inside Netlify's ten (lib/stripe.js) */
+export default async function handler(req, context) {
+  try { return await withinTime(8000, () => route(req, context)); }
   catch (e) {
     console.error('api-apple', e);
     return fail('Something went wrong on our side', 500);
   }
 }
 
-async function route(req) {
+async function route(req, context) {
   const action = new URL(req.url).pathname.replace(/\/$/, '').split('/').pop();
   if (req.method !== 'POST' || !['link', 'notify'].includes(action)) return fail('Not found', 404);
 
@@ -132,7 +158,7 @@ async function route(req) {
     let outcome;
     try {
       const hid = await householdFor(txn);
-      outcome = hid ? await apply(hid, iso(n.signedDate), txn, renewal || null) : 'no household';
+      outcome = hid ? await apply(hid, iso(n.signedDate), txn, renewal || null, context) : 'no household';
     } catch (e) {
       /* let go, so Apple's retry applies it; if the database will not take even that, the hold lapses */
       await sql()`DELETE FROM apple_events WHERE id = ${n.notificationUUID} AND applying_since IS NOT NULL`
@@ -170,7 +196,7 @@ async function route(req) {
      here; one carrying none (an offer code, a promoted purchase) cannot be placed, so it is not taken. */
   if (!UUID.test(txn.appAccountToken || '')) return notHere();
   if (txn.appAccountToken.toLowerCase() !== String(h.token || '').toLowerCase() && await tokenHousehold(txn.appAccountToken)) return elsewhere();
-  const outcome = await apply(h.id, iso(txn.signedDate), txn, null);
+  const outcome = await apply(h.id, iso(txn.signedDate), txn, null, context);
   if (outcome === 'elsewhere') return elsewhere();
   const e = await entitlementOf(h.id);
   if (outcome === 'stale' && e && WEB.has(e.source) && LIVE.has(e.status)) return fail('This household already has the plan through the website', 409, { paying: true, entitlement: e });

@@ -1,4 +1,6 @@
 import { sql, milestone } from './db.js';
+import { stripe, cancelSubscription } from './stripe.js';
+import { appleLive } from './apple.js';
 
 /* The entitlement row is the only truth about a household's plan, and only a way of paying
    writes it: Stripe through its webhook, a beta tester's code through Stripe's checkout, and the
@@ -61,7 +63,9 @@ export async function write(hid, at, v) {
    cancelAtPeriodEnd null means the delivery did not say (a transaction from the phone carries no
    renewal info), so the row keeps what the last notification set. paid_by is Stripe's alone: it
    opens the Stripe billing portal, and a purchase through Apple must not open another parent's.
-   The unique index on apple_original_transaction_id throws if the purchase is another household's. */
+   The unique index on apple_original_transaction_id throws if the purchase is another household's.
+   Returns the row as written, with the Stripe subscription it still carries, or null when the
+   delivery was refused. */
 export async function writeApple(hid, at, v) {
   const keepCancel = v.cancelAtPeriodEnd === null || v.cancelAtPeriodEnd === undefined;
   const live = v.status === 'active' || v.status === 'past_due';
@@ -79,10 +83,45 @@ export async function writeApple(hid, at, v) {
                AND (entitlements.current_period_end IS NULL OR entitlements.current_period_end > now() - interval '3 days')
                AND entitlements.apple_original_transaction_id IS DISTINCT FROM EXCLUDED.apple_original_transaction_id
                AND (NOT ${live} OR (entitlements.plan = 'lifetime' AND EXCLUDED.plan <> 'lifetime')))
-    RETURNING household_id, status`;
-  const ok = rows.length > 0;
+    RETURNING household_id, source, status, current_period_end, stripe_subscription_id`;
+  const row = rows[0] || null;
   /* a household paying Apple has paid as surely as one paying Stripe; a sandbox purchase (App Review,
      TestFlight) cost nothing, so the caller does not mark it charged */
-  if (ok && v.charged && (rows[0].status === 'active' || rows[0].status === 'past_due')) await milestone(hid, 'paid');
-  return ok;
+  if (row && v.charged && (row.status === 'active' || row.status === 'past_due')) await milestone(hid, 'paid');
+  return row;
+}
+
+/* a row whose plan is held another way: forever (the beta's, a code's, a purchase's), or a live App Store plan */
+const heldElsewhere = (r) => !!r && (appleLive(r) || (r.plan === 'lifetime' && r.status === 'active' && r.source !== 'apple'));
+
+/* A Stripe subscription left on a row whose plan is now held another way: through the App Store, or
+   forever. Neither writer refuses a row whose first charge failed when the three weeks ended, since it
+   reads as ended while Stripe goes on retrying the card, and a retry that went through would bill the
+   household beside the plan it holds.
+   - Stripe is asked first, since the row can be behind it: one that has ended, or that Stripe has no
+     record of, needs nothing more.
+   - The row is read again once Stripe has answered, which can be seconds later: one that no longer
+     carries this subscription beside a plan held another way is not this call's to cancel.
+   - Anything else is cancelled. One Stripe called active had a retry go through that the row never heard
+     of, and one Stripe would not say anything about may have, so the log asks for its charge to be looked
+     at (CHECK BY HAND) before the cancel, whatever comes of it. With leavePaid, one Stripe calls active, or
+     will not say, is left running instead, and the log asks for it to be looked at: the plan beside it may
+     be a sandbox one, which cost nothing.
+   Once Stripe says it can no longer charge it leaves the row, so nothing asks Stripe about it again; only
+   that id is taken off, so a subscription written since stays. One Stripe will not cancel stays on the row
+   for the next try. Returns false only when one it should cancel could not be cancelled. */
+export async function cancelAndForget(hid, sub, { leavePaid = false } = {}) {
+  let was;
+  try { was = (await stripe('GET', `/subscriptions/${sub}`)).status; }
+  catch (e) { if (e.status === 404 && e.code === 'resource_missing') was = 'canceled'; }
+  if (was !== 'canceled' && was !== 'incomplete_expired') {
+    const [r] = await sql()`SELECT plan, status, source, current_period_end FROM entitlements WHERE household_id = ${hid} AND stripe_subscription_id = ${sub}`;
+    if (!heldElsewhere(r)) return true;
+    const said = typeof was === 'string', why = said ? 'Stripe says it is paid for, beside a plan held another way' : 'Stripe would not say whether it is paid for, beside a plan held another way';
+    if (leavePaid && (was === 'active' || !said)) { console.error('billing: CHECK BY HAND', sub, 'of household', hid + ':', why + '; left running'); return true; }
+    if (was === 'active' || !said) console.error('billing: CHECK BY HAND the last charge of', sub, 'of household', hid + ':', why + '; cancelling it');
+    if (!(await cancelSubscription(sub))) return false;
+  }
+  await sql()`UPDATE entitlements SET stripe_subscription_id = NULL, updated_at = now() WHERE household_id = ${hid} AND stripe_subscription_id = ${sub}`;
+  return true;
 }
