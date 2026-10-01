@@ -1,9 +1,10 @@
 [build]
   publish = "public"
-  # the only build step: refuse a Stripe key scoped to the wrong context, or a key
-  # or a database address pasted with more than itself (naming the variable), then
-  # apply any new database migration before the deploy goes live (skips quietly on
-  # a deploy that has no database URL)
+  # the only build step: refuse a Stripe key scoped to the wrong context, a key or
+  # a database address pasted with more than itself, or a production build with no
+  # Resend key it can see (naming the variable), then apply any new database
+  # migration before the deploy goes live (skips quietly on a deploy that has no
+  # database URL)
   command = "node scripts/migrate.mjs"
   # the test-only dependencies are never installed on Netlify
   [build.environment]
