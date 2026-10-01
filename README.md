@@ -675,19 +675,19 @@ refuses a build whose note names an older build, so the note cannot be forgotten
 text to `''` for a release with nothing to say.
 
 A release that only fixes something or moves a screen carries the last note forward rather than
-spending the banner on itself: re-tag `WHATS_NEW.build` to the new build and add
-`seenAs:'<the build the note was written for>'`. `whatsNew()` returns early on that value, so a
-phone that already read the walk-through is left alone — the banner is retired by *reading* it,
-not by an OK, so a repeat would sit over the box every morning until a parent re-read Monday's
-news — while a phone that skipped that build still hears it. `seenAs` is the field that is easy
-to leave behind, and a stale one silently silences every later note for the phones stuck on that
-build, so `npm run csp` refuses one that equals `APP_BUILD` or is empty. Drop the field the next
-time a note is actually written.
+spending the banner on itself: re-tag `WHATS_NEW.build` to the new build and list in
+`seenAs:['<build>', …]` every shipped build the note was already shown as. `whatsNew()` returns
+early when the phone's `seen` is in that list, so a phone that already read the walk-through is
+left alone — the banner is retired by *reading* it, not by an OK, so a repeat would sit over the
+box every morning until a parent re-read Monday's news — while a phone that skipped those builds
+still hears it. `seenAs` is the field that is easy to leave behind, and a stale one silently
+silences every later note for the phones stuck on those builds, so `npm run csp` refuses one that
+is not a list, is empty, has an empty entry or names `APP_BUILD`. Drop the field the next time a
+note is actually written.
 
-`seenAs` holds one build, so it carries a note across **one** hop: v23's note tagged v24, then
-tagged v25 with `seenAs` still naming v23, is shown again to every phone that read it at v24,
-because only one of the two "already seen" builds can be named. If a note ever genuinely needs
-two hops, `seenAs` has to become a list and the guard has to check all of them.
+`seenAs` is a list because a note can be carried more than one hop: v27 carries the note written
+for v25, which v25 and v26 both showed, so it names both. With one build named, every phone that
+read the note on the other would be shown it again.
 
 That hazard is only real once the intervening build has actually shipped. **An unshipped tag is
 free to amend**: while `dev` sits above the tag production is serving, more work on it is more
@@ -739,8 +739,8 @@ so App Store Connect has to follow in the same sitting:
       Subscription, its caption on the Account tab and the delete warning stop calling the
       beta's free forever a purchase, and the beta link stops telling a household that bought
       forever that it is free, a fix, and a phone that skipped v25 and v26 still has to hear
-      about the avoid list. `seenAs` still names v25, so a phone that read the note on v26, or
-      was set up on v26, sees it again; a `seenAs` naming both builds would end that.
+      about the avoid list. `seenAs` became a list for it and names both v25 and v26, so a
+      phone that read the note on either, or was set up on either, is not shown it again.
 - [x] **Migrations `0009_milestones_errors` and `0010_trial_extra_days`** applied themselves on
       the `main` deploy (the build command runs `scripts/migrate.mjs`): 0009 backfills
       `signed_up` exactly and `paid` approximately, and was applied on the staging branch as
@@ -923,7 +923,7 @@ one on the sign-in screen once 1.0 (7) is answered, since that is where the revi
   four to `dropSplash()` rather than to raise the toast over a cover it is meant to be under.
 
 - **A launch history, not one note.** `WHATS_NEW` holds a single release, and `whatsNew()`
-  fires only when `seen !== APP_BUILD` and `seen !== WHATS_NEW.seenAs` (see the note field
+  fires only when `seen !== APP_BUILD` and `seen` is not in `WHATS_NEW.seenAs` (see the note field
   below), so the only thing a phone can ever be shown is the newest build's note. A parent who was last in on v20 and opens on v22 hears about v22 and
   never learns v21 happened at all — at a three-day cadence that is most of the recent work.
   Make it `RELEASES`, newest first, with `WHATS_NEW = RELEASES[0]` so the banner and the

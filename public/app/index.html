@@ -1557,8 +1557,8 @@ function claimBeta(){
   claimBeta.busy = true; claimBeta.tries = (claimBeta.tries || 0) + 1; claimBeta.failed = false;
   api('POST', '/api/billing/beta', {code:code}).then(function(r){
     claimBeta.busy = false;
-    if(r.status === 200){ betaForget(); if(!r.already) UI.notice = BETA_ON; toast(r.already ? 'Lunch Sorted is already yours, for good' : 'Lunch Sorted is yours, free forever'); Sync.pull().then(render); return; }   /* already: forever may have been bought, and the beta's banner calls it free */
-    if(r.status === 409){ betaForget(); UI.notice = r.paying ? 'This household already pays for the Household plan, so the beta link is not for it.' : 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
+    if(r.status === 200){ betaForget(); if(r.already) toast('Lunch Sorted is already yours, for good'); else { UI.notice = BETA_ON; render(); } Sync.pull().then(render); return; }   /* already: forever may have been bought, and the beta's banner calls it free. A fresh claim is said once, in the banner, not in a toast as well */
+    if(r.status === 409){ betaForget(); UI.notice = r.apple ? 'This household pays for the Household plan through the App Store, so the beta link is not for it.' : r.paying ? 'This household already pays for the Household plan, so the beta link is not for it.' : 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
     if(r.status === 404){ betaForget(); UI.notice = 'That beta link is not right. Ask for a fresh one.'; render(); return; }
     claimBeta.failed = true; render();                             /* a hiccup: the code stays, the banner offers another go */
   }).catch(function(){ claimBeta.busy = false; claimBeta.failed = true; render(); });
@@ -2005,13 +2005,11 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    called it the forever purchase, and opening the beta link again told a household that had
    bought forever that it was free. A fix, nothing a parent would call new, so it carries v25's
    note once more, which the line above did not plan: a phone that skipped v25 and v26 still
-   has to hear that the avoid list matches whole words. seenAs holds one build and names v25,
-   where most phones read it, so a phone that read it on v26, or was set up on v26, is shown it
-   again. A seenAs that named both would end that, at the price of changing csp.mjs and the
-   smoke checks that read it.
+   has to hear that the avoid list matches whole words. seenAs is a list for it, and names both
+   v25 and v26, so a phone that read the note on either, or was set up on either, is left alone.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v27', seenAs:'lunchsorted-v25', text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
+var WHATS_NEW = {build:'lunchsorted-v27', seenAs:['lunchsorted-v25','lunchsorted-v26'], text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
   steps:[
     ['Check your avoid list', 'Under Anything else in the lunchbox settings, a word now has to be the whole word: \u201cham\u201d keeps ham out and lets graham crackers in. It no longer catches a longer word it sits inside \u2014 \u201cmelon\u201d misses watermelon, \u201cnut\u201d misses walnut \u2014 so write each of those out.'],
     ['Lock what worked', 'Shuffle all is now Plan the week; Shuffle day is the crossed arrows beside each day. Every day on Week has a lock: tap it and Plan the week leaves that day alone. The lock on a compartment\u2019s sheet holds one compartment, and shows on the tin. A food you pick by hand is locked where you put it, and the message says so.'],
@@ -2032,11 +2030,11 @@ function markSeen(){ try{ localStorage.setItem(SEEN_KEY, APP_BUILD); }catch(e){}
 function whatsNew(){
   var seen = ''; try{ seen = localStorage.getItem(SEEN_KEY) || ''; }catch(e){}
   if(!S.onboardedAt){ markSeen(); return; }                          /* a phone new to the app has nothing to be told */
-  /* a carried-forward note names the build it was already shown as, and that phone is left alone:
+  /* a carried-forward note names the builds it was already shown as, and those phones are left alone:
      the banner is not dismissed by an OK, only by reading the walk-through behind Show me, so a
      repeat would sit over the box every morning until a parent re-read what they read on Monday.
      Its `seen` is left where it is, so the next build's note still reaches them. */
-  if(seen === WHATS_NEW.seenAs) return;
+  if((WHATS_NEW.seenAs || []).indexOf(seen) > -1) return;
   if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text){ UI.newsHeld = true; if(!UI.notice) UI.notice = WHATS_NEW.text; }
 }
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
@@ -3872,6 +3870,13 @@ function planBanner(asNew, quiet){
   return h + '<div class="banner"><span>'+msg+'</span>'
     + '<button class="btn sm primary" data-act="plan-all">Plan the week</button></div>';
 }
+/* The beta's own banners speak to what the parent just did with the link, so on Account, where
+   the link lands and the sign-in is, they outrank the What's new note, which stays owed and comes
+   back once they give way. Elsewhere the note keeps its place: a tester who never signs in still
+   hears about the avoid list. Any other message keeps them waiting, as before. */
+function betaUp(){
+  return !!betaWaiting() && !!S.onboardedAt && !isHelper() && (!UI.notice || (UI.notice === WHATS_NEW.text && UI.tab === 'setup'));
+}
 function noticeBanner(){
   if(Account.elsewhere && !S.onboardedAt && signedIn())
     return '<div class="banner wrap"><span>Signed in as '+esc(Account.user.email)+'. If you built the week in the home-screen app or another window, go back there and type the code from the same email; the link only signs in where it opens. Or start fresh here.</span>'
@@ -3880,7 +3885,7 @@ function noticeBanner(){
     if(Account.status === 'syncing' || Account.busy) return '<div class="banner"><span>Getting your lunches back\u2026</span></div>';
     if(Account.status === 'error') return '<div class="banner"><span>Could not reach your lunches.</span><button class="btn sm primary" data-act="sync-now">Try again</button></div>';
   }
-  if(betaWaiting() && !UI.notice && S.onboardedAt && !isHelper()){
+  if(betaUp()){
     if(!signedIn()) return '<div class="banner good"><span>Sign in and the beta switches on: Lunch Sorted, free forever.</span>'+(UI.tab === 'setup' ? '' : '<button class="btn sm ghost" data-act="tab" data-tab="setup">Sign in</button>')+'</div>';
     if(claimBeta.failed) return '<div class="banner"><span>Could not switch the beta on.</span><button class="btn sm ghost" data-act="beta-retry">Try again</button></div>';
     return '<div class="banner good"><span>Switching the beta on\u2026</span></div>';
@@ -4766,7 +4771,7 @@ function paneAccount(){
       +  (owner
           ? '<li>Every lunchbox, food, plan, photo and answer, from our servers and from this phone</li>'
             + (others.length ? '<li>'+esc(andList(others))+'’s sign-in to this household — whatever is already on their phone stays on it</li>' : '')
-            + (paid() ? '<li>'+(Account.entitlement.source === 'apple' ? 'The Household plan here. Apple\u2019s billing is not: cancel it first '+(iapOn() ? 'in Subscription \u2192 Manage in the App Store' : 'on your iPhone, in Settings \u2192 your name \u2192 Subscriptions')+', or Apple keeps charging' : foreverGiven() ? 'The forever plan, which does not come back' : Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The plan, which stops at once')+'</li>' : '')
+            + (paid() ? '<li>'+(Account.entitlement.source === 'apple' ? 'The Household plan here. Apple\u2019s billing is not: cancel it first '+(iapOn() ? 'in Subscription \u2192 Manage in the App Store' : 'on your iPhone, in Settings \u2192 your name \u2192 Subscriptions')+', or Apple keeps charging' : foreverGiven() ? 'Your free forever plan, which does not come back' : Account.entitlement.plan === 'lifetime' ? 'The forever purchase, which does not come back' : 'The plan, which stops at once')+'</li>' : '')
           : '<li>Your place in this household, and the lunches from this phone</li>')
       +  '</ul>'
       +  (owner ? '' : '<p class="hint" style="margin:0">The household and its lunches stay'+(others.length ? ' with '+esc(andList(others)) : '')+'. To keep your place and only clear this phone, sign out instead.</p>')

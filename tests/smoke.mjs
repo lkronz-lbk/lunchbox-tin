@@ -16,7 +16,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'publ
 /* the walk-through must have a card for every step this build claims, no more — and a
    build that claims nothing must say nothing, which is the usual case */
 const APP_SRC = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'app', 'index.html'), 'utf8');
-const NOTE_TEXT = (APP_SRC.match(/var WHATS_NEW = \{build:'[^']*',(?: seenAs:'[^']*',)? text:'([^']*)'/) || [,''])[1];   /* a note carried forward names the build it was shown as, between the two */
+const NOTE_TEXT = (APP_SRC.match(/var WHATS_NEW = \{build:'[^']*',(?: seenAs:\[[^\]]*\],)? text:'([^']*)'/) || [,''])[1];   /* a note carried forward names the builds it was shown as, a list between the two */
 const APP_BUILD = (APP_SRC.match(/var APP_BUILD = '([^']+)'/) || [,''])[1];
 const STEP_COUNT = (APP_SRC.match(/steps:\[([\s\S]*?)\n  \]\};/) || [,''])[1].split('\n').filter(l => l.trim().startsWith('[')).length;
 const POLICIES = readPolicies(fs.readFileSync(path.join(ROOT, '..', 'netlify.toml'), 'utf8'));
@@ -47,6 +47,10 @@ process.env.BETA_CODE = 'BETA-TEST-1234'; process.env.BETA_CAP = '2';
 const stripeLib = await import('../netlify/lib/stripe.js');
 /* Stripe itself is a stub: it answers the four calls the code makes and records what it was asked */
 const stripeCalls = [];
+/* when a Stripe plan renews in these checks: midday UTC on Jan 15, 2027, so the date a parent is
+   shown is Jan 15 in any time zone from UTC-11 to UTC+11. At 08:00 it read Jan 14 more than eight
+   hours west of UTC, where nothing pins the browser's zone */
+const PERIOD_END = 1800014400;
 globalThis.__LS_STRIPE_FETCH = async (url, init) => {
   const u = new URL(url); const params = Object.fromEntries(new URLSearchParams(init.body || ''));
   stripeCalls.push({ method: init.method, path: u.pathname, params, auth: init.headers.authorization });
@@ -69,7 +73,7 @@ globalThis.__LS_STRIPE_FETCH = async (url, init) => {
   if (/^\/v1\/checkout\/sessions\/[^/]+\/expire$/.test(u.pathname)) return reply({ id: u.pathname.split('/')[4], status: 'expired' });
   if (u.pathname.startsWith('/v1/subscriptions/')) {
     const id = u.pathname.split('/').pop();
-    if (init.method === 'GET') return reply({ id, object: 'subscription', status: 'active', cancel_at_period_end: false, customer: 'cus_pat', items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] } });
+    if (init.method === 'GET') return reply({ id, object: 'subscription', status: 'active', cancel_at_period_end: false, customer: 'cus_pat', items: { data: [{ current_period_end: PERIOD_END, price: { id: 'price_year' } }] } });
     if (init.method === 'DELETE') return reply({ id, status: 'canceled' });
     return reply({ id, cancel_at_period_end: true });
   }
@@ -750,12 +754,16 @@ try {
         /New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1);
       /* a note carried forward from an earlier build is for the phones that missed it: the ones that
          already read it there are not told twice, and there is no OK on a news banner to make it go away */
-      const seenAs = (APP_SRC.match(/var WHATS_NEW = \{build:'[^']*', seenAs:'([^']*)'/) || [,''])[1];
-      if (seenAs) {
-        await page.evaluate(b => localStorage.setItem('lunchsorted-seen', b), seenAs);
-        await page.reload(); await page.waitForTimeout(600);
-        check('and a phone that already read it on the build it was carried from is left alone',
-          !/New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0);
+      /* seenAs is a list: a note carried across two shipped builds leaves alone the phones that read it on either */
+      const seenAs = [...((APP_SRC.match(/var WHATS_NEW = \{build:'[^']*', seenAs:\[([^\]]*)\]/) || [,''])[1]).matchAll(/'([^']*)'/g)].map(m => m[1]);
+      if (seenAs.length) {
+        const leftAlone = [];
+        for (const b of seenAs) {
+          await page.evaluate(b => localStorage.setItem('lunchsorted-seen', b), b);
+          await page.reload(); await page.waitForTimeout(600);
+          if (!/New: /.test(await page.textContent('#view')) && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0) leftAlone.push(b);
+        }
+        check('and a phone that already read it on any build it was carried from is left alone', leftAlone.length === seenAs.length, { seenAs, leftAlone });
         await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
         await page.reload(); await page.waitForTimeout(600);
       }
@@ -874,6 +882,23 @@ try {
       const okFresh = setFresh && await tapOK();
       check('so its OK then brings no note over the new week', okFresh && await noNote());
       await cx.close();
+    }
+    /* The beta link opened signed out, on the first open after an update. On Account, where the link
+       lands and the sign-in is, the beta's own banner outranks the note; elsewhere the note keeps its
+       place, so a tester who never signs in still hears about the avoid list. */
+    {
+      await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
+      await page.goto(BASE + '/app/?beta=BETA-TEST-1234'); await page.waitForLoadState('load');
+      const onAccount = await until(page, () => /Sign in and the beta switches on/.test(document.getElementById('view').textContent));
+      const noteHeld = onAccount && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0;
+      await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
+      const onPack = (await page.$$eval('[data-act="whats-new"]', a => a.length)) === (NOTE_TEXT ? 1 : 0)
+        && (!NOTE_TEXT || !/Sign in and the beta switches on/.test(await page.textContent('#view')));
+      check('signed out, the beta link\'s own banner outranks the note on Account, where the link lands', onAccount && noteHeld);
+      check('and on Pack the note keeps its place, so a tester who never signs in still hears what changed', onAccount && onPack);
+      /* this phone signs in further down, where a code still waiting would claim the beta */
+      await page.evaluate(b => { localStorage.removeItem('lunchsorted-beta'); localStorage.setItem('lunchsorted-seen', b); }, APP_BUILD);
+      await page.reload(); await page.waitForTimeout(600);
     }
     await page.click('[data-act="tab"][data-tab="shop"]'); await page.waitForTimeout(250);
     check('the list groups every line under a real aisle', (await page.$$eval('.sect-head h3', a => a.map(x => x.textContent))).every(t => ['Produce','Deli','Bakery','Dairy','Drinks','Pantry','Snacks','Frozen','Your own'].includes(t)));
@@ -4015,12 +4040,21 @@ try {
     const wrong = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-NOPE-0000' }) }).then(r => r.status));
     check('a wrong beta code grants nothing', wrong === 404 && ((await entPat()) || {}).plan !== 'lifetime', wrong);
     check('a stranger cannot claim the beta', (await fetch(NODE_BASE + '/api/billing/beta', { method: 'POST', body: JSON.stringify({ code: 'BETA-TEST-1234' }) })).status === 401);
+    /* opened on the first open after an update: the note is owed, the claim's own banner takes its place, and hands it back */
+    await pb.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
     await pb.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pb.waitForLoadState('load');
     let got = null; for (let i = 0; i < 40 && !(got && got.plan === 'lifetime'); i++) { await pb.waitForTimeout(250); got = await entPat(); }
     check('opening the beta link while signed in switches the household to forever, marked as the beta', !!got && got.plan === 'lifetime' && got.source === 'code' && got.status === 'active', got);
     check('the code leaves the address bar and the phone once used', !/beta=/.test(pb.url()) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-beta'))) === null);
     await until(pb, () => /The beta is on/.test(document.querySelector('#view').textContent));
     check('and the app says so where it stays, in green', !!(await pb.$('.banner.good [data-act="notice-dismiss"]')));
+    check('once: no toast says the same words over the banner', await pb.evaluate(() => { const t = document.querySelector('#toast');
+      return !(t && t.classList.contains('show') && /free forever/.test(t.textContent)); }));
+    const betaOK = !!(await pb.$('.banner [data-act="notice-dismiss"]'));
+    if (betaOK) { await pb.click('.banner [data-act="notice-dismiss"]'); await pb.waitForTimeout(250); }
+    const handedBack = (await pb.$$eval('[data-act="whats-new"]', a => a.length)) === (NOTE_TEXT ? 1 : 0);
+    check('and its OK hands the banner back to the note the update owed', betaOK && handedBack);
+    if (betaOK && NOTE_TEXT && handedBack) { await pb.click('[data-act="whats-new"]'); await sheetDone(pb); await pb.waitForTimeout(300); }
     await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(250);
     check('a beta household has the feedback strip on every tab', !!(await pb.$('.betabar a[href="/feedback.html"], .betabar [data-act="help-site"]')) && /Beta tester/.test(await pb.textContent('.betabar')));
     /* the strip is on every tab, and its own rule had squeezed the button to 40px, under the 44px every button keeps */
@@ -4041,7 +4075,7 @@ try {
       { lifePrice, betaCaption, betaRows, betaCard });
     await openPane(pb, 'account');
     const betaGone = await pb.$$eval('#view li', a => a.map(l => l.textContent));
-    check('and the delete warning calls it the forever plan, not a purchase', betaGone.includes('The forever plan, which does not come back') && !betaGone.some(l => /purchase|paid/i.test(l)), betaGone);
+    check('and the delete warning calls it your free forever plan, as every other screen does, not a purchase', betaGone.includes('Your free forever plan, which does not come back') && !betaGone.some(l => /purchase|paid/i.test(l)), betaGone);
     const again = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, already: j.already }))));
     check('claiming twice is fine and says so', again.status === 200 && again.already === true, again);
     await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'active', stripe_subscription_id = 'sub_beta_x' WHERE household_id = ${patState.household.id}`);
@@ -4332,12 +4366,12 @@ try {
   const ok = await hook(completed);
   check('a paid checkout closes any other still open for the household and clears the marks', stripeCalls.some(c => c.path === '/v1/checkout/sessions/cs_other_open/expire') && (await db.query(`SELECT count(*)::int AS n FROM rate_events WHERE key LIKE 'checkout:${patState.household.id}:%'`)).rows[0].n === 0);
   check('a delivery that failed mid-apply is retried by Stripe and applied the second time', blinked.status === 500 && ok.status === 200 && !ok.body.duplicate && (await ent()).plan === 'household', [blinked.status, ok.body]);
-  check('a signed checkout.session.completed makes the household paid, with the renewal date from the subscription itself', (await ent()).status === 'active' && (await ent()).cust === 'cus_pat' && (await ent()).sub === 'sub_pat' && new Date((await ent()).pe).toISOString() === '2027-01-15T08:00:00.000Z' && stripeCalls.some(c => c.method === 'GET' && c.path === '/v1/subscriptions/sub_pat'), await ent());
+  check('a signed checkout.session.completed makes the household paid, with the renewal date from the subscription itself', (await ent()).status === 'active' && (await ent()).cust === 'cus_pat' && (await ent()).sub === 'sub_pat' && new Date((await ent()).pe).getTime() === PERIOD_END * 1000 && stripeCalls.some(c => c.method === 'GET' && c.path === '/v1/subscriptions/sub_pat'), await ent());
   const paidKinds = async (h) => (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${h} AND kind = 'paid'`)).rows[0].n;
   check('a checkout that took the money is the household\'s paid milestone', (await paidKinds(patState.household.id)) === 1);
   const again = await hook(completed);
   check('the same event delivered twice is a no-op', again.status === 200 && again.body.duplicate === true);
-  const subEv = (id, type, created, extra = {}) => ({ id, type, created, data: { object: Object.assign({ id: 'sub_pat', object: 'subscription', customer: 'cus_pat', status: 'active', cancel_at_period_end: false, items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] }, metadata: { household_id: String(patState.household.id) } }, extra) } });
+  const subEv = (id, type, created, extra = {}) => ({ id, type, created, data: { object: Object.assign({ id: 'sub_pat', object: 'subscription', customer: 'cus_pat', status: 'active', cancel_at_period_end: false, items: { data: [{ current_period_end: PERIOD_END, price: { id: 'price_year' } }] }, metadata: { household_id: String(patState.household.id) } }, extra) } });
   const early = await hook(subEv('evt_2', 'customer.subscription.created', t0 - 1));
   check('the subscription.created event, stamped a second earlier, is stale and harmless', early.status === 200 && (await ent()).status === 'active');
   const staleHook = await hook(subEv('evt_0', 'customer.subscription.updated', t0 - 100, { status: 'canceled' }));
@@ -4544,7 +4578,7 @@ try {
     await hook({ id: 'evt_later', type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000), data: { object: { id: 'cs_later', mode: 'subscription', payment_status: 'no_payment_required', amount_total: 0, customer: 'cus_later', subscription: 'sub_later', client_reference_id: String(h2.id), metadata: { plan: 'year', charge_later: '1' } } } });
     const [e2] = (await db.query(`SELECT plan, source, status FROM entitlements WHERE household_id = ${h2.id}`)).rows;
     check('and a plan bought inside the three weeks, nothing charged yet, is on and counted as a sale, not a beta code', e2.plan === 'household' && e2.source === 'stripe' && e2.status === 'active', e2);
-    const laterSub = (id, created, status) => ({ id, type: 'customer.subscription.updated', created, data: { object: { id: 'sub_later', object: 'subscription', customer: 'cus_later', status, cancel_at_period_end: false, items: { data: [{ current_period_end: 1800000000, price: { id: 'price_year' } }] }, metadata: { household_id: String(h2.id) } } } });
+    const laterSub = (id, created, status) => ({ id, type: 'customer.subscription.updated', created, data: { object: { id: 'sub_later', object: 'subscription', customer: 'cus_later', status, cancel_at_period_end: false, items: { data: [{ current_period_end: PERIOD_END, price: { id: 'price_year' } }] }, metadata: { household_id: String(h2.id) } } } });
     const paidH2 = async () => (await db.query(`SELECT count(*)::int AS n FROM milestones WHERE household_id = ${h2.id} AND kind = 'paid'`)).rows[0].n;
     const stillFree = await paidH2();
     await hook(laterSub('evt_later_trial', Math.floor(Date.now() / 1000) + 0.5, 'trialing'));
@@ -4621,7 +4655,7 @@ try {
        the Account tab's caption, Liz's call on 2026-09-30: only forever from a code reads free. The forever
        row above is put back as it was, for the roster below */
     const [was] = (await db.query(`SELECT plan, status, stripe_price_id, stripe_subscription_id, current_period_end, cancel_at_period_end FROM entitlements WHERE household_id = ${patState.household.id}`)).rows;
-    await db.query(`UPDATE entitlements SET plan = 'household', status = 'active', stripe_price_id = 'price_year', stripe_subscription_id = 'sub_code', current_period_end = to_timestamp(1800000000) WHERE household_id = ${patState.household.id}`);
+    await db.query(`UPDATE entitlements SET plan = 'household', status = 'active', stripe_price_id = 'price_year', stripe_subscription_id = 'sub_code', current_period_end = to_timestamp(${PERIOD_END}) WHERE household_id = ${patState.household.id}`);
     await pb.reload(); await pb.waitForLoadState('load'); await openPane(pb, 'plan');
     const codeYear = ['Your plan: Household', 'Cost: $19.99 a year', 'Renews: Jan 15, 2027'];
     const yearRows = await planRows(codeYear);
@@ -4788,6 +4822,14 @@ try {
     check('a purchase in Apple\'s sandbox (App Review, TestFlight) is not a paid household; the same purchase for real is', sandboxPaid === 0 && live.status === 200 && livePaid === 1, [sandboxPaid, live.status, livePaid]);
     const webBuy = await pb.evaluate(() => fetch('/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"plan":"year"}' }).then(async r => ({ status: r.status, body: await r.json() })));
     check('the website will not sell the plan again to a household paying Apple, and says where it is managed', webBuy.status === 409 && webBuy.body.apple === true && /App Store/.test(webBuy.body.error), webBuy);
+    /* nor will the beta link take it: the server answers apple, and the app says that, not that the beta is full */
+    await db.query(`DELETE FROM rate_events WHERE key = 'beta:${patState.me.userId}'`);
+    await pb.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pb.waitForLoadState('load');
+    const appleBeta = await until(pb, () => /through the App Store, so the beta link is not for it/.test(document.querySelector('#view').textContent));
+    check('a household paying through the App Store that opens the beta link is told so, not that the beta is full',
+      appleBeta && !/beta is full/.test(await pb.textContent('#view')) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-beta'))) === null && (await row()).source === 'apple',
+      appleBeta ? undefined : (await pb.textContent('#view')).slice(0, 200));
+    if (appleBeta) { await pb.click('.banner [data-act="notice-dismiss"]'); await pb.waitForTimeout(250); }
     const [otherHh] = (await db.query(`SELECT apple_account_token::text AS t FROM entitlements WHERE household_id <> ${hid} LIMIT 1`)).rows;
     const someoneElse = await link(txn({ appAccountToken: otherHh.t }));
     check('a purchase made for another household is not taken by this one', someoneElse.status === 409 && someoneElse.body.elsewhere === true, someoneElse);
