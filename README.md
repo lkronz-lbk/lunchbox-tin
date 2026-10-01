@@ -704,8 +704,8 @@ beside `text:''`, or whose newest build is not the one just before `APP_BUILD`: 
 again adds the build it last went out on, and a list left beside a new note is caught. Drop the
 field the next time a note is actually written.
 
-`seenAs` is a list because a note can be carried more than one hop: v27 carries the note written
-for v25, which v25 and v26 both showed, so it names both. With one build named, every phone that
+`seenAs` is a list because a note can be carried more than one hop: v27 carried the note written
+for v25, which v25 and v26 both showed, so it named both, and v28 carries it again with v27 added. With one build named, every phone that
 read the note on the other would be shown it again.
 
 That hazard is only real once the intervening build has actually shipped. **An unshipped tag is
@@ -760,15 +760,19 @@ so App Store Connect has to follow in the same sitting:
       forever that it is free, a fix, and a phone that skipped v25 and v26 still has to hear
       about the avoid list. `seenAs` became a list for it and names both v25 and v26, so a
       phone that read the note on either, or was set up on either, is not shown it again.
+      v28 (Restore and Apple's notifications, #53, and the App Store purchase cancelling a
+      Stripe subscription, #56) is a fix too: it carries the same note, and `seenAs` gains v27.
 - [x] **Migrations `0009_milestones_errors` and `0010_trial_extra_days`** applied themselves on
       the `main` deploy (the build command runs `scripts/migrate.mjs`): 0009 backfills
       `signed_up` exactly and `paid` approximately, and was applied on the staging branch as
       `0006_milestones_errors`; under its new number it ran there once more and changed nothing,
       since every statement in it is `IF NOT EXISTS` or `ON CONFLICT DO NOTHING`.
-- [ ] **Migration `0011_code_tries`** applies itself on v27's `main` deploy, the only one that
-      deploy runs: it adds `magic_links.code_tries` (metadata only, no rewrite) and deletes the
-      throttle rows whose keys still hold an email address. v26 never reads the column, so it
-      is safe while the build runs. `0012` (Apple notifications, #53) must reach `main` after it.
+- [x] **Migration `0011_code_tries`** applied itself on v27's `main` deploy (2026-10-01 02:07
+      UTC): it added `magic_links.code_tries` (metadata only, no rewrite) and deleted the
+      throttle rows whose keys still held an email address.
+- [ ] **Migration `0012_apple_events_applying`** applies itself on v28's `main` deploy, the only
+      one that deploy runs: a nullable `apple_events.applying_since`, where NULL reads as applied,
+      so v27's functions keep working while the build runs.
 - [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://example.com' https://lunchsorted.app/api/errors`
       answers 403 (a post from another site is refused, and writes nothing; before the function
       existed the same request answered 404, as a GET still does), the privacy page's "Last
