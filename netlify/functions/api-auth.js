@@ -94,7 +94,11 @@ function reviewAccount(email) {
   return email === who ? code : '';
 }
 
-export default async function handler(req, context) {
+/* every Stripe call a request here makes (deleting an account cancels its subscriptions) shares one eight-second
+   budget, inside Netlify's ten (lib/stripe.js) */
+export default function handler(req, context) { return withinTime(8000, () => serve(req, context)); }
+
+async function serve(req, context) {
   const url = new URL(req.url);
   const action = url.pathname.split('/').pop();
   try {
@@ -239,13 +243,14 @@ export default async function handler(req, context) {
       const q = sql();
       /* a household the person owns goes with them, and its yearly plan stops charging; one
          they merely joined loses a member. The card is cancelled for whoever pays it, owner
-         or not: deleting the payer removes the membership the portal needs, so a plan left
-         running here could never be stopped from inside the app again. Whatever the row says
-         of it: a first charge that failed reads as ended while Stripe goes on retrying the
-         card, and one that has ended answers no such subscription, which costs one call. */
+         or not: it is theirs, and with their account gone they could not stop it charging.
+         Whatever the row says of it: a first charge that failed reads as ended while Stripe
+         goes on retrying the card, and one that has ended answers no such subscription, which
+         costs one call. All at once, inside the request's budget, so one that hangs starves
+         none of the others. */
       const subs = await q`SELECT e.stripe_subscription_id AS id FROM entitlements e JOIN households h ON h.id = e.household_id
         WHERE (h.owner_user_id = ${user.id} OR e.paid_by = ${user.id}) AND e.stripe_subscription_id IS NOT NULL`;
-      await withinTime(8000, async () => { for (const s of subs) if (!(await cancelSubscription(s.id))) console.error('auth: CANCEL BY HAND', s.id, 'of an account being deleted'); });
+      await Promise.all(subs.map(async (s) => { if (!(await cancelSubscription(s.id))) console.error('auth: CANCEL BY HAND', s.id, 'of an account being deleted'); }));
       await q`DELETE FROM households WHERE owner_user_id = ${user.id}`;
       await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
       await q`DELETE FROM invites WHERE created_by = ${user.id}`;

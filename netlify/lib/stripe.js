@@ -13,9 +13,9 @@ const API = 'https://api.stripe.com/v1';
 /* one budget for every Stripe call a request makes: each call gets eight seconds or what is left of the
    request's eight, whichever is less, so a request never runs into Netlify's own ten seconds with
    something half done (a webhook's event, a household half folded). A call made with nothing left
-   gets the words for no answer at once */
+   gets the words for no answer at once. A budget inside another only ever shortens it */
 const budget = new AsyncLocalStorage();
-export const withinTime = (ms, work) => budget.run(Date.now() + ms, work);
+export const withinTime = (ms, work) => budget.run(Math.min(budget.getStore() ?? Infinity, Date.now() + ms), work);
 
 export function stripeKey() {
   const key = process.env.STRIPE_SECRET_KEY || '';

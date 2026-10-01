@@ -178,6 +178,12 @@ export async function consumeInvite(code, userId) {
   return rows[0] || null;
 }
 
+/* an invite spent on a join that could not be finished (Stripe could not cancel the household's subscription)
+   is given back, so the same link works on the next go */
+export async function releaseInvite(code, userId) {
+  await sql()`UPDATE invites SET used_by = NULL, used_at = NULL WHERE code_hash = ${hash(code)} AND used_by = ${userId}`;
+}
+
 export async function peekInvite(code) {
   const rows = await sql()`
     SELECT i.household_id, i.role, h.name, u.email AS "inviterEmail", u.name AS "inviterName"

@@ -851,10 +851,11 @@ out by deleting it in the commit that does it.
   claim now cancels the one on the row, and a checkout paid onto a forever is cancelled and
   refunded. What it still reaches there: the invoices of anything bought before; the open
   invoice a failed first charge leaves, which Stripe stops collecting when the subscription is
-  cancelled but does not void; and any subscription the webhook could not cancel before Stripe
-  stopped delivering its events, about three days on: a checkout paid onto the forever, one an
-  earlier checkout replaced, or one a claim left before claims cancelled them (CANCEL BY HAND in
-  the log). A leftover of that last kind is now cancelled on its own next event. Taking it away
+  cancelled but does not void; and a subscription the webhook could not cancel, CANCEL BY HAND
+  in the log: a checkout paid onto the forever, once Stripe stops delivering its event (about
+  three days on), or one an earlier checkout replaced, which is tried once. While a forever is
+  held, each is cancelled on its own next event, as is one a claim left before claims cancelled
+  them. Taking it away
   is an app change with a build of its own: the portal button in
   `panePlan()` (`!foreverGiven()`), the comment beside it, and the smoke check "and
   Subscription quotes it no price".
@@ -1228,9 +1229,11 @@ the idea bank stays free so a free list is never stuck with what it has.
   `customer.subscription.created / updated / deleted` and `charge.refunded`; anything else
   is acknowledged and dropped. An event id is recorded once it has been applied, so Stripe's
   retries are no-ops but a delivery that failed halfway, or whose function was ended halfway, is
-  retried for real; applying one twice repeats nothing. Every Stripe call a request makes shares
-  one eight-second budget, inside Netlify's ten, so a hung Stripe hands the event back with its
-  failure logged rather than leaving it half done. Every write is
+  retried for real; applying one twice repeats nothing of the money (two copies at once can log
+  a REFUND BY HAND the other copy made good). Every Stripe call a request makes shares one
+  eight-second budget, inside Netlify's ten, so a hung Stripe never leaves a request half done:
+  the undo and the subscription events below hand their event back, and the other calls log
+  their failure and go on. Every write is
   one upsert that only applies when the event is not older than the last one applied, so
   two deliveries racing each other are ordered by Postgres. On checkout the subscription
   is read back from Stripe for its renewal date, so the plan line is complete at once. A
@@ -1251,10 +1254,11 @@ the idea bank stays free so a free list is never stuck with what it has.
   sells over neither) reads the subscription at Stripe, since the event may be an old one. One
   still able to charge, with no end set, is cancelled: one a beta claim left before claims
   cancelled them, a first charge Stripe was still retrying when the household bought on the
-  iPhone, or a checkout's own (whose undo refunds it). The log says CHECK BY HAND for its last
-  charge when it is more than a day old. One winding down (cancel_at_period_end), or still
-  incomplete, is left. If Stripe cannot say, or will not cancel it, the event goes back to
-  Stripe; buying forever on top of a
+  iPhone, or a checkout's own (whose undo refunds it when it runs). The log says CHECK BY HAND
+  for its last charge, before the cancel. One winding down (cancel_at_period_end), or still
+  incomplete, is left. An App Store plan past its end, inside the three days it is held while
+  Apple's word is awaited, is waited out rather than cancelled beside. If Stripe cannot say, or
+  will not cancel it, the event goes back to Stripe; buying forever on top of a
   yearly plan stops the yearly plan at its period end; a fresh yearly checkout replaces an
   unpaid one; a forever purchase refunded in full is undone (a yearly refund is paired with
   canceling the subscription in the dashboard), but only one bought through Stripe
@@ -1263,10 +1267,10 @@ the idea bank stays free so a free list is never stuck with what it has.
   an owner folding their household into another, cancels its subscription first, whatever the
   row says of it (a first charge Stripe is still retrying reads as ended). Deleting goes ahead if
   Stripe will not cancel it, the log saying CANCEL BY HAND, since the account is the parent's to
-  delete; a join waits instead (503, "Could not join just now"), with the invite still good and
-  nothing let go. Deleting a parent who paid for a household they do not own cancels that
-  household's subscription too: the card is theirs, and nobody else could stop it from inside
-  the app.
+  delete; a join waits instead (503, "Could not join just now"): the invite, spent first, is
+  given back, and nothing is let go. Deleting a parent who paid for a household they do not own
+  cancels that household's subscription too: the card is theirs, and with their account gone
+  they could not stop it charging.
 - **Portal** (`POST /api/billing/portal`) opens Stripe's customer portal for the card,
   invoices and cancellation, and comes back to `/app/?portal=1`; the iPhone app never opens it. It is for the owner and
   whoever paid (`paid_by`); another parent sees the plan but not the card. It stays
@@ -1340,7 +1344,8 @@ the idea bank stays free so a free list is never stuck with what it has.
   key to Builds as well as Functions, since the build cannot refuse what it cannot see: a
   function handed a bad key takes billing as off, so every gate lifts and nothing can be bought,
   on the web or in the iPhone app, and it makes no Stripe call, so a deleted household's
-  subscription goes on charging and a beta claim over a subscription waits; sync carries on),
+  subscription goes on charging, and a beta claim over a subscription waits, as does a join by
+  an owner whose household has one; sync carries on),
   `STRIPE_WEBHOOK_SECRET` (one endpoint per context: the staging URL and the
   production URL each give their own), `STRIPE_PRICE_YEAR` (the yearly price
   id; test mode and live mode have different ones), `STRIPE_PRICE_MONTH`, which adds the monthly

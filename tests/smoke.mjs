@@ -4905,7 +4905,8 @@ try {
     const stub = globalThis.__LS_STRIPE_FETCH, refusing = new Set(['sub_undo', 'sub_orphan_stuck']), nowSecs = Math.floor(Date.now() / 1000);
     const answer = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
     const atStripe = { sub_orphan: { status: 'active', created: nowSecs - 30 * 86400 }, sub_orphan_ending: { status: 'active', cancel_at_period_end: true, created: nowSecs - 300 * 86400 },
-      sub_orphan_new: { status: 'active', created: nowSecs - 60 }, sub_orphan_stale: { status: 'canceled', created: nowSecs - 30 * 86400 }, sub_beside_apple: { status: 'active', created: nowSecs - 40 * 86400 } };
+      sub_orphan_new: { status: 'active', created: nowSecs - 60 }, sub_orphan_stale: { status: 'canceled', created: nowSecs - 30 * 86400 }, sub_beside_apple: { status: 'active', created: nowSecs - 40 * 86400 },
+      sub_beside_ended_apple: { status: 'active', created: nowSecs - 40 * 86400 } };
     globalThis.__LS_STRIPE_FETCH = async (url, init) => {
       const path = new URL(url).pathname, id = path.split('/').pop();
       if (init.method === 'DELETE' && refusing.has(id)) { stripeCalls.push({ method: init.method, path }); return answer({ error: { type: 'api_error', message: 'stub: not now' } }, 500); }
@@ -4927,12 +4928,15 @@ try {
       r.fresh = await callsOf(() => hook(subEv('evt_orphan_new', 'customer.subscription.created', t0 + 9.1555, { id: 'sub_orphan_new' })));
       r.stale = await callsOf(() => hook(subEv('evt_orphan_stale', 'customer.subscription.updated', t0 + 9.1557, { id: 'sub_orphan_stale' })));
       r.stuck = await callsOf(() => hook(subEv('evt_orphan_stuck', 'customer.subscription.updated', t0 + 9.156, { id: 'sub_orphan_stuck' }))); r.seenStuck = await seen('evt_orphan_stuck');
+      r.row = await ent();
       await db.query(`UPDATE entitlements SET plan = 'household', source = 'apple', status = 'active', current_period_end = now() + interval '300 days' WHERE household_id = ${patState.household.id}`);
       r.apple = await callsOf(() => hook(subEv('evt_beside_apple', 'customer.subscription.updated', t0 + 9.1565, { id: 'sub_beside_apple' })));
       r.appleRow = await ent();
+      /* an App Store plan past its end, inside the three days it is held while Apple's word is awaited: not cancelled beside */
+      await db.query(`UPDATE entitlements SET current_period_end = now() - interval '1 day' WHERE household_id = ${patState.household.id}`);
+      r.ended = await callsOf(() => hook(subEv('evt_beside_ended_apple', 'customer.subscription.updated', t0 + 9.1566, { id: 'sub_beside_ended_apple' }))); r.seenEnded = await seen('evt_beside_ended_apple');
     } finally { console.error = ce; globalThis.__LS_STRIPE_FETCH = stub; }
     await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', current_period_end = NULL WHERE household_id = ${patState.household.id}`);
-    r.row = await ent();
     const logged = (re) => said.some(l => re.test(l));
     check('an undo Stripe will not let finish goes back to Stripe unmarked, and the next delivery finishes it',
       r.first.status === 500 && r.seenFirst === 0 && r.first.calls.includes('DELETE sub_undo') && logged(/^billing: CANCEL BY HAND sub_undo paid while/)
@@ -4941,13 +4945,15 @@ try {
       r.done.status === 200 && r.seenDone === 1 && r.done.calls.includes('DELETE sub_undo_done') && r.done.calls.includes('POST /v1/refunds') && !logged(/REFUND BY HAND, checkout cs_undo_done/), { done: r.done, seenDone: r.seenDone, said });
     check('a subscription still able to charge a held forever is read at Stripe and cancelled on its own event, the log asking for its last charge',
       r.live.status === 200 && JSON.stringify(r.live.calls) === JSON.stringify(['GET sub_orphan', 'DELETE sub_orphan']) && logged(/^billing: CHECK BY HAND the last charge of sub_orphan /) && r.row.plan === 'lifetime' && r.row.source === 'code', r);
-    check('one winding down, or an event older than what Stripe now says, is left alone; a checkout\'s own new one is cancelled with no CHECK BY HAND',
+    check('one winding down, or an event older than what Stripe now says, is left alone; a checkout\'s own new one is cancelled, its charge asked about too',
       r.ending.status === 200 && JSON.stringify(r.ending.calls) === JSON.stringify(['GET sub_orphan_ending']) && r.stale.status === 200 && JSON.stringify(r.stale.calls) === JSON.stringify(['GET sub_orphan_stale'])
-      && r.fresh.status === 200 && r.fresh.calls.includes('DELETE sub_orphan_new') && !logged(/CHECK BY HAND the last charge of sub_orphan_(new|stale|ending)/), r);
+      && r.fresh.status === 200 && r.fresh.calls.includes('DELETE sub_orphan_new') && logged(/^billing: CHECK BY HAND the last charge of sub_orphan_new /) && !logged(/CHECK BY HAND the last charge of sub_orphan_(stale|ending)/), r);
     check('and if Stripe will not cancel it, the event goes back to Stripe, unmarked', r.stuck.status === 500 && r.seenStuck === 0 && r.stuck.calls.includes('DELETE sub_orphan_stuck') && logged(/CANCEL BY HAND sub_orphan_stuck/), r);
     check('a Stripe subscription still charging beside a plan the App Store holds is cancelled, and the App Store\'s plan stands',
       r.apple.status === 200 && JSON.stringify(r.apple.calls) === JSON.stringify(['GET sub_beside_apple', 'DELETE sub_beside_apple']) && logged(/^billing: CHECK BY HAND the last charge of sub_beside_apple /)
       && r.appleRow.source === 'apple' && r.appleRow.plan === 'household' && r.appleRow.status === 'active', r);
+    check('but beside an App Store plan past its end, still held while Apple\'s word is awaited, the event goes back to Stripe with nothing cancelled',
+      r.ended.status === 500 && r.seenEnded === 0 && !r.ended.calls.some(c => c.startsWith('DELETE')) && logged(/App Store plan past its end: sub_beside_ended_apple waits/), r);
   }
   {
     /* a webhook whose Stripe calls hang: one eight-second budget for them all, so the event goes back to Stripe, unmarked,
@@ -4963,6 +4969,23 @@ try {
     const took = Date.now() - started, hungSeen = (await db.query(`SELECT count(*)::int AS n FROM stripe_events WHERE id = 'evt_hung_undo'`)).rows[0].n;
     check('a webhook whose Stripe calls hang hands its event back within eight seconds, unmarked, inside Netlify\'s ten',
       hungStatus === 500 && hungSeen === 0 && took >= 7900 && took < 9500, { hungStatus, hungSeen, took });
+  }
+  {
+    /* a checkout replacing a subscription whose card failed: its read of the new subscription is only for the dates, and gets
+       three seconds at most, so the old subscription's cancel after it keeps its time even when the read hangs. The real timer */
+    await db.query(`UPDATE entitlements SET plan = 'household', source = 'stripe', status = 'canceled', stripe_subscription_id = 'sub_replaced_old', current_period_end = NULL WHERE household_id = ${patState.household.id}`);
+    const stub = globalThis.__LS_STRIPE_FETCH, started = Date.now();
+    globalThis.__LS_STRIPE_FETCH = (url, init) => !(init.method === 'GET' && new URL(url).pathname === '/v1/subscriptions/sub_slow_read') ? stub(url, init) : new Promise((_, reject) => init.signal
+      ? init.signal.addEventListener('abort', () => reject(new DOMException('gave up', 'TimeoutError')), { once: true })
+      : reject(new Error('no time limit')));
+    const from = stripeCalls.length;
+    let replaced;
+    try { replaced = (await hook({ id: 'evt_slow_read', type: 'checkout.session.completed', created: t0 + 9.158, data: { object: { id: 'cs_slow_read', mode: 'subscription', payment_status: 'paid', amount_total: 1999, customer: 'cus_pat', subscription: 'sub_slow_read', client_reference_id: String(patState.household.id), metadata: { plan: 'year' } } } })).status; }
+    finally { globalThis.__LS_STRIPE_FETCH = stub; }
+    const took = Date.now() - started, calls = stripeCalls.slice(from).map(c => c.method + ' ' + c.path), row = await ent();
+    await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL, current_period_end = NULL WHERE household_id = ${patState.household.id}`);
+    check('a checkout whose read of its new subscription hangs gives the read three seconds, and still cancels the subscription it replaced',
+      replaced === 200 && calls.includes('DELETE /v1/subscriptions/sub_replaced_old') && took >= 2900 && took < 7000 && row.sub === 'sub_slow_read', { replaced, calls, took, row });
   }
   {
     /* the claim writing forever while a checkout's webhook waits on Stripe for the new subscription, after the webhook read the
@@ -5017,7 +5040,9 @@ try {
       lapsedEvent.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'stripe' && (await ent()).sub === 'sub_after_sandbox', await ent());
   }
   /* one household, two ways to pay: Stripe's clock and Apple's cannot be compared, so a Stripe
-     delivery late enough to pass the ordering check must still not undo a plan paid to Apple */
+     delivery late enough to pass the ordering check must still not undo a plan paid to Apple. The
+     subscription events stop beside a plan the App Store holds before they write; write()'s own
+     Apple clause, behind them, is what the App Store clash check further down reaches */
   await db.query(`UPDATE entitlements SET plan='household', source='apple', status='active', current_period_end=NULL, stripe_subscription_id=NULL, event_at=to_timestamp(${t0 + 9}), apple_original_transaction_id='2000000000000001', apple_product_id='app.lunchsorted.household.annual' WHERE household_id=${patState.household.id}`);
   const lateStripe = await hook(subEv('evt_apple_1', 'customer.subscription.deleted', t0 + 9.2, { status: 'canceled' }));
   check('a late Stripe delivery cannot undo a plan the household pays Apple for', lateStripe.status === 200 && (await ent()).plan === 'household' && (await ent()).source === 'apple' && (await ent()).status === 'active', await ent());

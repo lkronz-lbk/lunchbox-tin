@@ -103,7 +103,7 @@ async function applyEvent(ev) {
     /* the subscription's own dates come with it, so the plan line has its renewal date from the
        first moment and the subscription.created event, which may carry an earlier stamp, is not needed */
     let sub = null;
-    if (subId) { try { sub = await stripe('GET', `/subscriptions/${subId}`); } catch (e) { console.error('billing: could not read', subId, e.message); } }
+    if (subId) { try { sub = await withinTime(3000, () => stripe('GET', `/subscriptions/${subId}`)); } catch (e) { console.error('billing: could not read', subId, e.message); } }   /* three seconds at most: the replaced subscription's cancel below must keep its time */
     const ok = await write(hid, at, { plan: 'household', source, status: sub ? subscriptionStatus(sub) : 'active', periodEnd: periodEnd(sub),
       cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy,
       charged: obj.payment_status === 'paid', keepForever: true });   /* $0 today inside the three weeks: charged later, on the subscription's own event */
@@ -131,19 +131,23 @@ async function applyEvent(ev) {
          beside one only bills for nothing. One winding down (an old yearly after a forever bought through Stripe)
          changes nothing. One still able to charge (left by a beta claim before claims cancelled them, or a first
          charge Stripe was still retrying when the household bought on the iPhone) is read at Stripe, since this
-         event may be an old one, and cancelled. The log asks for its last charge to be looked at when it is more than
-         a day old: a newer one is a checkout's, whose own undo gives its payment back. If Stripe cannot say, or will
+         event may be an old one, and cancelled, the log asking for its last charge to be looked at (a checkout's own
+         is refunded by its undo when that runs, but a retried undo decides afresh). If Stripe cannot say, or will
          not cancel it, the event goes back to Stripe to be tried again */
       const kept = foreverHeld(cur) ? 'lifetime kept' : 'the App Store holds it';
       if (ev.type === 'customer.subscription.deleted') return kept;
+      /* an App Store plan past its end, inside the three days it is held while Apple's word is awaited, may not be
+         renewed: the event goes back to Stripe, whose retries outlast the three days, rather than cancel a plan
+         the household could be left without */
+      if (cur.source === 'apple' && cur.current_period_end && Date.parse(cur.current_period_end) < Date.now()) throw new Error(`App Store plan past its end: ${obj.id} waits for Apple's word`);
       let now = null, noRecord = false;
       try { now = await stripe('GET', `/subscriptions/${obj.id}`); } catch (e) { if (!(e.status === 404 && e.code === 'resource_missing')) throw e; noRecord = true; }
       if (noRecord) return kept;
       if (!(now && typeof now === 'object' && STRIPE_STATES.includes(now.status))) throw new Error(`no state for ${obj.id} beside a plan held another way`);
       if (now.cancel_at_period_end || ['canceled', 'incomplete_expired', 'incomplete'].includes(now.status)) return kept;
+      /* said before the cancel, whatever its outcome, so a retry that finds it cancelled loses nothing */
+      if (now.status === 'active' || now.status === 'past_due') console.error('billing: CHECK BY HAND the last charge of', obj.id, 'cancelled: it was charging beside a plan held another way');
       if (!(await cancelSubscription(obj.id))) throw new Error(`CANCEL BY HAND ${obj.id}: still able to charge beside a plan held another way`);
-      if ((now.status === 'active' || now.status === 'past_due') && Number(now.created) > 0 && Date.now() / 1000 - now.created > 86400)
-        console.error('billing: CHECK BY HAND the last charge of', obj.id, 'cancelled: it was charging beside a plan held another way');
       return kept + ', its subscription cancelled';
     }
     if (cur && cur.stripe_subscription_id && cur.stripe_subscription_id !== obj.id) return 'other subscription';   /* an older one of the same customer */
