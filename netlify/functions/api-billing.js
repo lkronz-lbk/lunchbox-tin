@@ -126,7 +126,11 @@ async function applyEvent(ev) {
     const hid = await householdFor(obj);
     if (!hid) return 'no household';
     const [cur] = await q`SELECT plan, status, source, current_period_end, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
-    if (foreverHeld(cur) || appleLive(cur)) {
+    /* only a subscription that is this household's own: its metadata names the household, or the row names it. One
+       found only through the customer (made in the dashboard, or for anything else sold on this Stripe account) is
+       left to the rules below */
+    const ours = (obj.metadata && String(obj.metadata.household_id) === String(hid)) || (!!cur && cur.stripe_subscription_id === obj.id);
+    if (ours && (foreverHeld(cur) || appleLive(cur))) {
       /* forever held, or a plan the App Store holds: the website sells no plan over either, so a Stripe subscription
          beside one only bills for nothing. One winding down (an old yearly after a forever bought through Stripe)
          changes nothing. One still able to charge (left by a beta claim before claims cancelled them, or a first
@@ -146,7 +150,9 @@ async function applyEvent(ev) {
       try { now = await stripe('GET', `/subscriptions/${obj.id}`); } catch (e) { if (!(e.status === 404 && e.code === 'resource_missing')) throw e; noRecord = true; }
       if (noRecord) return kept;
       if (!(now && typeof now === 'object' && STRIPE_STATES.includes(now.status))) throw new Error(`no state for ${obj.id} beside a plan held another way`);
-      if (now.cancel_at_period_end || ['canceled', 'incomplete_expired', 'incomplete'].includes(now.status)) return kept;
+      /* winding down only while it has nothing left to collect: one set to end at its period end that Stripe is still
+         retrying (a first charge that failed, then Cancel pressed in the portal) can still go through */
+      if (['canceled', 'incomplete_expired', 'incomplete'].includes(now.status) || (now.cancel_at_period_end && (now.status === 'active' || now.status === 'trialing'))) return kept;
       /* said before the cancel, whatever its outcome, so a retry that finds it cancelled loses nothing */
       if (now.status === 'active' || now.status === 'past_due') console.error('billing: CHECK BY HAND the last charge of', obj.id, 'cancelled: it was charging beside a plan held another way');
       if (!(await cancelSubscription(obj.id))) throw new Error(`CANCEL BY HAND ${obj.id}: still able to charge beside a plan held another way`);

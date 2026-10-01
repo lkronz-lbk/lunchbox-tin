@@ -4906,7 +4906,8 @@ try {
     const answer = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
     const atStripe = { sub_orphan: { status: 'active', created: nowSecs - 30 * 86400 }, sub_orphan_ending: { status: 'active', cancel_at_period_end: true, created: nowSecs - 300 * 86400 },
       sub_orphan_new: { status: 'active', created: nowSecs - 60 }, sub_orphan_stale: { status: 'canceled', created: nowSecs - 30 * 86400 }, sub_beside_apple: { status: 'active', created: nowSecs - 40 * 86400 },
-      sub_beside_ended_apple: { status: 'active', created: nowSecs - 40 * 86400 } };
+      sub_beside_ended_apple: { status: 'active', created: nowSecs - 40 * 86400 }, sub_ending_retrying: { status: 'past_due', cancel_at_period_end: true, created: nowSecs - 30 * 86400 },
+      sub_not_ours: { status: 'active', created: nowSecs - 30 * 86400 } };
     globalThis.__LS_STRIPE_FETCH = async (url, init) => {
       const path = new URL(url).pathname, id = path.split('/').pop();
       if (init.method === 'DELETE' && refusing.has(id)) { stripeCalls.push({ method: init.method, path }); return answer({ error: { type: 'api_error', message: 'stub: not now' } }, 500); }
@@ -4927,6 +4928,8 @@ try {
       r.ending = await callsOf(() => hook(subEv('evt_orphan_ending', 'customer.subscription.updated', t0 + 9.155, { id: 'sub_orphan_ending' })));
       r.fresh = await callsOf(() => hook(subEv('evt_orphan_new', 'customer.subscription.created', t0 + 9.1555, { id: 'sub_orphan_new' })));
       r.stale = await callsOf(() => hook(subEv('evt_orphan_stale', 'customer.subscription.updated', t0 + 9.1557, { id: 'sub_orphan_stale' })));
+      r.retrying = await callsOf(() => hook(subEv('evt_ending_retrying', 'customer.subscription.updated', t0 + 9.1558, { id: 'sub_ending_retrying' })));
+      r.notOurs = await callsOf(() => hook(subEv('evt_not_ours', 'customer.subscription.updated', t0 + 9.1559, { id: 'sub_not_ours', metadata: {} })));
       r.stuck = await callsOf(() => hook(subEv('evt_orphan_stuck', 'customer.subscription.updated', t0 + 9.156, { id: 'sub_orphan_stuck' }))); r.seenStuck = await seen('evt_orphan_stuck');
       r.row = await ent();
       await db.query(`UPDATE entitlements SET plan = 'household', source = 'apple', status = 'active', current_period_end = now() + interval '300 days' WHERE household_id = ${patState.household.id}`);
@@ -4949,6 +4952,9 @@ try {
     check('one winding down, or an event older than what Stripe now says, is left alone; a checkout\'s own new one is cancelled, its charge asked about too',
       r.ending.status === 200 && JSON.stringify(r.ending.calls) === JSON.stringify(['GET sub_orphan_ending']) && r.stale.status === 200 && JSON.stringify(r.stale.calls) === JSON.stringify(['GET sub_orphan_stale'])
       && r.fresh.status === 200 && r.fresh.calls.includes('DELETE sub_orphan_new') && logged(/^billing: CHECK BY HAND the last charge of sub_orphan_new /) && !logged(/CHECK BY HAND the last charge of sub_orphan_(stale|ending)/), r);
+    check('one set to end at its period end that Stripe is still retrying is cancelled now; one that is not this household\'s own is not touched',
+      r.retrying.status === 200 && r.retrying.calls.includes('DELETE sub_ending_retrying') && logged(/^billing: CHECK BY HAND the last charge of sub_ending_retrying /)
+      && r.notOurs.status === 200 && r.notOurs.calls.length === 0, r);
     check('and if Stripe will not cancel it, the event goes back to Stripe, unmarked', r.stuck.status === 500 && r.seenStuck === 0 && r.stuck.calls.includes('DELETE sub_orphan_stuck') && logged(/CANCEL BY HAND sub_orphan_stuck/), r);
     check('a Stripe subscription still charging beside a plan the App Store holds is cancelled, and the App Store\'s plan stands',
       r.apple.status === 200 && JSON.stringify(r.apple.calls) === JSON.stringify(['GET sub_beside_apple', 'DELETE sub_beside_apple']) && logged(/^billing: CHECK BY HAND the last charge of sub_beside_apple /)

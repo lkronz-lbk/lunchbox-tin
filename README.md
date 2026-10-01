@@ -1255,8 +1255,9 @@ the idea bank stays free so a free list is never stuck with what it has.
   still able to charge, with no end set, is cancelled: one a beta claim left before claims
   cancelled them, a first charge Stripe was still retrying when the household bought on the
   iPhone, or a checkout's own (whose undo refunds it when it runs). The log says CHECK BY HAND
-  for its last charge, before the cancel. One winding down (cancel_at_period_end), or still
-  incomplete, is left. An App Store plan past its end, inside the three days it is held while
+  for its last charge, before the cancel. One winding down (set to end at its period end, with
+  nothing left to collect), or still incomplete, is left, and only the household's own is touched:
+  its metadata or its row names the household, not just the customer. An App Store plan past its end, inside the three days it is held while
   Apple's word is awaited, is waited out rather than cancelled beside, its deleted event too, the
   log saying CHECK BY HAND at each wait in case Stripe stops retrying first. If Stripe cannot say, or
   will not cancel it, the event goes back to Stripe; buying forever on top of a
