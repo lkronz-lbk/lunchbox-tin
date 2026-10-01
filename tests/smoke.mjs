@@ -3725,6 +3725,20 @@ try {
       JSON.stringify(fine.rows) === '[{"n":1}]' && JSON.stringify(fineText.rows) === '[{"n":1}]', { refused: refusedQuery.e && refusedQuery.e.message, proxied: proxied.e && proxied.e.message, fine, fineText });
     check('and api-apple, reached anonymously while the database cannot be, answers 500 in its own words and logs ours',
       appleAnswer.status === 500 && appleAnswer.body.error === 'Something went wrong on our side' && logged.some(l => /^api-apple Error: No answer from the database \(/.test(l)), { appleAnswer, logged });
+    /* a transaction, as the sign-in limits take one (sql().transaction), goes through the same door: what the driver says
+       about it is told in the same fixed words, and its results come back one list of rows a statement */
+    const viaTx = (url, fetchFn) => using({ SITE_ENV: 'preview', STAGING_DATABASE_URL: url }, () => {
+      try { return dbLib.sql().transaction(q => [q`SELECT 1 AS n`, q`SELECT ${1}::int AS n`]).then(results => ({ results }), e => ({ e })); } catch (e) { return Promise.resolve({ e }); }
+    }, fetchFn);
+    const bothRows = JSON.stringify({ results: [JSON.parse(one), JSON.parse(one)] });
+    const [txSpoiled, txDown, txEchoed, txFine] = await watching(() => Promise.all([
+      viaTx(ALONE, spoil), viaTx(ALONE, answer(503, 'upstream said ' + ALONE)),
+      viaTx(ALONE, answer(400, JSON.stringify({ message: 'no such endpoint in ' + ALONE, code: 'XX000' }))), viaTx(ALONE, answer(200, bothRows))]));
+    check('and a transaction, as the sign-in limits take one, goes through the same door: nothing of the address in what it throws, and its results come back one list of rows a statement',
+      [txSpoiled, txDown, txEchoed].every(r => !!r.e && hidden(shown(r.e)) && r.e.cause === undefined && !(r.e instanceof NeonDbError)) &&
+      /^No answer from the database \(/.test(txSpoiled.e.message) && /^The database answered 503, but not with a result \(/.test(txDown.e.message) &&
+      /^The database refused a query in words that hold the password/.test(txEchoed.e.message) && txEchoed.e.code === 'XX000' && JSON.stringify(txFine.results) === '[[{"n":1}],[{"n":1}]]',
+      { spoiled: txSpoiled.e && txSpoiled.e.message, down: txDown.e && txDown.e.message, echoed: txEchoed.e && txEchoed.e.message, fine: txFine.results });
     check('and nothing this process wrote to its console meanwhile holds the address, whichever console method it came through', logged.length >= 1 && logged.every(l => hidden(l)), logged);
     /* the driver's own query ran again at every await; the suite's database never did */
     let asked = 0, twice = null;
