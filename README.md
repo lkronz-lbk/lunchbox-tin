@@ -666,7 +666,10 @@ Got it at its foot or Done at its head retires the note for that build. A tap on
 only puts the sheet away, so a mis-tap during the slide-in does not spend a note that is only
 ever shown once. Nothing else spends it either: a message that arrives while the note is up (the
 beta switching on, an invite that has lapsed) takes the banner, its OK clears that message alone,
-and the note comes straight back. Whether an open owes the note is settled once, at boot, so an OK
+and the note comes straight back. On Account, where the beta link lands and the sign-in is, the
+beta's own banners (Sign in and the beta switches on, Switching the beta on, Could not switch the
+beta on with Try again) hold the note back the same way while a code waits; on every other tab
+the note keeps its place, so a tester who never signs in still hears it. Whether an open owes the note is settled once, at boot, so an OK
 never brings it to a phone that has started over since (Erase everything, sign-out, deleting the
 account, a save that could not be shown), nor back once it has been read. Starting over also takes
 the note off the banner, and a household set up afterwards is marked as having seen it, as a phone
@@ -682,8 +685,10 @@ left alone — the banner is retired by *reading* it, not by an OK, so a repeat 
 box every morning until a parent re-read Monday's news — while a phone that skipped those builds
 still hears it. `seenAs` is the field that is easy to leave behind, and a stale one silently
 silences every later note for the phones stuck on those builds, so `npm run csp` refuses one that
-is not a list, is empty, has an empty entry or names `APP_BUILD`. Drop the field the next time a
-note is actually written.
+is not one list of single-quoted builds, is empty, has an empty entry, names `APP_BUILD`, sits
+beside `text:''`, or whose newest build is not the one just before `APP_BUILD`: a note carried
+again adds the build it last went out on, and a list left beside a new note is caught. Drop the
+field the next time a note is actually written.
 
 `seenAs` is a list because a note can be carried more than one hop: v27 carries the note written
 for v25, which v25 and v26 both showed, so it names both. With one build named, every phone that
@@ -734,8 +739,8 @@ so App Store Connect has to follow in the same sitting:
       note, and PR #36, which had tagged v25 on its branch with no note and was never served on
       its own. No phone had read a v25 note, so v25 carries no `seenAs`. The next build that
       changes the app is v26: the sheet focus fixes, which carry v25's note forward with
-      `seenAs:'lunchsorted-v25'`. That is the one hop `seenAs` allows, so the build after v26
-      writes a note of its own or says nothing, and drops `seenAs` either way. v27 carries it once more even so:
+      `seenAs:'lunchsorted-v25'`. That was the one hop a single-build `seenAs` allowed, and the
+      plan was for the build after v26 to write a note of its own or say nothing, and drop `seenAs`. v27 carries it once more even so:
       Subscription, its caption on the Account tab and the delete warning stop calling the
       beta's free forever a purchase, and the beta link stops telling a household that bought
       forever that it is free, a fix, and a phone that skipped v25 and v26 still has to hear
@@ -1201,7 +1206,7 @@ the idea bank stays free so a free list is never stuck with what it has.
   cannot open the portal. Forever is priced, and "Paid once", only where Stripe or the App
   Store took the money (`source`), since a code's row can carry forever's price id too: the
   beta's, from the link or a 100%-off code, reads "Household, free forever" and no other row,
-  its caption is Free forever, the delete warning calls it the forever plan, not the forever
+  its caption is Free forever, the delete warning calls it your free forever plan, not the forever
   purchase, and opening the beta link again never puts up the beta's banner over a forever
   already held. Only forever reads free: a yearly or monthly plan on a 100%-off code keeps its
   price and its renewal date (Liz, 2026-09-30), dated Renews even inside the three weeks, since

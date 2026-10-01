@@ -25,18 +25,26 @@ const noteBuild = (html.match(/var WHATS_NEW = \{build:'([^']+)'/) || [])[1];
 if (noteBuild !== appBuild) throw new Error(`WHATS_NEW.build in public/app/index.html (${noteBuild}) must equal APP_BUILD (${appBuild}): write this build's note, or '' for none`);
 /* seenAs names the builds this note was already shown as, so a phone that read it on any of
    them is not shown it twice. It is a list (v27 carried v25's note across two shipped builds),
-   and must be one: whatsNew() asks indexOf, and a string's indexOf would match part of a tag.
+   written as one list literal of single-quoted builds, which is how the smoke checks read it too:
+   whatsNew() asks indexOf, and a string's indexOf would match part of a tag.
    It is the field that is easy to leave behind: carried forward and then forgotten, it goes on
-   silencing the note for every phone that stopped at those builds, release after release — and
-   unlike a stale note, nothing on screen ever says so. So every entry must name a build that
-   is not this one, and the note must actually be carried. */
-const noteObj = (html.match(/var WHATS_NEW = \{[\s\S]*?\n  \]\};/) || [''])[0];
-const seenField = noteObj.match(/seenAs\s*:\s*(\[[^\]]*\]|['"][^'"]*['"])/);
-if (seenField) {
-  if (seenField[1][0] !== '[') throw new Error("WHATS_NEW.seenAs in public/app/index.html must be a list of builds, such as seenAs:['lunchsorted-v25']");
-  const seenAs = [...seenField[1].matchAll(/['"]([^'"]*)['"]/g)].map(m => m[1]);
+   silencing the note for every phone that stopped at those builds, release after release, and
+   unlike a stale note, nothing on screen ever says so. So every entry must name a build that is
+   not this one, the note must actually be carried (a build with text:'' has none), and the
+   newest build named must be the one just before this: a note carried again adds the build it
+   last went out on, and a list left beside a new note is caught here. */
+const noteObj = (html.match(/var WHATS_NEW = \{[\s\S]*?\};\n/) || [''])[0];
+const seenKeys = noteObj.match(/\bseenAs\s*:/g) || [];
+if (seenKeys.length) {
+  const seenField = noteObj.match(/\bseenAs\s*:\s*\[([^\]]*)\]/);
+  if (seenKeys.length > 1 || !seenField || seenField[1].replace(/'[^']*'/g, '').replace(/[\s,]/g, '')) throw new Error("WHATS_NEW.seenAs in public/app/index.html must be one list of single-quoted builds, such as seenAs:['lunchsorted-v25']");
+  const seenAs = [...seenField[1].matchAll(/'([^']*)'/g)].map(m => m[1]);
   if (!seenAs.length || seenAs.some(b => !b)) throw new Error("WHATS_NEW.seenAs in public/app/index.html is empty or has an empty entry: name the builds the note was shown as, or remove the field");
   if (seenAs.includes(appBuild)) throw new Error(`WHATS_NEW.seenAs in public/app/index.html names APP_BUILD (${appBuild}), which would hide this build's note from every phone: name only the earlier builds the note is carried from`);
+  if (/\btext\s*:\s*''/.test(noteObj)) throw new Error("WHATS_NEW.seenAs in public/app/index.html sits beside text:'', a build with no note to carry: remove seenAs");
+  const num = t => +((t.match(/-v(\d+)$/) || [])[1] || NaN);
+  const newest = Math.max(...seenAs.map(num));
+  if (num(appBuild) && newest !== num(appBuild) - 1) throw new Error(`WHATS_NEW.seenAs in public/app/index.html goes up to ${seenAs.find(b => num(b) === newest) || seenAs.join(', ')}, but this is ${appBuild}: a note carried again adds the build just before this one, and a new note drops seenAs`);
 }
 
 export const APP_CSP = [

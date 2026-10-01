@@ -756,6 +756,9 @@ try {
          already read it there are not told twice, and there is no OK on a news banner to make it go away */
       /* seenAs is a list: a note carried across two shipped builds leaves alone the phones that read it on either */
       const seenAs = [...((APP_SRC.match(/var WHATS_NEW = \{build:'[^']*', seenAs:\[([^\]]*)\]/) || [,''])[1]).matchAll(/'([^']*)'/g)].map(m => m[1]);
+      /* npm run csp reads the field the same way; one it could not read here would skip the check below unseen */
+      if (/\bseenAs\s*:/.test((APP_SRC.match(/var WHATS_NEW = \{[\s\S]*?\};\n/) || [''])[0]))
+        check('the note\'s seenAs reads as a list of builds, straight after its build', seenAs.length > 0, seenAs);
       if (seenAs.length) {
         const leftAlone = [];
         for (const b of seenAs) {
@@ -890,12 +893,13 @@ try {
       await page.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
       await page.goto(BASE + '/app/?beta=BETA-TEST-1234'); await page.waitForLoadState('load');
       const onAccount = await until(page, () => /Sign in and the beta switches on/.test(document.getElementById('view').textContent));
-      const noteHeld = onAccount && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0;
-      await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
-      const onPack = (await page.$$eval('[data-act="whats-new"]', a => a.length)) === (NOTE_TEXT ? 1 : 0)
-        && (!NOTE_TEXT || !/Sign in and the beta switches on/.test(await page.textContent('#view')));
-      check('signed out, the beta link\'s own banner outranks the note on Account, where the link lands', onAccount && noteHeld);
-      check('and on Pack the note keeps its place, so a tester who never signs in still hears what changed', onAccount && onPack);
+      if (NOTE_TEXT) {
+        const noteHeld = onAccount && (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 0;
+        await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(250);
+        const onPack = (await page.$$eval('[data-act="whats-new"]', a => a.length)) === 1 && !/Sign in and the beta switches on/.test(await page.textContent('#view'));
+        check('signed out, the beta link\'s own banner outranks the note on Account, where the link lands', onAccount && noteHeld);
+        check('and on Pack the note keeps its place, so a tester who never signs in still hears what changed', onAccount && onPack);
+      } else check('signed out, with no note owed, the beta link\'s banner is on Account as ever', onAccount);
       /* this phone signs in further down, where a code still waiting would claim the beta */
       await page.evaluate(b => { localStorage.removeItem('lunchsorted-beta'); localStorage.setItem('lunchsorted-seen', b); }, APP_BUILD);
       await page.reload(); await page.waitForTimeout(600);
@@ -3769,6 +3773,23 @@ try {
     check('a parent who taps the link from onboarding lands on the week it promised, signed in', await pw.getAttribute('nav.tabs [aria-current="true"]', 'data-tab') === 'week' && await pw.evaluate(() => fetch('/api/auth/me').then(r => r.json()).then(j => j.user && j.user.email === 'wren-parent@example.com')));
     await ctxW.close();
   }
+  /* A beta code waiting on a signed-out phone: the sign-in card under the beta's banner offers no plan to
+     keep or get, since the banner says what signing in brings, free forever. Tapping Keep there used to put
+     the price sheet up just as the beta switched on. The same card offers it again once no code waits. */
+  {
+    const cB = await phone(); const pB = await cB.newPage(); pB.on('pageerror', e => errors.push(String(e.message)));
+    await pB.goto(BASE + '/app/'); await pB.waitForTimeout(300);
+    if (await until(pB, () => !!document.querySelector('#obName'), null, 5000)) { await pB.fill('#obName', 'Bea'); await pB.click('[data-act="ob-go"]'); await pB.waitForTimeout(300); }
+    await pB.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pB.waitForLoadState('load');
+    const card = await until(pB, () => /Sign in and the beta switches on/.test(document.getElementById('view').textContent) && !!document.querySelector('#signinEmail'));
+    const billed = await until(pB, () => { try { return JSON.parse(localStorage.getItem('lunchsorted-billing')).enabled === true; } catch (e) { return false; } });
+    const noKeep = card && billed && !(await pB.$('[data-act="upgrade"][data-why="keep"]'));
+    await pB.evaluate(() => localStorage.removeItem('lunchsorted-beta'));
+    if (card) { await pB.click('[data-act="tab"][data-tab="pack"]'); await pB.click('[data-act="tab"][data-tab="setup"]'); await pB.waitForTimeout(250); }
+    const keepBack = card && !!(await pB.$('[data-act="upgrade"][data-why="keep"]'));
+    check('with a beta code waiting, the sign-in card offers no plan to keep or get under the free forever its banner promises, and offers it again once none waits', noKeep && keepBack, { card, billed, noKeep, keepBack });
+    await cB.close();
+  }
   /* the link opened somewhere else: a browser with no lunches must not become the household */
   {
     const ctxI = await phone(); const pi = await ctxI.newPage(); pi.on('pageerror', e => errors.push(String(e.message)));
@@ -4040,9 +4061,24 @@ try {
     const wrong = await pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-NOPE-0000' }) }).then(r => r.status));
     check('a wrong beta code grants nothing', wrong === 404 && ((await entPat()) || {}).plan !== 'lifetime', wrong);
     check('a stranger cannot claim the beta', (await fetch(NODE_BASE + '/api/billing/beta', { method: 'POST', body: JSON.stringify({ code: 'BETA-TEST-1234' }) })).status === 401);
-    /* opened on the first open after an update: the note is owed, the claim's own banner takes its place, and hands it back */
+    /* Opened on the first open after an update, so the note is owed. The first tries cannot get through
+       (a 503, as when Stripe cannot be reached to stop a subscription): Account, where the link lands,
+       says so with Try again over the note, and Pack keeps the note. The 503 is the test's own, so no
+       claim reaches the server and none counts against the hour's five. Then Try again goes through,
+       and the claim's own banner hands the note back. */
     await pb.evaluate(() => localStorage.setItem('lunchsorted-seen', 'lunchsorted-v0'));
+    const unreachable = r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Stripe could not be reached' }) });
+    await pb.route('**/api/billing/beta', unreachable);
     await pb.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pb.waitForLoadState('load');
+    const tryAgain = await until(pb, () => !!document.querySelector('.banner [data-act="beta-retry"]'));
+    if (NOTE_TEXT) {
+      check('a claim that cannot get through says so on Account, with Try again, over the note the update owes', tryAgain && (await pb.$$eval('[data-act="whats-new"]', a => a.length)) === 0);
+      await pb.click('[data-act="tab"][data-tab="pack"]'); await pb.waitForTimeout(250);
+      check('and Pack keeps the note meanwhile', (await pb.$$eval('[data-act="whats-new"]', a => a.length)) === 1 && !(await pb.$('[data-act="beta-retry"]')));
+      await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
+    } else check('a claim that cannot get through says so on Account, with Try again', tryAgain);
+    await pb.unroute('**/api/billing/beta', unreachable);
+    if (await until(pb, () => !!document.querySelector('.banner [data-act="beta-retry"]'), null, 3000)) await pb.click('.banner [data-act="beta-retry"]');
     let got = null; for (let i = 0; i < 40 && !(got && got.plan === 'lifetime'); i++) { await pb.waitForTimeout(250); got = await entPat(); }
     check('opening the beta link while signed in switches the household to forever, marked as the beta', !!got && got.plan === 'lifetime' && got.source === 'code' && got.status === 'active', got);
     check('the code leaves the address bar and the phone once used', !/beta=/.test(pb.url()) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-beta'))) === null);
@@ -4050,11 +4086,15 @@ try {
     check('and the app says so where it stays, in green', !!(await pb.$('.banner.good [data-act="notice-dismiss"]')));
     check('once: no toast says the same words over the banner', await pb.evaluate(() => { const t = document.querySelector('#toast');
       return !(t && t.classList.contains('show') && /free forever/.test(t.textContent)); }));
+    check('and a screen reader is told, as the toast used to tell it', await pb.evaluate(() => { const s = document.getElementById('say');
+      return !!s && s.getAttribute('aria-live') === 'polite' && /The beta is on/.test(s.textContent); }));
     const betaOK = !!(await pb.$('.banner [data-act="notice-dismiss"]'));
     if (betaOK) { await pb.click('.banner [data-act="notice-dismiss"]'); await pb.waitForTimeout(250); }
-    const handedBack = (await pb.$$eval('[data-act="whats-new"]', a => a.length)) === (NOTE_TEXT ? 1 : 0);
-    check('and its OK hands the banner back to the note the update owed', betaOK && handedBack);
-    if (betaOK && NOTE_TEXT && handedBack) { await pb.click('[data-act="whats-new"]'); await sheetDone(pb); await pb.waitForTimeout(300); }
+    const notesUp = await pb.$$eval('[data-act="whats-new"]', a => a.length);
+    if (NOTE_TEXT) {
+      check('and its OK hands the banner back to the note the update owed', betaOK && notesUp === 1);
+      if (betaOK && notesUp === 1) { await pb.click('[data-act="whats-new"]'); await sheetDone(pb); await pb.waitForTimeout(300); }
+    } else check('and its OK clears it, with no note to hand back', betaOK && notesUp === 0);
     await pb.click('[data-act="tab"][data-tab="week"]'); await pb.waitForTimeout(250);
     check('a beta household has the feedback strip on every tab', !!(await pb.$('.betabar a[href="/feedback.html"], .betabar [data-act="help-site"]')) && /Beta tester/.test(await pb.textContent('.betabar')));
     /* the strip is on every tab, and its own rule had squeezed the button to 40px, under the 44px every button keeps */
@@ -4825,7 +4865,7 @@ try {
     /* nor will the beta link take it: the server answers apple, and the app says that, not that the beta is full */
     await db.query(`DELETE FROM rate_events WHERE key = 'beta:${patState.me.userId}'`);
     await pb.goto(BASE + '/app/?beta=BETA-TEST-1234'); await pb.waitForLoadState('load');
-    const appleBeta = await until(pb, () => /through the App Store, so the beta link is not for it/.test(document.querySelector('#view').textContent));
+    const appleBeta = await until(pb, () => /paid through the App Store, so there is nothing for the beta link to switch on/.test(document.querySelector('#view').textContent));
     check('a household paying through the App Store that opens the beta link is told so, not that the beta is full',
       appleBeta && !/beta is full/.test(await pb.textContent('#view')) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-beta'))) === null && (await row()).source === 'apple',
       appleBeta ? undefined : (await pb.textContent('#view')).slice(0, 200));

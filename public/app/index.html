@@ -609,6 +609,7 @@ textarea.codebox:not([readonly]){font-size:16px}   /* a parent types into this o
 </div>
 <div id="kid" hidden></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="sr-only" id="say" role="status" aria-live="polite"></div>
 
 <script>
 /* Merge rules for one household edited on two phones. Pure: two account
@@ -1557,8 +1558,8 @@ function claimBeta(){
   claimBeta.busy = true; claimBeta.tries = (claimBeta.tries || 0) + 1; claimBeta.failed = false;
   api('POST', '/api/billing/beta', {code:code}).then(function(r){
     claimBeta.busy = false;
-    if(r.status === 200){ betaForget(); if(r.already) toast('Lunch Sorted is already yours, for good'); else { UI.notice = BETA_ON; render(); } Sync.pull().then(render); return; }   /* already: forever may have been bought, and the beta's banner calls it free. A fresh claim is said once, in the banner, not in a toast as well */
-    if(r.status === 409){ betaForget(); UI.notice = r.apple ? 'This household pays for the Household plan through the App Store, so the beta link is not for it.' : r.paying ? 'This household already pays for the Household plan, so the beta link is not for it.' : 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
+    if(r.status === 200){ betaForget(); if(r.already){ toast('Lunch Sorted is already yours, for good'); render(); } else { UI.notice = BETA_ON; say(BETA_ON); } Sync.pull().then(render); return; }   /* already: forever may have been bought, and the beta's banner calls it free; nothing else changes, so it draws at once. A fresh claim is said once, in the banner, which comes with the pull so the plan rows under it change at the same moment, and to a screen reader at once */
+    if(r.status === 409){ betaForget(); UI.notice = r.apple ? 'Your Household plan is paid through the App Store, so there is nothing for the beta link to switch on.' : r.paying ? 'This household already pays for the Household plan, so the beta link is not for it.' : 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
     if(r.status === 404){ betaForget(); UI.notice = 'That beta link is not right. Ask for a fresh one.'; render(); return; }
     claimBeta.failed = true; render();                             /* a hiccup: the code stays, the banner offers another go */
   }).catch(function(){ claimBeta.busy = false; claimBeta.failed = true; render(); });
@@ -1700,7 +1701,7 @@ function rememberAfter(why){ try{ if(why) localStorage.setItem(AFTER_KEY, why); 
 function resumeAfter(){
   var why = ''; try{ why = localStorage.getItem(AFTER_KEY) || ''; localStorage.removeItem(AFTER_KEY); }catch(e){}
   if(!why || !signedIn()) return;
-  if(gated() || (why === 'keep' && !paid())){                    /* the page they came from first, the plan sheet over it */
+  if((gated() || (why === 'keep' && !paid())) && !betaWaiting()){   /* the page they came from first, the plan sheet over it; not while a beta claim is on its way */
     var to = {lunchbox:['setup','box'], share:['setup','household'], week:['week',''], write:['week',''], food:['foods',''], recipe:['recipes',''], pantry:['shop',''], review:['pack',''], kidpick:['pack',''], keep:['setup','plan']}[why];
     if(to){ UI.tab = to[0]; UI.pane = to[1]; }
     render(); window.scrollTo(0, 0); upgradeSheet(why); return;
@@ -1998,8 +1999,8 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    longer moving the page under the thumb: a fix, nothing a parent would call new, so it carries
    v25's note forward rather than spend the banner on itself. seenAs names v25: a phone that read
    the walk-through at v25, or was set up on v25, is left alone, and one that never opened v25
-   still hears it. That is the one hop seenAs allows. The build after v26 writes a note of its
-   own, or says nothing (text:''), and drops seenAs.
+   still hears it. That was the one hop a single-build seenAs allowed, and the plan was for the
+   build after v26 to write a note of its own, or say nothing (text:''), and drop seenAs.
    v27 stops calling the beta's free forever a purchase: Subscription had quoted it forever's
    price and "Paid once", the Account tab's caption said only Forever, the delete warning
    called it the forever purchase, and opening the beta link again told a household that had
@@ -2034,7 +2035,7 @@ function whatsNew(){
      the banner is not dismissed by an OK, only by reading the walk-through behind Show me, so a
      repeat would sit over the box every morning until a parent re-read what they read on Monday.
      Its `seen` is left where it is, so the next build's note still reaches them. */
-  if((WHATS_NEW.seenAs || []).indexOf(seen) > -1) return;
+  if([].concat(WHATS_NEW.seenAs || []).indexOf(seen) > -1) return;   /* concat: a string, were one ever to get past npm run csp, matches a whole tag, never part of one */
   if(seen !== APP_BUILD && WHATS_NEW.build === APP_BUILD && WHATS_NEW.text){ UI.newsHeld = true; if(!UI.notice) UI.notice = WHATS_NEW.text; }
 }
 /* UI.pane is the page stacked over a tab: the lunchbox settings, or one of the
@@ -2616,6 +2617,8 @@ function addDays(d,n){ var x = new Date(d.getTime()); x.setDate(x.getDate()+n); 
 function weekStart(d){ return addDays(d, -((d.getDay()+6)%7)); }
 function has(item,tag){ return !!(item && item.t && item.t.indexOf(tag)>-1); }
 function toastMs(msg, undo){ return undo ? Math.max(6000, String(msg).length * 55) : Math.max(2000, String(msg).length * 55); }
+/* words for a screen reader alone, where the screen changes and nothing takes the cursor: emptied first, so the same words twice are still said twice */
+function say(msg){ var s = document.getElementById('say'); if(!s) return; s.textContent = ''; setTimeout(function(){ s.textContent = msg; }, 60); }
 function toast(msg, undo){
   var t = document.getElementById('toast');
   t.textContent = msg;
@@ -3886,7 +3889,7 @@ function noticeBanner(){
     if(Account.status === 'error') return '<div class="banner"><span>Could not reach your lunches.</span><button class="btn sm primary" data-act="sync-now">Try again</button></div>';
   }
   if(betaUp()){
-    if(!signedIn()) return '<div class="banner good"><span>Sign in and the beta switches on: Lunch Sorted, free forever.</span>'+(UI.tab === 'setup' ? '' : '<button class="btn sm ghost" data-act="tab" data-tab="setup">Sign in</button>')+'</div>';
+    if(!signedIn() && !(Store.hadAccount() && Account.busy)) return '<div class="banner good"><span>Sign in and the beta switches on: Lunch Sorted, free forever.</span>'+(UI.tab === 'setup' && !UI.pane ? '' : '<button class="btn sm ghost" data-act="tab" data-tab="setup">Sign in</button>')+'</div>';   /* the row list carries the sign-in card; a pane over it does not */
     if(claimBeta.failed) return '<div class="banner"><span>Could not switch the beta on.</span><button class="btn sm ghost" data-act="beta-retry">Try again</button></div>';
     return '<div class="banner good"><span>Switching the beta on\u2026</span></div>';
   }
@@ -4955,7 +4958,7 @@ function joinBlock(){
    than behind a row. */
 function signInCard(){
   var h = '<div><div class="sect-head"><h3>Sign in</h3></div><div class="card stack" style="gap:12px">';
-  if(billingOn()) h += '<div class="kv"><span>Household plan</span><span>'+esc(planLabel())+'</span></div>'
+  if(billingOn() && !betaWaiting()) h += '<div class="kv"><span>Household plan</span><span>'+esc(planLabel())+'</span></div>'   /* a beta code waiting: the banner over this card says what signing in brings */
     +  '<div class="row"><button class="btn sm" data-act="upgrade" data-why="keep">'+(trialing() ? 'Keep the Household plan' : 'Get the Household plan')+'</button></div>';
   h += '<p class="hint" style="margin:0">The same lunches on every phone. No password: we email a link and a code.</p>'
     +  '<div class="field"><label for="signinEmail">Email</label><input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email" inputmode="email" enterkeyhint="send" value="'+esc(Account.linkSent || '')+'"></div>'
@@ -5790,8 +5793,8 @@ function helpSheet(fromSupport){
     ['Why can’t I add my own food?', 'Your three weeks are up, or the plan has ended. Every food you added is still on the list and still gets planned; adding another in your own words, writing one into a box, or keeping a recipe of your own is part of the Household plan. The idea bank, and the recipes that come with it, stay free.']
   ];
   if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', native()
-    ? 'Account tab → Subscription: the plan, the date it renews or ends, and Manage in the App Store to change or cancel it; refunds are Apple’s. Paid but not on? Restore purchases, under the prices. A plan bought on the website is changed there, at lunchsorted.app.'
-    : 'Account tab → Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel. A plan bought in the iPhone app is changed in the App Store.']);
+    ? 'Account tab → Subscription: the plan, the date it renews or ends, and Manage in the App Store to change or cancel it; refunds are Apple’s. If the plan came to you free for good, as a beta tester, it reads Household, free forever: there is nothing to pay and nothing renews. Paid but not on? Restore purchases, under the prices. A plan bought on the website is changed there, at lunchsorted.app.'
+    : 'Account tab → Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel. If the plan came to you free for good, as a beta tester, it reads Household, free forever: there is nothing to pay and nothing renews. A plan bought in the iPhone app is changed in the App Store.']);
   if(billingOn()) qa.push(['It says the last payment did not go through', native()
     ? 'The plan stays on while Apple tries again. Manage in the App Store, on the banner or under Account \u2192 Subscription, is where to update how you pay; if it keeps failing the plan ends on the date shown, and everything you added stays.'
     : 'The plan stays on while the card is tried again. Manage billing, on the banner or under Account \u2192 Subscription, is where to update the card; if it keeps failing the plan ends on the date shown, and everything you added stays.']);
