@@ -660,7 +660,8 @@ or that Stripe would not cancel, or did not answer about in time, when the purch
 cancelled first, Stripe asked about it as the App Store purchase asks (Billing, the App Store),
 the answer waiting on Stripe as it does for the claim's own cancel, and the log says CANCEL BY HAND
 if Stripe will not. One Stripe says is paid for, or will not say, is left running instead, the
-log saying CHECK BY HAND: the App Store plan beside it may be a sandbox one, which cost nothing.
+log saying CHECK BY HAND: the App Store plan beside it may be a sandbox one, which cost nothing
+(its own next event may still cancel it, as the webhook does beside any plan the App Store holds).
 Whoever claims is not made the payer, whose card the portal shows. A household that checks out
 with a 100%-off Stripe code (TESTER) is written the same way and kept so through later Stripe
 events, a refund of an earlier charge among them; `/admin` lists them under

@@ -5640,7 +5640,7 @@ try {
       const realNotice = (type, t, o = {}) => notify(type, t, null, Object.assign({ data: { bundleId: 'app.lunchsorted', environment: 'Production', signedTransactionInfo: jws(t) } }, o));
       const states = { sub_retried: 'past_due', sub_retried_n: 'past_due', sub_refused: 'past_due', sub_went_through: 'active', sub_long_ended: 'gone', sub_hung: 'past_due',
         sub_ended: 'canceled', sub_paid_stuck: 'active', sub_live_web: 'active', sub_kept: 'past_due', sub_sandbox_left: 'past_due', sub_unsaid: 'unsaid', sub_moved: 'past_due',
-        sub_beside_forever: 'past_due', sub_beside_yearly: 'past_due', sub_beside_stuck: 'past_due', sub_beside_paid: 'active' };
+        sub_beside_forever: 'past_due', sub_beside_yearly: 'past_due', sub_beside_stuck: 'past_due', sub_beside_paid: 'active', sub_beside_unsaid: 'unsaid' };
       const refusing = new Set(['sub_refused', 'sub_paid_stuck', 'sub_beside_stuck']), ended = new Set();
       const stub = globalThis.__LS_STRIPE_FETCH;
       const answer = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
@@ -5729,7 +5729,7 @@ try {
         const t1 = Date.now();
         r.hung = (await link(real({ originalTransactionId: '2000000000000970', transactionId: '2000000000000970' }))).status;
         r.hungMs = Date.now() - t1; r.hungRow = await row(); r.hungSub = await subNow(); r.handedOver = waiting.length;
-        await Promise.allSettled(waiting.splice(0));
+        await Promise.race([Promise.allSettled(waiting.splice(0)), new Promise(res => setTimeout(res, 9000))]);   /* nine seconds at most: past Stripe's eight, a cancel never finishing fails the check rather than hanging the run */
         r.hungLater = await subNow(); r.hungCalls = subCalls(from);
         /* a household holding the plan through the App Store opens the beta link with a subscription still on its row */
         await onRow('sub_beside_forever', `plan = 'lifetime', source = 'apple', status = 'active', current_period_end = NULL`);
@@ -5743,13 +5743,16 @@ try {
         await onRow('sub_beside_paid', `plan = 'household', source = 'apple', status = 'active', current_period_end = now() + interval '300 days'`);
         from = stripeCalls.length;
         r.paidClaim = await claim(); r.paidCalls = subCalls(from); r.paidSub = await subNow();
+        await onRow('sub_beside_unsaid', `plan = 'household', source = 'apple', status = 'active', current_period_end = now() + interval '300 days'`);
+        from = stripeCalls.length;
+        r.unsaidClaim = await claim(); r.unsaidClaimCalls = subCalls(from); r.unsaidClaimSub = await subNow();
       } finally { console.error = ce; globalThis.__LS_STRIPE_FETCH = stub; }
       const was = (calls, ...want) => JSON.stringify(calls) === JSON.stringify(want);
       check('an iPhone purchase over a web subscription Stripe is still retrying cancels it, which then leaves the row, so telling us again asks Stripe nothing',
         r.linked === 200 && r.linkRow.source === 'apple' && r.linkRow.status === 'active' && was(r.linkCalls, 'GET sub_retried', 'DELETE sub_retried') && r.linkSub === null
-        && r.again === 200 && r.againCalls.length === 0 && !logged(/BY HAND sub_retried /), { r, said });
+        && r.again === 200 && r.againCalls.length === 0 && !logged(/BY HAND.*sub_retried /), { r, said });
       check('and so does a purchase reaching us first as Apple\'s own notice',
-        r.notified === 200 && r.notifyRow.source === 'apple' && r.notifyRow.status === 'active' && was(r.notifyCalls, 'GET sub_retried_n', 'DELETE sub_retried_n') && r.notifySub === null && !logged(/BY HAND sub_retried_n /), { r, said });
+        r.notified === 200 && r.notifyRow.source === 'apple' && r.notifyRow.status === 'active' && was(r.notifyCalls, 'GET sub_retried_n', 'DELETE sub_retried_n') && r.notifySub === null && !logged(/BY HAND.*sub_retried_n /), { r, said });
       check('one Stripe will not cancel does not hold the purchase up: the plan is the App Store\'s, the subscription stays on the row, and the log says CANCEL BY HAND',
         r.refused === 200 && r.refusedRow.source === 'apple' && r.refusedRow.status === 'active' && r.refusedSub === 'sub_refused'
         && was(r.refusedCalls, 'GET sub_refused', 'DELETE sub_refused', 'GET sub_refused') && logged(/^apple: CANCEL BY HAND sub_refused /), { r, said });
@@ -5777,8 +5780,9 @@ try {
         r.foreverClaim.status === 200 && r.foreverClaim.already && was(r.foreverCalls, 'GET sub_beside_forever', 'DELETE sub_beside_forever') && r.foreverSub === null
         && r.yearlyClaim.status === 409 && r.yearlyClaim.apple && was(r.yearlyCalls, 'GET sub_beside_yearly', 'DELETE sub_beside_yearly') && r.yearlySub === null
         && r.stuckClaim.status === 200 && r.stuckClaim.already && r.stuckSub === 'sub_beside_stuck' && logged(/^billing: CANCEL BY HAND sub_beside_stuck /), { r, said });
-      check('but one Stripe says is paid for is left running, since the App Store plan beside it may be a sandbox one, and the log asks for it to be looked at',
-        r.paidClaim.status === 409 && r.paidClaim.apple && was(r.paidCalls, 'GET sub_beside_paid') && r.paidSub === 'sub_beside_paid' && logged(/^billing: CHECK BY HAND sub_beside_paid of household \d+: Stripe says it is paid for, beside a plan held another way; left running/) && !logged(/CANCEL BY HAND sub_beside_paid /), { r, said });
+      check('but one Stripe says is paid for, or will not say about, is left running, since the App Store plan beside it may be a sandbox one, and the log asks for it to be looked at',
+        r.paidClaim.status === 409 && r.paidClaim.apple && was(r.paidCalls, 'GET sub_beside_paid') && r.paidSub === 'sub_beside_paid' && logged(/^billing: CHECK BY HAND sub_beside_paid of household \d+: Stripe says it is paid for, beside a plan held another way; left running/) && !logged(/CANCEL BY HAND sub_beside_paid /)
+        && r.unsaidClaim.status === 409 && r.unsaidClaim.apple && was(r.unsaidClaimCalls, 'GET sub_beside_unsaid') && r.unsaidClaimSub === 'sub_beside_unsaid' && logged(/^billing: CHECK BY HAND sub_beside_unsaid of household \d+: Stripe would not say whether it is paid for, beside a plan held another way; left running/), { r, said });
     }
     delete globalThis.__LS_APPLE_ROOT;
     await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL, cancel_at_period_end = false, apple_original_transaction_id = NULL, apple_product_id = NULL, apple_event_at = NULL WHERE household_id = ${hid}`);
