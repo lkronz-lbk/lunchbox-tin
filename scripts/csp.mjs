@@ -34,17 +34,21 @@ if (noteBuild !== appBuild) throw new Error(`WHATS_NEW.build in public/app/index
    newest build named must be the one just before this: a note carried again adds the build it
    last went out on, and a list left beside a new note is caught here. */
 const noteObj = (html.match(/var WHATS_NEW = \{[\s\S]*?\};\n/) || [''])[0];
-const seenKeys = noteObj.match(/\bseenAs\s*:/g) || [];
+/* every way of writing the key, quoted, computed or assigned after the literal, anywhere in the file,
+   so that none of them can stand in for the one read here: exactly one is allowed */
+const seenKeys = html.match(/seenAs["'\]]*\s*[:=](?!=)/g) || [];
 if (seenKeys.length) {
-  const seenField = noteObj.match(/\bseenAs\s*:\s*\[([^\]]*)\]/);
-  if (seenKeys.length > 1 || !seenField || seenField[1].replace(/'[^']*'/g, '').replace(/[\s,]/g, '')) throw new Error("WHATS_NEW.seenAs in public/app/index.html must be one list of single-quoted builds, such as seenAs:['lunchsorted-v25']");
+  const seenField = noteObj.match(/\bseenAs\s*:\s*\[([^\]]*)\]\s*,/);   /* the list and then the next field: nothing joined on after it */
+  if (seenKeys.length > 1 || !seenField || seenField[1].replace(/'[^']*'/g, '').replace(/[\s,]/g, '')) throw new Error("WHATS_NEW.seenAs in public/app/index.html must be one list of single-quoted builds, written once and followed by the next field, such as seenAs:['lunchsorted-v25'],");
   const seenAs = [...seenField[1].matchAll(/'([^']*)'/g)].map(m => m[1]);
   if (!seenAs.length || seenAs.some(b => !b)) throw new Error("WHATS_NEW.seenAs in public/app/index.html is empty or has an empty entry: name the builds the note was shown as, or remove the field");
   if (seenAs.includes(appBuild)) throw new Error(`WHATS_NEW.seenAs in public/app/index.html names APP_BUILD (${appBuild}), which would hide this build's note from every phone: name only the earlier builds the note is carried from`);
   if (/\btext\s*:\s*''/.test(noteObj)) throw new Error("WHATS_NEW.seenAs in public/app/index.html sits beside text:'', a build with no note to carry: remove seenAs");
   const num = t => +((t.match(/-v(\d+)$/) || [])[1] || NaN);
+  if (!num(appBuild)) throw new Error(`APP_BUILD (${appBuild}) does not end in -v and a number, so npm run csp cannot tell whether WHATS_NEW.seenAs was left behind: tag the build lunchsorted-vN, or remove seenAs`);
+  if (seenAs.some(b => b.replace(/\d+$/, '') !== appBuild.replace(/\d+$/, '') || !num(b))) throw new Error(`WHATS_NEW.seenAs in public/app/index.html names something that is not a build tag like ${appBuild}: whatsNew() compares whole tags`);
   const newest = Math.max(...seenAs.map(num));
-  if (num(appBuild) && newest !== num(appBuild) - 1) throw new Error(`WHATS_NEW.seenAs in public/app/index.html goes up to ${seenAs.find(b => num(b) === newest) || seenAs.join(', ')}, but this is ${appBuild}: a note carried again adds the build just before this one, and a new note drops seenAs`);
+  if (newest !== num(appBuild) - 1) throw new Error(`WHATS_NEW.seenAs in public/app/index.html goes up to ${seenAs.find(b => num(b) === newest) || seenAs.join(', ')}, but this is ${appBuild}: a note carried again adds the build just before this one, and a new note drops seenAs`);
 }
 
 export const APP_CSP = [

@@ -669,7 +669,9 @@ beta switching on, an invite that has lapsed) takes the banner, its OK clears th
 and the note comes straight back. On Account, where the beta link lands and the sign-in is, the
 beta's own banners (Sign in and the beta switches on, Switching the beta on, Could not switch the
 beta on with Try again) hold the note back the same way while a code waits; on every other tab
-the note keeps its place, so a tester who never signs in still hears it. Whether an open owes the note is settled once, at boot, so an OK
+the note keeps its place, so a tester who never signs in still hears it. While a beta code waits,
+the sign-in card under that banner offers no plan to keep or get, and a price sheet still up when
+the claim lands paid is put away: there is nothing left to sell. Whether an open owes the note is settled once, at boot, so an OK
 never brings it to a phone that has started over since (Erase everything, sign-out, deleting the
 account, a save that could not be shown), nor back once it has been read. Starting over also takes
 the note off the banner, and a household set up afterwards is marked as having seen it, as a phone

@@ -1558,7 +1558,9 @@ function claimBeta(){
   claimBeta.busy = true; claimBeta.tries = (claimBeta.tries || 0) + 1; claimBeta.failed = false;
   api('POST', '/api/billing/beta', {code:code}).then(function(r){
     claimBeta.busy = false;
-    if(r.status === 200){ betaForget(); if(r.already){ toast('Lunch Sorted is already yours, for good'); render(); } else { UI.notice = BETA_ON; say(BETA_ON); } Sync.pull().then(render); return; }   /* already: forever may have been bought, and the beta's banner calls it free; nothing else changes, so it draws at once. A fresh claim is said once, in the banner, which comes with the pull so the plan rows under it change at the same moment, and to a screen reader at once */
+    if(r.status === 200){ betaForget(); if(r.already){ toast('Lunch Sorted is already yours, for good'); render(); } else { UI.notice = BETA_ON; say(BETA_ON); }
+      Sync.pull().then(function(){ if(!r.already && paid() && sheetState && sheetState.plan && !Account.buying) closeSheet(); render(); });   /* a price sheet still up when the beta lands, opened by a sign-in that came back to a gated page, has nothing left to sell */
+      return; }   /* already: forever may have been bought, and the beta's banner calls it free; nothing else changes, so it draws at once. A fresh claim is said once, in the banner, which comes with the pull so the plan rows under it change at the same moment, and to a screen reader at once */
     if(r.status === 409){ betaForget(); UI.notice = r.apple ? 'Your Household plan is paid through the App Store, so there is nothing for the beta link to switch on.' : r.paying ? 'This household already pays for the Household plan, so the beta link is not for it.' : 'The beta is full \u2014 the first three weeks are on us anyway.'; render(); return; }
     if(r.status === 404){ betaForget(); UI.notice = 'That beta link is not right. Ask for a fresh one.'; render(); return; }
     claimBeta.failed = true; render();                             /* a hiccup: the code stays, the banner offers another go */
@@ -1701,7 +1703,7 @@ function rememberAfter(why){ try{ if(why) localStorage.setItem(AFTER_KEY, why); 
 function resumeAfter(){
   var why = ''; try{ why = localStorage.getItem(AFTER_KEY) || ''; localStorage.removeItem(AFTER_KEY); }catch(e){}
   if(!why || !signedIn()) return;
-  if((gated() || (why === 'keep' && !paid())) && !betaWaiting()){   /* the page they came from first, the plan sheet over it; not while a beta claim is on its way */
+  if(gated() || (why === 'keep' && !paid())){                    /* the page they came from first, the plan sheet over it */
     var to = {lunchbox:['setup','box'], share:['setup','household'], week:['week',''], write:['week',''], food:['foods',''], recipe:['recipes',''], pantry:['shop',''], review:['pack',''], kidpick:['pack',''], keep:['setup','plan']}[why];
     if(to){ UI.tab = to[0]; UI.pane = to[1]; }
     render(); window.scrollTo(0, 0); upgradeSheet(why); return;
@@ -2618,7 +2620,7 @@ function weekStart(d){ return addDays(d, -((d.getDay()+6)%7)); }
 function has(item,tag){ return !!(item && item.t && item.t.indexOf(tag)>-1); }
 function toastMs(msg, undo){ return undo ? Math.max(6000, String(msg).length * 55) : Math.max(2000, String(msg).length * 55); }
 /* words for a screen reader alone, where the screen changes and nothing takes the cursor: emptied first, so the same words twice are still said twice */
-function say(msg){ var s = document.getElementById('say'); if(!s) return; s.textContent = ''; setTimeout(function(){ s.textContent = msg; }, 60); }
+function say(msg){ var s = document.getElementById('say'); if(!s) return; s.textContent = ''; clearTimeout(say._t); setTimeout(function(){ s.textContent = msg; say._t = setTimeout(function(){ if(s.textContent === msg) s.textContent = ''; }, 8000); }, 60); }
 function toast(msg, undo){
   var t = document.getElementById('toast');
   t.textContent = msg;
@@ -3889,7 +3891,7 @@ function noticeBanner(){
     if(Account.status === 'error') return '<div class="banner"><span>Could not reach your lunches.</span><button class="btn sm primary" data-act="sync-now">Try again</button></div>';
   }
   if(betaUp()){
-    if(!signedIn() && !(Store.hadAccount() && Account.busy)) return '<div class="banner good"><span>Sign in and the beta switches on: Lunch Sorted, free forever.</span>'+(UI.tab === 'setup' && !UI.pane ? '' : '<button class="btn sm ghost" data-act="tab" data-tab="setup">Sign in</button>')+'</div>';   /* the row list carries the sign-in card; a pane over it does not */
+    if(!signedIn()) return '<div class="banner good"><span>Sign in and the beta switches on: Lunch Sorted, free forever.</span>'+(UI.tab === 'setup' && !UI.pane ? '' : '<button class="btn sm ghost" data-act="tab" data-tab="setup">Sign in</button>')+'</div>';   /* the row list carries the sign-in card; a pane over it does not */
     if(claimBeta.failed) return '<div class="banner"><span>Could not switch the beta on.</span><button class="btn sm ghost" data-act="beta-retry">Try again</button></div>';
     return '<div class="banner good"><span>Switching the beta on\u2026</span></div>';
   }

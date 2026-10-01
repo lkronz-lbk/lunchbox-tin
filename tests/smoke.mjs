@@ -4078,7 +4078,20 @@ try {
       await pb.click('[data-act="tab"][data-tab="setup"]'); await pb.waitForTimeout(250);
     } else check('a claim that cannot get through says so on Account, with Try again', tryAgain);
     await pb.unroute('**/api/billing/beta', unreachable);
+    /* Try again goes out and is held a moment, while the price sheet goes up over Subscription, as a sign-in
+       that came back to a gated page can put it up. When the claim lands paid, the sheet is put away. */
+    let release = () => {}; const held = new Promise(r => { release = r; });
+    const hold = async route => { await held; await route.continue(); };
+    await pb.route('**/api/billing/beta', hold);
     if (await until(pb, () => !!document.querySelector('.banner [data-act="beta-retry"]'), null, 3000)) await pb.click('.banner [data-act="beta-retry"]');
+    await openPane(pb, 'plan');
+    const buyUp = await until(pb, () => !!document.querySelector('#view [data-act="upgrade"]'), null, 5000);
+    if (buyUp) await pb.click('#view [data-act="upgrade"]');
+    const priceUp = buyUp && await sheetIsOpen(pb) && /Household plan/.test(await pb.textContent('#sheetTitle'));
+    release();
+    const priceGone = priceUp && await until(pb, () => !document.querySelector('#sheet').classList.contains('open'), null, 10000);
+    await pb.unroute('**/api/billing/beta', hold);
+    check('a price sheet up when the beta lands is put away: nothing is offered for sale over a free forever', priceUp && priceGone, { buyUp, priceUp, priceGone });
     let got = null; for (let i = 0; i < 40 && !(got && got.plan === 'lifetime'); i++) { await pb.waitForTimeout(250); got = await entPat(); }
     check('opening the beta link while signed in switches the household to forever, marked as the beta', !!got && got.plan === 'lifetime' && got.source === 'code' && got.status === 'active', got);
     check('the code leaves the address bar and the phone once used', !/beta=/.test(pb.url()) && (await pb.evaluate(() => localStorage.getItem('lunchsorted-beta'))) === null);
