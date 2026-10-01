@@ -758,6 +758,10 @@ so App Store Connect has to follow in the same sitting:
       `signed_up` exactly and `paid` approximately, and was applied on the staging branch as
       `0006_milestones_errors`; under its new number it ran there once more and changed nothing,
       since every statement in it is `IF NOT EXISTS` or `ON CONFLICT DO NOTHING`.
+- [ ] **Migration `0011_code_tries`** applies itself on v27's `main` deploy, the only one that
+      deploy runs: it adds `magic_links.code_tries` (metadata only, no rewrite) and deletes the
+      throttle rows whose keys still hold an email address. v26 never reads the column, so it
+      is safe while the build runs. `0012` (Apple notifications, #53) must reach `main` after it.
 - [ ] **After the deploy**: `curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://example.com' https://lunchsorted.app/api/errors`
       answers 403 (a post from another site is refused, and writes nothing; before the function
       existed the same request answered 404, as a GET still does), the privacy page's "Last
