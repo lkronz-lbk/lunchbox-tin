@@ -3,7 +3,7 @@ import { normalizeEmail, normalizeCode, createMagicLink, peekMagicLink, consumeM
          createSession, sessionCookie, currentUser, destroySession, destroyAllSessions,
          verifyNonce, verifyCookie, verifyCookieFrom, sameOrigin, mailStopToken, stopMail } from '../lib/auth.js';
 import { sendMagicLink, sendWelcome } from '../lib/mail.js';
-import { cancelSubscription } from '../lib/stripe.js';
+import { cancelSubscription, withinTime } from '../lib/stripe.js';
 
 /* Sign-in by email link. No passwords: nothing to forget, nothing to leak.
    POST /api/auth/request   {email}         -> sends the link (honeypot: "website")
@@ -245,7 +245,7 @@ export default async function handler(req, context) {
          card, and one that has ended answers no such subscription, which costs one call. */
       const subs = await q`SELECT e.stripe_subscription_id AS id FROM entitlements e JOIN households h ON h.id = e.household_id
         WHERE (h.owner_user_id = ${user.id} OR e.paid_by = ${user.id}) AND e.stripe_subscription_id IS NOT NULL`;
-      for (const s of subs) if (!(await cancelSubscription(s.id))) console.error('auth: CANCEL BY HAND', s.id, 'of an account being deleted');
+      await withinTime(8000, async () => { for (const s of subs) if (!(await cancelSubscription(s.id))) console.error('auth: CANCEL BY HAND', s.id, 'of an account being deleted'); });
       await q`DELETE FROM households WHERE owner_user_id = ${user.id}`;
       await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
       await q`DELETE FROM invites WHERE created_by = ${user.id}`;

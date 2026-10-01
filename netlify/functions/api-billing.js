@@ -1,7 +1,7 @@
 import { sql, json, fail, siteUrl, throttled, milestone, recentKeys, mark, unmark } from '../lib/db.js';
 import { codeMatches, betaCap, betaCount } from '../lib/beta.js';
 import { currentUser } from '../lib/auth.js';
-import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription } from '../lib/stripe.js';
+import { billingEnabled, isProduction, prices, priceInfo, stripe, verifyWebhook, periodEnd, subscriptionStatus, cancelSubscription, withinTime } from '../lib/stripe.js';
 import { write } from '../lib/entitlement.js';
 import { appleLive, lapsed } from '../lib/apple.js';
 import { chargeLaterUntil } from '../lib/trial.js';
@@ -126,15 +126,25 @@ async function applyEvent(ev) {
     const hid = await householdFor(obj);
     if (!hid) return 'no household';
     const [cur] = await q`SELECT plan, status, source, current_period_end, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
-    if (foreverHeld(cur)) {
-      /* a subscription winding down after a lifetime purchase changes nothing. One still able to charge, with no end
-         set (left by a beta claim before the claim cancelled them, or beside a forever given by hand), bills the
-         forever every year: it is cancelled, and the log asks for its last charge to be looked at. If Stripe will not
-         cancel it, the event goes back to Stripe to be tried again */
-      if (ev.type === 'customer.subscription.deleted' || obj.cancel_at_period_end || ['canceled', 'incomplete_expired'].includes(obj.status)) return 'lifetime kept';
-      if (!(await cancelSubscription(obj.id))) throw new Error(`CANCEL BY HAND ${obj.id}: still able to charge a forever`);
-      if (obj.status === 'active' || obj.status === 'past_due') console.error('billing: CHECK BY HAND the last charge of', obj.id, 'cancelled: it was charging a forever');
-      return 'lifetime kept, its subscription cancelled';
+    if (foreverHeld(cur) || appleLive(cur)) {
+      /* forever held, or a plan the App Store holds: the website sells no plan over either, so a Stripe subscription
+         beside one only bills for nothing. One winding down (an old yearly after a forever bought through Stripe)
+         changes nothing. One still able to charge (left by a beta claim before claims cancelled them, or a first
+         charge Stripe was still retrying when the household bought on the iPhone) is read at Stripe, since this
+         event may be an old one, and cancelled. The log asks for its last charge to be looked at when it is more than
+         a day old: a newer one is a checkout's, whose own undo gives its payment back. If Stripe cannot say, or will
+         not cancel it, the event goes back to Stripe to be tried again */
+      const kept = foreverHeld(cur) ? 'lifetime kept' : 'the App Store holds it';
+      if (ev.type === 'customer.subscription.deleted') return kept;
+      let now = null, noRecord = false;
+      try { now = await stripe('GET', `/subscriptions/${obj.id}`); } catch (e) { if (!(e.status === 404 && e.code === 'resource_missing')) throw e; noRecord = true; }
+      if (noRecord) return kept;
+      if (!(now && typeof now === 'object' && STRIPE_STATES.includes(now.status))) throw new Error(`no state for ${obj.id} beside a plan held another way`);
+      if (now.cancel_at_period_end || ['canceled', 'incomplete_expired', 'incomplete'].includes(now.status)) return kept;
+      if (!(await cancelSubscription(obj.id))) throw new Error(`CANCEL BY HAND ${obj.id}: still able to charge beside a plan held another way`);
+      if ((now.status === 'active' || now.status === 'past_due') && Number(now.created) > 0 && Date.now() / 1000 - now.created > 86400)
+        console.error('billing: CHECK BY HAND the last charge of', obj.id, 'cancelled: it was charging beside a plan held another way');
+      return kept + ', its subscription cancelled';
     }
     if (cur && cur.stripe_subscription_id && cur.stripe_subscription_id !== obj.id) return 'other subscription';   /* an older one of the same customer */
     const status = ev.type === 'customer.subscription.deleted' ? 'canceled' : subscriptionStatus(obj);
@@ -217,7 +227,10 @@ async function refundCheckout(obj, held) {
   }
 }
 
-export default async function handler(req, context) {
+/* every Stripe call a billing request makes shares one eight-second budget, inside Netlify's ten (lib/stripe.js) */
+export default function handler(req, context) { return withinTime(8000, () => serve(req, context)); }
+
+async function serve(req, context) {
   const url = new URL(req.url);
   const parts = url.pathname.replace(/\/$/, '').split('/');
   const action = parts[parts.length - 1] === 'billing' ? '' : parts[parts.length - 1];
@@ -240,15 +253,14 @@ export default async function handler(req, context) {
       /* a test-mode event can never touch production households, whatever secret was pasted where */
       if (ev.livemode !== isProduction()) return fail('Wrong mode', 400);
       if (!HANDLED.has(ev.type)) return json({ received: true, ignored: true });
-      const seen = await sql()`INSERT INTO stripe_events (id, type) VALUES (${ev.id}, ${ev.type}) ON CONFLICT (id) DO NOTHING RETURNING id`;
-      if (!seen.length) return json({ received: true, duplicate: true });
-      let outcome;
-      try { outcome = await applyEvent(ev); }
-      catch (e) {
-        /* not applied, so not seen: Stripe's retry gets another go */
-        await sql()`DELETE FROM stripe_events WHERE id = ${ev.id}`;
-        throw e;
-      }
+      /* an event counts as seen once it has been applied, so one that failed, or whose function was ended
+         halfway, is delivered again by Stripe and applied for real. Applying one twice repeats nothing:
+         writes are ordered by the event's own stamp, a second cancel answers no such subscription, a
+         refund carries its idempotency key, and a milestone is kept once */
+      const [already] = await sql()`SELECT 1 AS seen FROM stripe_events WHERE id = ${ev.id}`;
+      if (already) return json({ received: true, duplicate: true });
+      const outcome = await applyEvent(ev);
+      await sql()`INSERT INTO stripe_events (id, type) VALUES (${ev.id}, ${ev.type}) ON CONFLICT (id) DO NOTHING`;
       console.log(`billing: ${ev.type} ${ev.id} -> ${outcome}`);
       if (Math.random() < 0.05) await sql()`DELETE FROM stripe_events WHERE received_at < now() - interval '30 days'`;
       return json({ received: true });

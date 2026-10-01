@@ -1,6 +1,6 @@
 import { sql, json, fail, siteUrl, throttled, milestone } from '../lib/db.js';
 import { currentUser, createInvite, consumeInvite, peekInvite } from '../lib/auth.js';
-import { billingEnabled, cancelSubscription } from '../lib/stripe.js';
+import { billingEnabled, cancelSubscription, withinTime } from '../lib/stripe.js';
 import { trialing, chargeLaterUntil, extraDays } from '../lib/trial.js';
 import { lapsed } from '../lib/apple.js';
 
@@ -196,16 +196,19 @@ export default async function handler(req) {
         const others = await q`SELECT count(*)::int AS n FROM household_members WHERE household_id = ${have.id} AND user_id <> ${user.id}`;
         if (others[0].n > 0) return fail('Other people are in your household. Remove them first, or ask for the invite from a different sign-in.', 409);
       }
-      /* the invite is spent first; only then is anything of the caller's own let go */
+      /* the household folded in goes, and its subscription with it, whatever its row says (a first charge Stripe is
+         still retrying reads as ended). So it is cancelled before anything is spent or let go, within Stripe's
+         eight seconds; if Stripe cannot say it is, the join waits, and nothing has changed */
+      if (owned && !(await withinTime(8000, () => cancelSubscription(have.stripe_subscription_id)))) {
+        console.error('household: a join waits:', have.stripe_subscription_id, 'could not be cancelled');
+        return fail('Could not join just now. Try again in a moment.', 503);
+      }
+      /* the invite is spent next; only then is anything of the caller's own let go */
       const used = await consumeInvite(String(body.code), user.id);
       if (!used) return fail('That invite has expired or was already used', 410);
       if (have) {
         await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
-        /* its subscription is cancelled whatever its row says: a first charge Stripe is still retrying reads as ended */
-        if (owned) {
-          if (!(await cancelSubscription(have.stripe_subscription_id))) console.error('household: CANCEL BY HAND', have.stripe_subscription_id, 'of a household folded into another');
-          await q`DELETE FROM households WHERE id = ${have.id}`;
-        }
+        if (owned) await q`DELETE FROM households WHERE id = ${have.id}`;
       }
       /* the phone says which member it is, so the name typed there and its ticks stay its own */
       const memberId = (typeof body.memberId === 'string' && MEMBER_ID.test(body.memberId)) ? body.memberId : 'mem_' + Math.random().toString(36).slice(2, 10);
