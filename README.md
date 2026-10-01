@@ -1204,10 +1204,11 @@ the idea bank stays free so a free list is never stuck with what it has.
   **Link** (`POST /api/apple/link {signedTransaction}`, signed in, owner or adult) takes the
   transaction the phone has just bought or restored; **notify** (`POST /api/apple/notify`,
   App Store Server Notifications v2) takes renewals, lapses, grace periods and refunds after.
-  A notification counts as seen only once it has been applied (`apple_events.applying_since`
-  holds it until then), so one that failed halfway, even with the database too far gone to let
-  it go, is applied by Apple's next delivery (an hour on; the sandbox sends once), and two
-  deliveries at once apply it once.
+  A notification counts as seen only once it has been applied. Until then
+  `apple_events.applying_since` holds it: a second delivery is turned away, and a hold more than
+  ten minutes old, from a delivery that never finished, is taken over. So one that failed
+  halfway, even with the database too far gone to let it go, is applied by Apple's next delivery
+  (an hour on; the sandbox sends once), and two deliveries at once apply it once.
   Nothing either sends is believed until `netlify/lib/apple.js` has checked it against Apple's
   root, pinned by fingerprint, with node:crypto and no library, check for check with Apple's
   own reference, the receipt-signing mark on the leaf most of all, and nothing is decoded from a
@@ -1226,8 +1227,11 @@ the idea bank stays free so a free list is never stuck with what it has.
   server and in the app whether or not Apple's notification came, so a missed one neither leaves
   it on nor stops the website selling the plan. The phone finishes a transaction only once the
   server has decided on it (200, 400 or 409); one that arrives before the account has loaded
-  waits until it has. A Restore the server could not decide on, offline or failing, says the
-  purchases could not be checked and to try again, never that the plans have ended.
+  waits until it has. Offline, Restore says so before asking the App Store. Unless the plan came
+  on, a Restore with any purchase the server did not decide on (no answer, a failure, too many
+  tries) says the purchases could not be checked and to try again, never that the plans have
+  ended or that a purchase cannot be used; one whose sign-in has lapsed is signed out and asked
+  to sign in again.
 - **In the app**, the Account tab carries a **Subscription** row whose caption is the same
   one-line state (Not on, On for N more days, On until tomorrow or tonight, Renews DATE, First
   charged DATE, Ends DATE, Ended with or without its date, Payment failed, Yearly for a paid
