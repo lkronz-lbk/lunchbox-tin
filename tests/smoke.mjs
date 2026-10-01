@@ -3763,17 +3763,21 @@ try {
       saw(built) === 'RESEND_API_KEY' && builtBoth.status === 0 && saw(builtBoth) === 'STRIPE_SECRET_KEY, RESEND_API_KEY' && bare.status === 0 && saw(bare) === 'none' &&
       [built, builtBoth, bare].every(b => hidden(b.stdout + b.stderr) && !(b.stdout + b.stderr).includes('Pasted42')),
       [built, builtBoth, bare].map(b => [b.status, b.stdout]));
-    /* production's build must see a key, or the deploy would go out unable to send a single sign-in
-       link (security review of v27, L4). Netlify's own CONTEXT marks a production build, so the local
-       run above, with SITE_ENV production and no CONTEXT, is not held to it, and nor are previews and
-       branch deploys. With Stripe's key bad as well, both refusals are told at once */
+    /* production's build must see a key: a deploy without one could send no sign-in link (security
+       review of v27, L4). Netlify's own CONTEXT marks a production build, whatever SITE_ENV says, so
+       the local run above, with SITE_ENV production and no CONTEXT, is not held to it, nor are
+       previews and branch deploys, while a production build with SITE_ENV saying otherwise is. With
+       Stripe's key bad as well, both refusals are told at once */
     const prodBare = build({ CONTEXT: 'production' }), prodKey = build({ CONTEXT: 'production', RESEND_API_KEY: KEY }), prodBoth = build({ CONTEXT: 'production', STRIPE_SECRET_KEY: 'sk_test_Pasted42' });
+    const prodStaging = build({ CONTEXT: 'production', SITE_ENV: 'staging' });
     const previewBare = build({ CONTEXT: 'deploy-preview', SITE_ENV: 'preview' }), stagingBare = build({ CONTEXT: 'branch-deploy', SITE_ENV: 'staging' });
-    check('a production build that cannot see a Resend key, absent or not scoped to Builds, refuses the deploy in words that say both; with the key it builds, and previews, branch deploys and a local run go on without one',
-      prodBare.status === 1 && /deploy refused: RESEND_API_KEY is absent from this production build, or not scoped to Builds/.test(prodBare.stderr) &&
-      prodBoth.status === 1 && /deploy refused: STRIPE_SECRET_KEY in production is not a live key/.test(prodBoth.stderr) && /deploy refused: RESEND_API_KEY is absent/.test(prodBoth.stderr) && !prodBoth.stderr.includes('Pasted42') &&
-      prodKey.status === 0 && saw(prodKey) === 'RESEND_API_KEY' && previewBare.status === 0 && saw(previewBare) === 'none' && stagingBare.status === 0 && saw(stagingBare) === 'none' && bare.status === 0,
-      [prodBare, prodBoth, prodKey, previewBare, stagingBare].map(b => [b.status, b.stdout, b.stderr]));
+    const absent = /deploy refused: RESEND_API_KEY is absent from this production build, or not scoped to Builds \(the build cannot tell which\)/;
+    check('a production build that cannot see a Resend key, absent or not scoped to Builds, refuses the deploy in words that say both, whatever SITE_ENV says; with the key it builds, and previews, branch deploys and a local run go on without one',
+      prodBare.status === 1 && absent.test(prodBare.stderr) && prodStaging.status === 1 && absent.test(prodStaging.stderr) &&
+      prodBoth.status === 1 && /deploy refused: STRIPE_SECRET_KEY in production is not a live key/.test(prodBoth.stderr) && absent.test(prodBoth.stderr) &&
+      prodKey.status === 0 && saw(prodKey) === 'RESEND_API_KEY' && previewBare.status === 0 && saw(previewBare) === 'none' && stagingBare.status === 0 && saw(stagingBare) === 'none' && bare.status === 0 &&
+      [prodBare, prodStaging, prodBoth, prodKey, previewBare, stagingBare].every(b => hidden(b.stdout + b.stderr) && !(b.stdout + b.stderr).includes('Pasted42')),
+      [prodBare, prodStaging, prodBoth, prodKey, previewBare, stagingBare].map(b => [b.status, b.stdout, b.stderr]));
     /* send() goes past the capture only while __LS_MAIL is away, and __LS_RESEND_FETCH takes its
        request. Each send here reads the key and the hook and hands the request over before its first
        await, so all three go back at once, before anything else in this process can see them. What

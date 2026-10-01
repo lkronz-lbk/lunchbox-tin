@@ -488,7 +488,8 @@ forward).
 - [x] Import the repo into Netlify, attach the domain; `dev` as a branch deploy, previews on.
 - [x] Neon project with `production` and `staging` branches; `NETLIFY_DATABASE_URL` and
       `STAGING_DATABASE_URL` scoped to their contexts.
-- [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set.
+- [x] Resend: `mail.lunchsorted.app` verified, `RESEND_API_KEY` and `MAIL_FROM` set. (Production's
+      key also needs the Builds scope before `main` takes the Resend key check: see Owed.)
 - [x] Stripe: product and two prices (yearly, marked `founding = yes`, and monthly) in test and live mode; the old forever price is best left out of the variables (Billing, below); a webhook endpoint per mode,
       keys, secrets and price ids scoped per context (Billing, below).
 - [ ] Confirm HTTPS covers `www.lunchsorted.app` as well as the apex.
@@ -805,19 +806,22 @@ out by deleting it in the commit that does it.
 - **Liz: `RESEND_API_KEY`, the key alone in every context, before `main` takes the Resend key
   check.** Each value is `re_` then letters, digits and underscores, with nothing pasted around
   it, and the variable needs the Builds scope as well as Functions. In Production that is now
-  enforced: a production build that cannot see the key, whether it is absent or not scoped to
-  Builds, refuses the deploy (`deploy refused: RESEND_API_KEY is absent from this production
-  build, or not scoped to Builds`), and the live one stays up; check both. Elsewhere the build
-  never sees an unscoped key and the check does nothing. A build that goes through names the
-  keys it could see (`migrate: keys the build can see, each the key alone: …`), so a key missing
-  from that line has no Builds scope. With the scope, anything more refuses the deploy, even a
-  space or a line break after the key, which sends mail today; the last good deploy stays live
-  with the key it was built with, and keeps sending. Nobody could read the keys, so each
-  context's next deploy is the first time the pattern meets its key: this check's deploy
-  preview, then dev's, then main's. Resend never shows a key twice, so a refused key means a new
-  one with the old one's permission, and the old one deleted only after a deploy with the new
-  value has gone through (`migrate:` lines in its build log, where a refusal says `deploy
-  refused:`); if a new key is refused too, the pattern in `resendKey()` is what to fix.
+  enforced: a production build that cannot see the key, whether it is absent or scoped to
+  Functions alone (the build cannot tell which, though only an absent key stops the mail),
+  refuses the deploy (`deploy refused: RESEND_API_KEY is absent from this production build, or
+  not scoped to Builds`), and the live one stays up. Only main's own deploy runs that check, as
+  no preview or dev deploy is a production build, so confirm it in the Netlify UI first: the
+  variable has a value in the Production context, and Builds is among its scopes. Elsewhere the
+  build never sees an unscoped key and the check does nothing. A build that goes through names
+  the keys it could see (`migrate: keys the build can see, each the key alone: …`), so a key
+  missing from that line has no Builds scope. With the scope, anything more refuses the deploy,
+  even a space or a line break after the key, which sends mail today; the last good deploy stays
+  live with the key it was built with, and keeps sending. Nobody could read the keys, so for
+  their shape each context's next deploy is the first time the pattern meets its key: this
+  check's deploy preview, then dev's, then main's. Resend never shows a key twice, so a refused
+  key means a new one with the old one's permission, and the old one deleted only after a deploy
+  with the new value has gone through (`migrate:` lines in its build log, where a refusal says
+  `deploy refused:`); if a new key is refused too, the pattern in `resendKey()` is what to fix.
   Production's key belongs to Production alone: a deploy preview runs any branch's code.
 - **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
   Store"; change it the same day (to the store link once it is live).
@@ -1051,8 +1055,9 @@ writes the same one.
 - **Environment**: production reads `NETLIFY_DATABASE_URL` (Netlify DB / Neon); branch
   deploys and previews read `STAGING_DATABASE_URL` and refuse to run without it, so they
   can never touch production data or migrate it. `RESEND_API_KEY` and `MAIL_FROM` send the
-  emails; without a key, production refuses: its build refuses the deploy when it cannot see the
-  key, absent or not scoped to Builds, and a running function that has none refuses to send. Any
+  emails; without a key, production refuses: its build (Netlify's `CONTEXT`) refuses the deploy
+  when it cannot see the key, absent or scoped to Functions alone, as it cannot tell which, and a
+  running function that has none refuses to send. Any
   other deploy without a key writes the whole email, the sign-in link and code included, to its
   function log instead of sending it; a deploy with
   `DEV_LINKS=1` (or the test suite, which captures every email) also returns the link and code
