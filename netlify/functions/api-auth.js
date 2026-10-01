@@ -22,7 +22,10 @@ import { cancelSubscription } from '../lib/stripe.js';
      small size whatever was sent. A request any of them already refuses is answered from one plain
      count, waiting on nothing and writing nothing; one that may go through counts again in one
      transaction behind one lock, so requests arriving together are counted one at a time, and is
-     marked only when all three still have room. The day's limit bounds what a flood can write, three marks
+     marked only when all three still have room. A burst that all passes the plain count queues on
+     the lock, a database connection each, so the wait is cut at 50 ms and answered as busy, a
+     parent caught in it included: past that it would hold the connections other routes need, and
+     outlast the ten seconds a function gets. The day's limit bounds what a flood can write, three marks
      and a sign-in link a request let through: about 6 KB at worst (the longest address allowed, in
      three-byte letters, sits in the link and two of its indexes), 12 MB a day, measured. A request
      let through pays for housekeeping as a throttled call does (db.js), so those rows go on a
@@ -76,15 +79,18 @@ async function welcome(user, req, beta) {
 }
 
 /* REVIEW_EMAIL + REVIEW_CODE: the address App Review signs in with, and its standing code. Empty means no such account. */
+let reviewWarned = false;
 function reviewAccount(email) {
   const raw = process.env.REVIEW_EMAIL || '';
   if (!raw) return '';
   const who = normalizeEmail(raw), code = normalizeCode(process.env.REVIEW_CODE || '');
   const admins = (process.env.ADMIN_EMAILS || '').split(',').map(normalizeEmail).filter(Boolean);
-  /* a misconfiguration must show in the logs the first time it is tried, not as a surprise from Apple */
-  if (!who) { console.error('REVIEW_EMAIL is not an email address; the review account is off'); return ''; }
-  if (code.length < 8) { console.error('REVIEW_CODE needs eight or more letters and digits; the review account is off'); return ''; }
-  if (admins.includes(who)) { console.error('REVIEW_EMAIL is in ADMIN_EMAILS; a standing code must not open /admin, so the review account is off'); return ''; }
+  /* a misconfiguration must show in the logs the first time it is tried, not as a surprise from Apple; once an
+     instance, since every sign-in request asks, a stranger's turned-away ones included */
+  const off = !who ? 'REVIEW_EMAIL is not an email address; the review account is off'
+    : code.length < 8 ? 'REVIEW_CODE needs eight or more letters and digits; the review account is off'
+    : admins.includes(who) ? 'REVIEW_EMAIL is in ADMIN_EMAILS; a standing code must not open /admin, so the review account is off' : '';
+  if (off) { if (!reviewWarned) { reviewWarned = true; console.error(off); } return ''; }
   return email === who ? code : '';
 }
 
@@ -115,16 +121,20 @@ export default async function handler(req, context) {
                       WHERE ${mark}::boolean AND here.ok AND them.ok AND everyone.ok RETURNING key)
         SELECT here.ok AS here, them.ok AS them, everyone.ok AS everyone FROM here, them, everyone`;
       let [room] = await limits(sql(), false);
-      if (room.here && room.them && room.everyone)
-        room = (await sql().transaction(q => [q`SELECT pg_advisory_xact_lock(hashtext('api-auth request'))`, limits(q, true)]))[1][0];
+      if (room.here && room.them && room.everyone) {
+        try { room = (await sql().transaction(q => [q`SET LOCAL lock_timeout = '50ms'`, q`SELECT pg_advisory_xact_lock(hashtext('api-auth request'))`, limits(q, true)]))[2][0]; }
+        catch (e) { if (e && e.code === '55P03') return fail('Sign-in is busy right now; try again later.', 503); throw e; }   /* 55P03: the wait was cut */
+      }
       if (!room.here) return fail('Too many sign-in requests from here; try again in an hour.', 429);
       if (!room.them) return fail('A link was sent recently. Check your inbox, or try again in a few minutes.', 429);
       if (!room.everyone) return fail('Sign-in is busy right now; try again later.', 503);
-      await housekeep();
       const { token, code } = await createMagicLink(email, review || undefined);
       const link = `${siteUrl(req)}/api/auth/verify?t=${token}${body.beta === true ? '&b=1' : ''}`;   /* the app says a beta code is waiting; only the welcome's wording rides on it */
       /* the mail provider refusing the send (its daily cap, most likely) is answered as the day's limit is */
       const sent = review ? { ok: true } : await sendMagicLink(email, link, code).catch(e => { console.error('api-auth: the sign-in email was refused', e.message); return null; });
+      /* a request let through pays for housekeeping one time in twenty-five, after its email has gone; a sweep that
+         fails is logged, and the sign-in goes on */
+      await housekeep().catch(e => console.error('api-auth: housekeeping', e.message));
       if (!sent) return fail('Sign-in is busy right now; try again later.', 503);
       /* the link and code come back to the caller only where a deploy has opted in (the test suite) */
       const show = sent.devLink && (siteEnv() === 'test' || process.env.DEV_LINKS === '1');

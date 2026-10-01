@@ -3081,6 +3081,21 @@ try {
     const refusedBody = await refused.json();
     check('a sign-in email the mail provider refuses is answered as busy, and still counts against the limits',
       refused.status === 503 && /busy/.test(refusedBody.error) && (await marks()) - m2 === 3 && (await links()) - l2 === 1, [refused.status, refusedBody, (await marks()) - m2]);
+    /* a burst queued on the lock past its 50 ms: the database cancels the wait (55P03), the request is answered as busy, and
+       nothing of it is written. Postgres here has one connection, so the cancel is handed in by the hook */
+    const realTx = globalThis.__LS_SQL.transaction;
+    globalThis.__LS_SQL.transaction = async () => { throw Object.assign(new Error('canceling statement due to lock timeout'), { code: '55P03' }); };
+    const [m3, l3] = [await marks(), await links()];
+    let queued; try { queued = await auth('request', { email: 'queued@example.com' }, '192.0.2.196'); } finally { globalThis.__LS_SQL.transaction = realTx; }
+    check('a request whose wait on the lock is cut is answered as busy, and writes nothing',
+      queued.status === 503 && /busy/.test((await queued.json()).error) && (await marks()) === m3 && (await links()) === l3, queued.status);
+    /* housekeeping that fails is logged and never fails the sign-in that paid for it */
+    const realSql = globalThis.__LS_SQL, realRandom = Math.random, heard = [], realError = console.error;
+    globalThis.__LS_SQL = Object.assign(async (strings, ...vals) => { if (typeof strings !== 'string' && strings.join('').includes('DELETE FROM rate_events WHERE ctid')) throw new Error('No answer from the database'); return realSql(strings, ...vals); }, { transaction: realSql.transaction });
+    Math.random = () => 0; console.error = (...a) => { heard.push(a.join(' ')); };
+    let swept; try { swept = await auth('request', { email: 'swept@example.com' }, '192.0.2.195'); } finally { globalThis.__LS_SQL = realSql; Math.random = realRandom; console.error = realError; }
+    check('a sign-in whose housekeeping fails still goes out, and the failure is logged in our own words',
+      swept.status === 200 && heard.some(l => /^api-auth: housekeeping No answer from the database/.test(l)), [swept.status, heard]);
     /* every window forgets on time: counts from a minute or an hour past it let a request through, and from just inside turn it away */
     const place = (key, n, minutes) => db.query("INSERT INTO rate_events (key, at) SELECT $1, now() - make_interval(mins => $3::int) FROM generate_series(1, $2::int)", [key, n, minutes]);
     await place('link:' + sha('old-quarter@example.com'), LINKS_TO_ONE, 16); await place('link:' + sha('new-quarter@example.com'), LINKS_TO_ONE, 14);

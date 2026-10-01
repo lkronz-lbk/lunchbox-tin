@@ -1020,8 +1020,10 @@ writes the same one.
   request any of the three already refuses is answered from one plain count, waiting on nothing and
   writing nothing; one that may go through is counted again in one transaction behind one lock, so
   requests arriving together are counted one at a time, and its counts are written only when all
-  three still have room. Each count sits in `rate_events` under a digest of the address, never the address, and a
-  stranger inventing addresses cannot fill the database: a day of let-through requests takes about
+  three still have room. A request waits at most 50 ms on that lock, then is answered as busy, so
+  a burst cannot hold the database's connections or outlast a function's ten seconds. Each count
+  sits in `rate_events` under a digest of the address, never the address, and a stranger
+  inventing addresses cannot fill the database: a day of let-through requests takes about
   12 MB at worst (every address as long as allowed, in three-byte letters), and a request let
   through pays for housekeeping one time in twenty-five, as a throttled call does, so those rows go
   on a deploy with no daily run as well. A code gets eight tries: each code counts its own wrong
