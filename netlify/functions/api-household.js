@@ -201,7 +201,11 @@ export default async function handler(req) {
       if (!used) return fail('That invite has expired or was already used', 410);
       if (have) {
         await q`DELETE FROM household_members WHERE user_id = ${user.id}`;
-        if (owned) { if (paid(have)) await cancelSubscription(have.stripe_subscription_id); await q`DELETE FROM households WHERE id = ${have.id}`; }
+        /* its subscription is cancelled whatever its row says: a first charge Stripe is still retrying reads as ended */
+        if (owned) {
+          if (!(await cancelSubscription(have.stripe_subscription_id))) console.error('household: CANCEL BY HAND', have.stripe_subscription_id, 'of a household folded into another');
+          await q`DELETE FROM households WHERE id = ${have.id}`;
+        }
       }
       /* the phone says which member it is, so the name typed there and its ticks stay its own */
       const memberId = (typeof body.memberId === 'string' && MEMBER_ID.test(body.memberId)) ? body.memberId : 'mem_' + Math.random().toString(36).slice(2, 10);

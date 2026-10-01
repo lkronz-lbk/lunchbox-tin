@@ -64,8 +64,10 @@ export async function stripe(method, path, params, idempotencyKey) {
      can quote a header it refused to send, and one of these headers is the key, so its message, its
      stack and the error itself (as a cause) stay here: nothing a header problem says can reach the
      log. Which of the two it was matters after a POST: once Stripe has answered, it may have acted */
+  /* eight seconds, then the same words as no answer: a hung call would otherwise hold a webhook until
+     Netlify ends the function, its event already marked seen and nothing done */
   let res, text;
-  try { res = await doFetch(url, { method, headers, body }); text = await res.text(); }
+  try { res = await doFetch(url, { method, headers, body, signal: AbortSignal.timeout(8000) }); text = await res.text(); }
   catch { throw new Error(`${res ? 'Stripe answered, but the answer could not be read' : 'No answer from Stripe'} (fetch's own error is left out, as it can quote the key)`); }
   let data = {}; try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) {

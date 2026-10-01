@@ -4060,6 +4060,19 @@ try {
     stripeLib.periodEnd({ current_period_end: 1800000000 }) === '2027-01-15T08:00:00.000Z' && stripeLib.periodEnd({ items: { data: [{ current_period_end: 1800000000 }] } }) === '2027-01-15T08:00:00.000Z' && stripeLib.periodEnd({}) === null);
 
   Object.assign(process.env, { STRIPE_SECRET_KEY: 'sk_test_stub', STRIPE_WEBHOOK_SECRET: WH, STRIPE_PRICE_YEAR: 'price_year', STRIPE_PRICE_LIFETIME: 'price_life', STRIPE_PRICE_MONTH: 'price_month' });
+  {
+    /* Stripe that never answers: the call gives up after eight seconds, in the words for no answer, so a webhook never sits
+       until Netlify ends it with its event marked seen and nothing done. The real timer; only this one path hangs */
+    const stub = globalThis.__LS_STRIPE_FETCH, started = Date.now();
+    globalThis.__LS_STRIPE_FETCH = (url, init) => new URL(url).pathname !== '/v1/subscriptions/sub_hang' ? stub(url, init) : new Promise((_, reject) => init.signal
+      ? init.signal.addEventListener('abort', () => reject(new DOMException('gave up on ' + init.headers.authorization, 'TimeoutError')), { once: true })
+      : reject(new Error('no time limit: ' + init.headers.authorization)));
+    let hung = null;
+    try { await stripeLib.stripe('GET', '/subscriptions/sub_hang'); } catch (e) { hung = e; } finally { globalThis.__LS_STRIPE_FETCH = stub; }
+    const waited = Date.now() - started;
+    check('a Stripe call that never answers gives up after eight seconds, in the words for no answer, with no key in them',
+      !!hung && /^No answer from Stripe/.test(hung.message) && !/sk_test_stub|Bearer/.test(String(hung.stack) + hung.message) && waited >= 7900 && waited < 15000, { message: hung && hung.message, waited });
+  }
   const ctxB = await browser.newContext({ viewport:{width:375,height:812}, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });   /* a phone's Safari, not the app */
   await pinClock(ctxB);
   await ctxB.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort());
@@ -4881,6 +4894,49 @@ try {
       lateTrial.status === 200 && said.some(l => /^billing: CHECK BY HAND for a first charge on sub_late_trial/.test(l)) && (await ent()).plan === 'lifetime' && (await ent()).source === 'code', { said, row: await ent() });
   }
   {
+    /* an undo Stripe will not let finish is not marked seen: the event goes back to Stripe, which delivers it again, and the
+       second go finishes it. A refund an earlier go made, a day on (past its idempotency key), answers already refunded,
+       which counts as done. And a subscription's own event on a held forever, for one still able to charge with no end
+       set (one a claim left before claims cancelled them), cancels it, or goes back to Stripe if Stripe will not */
+    await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL WHERE household_id = ${patState.household.id}`);
+    const stub = globalThis.__LS_STRIPE_FETCH, refusing = new Set(['sub_undo', 'sub_orphan_stuck']);
+    const answer = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
+    globalThis.__LS_STRIPE_FETCH = async (url, init) => {
+      const path = new URL(url).pathname, id = path.split('/').pop();
+      if (init.method === 'DELETE' && refusing.has(id)) { stripeCalls.push({ method: init.method, path }); return answer({ error: { type: 'api_error', message: 'stub: not now' } }, 500); }
+      if (path === '/v1/refunds' && init.headers['idempotency-key'] === 'refund-cs_undo_done') { stripeCalls.push({ method: init.method, path }); return answer({ error: { type: 'invalid_request_error', code: 'charge_already_refunded', message: 'Charge ch_undo has already been refunded.' } }, 400); }
+      return stub(url, init);
+    };
+    const paidOnto = (id, sub, created) => ({ id, type: 'checkout.session.completed', created, data: { object: { id: 'cs_' + id.slice(4), mode: 'subscription', payment_status: 'paid', amount_total: 1999, customer: 'cus_pat', subscription: sub, invoice: 'in_clash', client_reference_id: String(patState.household.id), metadata: { plan: 'year' } } } });
+    const seen = async (id) => (await db.query(`SELECT count(*)::int AS n FROM stripe_events WHERE id = '${id}'`)).rows[0].n;
+    const said = [], ce = console.error; console.error = (...a) => { said.push(a.map(String).join(' ')); ce.apply(console, a); };
+    const r = {};
+    try {
+      r.first = (await hook(paidOnto('evt_undo', 'sub_undo', t0 + 9.152))).status; r.seenFirst = await seen('evt_undo');
+      refusing.delete('sub_undo');
+      let from = stripeCalls.length;
+      r.second = (await hook(paidOnto('evt_undo', 'sub_undo', t0 + 9.152))).status; r.seenSecond = await seen('evt_undo');
+      r.secondCalls = stripeCalls.slice(from).map(c => c.method + ' ' + c.path);
+      r.done = (await hook(paidOnto('evt_undo_done', 'sub_undo_done', t0 + 9.153))).status; r.seenDone = await seen('evt_undo_done');
+      from = stripeCalls.length;
+      r.live = (await hook(subEv('evt_orphan', 'customer.subscription.updated', t0 + 9.154, { id: 'sub_orphan' }))).status;
+      r.liveCalls = stripeCalls.slice(from).map(c => c.method + ' ' + c.path);
+      from = stripeCalls.length;
+      r.ending = (await hook(subEv('evt_orphan_ending', 'customer.subscription.updated', t0 + 9.155, { id: 'sub_orphan_ending', cancel_at_period_end: true }))).status;
+      r.endingCalls = stripeCalls.slice(from).map(c => c.method + ' ' + c.path);
+      r.stuck = (await hook(subEv('evt_orphan_stuck', 'customer.subscription.updated', t0 + 9.156, { id: 'sub_orphan_stuck' }))).status; r.seenStuck = await seen('evt_orphan_stuck');
+    } finally { console.error = ce; globalThis.__LS_STRIPE_FETCH = stub; }
+    r.row = await ent();
+    check('an undo Stripe will not let finish goes back to Stripe unmarked, and the next delivery finishes it',
+      r.first === 500 && r.seenFirst === 0 && r.second === 200 && r.seenSecond === 1 && r.secondCalls.includes('DELETE /v1/subscriptions/sub_undo') && r.secondCalls.includes('POST /v1/refunds'), r);
+    check('and a refund an earlier go made answers already refunded, which counts as done, with no REFUND BY HAND',
+      r.done === 200 && r.seenDone === 1 && !said.some(l => /REFUND BY HAND, checkout cs_undo_done/.test(l)), { done: r.done, seenDone: r.seenDone, said });
+    check('a subscription still able to charge a held forever is cancelled on its own event, and one winding down is left alone',
+      r.live === 200 && r.liveCalls.includes('DELETE /v1/subscriptions/sub_orphan') && said.some(l => /^billing: CHECK BY HAND the last charge of sub_orphan /.test(l))
+      && r.ending === 200 && !r.endingCalls.some(c => c.startsWith('DELETE')) && r.row.plan === 'lifetime' && r.row.source === 'code', r);
+    check('and if Stripe will not cancel it, the event goes back to Stripe, unmarked', r.stuck === 500 && r.seenStuck === 0, r);
+  }
+  {
     /* the claim writing forever while a checkout's webhook waits on Stripe for the new subscription, after the webhook read the
        row and before it writes. With Stripe's stamp behind our clock the webhook's write is the older one and misses; with it
        ahead, the write would land on the forever. Either way the checkout is undone, and the forever stands */
@@ -5456,7 +5512,28 @@ try {
     await db.query(`UPDATE entitlements SET plan = '${entRow.plan}', source = '${entRow.source}', status = '${entRow.status}', stripe_subscription_id = ${entRow.stripe_subscription_id ? "'" + entRow.stripe_subscription_id + "'" : 'NULL'} WHERE household_id = ${patState.household.id}`);
   }
   await ctxA.close();
-  /* deleting the account stops the money */
+  {
+    /* an owner folding a household with nobody else in it into another: its subscription is cancelled whatever its row says,
+       since a first charge Stripe is still retrying reads as ended, and once the household goes nothing would find it */
+    const { createSession, findOrCreateUser, createInvite } = await import('../netlify/lib/auth.js');
+    const folder = await findOrCreateUser('folder@example.com'), folderToken = await createSession(folder.id, 'native');
+    const [own] = (await db.query(`INSERT INTO households (owner_user_id, doc) VALUES (${folder.id}, '{}'::jsonb) RETURNING id`)).rows;
+    await db.query(`INSERT INTO household_members (household_id, user_id, role, member_id) VALUES (${own.id}, ${folder.id}, 'owner', 'mem_folder1')`);
+    await db.query(`INSERT INTO entitlements (household_id, plan, source, status, stripe_subscription_id) VALUES (${own.id}, 'free', 'none', 'canceled', 'sub_folded')`);
+    const code = await createInvite(patState.household.id, patState.me.userId, 'adult');
+    const before = stripeCalls.length;
+    const joined = await fetch(NODE_BASE + '/api/household/join', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + folderToken }, body: JSON.stringify({ code }) });
+    const gone = (await db.query(`SELECT count(*)::int AS n FROM households WHERE id = ${own.id}`)).rows[0].n === 0;
+    const calls = stripeCalls.slice(before).map(c => c.method + ' ' + c.path);
+    await db.query(`DELETE FROM users WHERE id = ${folder.id}`);   /* out of Pat's household again, and off the numbers page */
+    check('an owner folding their household into another cancels its subscription, a first charge Stripe is still retrying included',
+      joined.status === 200 && gone && calls.includes('DELETE /v1/subscriptions/sub_folded'), { status: joined.status, gone, calls });
+  }
+  /* deleting the account stops the money; and a household this parent paid for, though another owns it, whose first charge
+     Stripe is still retrying, has that subscription cancelled too, whatever its row says */
+  const [elsewhereOwner] = (await db.query(`INSERT INTO users (email) VALUES ('elsewhere@example.com') RETURNING id`)).rows;
+  const [elsewhere] = (await db.query(`INSERT INTO households (owner_user_id, doc) VALUES (${elsewhereOwner.id}, '{}'::jsonb) RETURNING id`)).rows;
+  await db.query(`INSERT INTO entitlements (household_id, plan, source, status, stripe_subscription_id, paid_by) VALUES (${elsewhere.id}, 'free', 'none', 'canceled', 'sub_paid_elsewhere', ${patState.me.userId})`);
   stripeCalls.length = 0;
   await openPane(pb, 'account');
   check('the delete warning says the plan stops', /The plan, which stops at once/.test(await pb.textContent('#view')),
@@ -5465,6 +5542,8 @@ try {
   await pb.click('[data-act="delete-account"]');
   await until(pb, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));
   check('deleting the account cancels the subscription at Stripe', stripeCalls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_pat'));
+  check('and one it paid for elsewhere, its first charge still being retried, whatever its row says', stripeCalls.some(c => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_paid_elsewhere'), stripeCalls.map(c => c.method + ' ' + c.path));
+  await db.query(`DELETE FROM users WHERE id = ${elsewhereOwner.id}`);   /* the household goes with its owner, and the numbers page counts every person */
   const unpaidSession = await hook({ id: 'evt_8', type: 'checkout.session.completed', created: t0 + 7, data: { object: { id: 'cs_test_4', mode: 'subscription', payment_status: 'unpaid', client_reference_id: '999999', metadata: {} } } });
   check('a session that is not paid yet, or for no household, grants nothing and is still acknowledged', unpaidSession.status === 200);
   await ctxB.close();

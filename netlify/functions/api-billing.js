@@ -108,7 +108,7 @@ async function applyEvent(ev) {
       cancelAtPeriodEnd: sub && sub.cancel_at_period_end, customer: cust, subscription: subId, price: prices()[obj.metadata && obj.metadata.plan === 'month' ? 'month' : 'year'] || null, paidBy,
       charged: obj.payment_status === 'paid', keepForever: true });   /* $0 today inside the three weeks: charged later, on the subscription's own event */
     /* a second subscription for the same household (a card that failed, then a fresh checkout) replaces the first */
-    if (ok && oldSub && subId && oldSub !== subId) await cancelSubscription(oldSub);
+    if (ok && oldSub && subId && oldSub !== subId && !(await cancelSubscription(oldSub))) console.error('billing: CANCEL BY HAND', oldSub, 'replaced by', subId);
     if (!ok) {
       /* paid on the web once the household held the plan another way: through the App Store (a
          checkout left open in a tab, then the iPhone), or forever, the beta's claimed while this event
@@ -126,7 +126,16 @@ async function applyEvent(ev) {
     const hid = await householdFor(obj);
     if (!hid) return 'no household';
     const [cur] = await q`SELECT plan, status, source, current_period_end, stripe_subscription_id FROM entitlements WHERE household_id = ${hid}`;
-    if (foreverHeld(cur)) return 'lifetime kept';                     /* a subscription winding down after a lifetime purchase changes nothing */
+    if (foreverHeld(cur)) {
+      /* a subscription winding down after a lifetime purchase changes nothing. One still able to charge, with no end
+         set (left by a beta claim before the claim cancelled them, or beside a forever given by hand), bills the
+         forever every year: it is cancelled, and the log asks for its last charge to be looked at. If Stripe will not
+         cancel it, the event goes back to Stripe to be tried again */
+      if (ev.type === 'customer.subscription.deleted' || obj.cancel_at_period_end || ['canceled', 'incomplete_expired'].includes(obj.status)) return 'lifetime kept';
+      if (!(await cancelSubscription(obj.id))) throw new Error(`CANCEL BY HAND ${obj.id}: still able to charge a forever`);
+      if (obj.status === 'active' || obj.status === 'past_due') console.error('billing: CHECK BY HAND the last charge of', obj.id, 'cancelled: it was charging a forever');
+      return 'lifetime kept, its subscription cancelled';
+    }
     if (cur && cur.stripe_subscription_id && cur.stripe_subscription_id !== obj.id) return 'other subscription';   /* an older one of the same customer */
     const status = ev.type === 'customer.subscription.deleted' ? 'canceled' : subscriptionStatus(obj);
     const price = obj.items && obj.items.data && obj.items.data[0] && obj.items.data[0].price && obj.items.data[0].price.id;
@@ -178,7 +187,12 @@ async function undoCheckout(obj, subId, held) {
      floor for the first charge; webhooks failing that long), its first charge may have been taken since */
   const late = !obj.amount_total && !!(obj.metadata && obj.metadata.charge_later) && Number(obj.created) > 0 && Date.now() / 1000 - obj.created > 48 * 3600;
   if (late) console.error('billing: CHECK BY HAND for a first charge on', subId, 'paid while', held);
-  return `${ended ? 'canceled' : 'CANCEL BY HAND'}, ${!refunded ? 'REFUND BY HAND' : obj.amount_total ? 'refunded' : late ? 'CHECK BY HAND for a first charge since' : 'nothing charged at checkout'}: ${held}`;
+  const outcome = `${ended ? 'canceled' : 'CANCEL BY HAND'}, ${!refunded ? 'REFUND BY HAND' : obj.amount_total ? 'refunded' : late ? 'CHECK BY HAND for a first charge since' : 'nothing charged at checkout'}: ${held}`;
+  /* not finished: the event goes back to Stripe, which delivers it again, and the undo runs again. A second go
+     repeats nothing: a cancel already made answers no such subscription, and the refund carries its idempotency
+     key, or, a day on, finds its charge already refunded */
+  if (!ended || !refunded) throw new Error(outcome);
+  return outcome;
 }
 
 /* gives back what a checkout charged, through the invoice it paid; older Stripe accounts name the
@@ -197,7 +211,10 @@ async function refundCheckout(obj, held) {
     if (!pi && !charge) throw new Error('no payment on ' + invId);
     await stripe('POST', '/refunds', pi ? { payment_intent: pi } : { charge }, 'refund-' + obj.id);
     return true;
-  } catch (e) { console.error('billing: REFUND BY HAND, checkout', obj.id, 'paid while', held + ':', e.message); return false; }
+  } catch (e) {
+    if (e.code === 'charge_already_refunded') return true;   /* an earlier go at the same undo, past the key's day */
+    console.error('billing: REFUND BY HAND, checkout', obj.id, 'paid while', held + ':', e.message); return false;
+  }
 }
 
 export default async function handler(req, context) {
