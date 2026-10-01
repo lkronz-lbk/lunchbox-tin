@@ -1754,12 +1754,14 @@ function iapArrived(t){
   var wasPaid = paid();
   iapLink(t).then(function(r){ if(r.status === 200){ render(); if(!wasPaid && paid()) toast('Welcome to the Household plan'); } });
 }
-/* once the server has answered at all it has decided: a purchase it refuses (another household's,
-   or one for a household the website bills) will never be taken, so it is finished too. One it never
-   heard, offline or signed out, is left for StoreKit to hand back at the next launch. */
+/* once the server has answered 200, 400 or 409 it has decided: a purchase it refuses (another
+   household's, or one for a household the website bills) will never be taken, so it is finished too.
+   One it never decided on, offline, signed out or the server failing, is left for StoreKit to hand
+   back at the next launch. */
+function iapDecided(r){ return r.status === 200 || r.status === 400 || r.status === 409; }
 function iapLink(t){
   return api('POST', '/api/apple/link', {signedTransaction: t.jws}).then(function(r){
-    if(r.status === 200 || r.status === 400 || r.status === 409){ var sk = storeKit(); if(sk) sk.finish({transactionId: t.transactionId}).catch(function(){}); }
+    if(iapDecided(r)){ var sk = storeKit(); if(sk) sk.finish({transactionId: t.transactionId}).catch(function(){}); }
     if(r.status === 200 && r.entitlement) Account.entitlement = Object.assign({}, Account.entitlement || {}, r.entitlement);
     return r;
   }, function(){ return {status: 0}; });
@@ -6901,6 +6903,8 @@ document.addEventListener('click', function(ev){
       return Promise.all(list.map(iapLink)).then(function(rs){
         back();
         if(paid() && rs.some(function(x){ return x.status === 200; })){ closeSheet(); render(); toast('Restored \u2014 the Household plan is on'); return; }
+        /* until the server has decided on every one, none is called ended or refused: the one it missed may be the plan still in force */
+        if(!rs.every(iapDecided)){ toast('We could not check your purchases just now. Try again in a moment'); return; }
         var said = rs.filter(function(x){ return x.status === 400 || x.status === 409; })[0];
         toast(said ? iapRefused(said) : 'The plans on this Apple Account have ended');
       });

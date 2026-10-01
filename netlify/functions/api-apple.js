@@ -112,18 +112,36 @@ async function route(req) {
     if (txn.bundleId !== BUNDLE_ID || txn.environment !== d.environment || (renewal && renewal.environment !== d.environment) || String(txn.originalTransactionId || '') === '') return fail('Wrong app', 400);
     await noteRevoked(txn);
     if (!owned(txn)) return json({ received: true, ignored: true });
-    const seen = await sql()`INSERT INTO apple_events (id, type) VALUES (${n.notificationUUID}, ${n.notificationType}) ON CONFLICT (id) DO NOTHING RETURNING id`;
-    if (!seen.length) return json({ received: true, duplicate: true });
+    /* seen only once applied. Until then the row is held (applying_since), and a second delivery
+       arriving meanwhile is turned away, for Apple to send again: it resends on anything but a
+       success, an hour later at first (in production; the sandbox sends once). A hold older than
+       ten minutes is a delivery that never finished, since Netlify stops a function at sixty
+       seconds (the database went away mid-apply and would not even let the row go, or the answer
+       to this insert never came back), so the next delivery takes it over. Applied twice, a
+       notification is no worse than a late one: writeApple orders Apple's writes by Apple's clock. */
+    const [taken] = await sql()`
+      INSERT INTO apple_events (id, type, applying_since) VALUES (${n.notificationUUID}, ${n.notificationType}, now())
+      ON CONFLICT (id) DO UPDATE SET applying_since = now() WHERE apple_events.applying_since < now() - interval '10 minutes'
+      RETURNING id`;
+    if (!taken) {
+      const [held] = await sql()`SELECT applying_since IS NULL AS applied FROM apple_events WHERE id = ${n.notificationUUID}`;
+      if (held && held.applied) return json({ received: true, duplicate: true });
+      console.log(`apple: ${n.notificationType} ${n.notificationUUID} -> still being applied`);
+      return fail('Still being applied', 409);
+    }
     let outcome;
     try {
       const hid = await householdFor(txn);
       outcome = hid ? await apply(hid, iso(n.signedDate), txn, renewal || null) : 'no household';
     } catch (e) {
-      /* unrecorded, so Apple's retry applies it */
-      await sql()`DELETE FROM apple_events WHERE id = ${n.notificationUUID}`;
+      /* let go, so Apple's retry applies it; if the database will not take even that, the hold lapses */
+      await sql()`DELETE FROM apple_events WHERE id = ${n.notificationUUID} AND applying_since IS NOT NULL`
+        .catch(e2 => console.error('apple: still held', n.notificationUUID, e2.message));
       console.error('apple:', n.notificationType, n.notificationUUID, e.message);
       return fail('Could not apply', 500);
     }
+    /* if this fails, the handler answers 500, and Apple's retry applies it again once the hold has lapsed */
+    await sql()`UPDATE apple_events SET applying_since = NULL WHERE id = ${n.notificationUUID}`;
     console.log(`apple: ${n.notificationType}${n.subtype ? '/' + n.subtype : ''} ${n.notificationUUID} -> ${outcome}`);
     if (Math.random() < 0.05) await sql()`DELETE FROM apple_events WHERE received_at < now() - interval '30 days'`;
     return json({ received: true });
