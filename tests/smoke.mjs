@@ -3083,12 +3083,23 @@ try {
       refused.status === 503 && /busy/.test(refusedBody.error) && (await marks()) - m2 === 3 && (await links()) - l2 === 1, [refused.status, refusedBody, (await marks()) - m2]);
     /* a burst queued on the lock past its 50 ms: the database cancels the wait (55P03), the request is answered as busy, and
        nothing of it is written. Postgres here has one connection, so the cancel is handed in by the hook */
-    const realTx = globalThis.__LS_SQL.transaction;
+    const realTx = globalThis.__LS_SQL.transaction, cutSaid = [], realCutError = console.error;
     globalThis.__LS_SQL.transaction = async () => { throw Object.assign(new Error('canceling statement due to lock timeout'), { code: '55P03' }); };
+    console.error = (...a) => { cutSaid.push(a.join(' ')); };
     const [m3, l3] = [await marks(), await links()];
-    let queued; try { queued = await auth('request', { email: 'queued@example.com' }, '192.0.2.196'); } finally { globalThis.__LS_SQL.transaction = realTx; }
-    check('a request whose wait on the lock is cut is answered as busy, and writes nothing',
-      queued.status === 503 && /busy/.test((await queued.json()).error) && (await marks()) === m3 && (await links()) === l3, queued.status);
+    let queued, queuedAgain; try { queued = await auth('request', { email: 'queued@example.com' }, '192.0.2.196'); queuedAgain = await auth('request', { email: 'queued-too@example.com' }, '192.0.2.193'); }
+    finally { globalThis.__LS_SQL.transaction = realTx; console.error = realCutError; }
+    check('a request whose wait on the lock is cut is answered as busy and writes nothing, and the log says so once, not once a request',
+      queued.status === 503 && queuedAgain.status === 503 && /busy/.test((await queued.json()).error) && (await marks()) === m3 && (await links()) === l3
+        && cutSaid.filter(l => /queued past 50 ms on the lock/.test(l)).length === 1, [queued.status, queuedAgain.status, cutSaid]);
+    /* the wait is cut by the transaction's own first statement, SET LOCAL, which ends with it: a plain SET would outlive the
+       transaction on Neon's pooled connection and cut the lock waits of whatever ran on it next, any route's */
+    const handed = [];
+    globalThis.__LS_SQL.transaction = fn => realTx(q => { const qs = fn(q); handed.push(qs.map(([strings]) => strings.join('?').replace(/\s+/g, ' ').trim())); return qs; });
+    let lockAsked; try { lockAsked = await auth('request', { email: 'locked@example.com' }, '192.0.2.194'); } finally { globalThis.__LS_SQL.transaction = realTx; }
+    const leftSet = (await db.query('SHOW lock_timeout')).rows[0].lock_timeout;
+    check('the wait on the lock is cut by the transaction\'s own first statement, SET LOCAL, and nothing of it outlives the transaction',
+      lockAsked.status === 200 && handed.length === 1 && handed[0][0] === "SET LOCAL lock_timeout = '50ms'" && /pg_advisory_xact_lock/.test(handed[0][1]) && leftSet === '0', [lockAsked.status, handed, leftSet]);
     /* housekeeping that fails is logged and never fails the sign-in that paid for it */
     const realSql = globalThis.__LS_SQL, realRandom = Math.random, heard = [], realError = console.error;
     globalThis.__LS_SQL = Object.assign(async (strings, ...vals) => { if (typeof strings !== 'string' && strings.join('').includes('DELETE FROM rate_events WHERE ctid')) throw new Error('No answer from the database'); return realSql(strings, ...vals); }, { transaction: realSql.transaction });

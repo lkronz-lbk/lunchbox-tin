@@ -79,7 +79,7 @@ async function welcome(user, req, beta) {
 }
 
 /* REVIEW_EMAIL + REVIEW_CODE: the address App Review signs in with, and its standing code. Empty means no such account. */
-let reviewWarned = false;
+let reviewWarned = false, cutLogged = 0;
 function reviewAccount(email) {
   const raw = process.env.REVIEW_EMAIL || '';
   if (!raw) return '';
@@ -123,7 +123,12 @@ export default async function handler(req, context) {
       let [room] = await limits(sql(), false);
       if (room.here && room.them && room.everyone) {
         try { room = (await sql().transaction(q => [q`SET LOCAL lock_timeout = '50ms'`, q`SELECT pg_advisory_xact_lock(hashtext('api-auth request'))`, limits(q, true)]))[2][0]; }
-        catch (e) { if (e && e.code === '55P03') return fail('Sign-in is busy right now; try again later.', 503); throw e; }   /* 55P03: the wait was cut */
+        catch (e) {
+          if (!e || e.code !== '55P03') throw e;
+          /* the wait was cut: a burst is turning parents away, which the log says once a minute an instance, never once a request */
+          if (Date.now() - cutLogged > 60000) { cutLogged = Date.now(); console.error('api-auth: sign-in requests queued past 50 ms on the lock and were answered as busy'); }
+          return fail('Sign-in is busy right now; try again later.', 503);
+        }
       }
       if (!room.here) return fail('Too many sign-in requests from here; try again in an hour.', 429);
       if (!room.them) return fail('A link was sent recently. Check your inbox, or try again in a few minutes.', 429);
