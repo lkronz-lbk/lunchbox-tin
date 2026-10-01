@@ -542,7 +542,10 @@ matters: production reads its own database and its live Stripe key, and neither 
 a branch deploy or a pull request preview. The build refuses a Stripe key scoped to the
 wrong context, and a Stripe or Resend key or a database address pasted with anything more
 than itself, as long as the variable has the Builds scope: a build cannot check a variable it
-cannot see, and it names the keys it could.
+cannot see, and it names the keys it could. A production build (Netlify's own `CONTEXT`, which a
+local run does not have, whatever `SITE_ENV` says) also refuses to go out without a Resend key it
+can see, absent or not scoped to Builds, as it cannot tell which: a deploy without one could
+send no sign-in link.
 
 **Netlify setup, once:** Site configuration → Build & deploy → Branches and deploy
 contexts → add `dev` as a branch deploy, and leave Deploy Previews on.
@@ -801,10 +804,13 @@ out by deleting it in the commit that does it.
   `migrate:` lines where a refusal says `deploy refused:`.
 - **Liz: `RESEND_API_KEY`, the key alone in every context, before `main` takes the Resend key
   check.** Each value is `re_` then letters, digits and underscores, with nothing pasted around
-  it, and the variable needs the Builds scope as well as Functions: without it the build never
-  sees the key and the check does nothing. A build that goes through names the keys it could see
-  (`migrate: keys the build can see, each the key alone: …`), so a key missing from that line
-  has no Builds scope. With the scope, anything more refuses the deploy, even a
+  it, and the variable needs the Builds scope as well as Functions. In Production that is now
+  enforced: a production build that cannot see the key, whether it is absent or not scoped to
+  Builds, refuses the deploy (`deploy refused: RESEND_API_KEY is absent from this production
+  build, or not scoped to Builds`), and the live one stays up; check both. Elsewhere the build
+  never sees an unscoped key and the check does nothing. A build that goes through names the
+  keys it could see (`migrate: keys the build can see, each the key alone: …`), so a key missing
+  from that line has no Builds scope. With the scope, anything more refuses the deploy, even a
   space or a line break after the key, which sends mail today; the last good deploy stays live
   with the key it was built with, and keeps sending. Nobody could read the keys, so each
   context's next deploy is the first time the pattern meets its key: this check's deploy
@@ -1045,8 +1051,10 @@ writes the same one.
 - **Environment**: production reads `NETLIFY_DATABASE_URL` (Netlify DB / Neon); branch
   deploys and previews read `STAGING_DATABASE_URL` and refuse to run without it, so they
   can never touch production data or migrate it. `RESEND_API_KEY` and `MAIL_FROM` send the
-  emails; without a key, production refuses, and any other deploy writes the whole email, the
-  sign-in link and code included, to its function log instead of sending it; a deploy with
+  emails; without a key, production refuses: its build refuses the deploy when it cannot see the
+  key, absent or not scoped to Builds, and a running function that has none refuses to send. Any
+  other deploy without a key writes the whole email, the sign-in link and code included, to its
+  function log instead of sending it; a deploy with
   `DEV_LINKS=1` (or the test suite, which captures every email) also returns the link and code
   to the caller. The key must be the key alone, `re_` then letters, digits and underscores: the
   build refuses the deploy over anything more, naming the variable, never the value, as long as

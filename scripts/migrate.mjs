@@ -38,7 +38,9 @@ if (process.argv[1] && process.argv[1].endsWith('migrate.mjs')) {
      never what it holds, and all are told at once, so one failed deploy shows everything there is to
      fix. A variable without the Builds scope never reaches this and is not checked, so the build says,
      by name, which keys it could see: one missing from that line was never checked (the database says
-     so on its own line, skipping or migrating) */
+     so on its own line, skipping or migrating). Resend's key in a production build is the exception:
+     the build refuses to go out without one it can see, as a deploy without it could send no sign-in
+     link (resendKey() in netlify/lib/mail.js) */
   const { stripeKey } = await import('../netlify/lib/stripe.js');
   const { resendKey } = await import('../netlify/lib/mail.js');
   const { databaseUrl, sql } = await import('../netlify/lib/db.js');
