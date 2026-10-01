@@ -3958,8 +3958,8 @@ try {
     check('cut short, with the key, the sign-in link\'s token and its code blanked wherever they sit, should an answer ever quote a sign-in email back, a key with a space or a tab inside included',
       [echoed, echoedSpaced, echoedTab].every(e => !!e && /^Resend 422: \{"message":"invalid: "Bearer /.test(e.message) && /type this code instead/.test(e.message) && e.message.length <= 'Resend 422: '.length + 300 && hidden(shown(e)) && !e.message.includes('ABCD-EF23')),
       [echoed, echoedSpaced, echoedTab].map(e => e && e.message));
-    /* and through the sign-in function, whose last catch logs the whole error, stack and all: a link
-       that cannot be sent fails the request, and a welcome that cannot be sent never fails the sign-in.
+    /* and through the sign-in function: a link that cannot be sent is answered as busy, logged in a line of
+       its own, and a welcome that cannot be sent never fails the sign-in.
        Unlike the sends above, the capture, the key and the hook stay away across two whole handler
        calls and their database waits; the page is signed out and idle, so nothing else sends mail
        meanwhile. Called straight, with no client address, so this machine's sign-in allowance is not
@@ -3975,9 +3975,10 @@ try {
         signedIn = await post('/api/auth/verify', { token: new URL(asked.devLink).searchParams.get('t'), kind: 'native' });
       } finally { globalThis.__LS_MAIL = was.m; putEnv('RESEND_API_KEY', was.k); globalThis.__LS_RESEND_FETCH = was.h; }
     });
-    await db.query(`DELETE FROM users WHERE email LIKE 'resend-%@example.com'`); await db.query(`DELETE FROM magic_links WHERE email LIKE 'resend-%@example.com'`); await db.query(`DELETE FROM rate_events WHERE key LIKE 'link:resend-%@example.com'`);
-    check('and a sign-in link that cannot be sent fails the request, while a welcome that cannot be sent still signs in, each logged in our own words',
-      !!link && link.status === 500 && !!signedIn && signedIn.status === 200 && logged.some(l => /^api-auth Error: No answer from Resend/.test(l)) && logged.some(l => /^welcome email No answer from Resend/.test(l)),
+    const counted = ['resend-welcome@example.com', 'resend-link@example.com'].map(e => 'link:' + crypto.createHash('sha256').update(e).digest('hex').slice(0, 24));   /* each address's sign-in count is a digest of it */
+    await db.query(`DELETE FROM users WHERE email LIKE 'resend-%@example.com'`); await db.query(`DELETE FROM magic_links WHERE email LIKE 'resend-%@example.com'`); await db.query('DELETE FROM rate_events WHERE key IN ($1, $2)', counted);
+    check('and a sign-in link that cannot be sent is answered as busy, while a welcome that cannot be sent still signs in, each logged in our own words',
+      !!link && link.status === 503 && !!signedIn && signedIn.status === 200 && logged.some(l => /^api-auth: the sign-in email was refused No answer from Resend/.test(l)) && logged.some(l => /^welcome email No answer from Resend/.test(l)),
       { link: link && link.status, signedIn: signedIn && signedIn.status, logged });
     check('and nothing this process wrote to its standard output or error while the sends ran holds the key, whatever wrote it', logged.length >= 2 && logged.every(l => hidden(l)), logged);
   }
