@@ -30,15 +30,18 @@ const db = new PGlite();
 /* every email the functions send is captured here instead of going to Resend */
 const mails = []; globalThis.__LS_MAIL = mails;
 globalThis.__LS_SQL = async (strings, ...vals) => typeof strings === 'string' ? (await db.query(strings)).rows : (await db.sql(strings, ...vals)).rows;
+/* statements that must see each other's work, in one transaction, as sql().transaction runs them on Neon (db.js) */
+globalThis.__LS_SQL.transaction = fn => db.transaction(async tx => { const out = []; for (const [strings, vals] of fn((s, ...v) => [s, v])) out.push((await tx.sql(strings, ...vals)).rows); return out; });
 await migrate(globalThis.__LS_SQL);
-const { default: authHandler } = await import('../netlify/functions/api-auth.js');
+const { default: authHandler, LINKS_FROM_ONE, LINKS_TO_ONE, LINKS_A_DAY } = await import('../netlify/functions/api-auth.js');
+const { CODE_TRIES } = await import('../netlify/lib/auth.js');
 const { default: householdHandler } = await import('../netlify/functions/api-household.js');
 const { default: billingHandler } = await import('../netlify/functions/api-billing.js');
 const { default: adminHandler, stats: adminStats } = await import('../netlify/functions/api-admin.js');
 const { default: betaHandler } = await import('../netlify/functions/beta.js');
 const { default: recipeHandler } = await import('../netlify/functions/api-recipe.js');
-const { default: errorsHandler, ipBucket, ROWS_AN_HOUR, EACH_AN_HOUR } = await import('../netlify/functions/api-errors.js');
-const { ipKey, ERRORS_KEPT } = await import('../netlify/lib/db.js');
+const { default: errorsHandler, ROWS_AN_HOUR, EACH_AN_HOUR } = await import('../netlify/functions/api-errors.js');
+const { ipKey, ipBucket, ERRORS_KEPT } = await import('../netlify/lib/db.js');
 const { default: appleHandler } = await import('../netlify/functions/api-apple.js');
 const appleLib = await import('../netlify/lib/apple.js');
 process.env.ADMIN_EMAILS = 'liz@example.com';
@@ -2856,7 +2859,7 @@ try {
     /* a flood from more addresses than the hourly caps can see stops at the table's ceiling, not the database's. The
        filler is two hours old and each report comes from a fresh address, so only the ceiling can turn one away */
     const flood = (message, ip) => errorsHandler(new Request('http://127.0.0.1/api/errors', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'error', message, build: 'lunchsorted-v3' }) }), { ip });
-    const marks = async ip => (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', ['err:' + ipKey(ipBucket(ip))])).rows[0].n;
+    const marks = async ip => (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', ['err:' + ipKey(ip)])).rows[0].n;
     const had = (await db.query('SELECT count(*)::int AS n FROM app_errors')).rows[0].n;
     await db.query(`INSERT INTO app_errors (at, build, kind, message) SELECT now() - interval '2 hours', 'lunchsorted-v3', 'error', 'smoke: filler ' || g FROM generate_series(1, $1::int) g`, [ERRORS_KEPT - had - 1]);
     const lastRoom = await flood('smoke: the last report there is room for', '203.0.113.7');
@@ -2897,7 +2900,7 @@ try {
        the driver, not the row, and asks TextEncoder rather than the server's own pattern whether each value is whole */
     const REPLACED = String.fromCharCode(0xFFFD), NUL = String.fromCharCode(0), LOW_HALF = String.fromCharCode(0xDE00);
     const realSql = globalThis.__LS_SQL; let sent = null;
-    globalThis.__LS_SQL = async (strings, ...vals) => { if (typeof strings !== 'string' && strings.join('').includes('INSERT INTO app_errors')) sent = vals; return realSql(strings, ...vals); };
+    globalThis.__LS_SQL = Object.assign(async (strings, ...vals) => { if (typeof strings !== 'string' && strings.join('').includes('INSERT INTO app_errors')) sent = vals; return realSql(strings, ...vals); }, { transaction: realSql.transaction });
     try { await flood(LOW_HALF + 'x'.repeat(296) + NUL + 'y' + '\u{1F34E}', '203.0.113.12'); } finally { globalThis.__LS_SQL = realSql; }
     const whole = v => new TextDecoder().decode(new TextEncoder().encode(v)) === v && !v.includes(NUL);
     check('a NUL and half an emoji, sent alone or left by a cut, reach the database as U+FFFD, and nothing Postgres cannot hold does',
@@ -2968,9 +2971,9 @@ try {
   await until(p2, () => !!document.querySelector('#signinCode'));
   const devCode = await p2.evaluate(() => fetch('/api/auth/request', {method:'POST', headers:{'content-type':'application/json'}, body:'{"email":"sam@example.com"}'}).then(r => r.json()).then(j => j.devCode));
   /* Enter in the code field presses Sign in, and a key held down repeats: each repeat was one more
-     try of the code, and the server allows eight a quarter of an hour, so a mistyped code held for
-     a moment locked the address out. The key is held here, with the first try held open so the
-     field is still there for every repeat, and the code goes once. */
+     try of the code, and a code takes eight wrong tries, so a mistyped code held for a moment spent
+     itself. The key is held here, with the first try held open so the field is still there for
+     every repeat, and the code goes once. */
   let letGo = () => {}; const holding = new Promise(r => { letGo = r; });
   let codeTries = 0; const holdCode = async route => { if (route.request().method() === 'POST') codeTries++; await holding; await route.continue(); };
   await p2.route('**/api/auth/code', holdCode);
@@ -2998,6 +3001,143 @@ try {
   }
   const codeAgain = await p2.evaluate(c => fetch('/api/auth/code', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({email:'sam@example.com', code:c})}).then(r => r.status), devCode);
   check('a code works once', codeAgain === 410, codeAgain);
+  {
+    /* What a stranger can make the sign-in routes write is bounded, and no row there names an address. Straight to the
+       handler, each call from a connection of its own, so the suite's own 127.0.0.1 keeps its hourly twenty. Only the
+       sign-in routes' rows are counted, so a phone's push landing meanwhile cannot move a count, and the digests are
+       worked out here rather than with the code's own digest() */
+    const auth = (route, body, ip, headers = {}) => authHandler(new Request('http://127.0.0.1/api/auth/' + route, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }), { ip });
+    const marks = async () => (await db.query("SELECT count(*)::int AS n FROM rate_events WHERE key LIKE 'link%' OR key LIKE 'code%' OR key LIKE 'verify%'")).rows[0].n;
+    const links = async () => (await db.query('SELECT count(*)::int AS n FROM magic_links')).rows[0].n;
+    const sha = s => crypto.createHash('sha256').update(s).digest('hex').slice(0, 24);
+    const wide = n => Array.from({ length: n }, () => String.fromCodePoint(0x4E00 + crypto.randomInt(20000))).join('');   /* three bytes a letter */
+    const before = [await marks(), await links()], answers = [];
+    for (let i = 0; i < 200; i++) answers.push((await auth('code', { email: wide(60) + i + '@' + wide(200) + '.com', code: 'ABCD-EFGH' }, i % 2 ? `2001:db8:${i.toString(16)}::1` : `203.0.113.${i}`)).status);
+    check('two hundred invented addresses in three-byte letters, from as many connections, write nothing through the code route and are each told the code is wrong',
+      (await marks()) === before[0] && (await links()) === before[1] && answers.every(s => s === 410), [(await marks()) - before[0], [...new Set(answers)]]);
+    /* a code with its email waiting: eight wrong tries, from however many connections, then even the right code is refused,
+       with the same answer every time; a new email brings a code with eight of its own */
+    const asked = await (await auth('request', { email: 'guess@example.com' }, '198.51.100.7')).json();
+    const tries = [];
+    for (let i = 0; i < CODE_TRIES + 4; i++) tries.push((await auth('code', { email: 'guess@example.com', code: 'ZZZZ-ZZZ' + (i % 8 + 2) }, `198.51.100.${10 + i}`)).status);
+    const right = (await auth('code', { email: 'guess@example.com', code: asked.devCode }, '198.51.100.99')).status;
+    const spent = (await db.query("SELECT code_tries AS n, code_used_at IS NULL AS unused FROM magic_links WHERE email = 'guess@example.com'")).rows;
+    const again = await (await auth('request', { email: 'guess@example.com' }, '198.51.100.8')).json();
+    const freshReply = await auth('code', { email: 'guess@example.com', code: 'ZZZZ-ZZZZ' }, '198.51.100.8');
+    const fresh = freshReply.status, answer = (await freshReply.json()).error;
+    const counted = (await db.query("SELECT code_tries AS n FROM magic_links WHERE email = 'guess@example.com' ORDER BY created_at")).rows.map(r => r.n);
+    check('a code takes eight wrong tries, from however many connections, then refuses even the right code with the same answer as a wrong one, which says to ask for a new email, and a new email brings a code with eight of its own',
+      !!asked.devCode && !!again.devCode && tries.every(s => s === 410) && right === 410 && spent.length === 1 && spent[0].n === CODE_TRIES && spent[0].unused && fresh === 410 && counted.join() === `${CODE_TRIES},1` && /ask for a new email/.test(answer),
+      [tries, right, spent, fresh, counted, answer]);
+    const keys = (await db.query('SELECT key FROM rate_events')).rows.map(r => r.key);
+    const shaped = k => k === 'link:all' || k === 'link:review' || /^(link|link-ip):[0-9a-f]{24}$/.test(k), signInKeys = keys.filter(k => /^(link|code)/.test(k));
+    check('the counts are kept under a digest of the address or the connection, the code route keeps none, and no mark in the table carries an address, the suite\'s own sign-ins included',
+      keys.includes('link:' + sha('guess@example.com')) && keys.includes('link:' + sha('liz@example.com')) && keys.includes('link:' + sha('sam@example.com')) && keys.includes('link-ip:' + sha('198.51.100.7'))
+        && !keys.some(k => k.startsWith('code:')) && signInKeys.every(shaped) && !keys.some(k => k.includes('@')),
+      signInKeys.filter(k => !shaped(k)).slice(0, 3));
+    /* one IPv6 /64 is one connection: twenty let through from twenty of its addresses, the twenty-first turned away, the next /64 still goes */
+    const sent = [];
+    for (let i = 1; i <= LINKS_FROM_ONE; i++) sent.push((await auth('request', { email: `six${i}@example.com` }, `2001:db8:77:1:${i.toString(16)}::1`)).status);
+    const had = await marks();
+    const past = await auth('request', { email: 'six-past@example.com' }, '2001:db8:77:1:ffff:ffff:ffff:ffff');
+    const grew = (await marks()) - had;
+    const nextBlock = await auth('request', { email: 'six-next@example.com' }, '2001:db8:77:2::1');
+    check('an IPv6 /64 is one connection to the sign-in limit: twenty from twenty of its addresses, then one turned away without a row written, and the next /64 still goes',
+      sent.every(s => s === 200) && past.status === 429 && grew === 0 && nextBlock.status === 200, [sent, past.status, grew, nextBlock.status]);
+    const thrice = [];
+    for (let i = 0; i < LINKS_TO_ONE; i++) thrice.push((await auth('request', { email: 'thrice@example.com' }, `192.0.2.${10 + i}`)).status);
+    const had2 = await marks();
+    const fourth = await auth('request', { email: 'thrice@example.com' }, '192.0.2.99');
+    check('three links a quarter hour to one address, and a fourth is turned away without a row written',
+      thrice.every(s => s === 200) && fourth.status === 429 && (await marks()) === had2, [thrice, fourth.status]);
+    /* the day's count: topped up with marks from twenty-five hours ago it still lets a request through, and topped up from
+       twenty-three hours ago it turns one away, with no row, no link and no email, while App Review's address, which is sent
+       no email, still gets its code and leaves the day's count alone. The filler goes in a finally, or every sign-in after
+       this would be told the app is busy */
+    const inDay = async () => (await db.query("SELECT count(*)::int AS n FROM rate_events WHERE key = 'link:all' AND at > now() - interval '1 day'")).rows[0].n;
+    const fill = async hours => db.query("INSERT INTO rate_events (key, at) SELECT 'link:all', now() - make_interval(hours => $2::int) FROM generate_series(1, $1::int)", [LINKS_A_DAY - await inDay(), hours]);
+    let early, busy, wrote, reviewed;
+    try {
+      await fill(25);
+      early = (await auth('request', { email: 'early@example.com' }, '192.0.2.199')).status;
+      await db.query("DELETE FROM rate_events WHERE key = 'link:all' AND at < now() - interval '1 day'");
+      await fill(23);
+      const [m0, l0, e0] = [await marks(), await links(), mails.length];
+      busy = (await auth('request', { email: 'late@example.com' }, '192.0.2.200')).status;
+      wrote = [(await marks()) - m0, (await links()) - l0, mails.length - e0];
+      const [d0, l1, e1] = [await inDay(), await links(), mails.length];
+      reviewed = [(await auth('request', { email: 'review@example.com' }, '192.0.2.198')).status, (await inDay()) - d0, (await links()) - l1, mails.length - e1];
+    } finally { await db.query("DELETE FROM rate_events WHERE key = 'link:all' AND at < now() - interval '22 hours'"); }
+    check('once the day\'s sign-in emails are spent a request is turned away, and writes no row, no link and no email',
+      busy === 503 && wrote.join() === '0,0,0', [busy, wrote]);
+    check('and App Review\'s address, which is sent no email, still gets its code then, without a mark on the day\'s count or an email',
+      reviewed.join() === '200,0,1,0', reviewed);
+    /* the mail provider refusing a send (its daily cap): the parent is told sign-in is busy, not that something broke, and the
+       counts stay, so refused sends cannot run past the limits */
+    const realPush = mails.push;
+    mails.push = () => { throw new Error('Resend 429: daily quota reached'); };
+    const [m2, l2] = [await marks(), await links()];
+    let refused; try { refused = await auth('request', { email: 'refused@example.com' }, '192.0.2.197'); } finally { mails.push = realPush; }
+    const refusedBody = await refused.json();
+    check('a sign-in email the mail provider refuses is answered as busy, and still counts against the limits',
+      refused.status === 503 && /busy/.test(refusedBody.error) && (await marks()) - m2 === 3 && (await links()) - l2 === 1, [refused.status, refusedBody, (await marks()) - m2]);
+    /* a burst queued on the lock past its 50 ms: the database cancels the wait (55P03), the request is answered as busy, and
+       nothing of it is written. Postgres here has one connection, so the cancel is handed in by the hook */
+    const realTx = globalThis.__LS_SQL.transaction, cutSaid = [], realCutError = console.error;
+    globalThis.__LS_SQL.transaction = async () => { throw Object.assign(new Error('canceling statement due to lock timeout'), { code: '55P03' }); };
+    console.error = (...a) => { cutSaid.push(a.join(' ')); };
+    const [m3, l3] = [await marks(), await links()];
+    let queued, queuedAgain; try { queued = await auth('request', { email: 'queued@example.com' }, '192.0.2.196'); queuedAgain = await auth('request', { email: 'queued-too@example.com' }, '192.0.2.193'); }
+    finally { globalThis.__LS_SQL.transaction = realTx; console.error = realCutError; }
+    check('a request whose wait on the lock is cut is answered as busy and writes nothing, and the log says so once, not once a request',
+      queued.status === 503 && queuedAgain.status === 503 && /busy/.test((await queued.json()).error) && (await marks()) === m3 && (await links()) === l3
+        && cutSaid.filter(l => /queued past 50 ms on the lock/.test(l)).length === 1, [queued.status, queuedAgain.status, cutSaid]);
+    /* the wait is cut by the transaction's own first statement, SET LOCAL, which ends with it: a plain SET would outlive the
+       transaction on Neon's pooled connection and cut the lock waits of whatever ran on it next, any route's */
+    const handed = [];
+    globalThis.__LS_SQL.transaction = fn => realTx(q => { const qs = fn(q); handed.push(qs.map(([strings]) => strings.join('?').replace(/\s+/g, ' ').trim())); return qs; });
+    let lockAsked; try { lockAsked = await auth('request', { email: 'locked@example.com' }, '192.0.2.194'); } finally { globalThis.__LS_SQL.transaction = realTx; }
+    const leftSet = (await db.query('SHOW lock_timeout')).rows[0].lock_timeout;
+    check('the wait on the lock is cut by the transaction\'s own first statement, SET LOCAL, and nothing of it outlives the transaction',
+      lockAsked.status === 200 && handed.length === 1 && handed[0][0] === "SET LOCAL lock_timeout = '50ms'" && /pg_advisory_xact_lock/.test(handed[0][1]) && leftSet === '0', [lockAsked.status, handed, leftSet]);
+    /* housekeeping that fails is logged and never fails the sign-in that paid for it */
+    const realSql = globalThis.__LS_SQL, realRandom = Math.random, heard = [], realError = console.error;
+    globalThis.__LS_SQL = Object.assign(async (strings, ...vals) => { if (typeof strings !== 'string' && strings.join('').includes('DELETE FROM rate_events WHERE ctid')) throw new Error('No answer from the database'); return realSql(strings, ...vals); }, { transaction: realSql.transaction });
+    Math.random = () => 0; console.error = (...a) => { heard.push(a.join(' ')); };
+    let swept; try { swept = await auth('request', { email: 'swept@example.com' }, '192.0.2.195'); } finally { globalThis.__LS_SQL = realSql; Math.random = realRandom; console.error = realError; }
+    check('a sign-in whose housekeeping fails still goes out, and the failure is logged in our own words',
+      swept.status === 200 && heard.some(l => /^api-auth: housekeeping No answer from the database/.test(l)), [swept.status, heard]);
+    /* every window forgets on time: counts from a minute or an hour past it let a request through, and from just inside turn it away */
+    const place = (key, n, minutes) => db.query("INSERT INTO rate_events (key, at) SELECT $1, now() - make_interval(mins => $3::int) FROM generate_series(1, $2::int)", [key, n, minutes]);
+    await place('link:' + sha('old-quarter@example.com'), LINKS_TO_ONE, 16); await place('link:' + sha('new-quarter@example.com'), LINKS_TO_ONE, 14);
+    await place('link-ip:' + sha('192.0.2.240'), LINKS_FROM_ONE, 61); await place('link-ip:' + sha('192.0.2.241'), LINKS_FROM_ONE, 59);
+    const forgot = [early,
+      (await auth('request', { email: 'old-quarter@example.com' }, '192.0.2.242')).status, (await auth('request', { email: 'new-quarter@example.com' }, '192.0.2.243')).status,
+      (await auth('request', { email: 'old-hour@example.com' }, '192.0.2.240')).status, (await auth('request', { email: 'new-hour@example.com' }, '192.0.2.241')).status];
+    check('each sign-in limit forgets on time: the day\'s, the hour\'s and the quarter hour\'s counts from just past the window let a request through, and from just inside turn it away',
+      forgot.join() === '200,200,429,200,429', forgot);
+    /* the link's own route counts nothing, and a stranger's page posting from its visitors' browsers is turned away first */
+    const m1 = await marks();
+    const bogus = await auth('verify', { token: 'x'.repeat(43), kind: 'native' }, '192.0.2.201');
+    const formElsewhere = await authHandler(new Request('http://127.0.0.1/api/auth/verify', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 't=abc' }), { ip: '192.0.2.202' });
+    const crossSite = await auth('request', { email: 'csrf@example.com' }, '192.0.2.203', { 'sec-fetch-site': 'cross-site' });
+    check('the link\'s own route writes no row, for a token nobody was sent or a form from elsewhere, and a sign-in request from another site is refused before anything is written',
+      bogus.status === 410 && formElsewhere.status === 403 && crossSite.status === 403 && (await marks()) === m1, [bogus.status, formElsewhere.status, crossSite.status]);
+    /* migration 0011 takes the counts from before digests, which held an address, and nothing else, and runs again harmlessly */
+    const m11 = fs.readFileSync(path.join(ROOT, '..', 'netlify', 'database', 'migrations', '0011_code_tries.sql'), 'utf8').replace(/--[^\n]*/g, '').split(';').map(x => x.trim()).filter(Boolean);
+    await db.query("INSERT INTO rate_events (key) VALUES ('link:old@example.com'), ('code:old@example.com'), ('link:' || $1)", [sha('old@example.com')]);
+    for (const statement of m11) await db.query(statement);
+    const oldLeft = (await db.query("SELECT key FROM rate_events WHERE key IN ('link:old@example.com', 'code:old@example.com', 'link:' || $1)", [sha('old@example.com')])).rows.map(r => r.key);
+    check('migration 0011 clears the counts from before digests, which held an address, leaves a digest\'s, and runs again harmlessly',
+      m11.length === 2 && oldLeft.join() === 'link:' + sha('old@example.com'), [m11.length, oldLeft]);
+    await db.query("DELETE FROM rate_events WHERE key = 'link:' || $1", [sha('old@example.com')]);
+    /* the numbers in the code are the words in the README: change one and the other has to follow */
+    const said = fs.readFileSync(path.join(ROOT, '..', 'README.md'), 'utf8').replace(/\s+/g, ' ');
+    const words = { 3: 'three', 8: 'eight', 20: 'twenty', 2000: 'two thousand' };
+    const phrases = [`at most ${words[LINKS_TO_ONE]} times a quarter hour to one address`, `${words[LINKS_FROM_ONE]} times an hour from one connection`, `${words[LINKS_A_DAY]} times a day in all`, `A code gets ${words[CODE_TRIES]} tries`];
+    check('the sign-in limits are the ones the README gives, in its own words: three a quarter hour to an address, twenty an hour from a connection, two thousand a day, eight tries a code',
+      phrases.every(p => said.includes(p)), phrases.filter(p => !said.includes(p)));
+  }
   await p2.click('[data-act="join-accept"]');
   await until(p2, () => /you share their lunches/i.test(document.querySelector('#toast').textContent) || /Parent/.test(document.querySelector('#view').textContent));
   await until(page, () => fetch('/api/household').then(r => r.json()).then(j => j.members.length === 2));
@@ -3501,6 +3641,9 @@ try {
   check('leaving the page throws the typed word away rather than leaving it armed',
     (await page.inputValue('#deleteConfirm')) === '' && await page.$eval('[data-act="delete-account"]', b => b.disabled));
   await page.fill('#deleteConfirm', 'DELETE'); await page.waitForSelector('[data-act="delete-account"]:not([disabled])');
+  const lizKey = 'link:' + crypto.createHash('sha256').update('liz@example.com').digest('hex').slice(0, 24);
+  const lizMarks = async () => (await db.query('SELECT count(*)::int AS n FROM rate_events WHERE key = $1', [lizKey])).rows[0].n;
+  const lizHad = await lizMarks();
   await page.click('[data-act="delete-account"]'); await until(page, () => !!document.querySelector('.ob') && !!localStorage.getItem('lunchsorted'));   /* the fresh document lands after the save debounce */
   const afterDelete = await page.evaluate(() => fetch('/api/household').then(r => r.status));
   check('deleting the account signs out, removes the household from the server, and starts this phone over',
@@ -3508,6 +3651,7 @@ try {
     await page.evaluate(() => !JSON.parse(localStorage.getItem('lunchsorted')).kids.some(k => k.foods.length)));
   const rowsLeft = await db.query(`SELECT (SELECT count(*)::int FROM households) AS h, (SELECT count(*)::int FROM users WHERE email='liz@example.com') AS u`);
   check('and the rows are really gone', rowsLeft.rows[0].u === 0, rowsLeft.rows[0]);
+  check('and so are the sign-in counts kept under a digest of the address', lizHad > 0 && (await lizMarks()) === 0, [lizHad, await lizMarks()]);
   await page.evaluate(raw => localStorage.setItem('lunchsorted', raw), goodDoc);
   await page.goto(BASE+'/app/'); await page.waitForTimeout(500);
 
@@ -3607,6 +3751,20 @@ try {
       JSON.stringify(fine.rows) === '[{"n":1}]' && JSON.stringify(fineText.rows) === '[{"n":1}]', { refused: refusedQuery.e && refusedQuery.e.message, proxied: proxied.e && proxied.e.message, fine, fineText });
     check('and api-apple, reached anonymously while the database cannot be, answers 500 in its own words and logs ours',
       appleAnswer.status === 500 && appleAnswer.body.error === 'Something went wrong on our side' && logged.some(l => /^api-apple Error: No answer from the database \(/.test(l)), { appleAnswer, logged });
+    /* a transaction, as the sign-in limits take one (sql().transaction), goes through the same door: what the driver says
+       about it is told in the same fixed words, and its results come back one list of rows a statement */
+    const viaTx = (url, fetchFn) => using({ SITE_ENV: 'preview', STAGING_DATABASE_URL: url }, () => {
+      try { return dbLib.sql().transaction(q => [q`SELECT 1 AS n`, q`SELECT ${1}::int AS n`]).then(results => ({ results }), e => ({ e })); } catch (e) { return Promise.resolve({ e }); }
+    }, fetchFn);
+    const bothRows = JSON.stringify({ results: [JSON.parse(one), JSON.parse(one)] });
+    const [txSpoiled, txDown, txEchoed, txFine] = await watching(() => Promise.all([
+      viaTx(ALONE, spoil), viaTx(ALONE, answer(503, 'upstream said ' + ALONE)),
+      viaTx(ALONE, answer(400, JSON.stringify({ message: 'no such endpoint in ' + ALONE, code: 'XX000' }))), viaTx(ALONE, answer(200, bothRows))]));
+    check('and a transaction, as the sign-in limits take one, goes through the same door: nothing of the address in what it throws, and its results come back one list of rows a statement',
+      [txSpoiled, txDown, txEchoed].every(r => !!r.e && hidden(shown(r.e)) && r.e.cause === undefined && !(r.e instanceof NeonDbError)) &&
+      /^No answer from the database \(/.test(txSpoiled.e.message) && /^The database answered 503, but not with a result \(/.test(txDown.e.message) &&
+      /^The database refused a query in words that hold the password/.test(txEchoed.e.message) && txEchoed.e.code === 'XX000' && JSON.stringify(txFine.results) === '[[{"n":1}],[{"n":1}]]',
+      { spoiled: txSpoiled.e && txSpoiled.e.message, down: txDown.e && txDown.e.message, echoed: txEchoed.e && txEchoed.e.message, fine: txFine.results });
     check('and nothing this process wrote to its console meanwhile holds the address, whichever console method it came through', logged.length >= 1 && logged.every(l => hidden(l)), logged);
     /* the driver's own query ran again at every await; the suite's database never did */
     let asked = 0, twice = null;
@@ -3840,8 +3998,8 @@ try {
     check('cut short, with the key, the sign-in link\'s token and its code blanked wherever they sit, should an answer ever quote a sign-in email back, a key with a space or a tab inside included',
       [echoed, echoedSpaced, echoedTab].every(e => !!e && /^Resend 422: \{"message":"invalid: "Bearer /.test(e.message) && /type this code instead/.test(e.message) && e.message.length <= 'Resend 422: '.length + 300 && hidden(shown(e)) && !e.message.includes('ABCD-EF23')),
       [echoed, echoedSpaced, echoedTab].map(e => e && e.message));
-    /* and through the sign-in function, whose last catch logs the whole error, stack and all: a link
-       that cannot be sent fails the request, and a welcome that cannot be sent never fails the sign-in.
+    /* and through the sign-in function: a link that cannot be sent is answered as busy, logged in a line of
+       its own, and a welcome that cannot be sent never fails the sign-in.
        Unlike the sends above, the capture, the key and the hook stay away across two whole handler
        calls and their database waits; the page is signed out and idle, so nothing else sends mail
        meanwhile. Called straight, with no client address, so this machine's sign-in allowance is not
@@ -3857,9 +4015,10 @@ try {
         signedIn = await post('/api/auth/verify', { token: new URL(asked.devLink).searchParams.get('t'), kind: 'native' });
       } finally { globalThis.__LS_MAIL = was.m; putEnv('RESEND_API_KEY', was.k); globalThis.__LS_RESEND_FETCH = was.h; }
     });
-    await db.query(`DELETE FROM users WHERE email LIKE 'resend-%@example.com'`); await db.query(`DELETE FROM magic_links WHERE email LIKE 'resend-%@example.com'`); await db.query(`DELETE FROM rate_events WHERE key LIKE 'link:resend-%@example.com'`);
-    check('and a sign-in link that cannot be sent fails the request, while a welcome that cannot be sent still signs in, each logged in our own words',
-      !!link && link.status === 500 && !!signedIn && signedIn.status === 200 && logged.some(l => /^api-auth Error: No answer from Resend/.test(l)) && logged.some(l => /^welcome email No answer from Resend/.test(l)),
+    const counted = ['resend-welcome@example.com', 'resend-link@example.com'].map(e => 'link:' + crypto.createHash('sha256').update(e).digest('hex').slice(0, 24));   /* each address's sign-in count is a digest of it */
+    await db.query(`DELETE FROM users WHERE email LIKE 'resend-%@example.com'`); await db.query(`DELETE FROM magic_links WHERE email LIKE 'resend-%@example.com'`); await db.query('DELETE FROM rate_events WHERE key IN ($1, $2)', counted);
+    check('and a sign-in link that cannot be sent is answered as busy, while a welcome that cannot be sent still signs in, each logged in our own words',
+      !!link && link.status === 503 && !!signedIn && signedIn.status === 200 && logged.some(l => /^api-auth: the sign-in email was refused No answer from Resend/.test(l)) && logged.some(l => /^welcome email No answer from Resend/.test(l)),
       { link: link && link.status, signedIn: signedIn && signedIn.status, logged });
     check('and nothing this process wrote to its standard output or error while the sends ran holds the key, whatever wrote it', logged.length >= 2 && logged.every(l => hidden(l)), logged);
   }
@@ -4479,7 +4638,7 @@ try {
   check('an event type we do not handle is acknowledged without touching the database', noise.status === 200 && noise.body.ignored === true && (await db.query(`SELECT count(*)::int AS n FROM stripe_events WHERE id='evt_noise'`)).rows[0].n === 0);
   /* the database fails once mid-apply: the event must not count as seen */
   const realSql = globalThis.__LS_SQL; let blow = true;
-  globalThis.__LS_SQL = async (strings, ...vals) => { if (blow && typeof strings !== 'string' && strings.join('').includes('INSERT INTO entitlements')) { blow = false; throw new Error('neon blinked'); } return realSql(strings, ...vals); };
+  globalThis.__LS_SQL = Object.assign(async (strings, ...vals) => { if (blow && typeof strings !== 'string' && strings.join('').includes('INSERT INTO entitlements')) { blow = false; throw new Error('neon blinked'); } return realSql(strings, ...vals); }, { transaction: realSql.transaction });
   const blinked = await hook(completed);
   globalThis.__LS_SQL = realSql;
   await db.query(`INSERT INTO rate_events (key) VALUES ('checkout:${patState.household.id}:999999:cs_other_open')`);   /* another checkout still open for the household when this one is paid */
@@ -5266,6 +5425,15 @@ try {
       check('the job refuses to run for anything but the schedule on the published deploy', stray.status === 404);
       /* on the published deploy the job then sweeps: a month-old error report and a two-day-old throttle mark go, younger ones
          stay. The suite's test key leaves production without billing, so the emails before it send nothing */
+      /* a flood leaves a day of rate rows due at once: the request that pays for housekeeping deletes one batch, and the daily
+         run below keeps going until they are gone. Math.random is held off the one-in-twenty-five from here until the daily
+         run has been counted, so no other request's housekeeping can take the rows either check is counting */
+      const { sweep: sweepNow, SWEEP_BATCH } = await import('../netlify/lib/db.js');
+      await db.query("INSERT INTO rate_events (key, at) SELECT 'flood:old', now() - interval '2 days' FROM generate_series(1, $1::int)", [2 * SWEEP_BATCH + 5]);
+      const floodLeft = async () => (await db.query("SELECT count(*)::int AS n FROM rate_events WHERE key = 'flood:old'")).rows[0].n;
+      const realRandom = Math.random; Math.random = () => 0.5 + realRandom() / 2;
+      await sweepNow(); const oneBatch = await floodLeft();
+      check('a request that pays for housekeeping deletes one batch of old rate rows, not the whole day', oneBatch === SWEEP_BATCH + 5, [oneBatch, SWEEP_BATCH]);
       await db.query(`INSERT INTO app_errors (at, build, kind, message) VALUES (now() - interval '31 days', 'lunchsorted-v3', 'error', 'smoke: a month old'), (now() - interval '29 days', 'lunchsorted-v3', 'error', 'smoke: not yet a month')`);
       await db.query(`INSERT INTO rate_events (key, at) VALUES ('smoke:two days old', now() - interval '2 days'), ('smoke:two hours old', now() - interval '2 hours')`);
       const leftover = async () => (await db.query("SELECT message AS k FROM app_errors WHERE build = 'lunchsorted-v3' UNION ALL SELECT key FROM rate_events WHERE key LIKE 'smoke:%'")).rows.map(r => r.k).sort().join();
@@ -5276,6 +5444,8 @@ try {
       check('on the published deploy the daily job also sweeps: a month-old error report and a two-day-old throttle mark go, younger ones stay',
         swept.status === 200 && seeded === 'smoke: a month old,smoke: not yet a month,smoke:two days old,smoke:two hours old' && stayed === 'smoke: not yet a month,smoke:two hours old' && mails.length === mailsBefore,
         [swept.status, seeded, stayed, mails.length - mailsBefore]);
+      check('and the daily run keeps going until a day of old rate rows is gone', (await floodLeft()) === 0, await floodLeft());
+      Math.random = realRandom;
       await db.query("DELETE FROM app_errors WHERE build = 'lunchsorted-v3'"); await db.query("DELETE FROM rate_events WHERE key LIKE 'smoke:%'");
       const { default: testerHandler } = await import('../netlify/functions/cron-tester.js');
       const strayT = await testerHandler(new Request('http://x/cron', { method: 'POST', body: '{"next_run":"x"}' }));

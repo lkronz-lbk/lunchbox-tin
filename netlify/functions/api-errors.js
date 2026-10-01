@@ -35,18 +35,6 @@ const clean = (v, n, lines) => String(v == null ? '' : v)
   .replace(UNSTORABLE, '\uFFFD');
 const done = () => new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
 
-/* one key an address; on IPv6 one key a /64, the block a home connection is given whole */
-export function ipBucket(ip) {
-  ip = String(ip || '').trim();
-  const v4 = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
-  if (v4) return v4[1];
-  if (!ip.includes(':')) return ip;
-  const [head, tail = ''] = ip.split('::');
-  const h = head ? head.split(':') : [], t = tail ? tail.split(':') : [];
-  const groups = h.concat(Array(Math.max(0, 8 - h.length - t.length)).fill('0'), t);
-  return groups.slice(0, 4).map(g => g.toLowerCase().padStart(4, '0')).join(':') + '::/64';
-}
-
 export default async function handler(req, context) {
   if (req.method !== 'POST') return fail('Not found', 404);
   try {
@@ -55,7 +43,7 @@ export default async function handler(req, context) {
     if (Buffer.byteLength(raw, 'utf8') > 8192) return fail('That is more than an error should say', 413);
     let b; try { b = JSON.parse(raw); } catch { return fail('Bad request'); }
     if (!b || typeof b !== 'object' || Array.isArray(b)) return fail('Bad request');
-    const key = 'err:' + ipKey(ipBucket(clientIp(req, context)));
+    const key = 'err:' + ipKey(clientIp(req, context));   /* a /64 is one address on IPv6 (db.js) */
     const kind = KINDS.has(b.kind) ? b.kind : 'error';
     const build = BUILD.test(String(b.build || '')) ? String(b.build) : 'unknown';
     const message = clean(b.message, 300) || '(no message)';

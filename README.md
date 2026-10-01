@@ -1014,6 +1014,33 @@ writes the same one.
   A browser the link signs in that has never built a week says so and points back to the
   code, and never pushes its empty household over the phone that did. Sessions are HttpOnly cookies for 180 days; links, codes and
   sessions are stored as hashes. No passwords anywhere.
+- **Limits on signing in** (`netlify/functions/api-auth.js`): a sign-in email goes out at most three
+  times a quarter hour to one address, twenty times an hour from one connection (a /64 counts as
+  one on IPv6) and two thousand times a day in all, and a request from another site is refused. A
+  request any of the three already refuses is answered from one plain count, waiting on nothing and
+  writing nothing; one that may go through is counted again in one transaction behind one lock, so
+  requests arriving together are counted one at a time, and its counts are written only when all
+  three still have room. A request waits at most 50 ms on that lock, then is answered as busy, so
+  a burst cannot hold the database's connections or outlast a function's ten seconds. Each count
+  sits in `rate_events` under a digest of the address, never the address, and a stranger
+  inventing addresses cannot fill the database: a day of let-through requests takes about
+  12 MB at worst (every address as long as allowed, in three-byte letters), and a request let
+  through pays for housekeeping one time in twenty-five, as a throttled call does, so those rows go
+  on a deploy with no daily run as well. A code gets eight tries: each code counts its own wrong
+  ones on its link row (migration 0011), and after eight even the right code is refused, with the
+  same answer as a wrong code or an expired one ("check it, or ask for a new email"), so nobody can
+  learn from it whether a link was asked for. A new email brings a new code with eight of its own,
+  and the link in the same email still works: a stranger who knows an address can spend the codes
+  waiting for it, never the link. The link's own button counts nothing: its token is 32 random
+  bytes. The two thousand is the one limit a stranger could spend
+  for everyone, with five IPv4 addresses for a day or a hundred IPv6 /64s at once, which one home
+  connection given a /56 holds. It stops new sign-in emails, never a parent already signed in, and
+  not App Review's address, which is sent no email and keeps a day's count of its own. The mail
+  provider's own daily cap binds first where it is lower, and takes the welcome, reminder and beta
+  emails with it: on 2026-09-30 the account was on Resend's free plan, a hundred a day, which one
+  connection spends in five hours, or five /64s at once. A send the provider refuses is answered
+  as the day's limit is ("Sign-in is busy"), and its counts stay, so it cannot be repeated past the
+  limits.
 - **Households** (`/api/household`): one document per household with a version number.
   `PUT` with the version you last saw; if the server has moved on you get `409` with its
   copy, merge, and try again. The merge rules are the first script block in
@@ -1074,8 +1101,8 @@ writes the same one.
   or an error answer it cannot read, is logged in fixed words, never fetch's own, which can
   quote the authorization header, key and all. `SITE_ENV` is set per context in the Netlify UI (and in `netlify.toml` for the build).
   `REVIEW_EMAIL` and `REVIEW_CODE` (production only, for App Review): that one address signs
-  in with that standing code and is sent no email; eight or more letters and digits, and
-  nothing else about it is special.
+  in with that standing code and is sent no email; eight or more letters and digits. It keeps a
+  day's count of its own (Limits on signing in, above), and nothing else about it is special.
   `node scripts/migrate.mjs` applies `netlify/database/migrations/*.sql` once each as the
   build command; every statement is idempotent, so a half-applied file is harmless.
   Each database variable (`NETLIFY_DATABASE_URL`, or the older `NETLIFY_DB_URL` when it is
@@ -1093,11 +1120,16 @@ writes the same one.
   as `migrate failed:`, naming the migration file when one was running.
   Housekeeping (`sweep()` in `netlify/lib/db.js`: expired links, sessions and invites,
   rate-limit rows past a day, error reports past thirty days) rides along with about one
-  throttled call in twenty-five, and runs once a day in production after the trial emails.
+  throttled call or sign-in request let through in twenty-five, and runs once a day in production
+  after the trial emails. The
+  rate-limit rows go twenty thousand at a time, since a flood leaves a whole day of them due at
+  once: the call that rides along takes one batch, and the daily run keeps on until they are gone,
+  starting no further batch once twenty seconds have passed.
 - **Tests** run the same functions in-process against PGlite, an in-memory Postgres, and
   drive three browser contexts through sign-in by link and by code, a forged sign-in form,
   invite, joining with lunches of one's own, an edit on each phone, an uncheck round trip,
-  a helper's refused push, sign-out and delete, plus the merge rules on their own.
+  a helper's refused push, sign-out and delete, plus the merge rules, and the sign-in limits and
+  what they write, on their own.
 
 ## Billing
 
@@ -1341,8 +1373,8 @@ the idea bank stays free so a free list is never stuck with what it has.
   plain text and 99 MB at the worst, every field the body carries in three-byte letters, which its
   8 KB allows. Past it a report is answered as usual and nothing is written, not even the
   throttle's mark, for any build, a real breakage's too, until rows go: the sweep drops rows past
-  thirty days (it rides about one throttled call in twenty-five, and runs daily in production
-  after the trial emails), and deleting a flood's rows by hand makes room at once. `/admin` lists
+  thirty days (it rides about one throttled call or sign-in request let through in twenty-five,
+  and runs daily in production after the trial emails), and deleting a flood's rows by hand makes room at once. `/admin` lists
   under **Broken screens** the week's twenty commonest, then the ten newest of the rest, and how
   many there were when that is not all; says how full the table is; and says when it is full and
   from when room comes back. The stacks are in `app_errors`.

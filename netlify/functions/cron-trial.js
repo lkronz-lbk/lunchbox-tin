@@ -69,6 +69,7 @@ export async function run(now = Date.now(), siteOverride = '') {
 /* only the schedule on the published deploy may run this: not a branch deploy, not a
    browser that found the path (a scheduled invocation carries next_run in its body) */
 export default async function handler(req) {
+  const started = Date.now();
   if (siteEnv() !== 'production') return new Response('not here', { status: 404 });
   const body = await req.json().catch(() => null);
   if (!body || !body.next_run) return new Response('not found', { status: 404 });
@@ -78,8 +79,11 @@ export default async function handler(req) {
   /* then the housekeeping that otherwise rides one throttled call in twenty-five, so old rows go (and
      a full error table reopens) however quiet the app is. After the emails, which have no other way
      out: the two share one time limit, a household's email is claimed before it is sent, and a sweep
-     that meets a day of expired rows at once can be slow */
-  try { await sweep(); } catch (e) { console.error('cron-trial: sweep', e.message); }
+     that meets a day of expired rows at once can be slow. It takes the rate rows a batch at a time, the
+     first whatever the time and no further one once twenty seconds have passed since the run began,
+     inside the thirty a scheduled function gets; each batch that finished is kept even if the run is
+     stopped */
+  try { await sweep(started + 20000); } catch (e) { console.error('cron-trial: sweep', e.message); }
   return res;
 }
 
