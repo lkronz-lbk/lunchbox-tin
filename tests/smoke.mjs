@@ -5495,80 +5495,126 @@ try {
     {
       /* an iPhone purchase over a web subscription Stripe is still retrying: its first charge failed when the three weeks
          ended, so the row reads ended and the purchase is written over it, but a retry that went through afterwards would
-         bill the household beside Apple, with nothing in the iPhone app to stop it. The purchase cancels it, from the phone
-         or from Apple's own notice, and it leaves the row once Stripe says it can no longer charge. One Stripe will not
-         cancel stays on the row, CANCEL BY HAND in the log, and its own next event cancels it. Stripe here refuses to
-         cancel sub_refused until told otherwise. The throttles are not what these check, so the parent's hourly counts
-         start again */
+         bill the household beside Apple, with nothing in the iPhone app to stop it. A purchase paid for real cancels it,
+         from the phone or from Apple's own notice, asking Stripe first, and it leaves the row once Stripe says it can no
+         longer charge. Stripe here is a stub that knows each of these subscriptions: retrying its first charge (past_due),
+         one whose retry went through (active), one long ended, one it will not cancel until told otherwise, and one it
+         takes six seconds to answer about. The throttles are not what these check, so the parent's hourly counts start again */
       await db.query(`DELETE FROM rate_events WHERE key IN ('apple:${patState.me.userId}', 'beta:${patState.me.userId}', 'billing:${patState.me.userId}')`);
-      const retrying = (sub, held = `plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL`) =>
-        db.query(`UPDATE entitlements SET ${held}, cancel_at_period_end = false, stripe_subscription_id = '${sub}', apple_original_transaction_id = NULL, apple_product_id = NULL, apple_event_at = NULL WHERE household_id = ${hid}`);
+      const onRow = (sub, held = `plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL`) =>
+        db.query(`UPDATE entitlements SET ${held}, cancel_at_period_end = false, stripe_subscription_id = ${sub ? `'${sub}'` : 'NULL'}, apple_original_transaction_id = NULL, apple_product_id = NULL, apple_event_at = NULL WHERE household_id = ${hid}`);
       const subNow = async () => (await db.query(`SELECT stripe_subscription_id AS sub FROM entitlements WHERE household_id = ${hid}`)).rows[0].sub;
       const subCalls = (from) => stripeCalls.slice(from).filter(c => c.path.startsWith('/v1/subscriptions/')).map(c => c.method + ' ' + c.path.split('/').pop());
       const claim = () => pb.evaluate(() => fetch('/api/billing/beta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'BETA-TEST-1234' }) }).then(r => r.json().then(j => ({ status: r.status, already: j.already === true, apple: j.apple === true }))));
-      const stub = globalThis.__LS_STRIPE_FETCH, refusing = new Set(['sub_refused']);
+      const real = (o) => txn(Object.assign({ environment: 'Production' }, o));
+      const realNotice = (type, t, o = {}) => notify(type, t, null, Object.assign({ data: { bundleId: 'app.lunchsorted', environment: 'Production', signedTransactionInfo: jws(t) } }, o));
+      const states = { sub_retried: 'past_due', sub_retried_n: 'past_due', sub_refused: 'past_due', sub_went_through: 'active', sub_long_ended: 'gone', sub_hung: 'past_due',
+        sub_live_web: 'active', sub_kept: 'past_due', sub_sandbox_left: 'past_due', sub_beside_forever: 'past_due', sub_beside_yearly: 'past_due', sub_beside_stuck: 'past_due' };
+      const refusing = new Set(['sub_refused', 'sub_beside_stuck']), ended = new Set();
+      const stub = globalThis.__LS_STRIPE_FETCH;
       const answer = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
       globalThis.__LS_STRIPE_FETCH = async (url, init) => {
         const path = new URL(url).pathname, id = path.split('/').pop();
-        if (!path.startsWith('/v1/subscriptions/') || !refusing.has(id)) return stub(url, init);
+        if (!path.startsWith('/v1/subscriptions/') || !(id in states)) return stub(url, init);
         stripeCalls.push({ method: init.method, path });
-        /* its first charge, when the free weeks ended, still being retried, and a cancel Stripe will not make now */
-        return init.method === 'GET' ? answer({ id, object: 'subscription', status: 'past_due', trial_end: 1790000000, items: { data: [{ current_period_start: 1790000000 }] } })
-          : answer({ error: { type: 'api_error', message: 'stub: not now' } }, 500);
+        if (id === 'sub_hung' && init.method === 'GET') await new Promise((ok, no) => { const t = setTimeout(ok, 6000); if (init.signal) init.signal.addEventListener('abort', () => { clearTimeout(t); no(new Error('gave up')); }, { once: true }); });
+        if (states[id] === 'gone') return answer({ error: { type: 'invalid_request_error', code: 'resource_missing', message: `No such subscription: '${id}'` } }, 404);
+        if (init.method === 'GET') return answer({ id, object: 'subscription', status: ended.has(id) ? 'canceled' : states[id] });
+        if (refusing.has(id)) return answer({ error: { type: 'api_error', message: 'stub: not now' } }, 500);
+        ended.add(id);
+        return answer({ id, object: 'subscription', status: 'canceled' });
       };
       const said = [], ce = console.error; console.error = (...a) => { said.push(a.map(String).join(' ')); ce.apply(console, a); };
-      const seen = async (id) => (await db.query(`SELECT count(*)::int AS n FROM stripe_events WHERE id = '${id}'`)).rows[0].n;
+      const logged = (re) => said.some(l => re.test(l));
       const r = {};
       let from;
       try {
-        await retrying('sub_retried');
+        await onRow('sub_retried');
         from = stripeCalls.length;
-        r.linked = (await link(txn({ originalTransactionId: '2000000000000900', transactionId: '2000000000000900' }))).status;
+        r.linked = (await link(real({ originalTransactionId: '2000000000000900', transactionId: '2000000000000900' }))).status;
         r.linkCalls = subCalls(from); r.linkRow = await row(); r.linkSub = await subNow();
         from = stripeCalls.length;
-        r.again = (await link(txn({ originalTransactionId: '2000000000000900', transactionId: '2000000000000900' }))).status;
+        r.again = (await link(real({ originalTransactionId: '2000000000000900', transactionId: '2000000000000900' }))).status;
         r.againCalls = subCalls(from);
-        await retrying('sub_retried_n');
+        await onRow('sub_retried_n');
         from = stripeCalls.length;
-        r.notified = (await notify('SUBSCRIBED', txn({ originalTransactionId: '2000000000000910', transactionId: '2000000000000910' }), { originalTransactionId: '2000000000000910', autoRenewStatus: 1 }, { subtype: 'INITIAL_BUY' })).status;
+        r.notified = (await realNotice('SUBSCRIBED', real({ originalTransactionId: '2000000000000910', transactionId: '2000000000000910' }), { subtype: 'INITIAL_BUY' })).status;
         r.notifyCalls = subCalls(from); r.notifyRow = await row(); r.notifySub = await subNow();
-        await retrying('sub_refused');
+        await onRow('sub_refused');
         from = stripeCalls.length;
-        r.refused = (await link(txn({ originalTransactionId: '2000000000000920', transactionId: '2000000000000920' }))).status;
+        r.refused = (await link(real({ originalTransactionId: '2000000000000920', transactionId: '2000000000000920' }))).status;
         r.refusedCalls = subCalls(from); r.refusedRow = await row(); r.refusedSub = await subNow();
-        /* then a retry goes through at Stripe, and the subscription's own event says so: Stripe still refusing, then not */
-        const through = subEv('evt_beside_apple', 'customer.subscription.updated', Math.floor(Date.now() / 1000) + 60, { id: 'sub_refused', status: 'active' });
-        r.stuck = (await hook(through)).status; r.seenStuck = await seen('evt_beside_apple');
         refusing.delete('sub_refused');
         from = stripeCalls.length;
-        r.backstop = (await hook(through)).status; r.seenBackstop = await seen('evt_beside_apple');
-        r.backstopCalls = subCalls(from); r.backstopRow = await row(); r.backstopSub = await subNow();
+        r.retried = (await link(real({ originalTransactionId: '2000000000000920', transactionId: '2000000000000920' }))).status;
+        r.retriedCalls = subCalls(from); r.retriedSub = await subNow();
+        await onRow('sub_went_through');
         from = stripeCalls.length;
-        r.ending = (await hook(subEv('evt_beside_apple_ending', 'customer.subscription.updated', Math.floor(Date.now() / 1000) + 61, { id: 'sub_beside_ending', cancel_at_period_end: true }))).status;
-        r.endingCalls = subCalls(from);
+        r.through = (await link(real({ originalTransactionId: '2000000000000930', transactionId: '2000000000000930' }))).status;
+        r.throughCalls = subCalls(from); r.throughSub = await subNow();
+        await onRow('sub_long_ended');
+        from = stripeCalls.length;
+        r.longEnded = (await link(real({ originalTransactionId: '2000000000000940', transactionId: '2000000000000940' }))).status;
+        r.longEndedCalls = subCalls(from); r.longEndedSub = await subNow();
+        /* and what must not cancel: a purchase turned away over a plan the website bills live, Apple's word that a plan
+           ended, and a sandbox purchase, which cost nothing */
+        await onRow('sub_live_web', `plan = 'household', source = 'stripe', status = 'active', current_period_end = now() + interval '300 days'`);
+        from = stripeCalls.length;
+        r.paying = await link(real({ originalTransactionId: '2000000000000950', transactionId: '2000000000000950' }));
+        r.payingCalls = subCalls(from); r.payingSub = await subNow();
+        await onRow(null);
+        await link(real({ originalTransactionId: '2000000000000960', transactionId: '2000000000000960' }));
+        await db.query(`UPDATE entitlements SET stripe_subscription_id = 'sub_kept' WHERE household_id = ${hid}`);
+        from = stripeCalls.length;
+        r.expired = (await realNotice('EXPIRED', real({ originalTransactionId: '2000000000000960', transactionId: '2000000000000960', expiresDate: Date.now() - DAY }), { subtype: 'VOLUNTARY' })).status;
+        r.expiredCalls = subCalls(from); r.expiredRow = await row(); r.expiredSub = await subNow();
+        await onRow('sub_sandbox_left');
+        from = stripeCalls.length;
+        r.sandbox = (await link(txn({ originalTransactionId: '2000000000000980', transactionId: '2000000000000980' }))).status;
+        r.sandboxCalls = subCalls(from); r.sandboxRow = await row(); r.sandboxSub = await subNow();
+        /* a parent who has just paid waits on Stripe three seconds at most; the cancel goes on behind the answer */
+        await onRow('sub_hung');
+        from = stripeCalls.length;
+        const t1 = Date.now();
+        r.hung = (await link(real({ originalTransactionId: '2000000000000970', transactionId: '2000000000000970' }))).status;
+        r.hungMs = Date.now() - t1; r.hungRow = await row(); r.hungSub = await subNow();
+        for (const end = Date.now() + 8000; Date.now() < end && (await subNow()) === 'sub_hung';) await new Promise(res => setTimeout(res, 250));
+        r.hungLater = await subNow(); r.hungCalls = subCalls(from);
         /* a household holding the plan through the App Store opens the beta link with a subscription still on its row */
-        await retrying('sub_beside_forever', `plan = 'lifetime', source = 'apple', status = 'active', current_period_end = NULL`);
+        await onRow('sub_beside_forever', `plan = 'lifetime', source = 'apple', status = 'active', current_period_end = NULL`);
         from = stripeCalls.length;
         r.foreverClaim = await claim(); r.foreverCalls = subCalls(from); r.foreverSub = await subNow();
-        await retrying('sub_beside_yearly', `plan = 'household', source = 'apple', status = 'active', current_period_end = now() + interval '300 days'`);
+        await onRow('sub_beside_yearly', `plan = 'household', source = 'apple', status = 'active', current_period_end = now() + interval '300 days'`);
         from = stripeCalls.length;
         r.yearlyClaim = await claim(); r.yearlyCalls = subCalls(from); r.yearlySub = await subNow();
+        await onRow('sub_beside_stuck', `plan = 'lifetime', source = 'apple', status = 'active', current_period_end = NULL`);
+        r.stuckClaim = await claim(); r.stuckSub = await subNow();
       } finally { console.error = ce; globalThis.__LS_STRIPE_FETCH = stub; }
+      const was = (calls, ...want) => JSON.stringify(calls) === JSON.stringify(want);
       check('an iPhone purchase over a web subscription Stripe is still retrying cancels it, which then leaves the row, so telling us again asks Stripe nothing',
-        r.linked === 200 && r.linkRow.source === 'apple' && r.linkRow.status === 'active' && JSON.stringify(r.linkCalls) === JSON.stringify(['DELETE sub_retried']) && r.linkSub === null
+        r.linked === 200 && r.linkRow.source === 'apple' && r.linkRow.status === 'active' && was(r.linkCalls, 'GET sub_retried', 'DELETE sub_retried') && r.linkSub === null
         && r.again === 200 && r.againCalls.length === 0, r);
-      check('and so does the same purchase reaching us first as Apple\'s own notice',
-        r.notified === 200 && r.notifyRow.source === 'apple' && r.notifyRow.status === 'active' && JSON.stringify(r.notifyCalls) === JSON.stringify(['DELETE sub_retried_n']) && r.notifySub === null, r);
+      check('and so does a purchase reaching us first as Apple\'s own notice',
+        r.notified === 200 && r.notifyRow.source === 'apple' && r.notifyRow.status === 'active' && was(r.notifyCalls, 'GET sub_retried_n', 'DELETE sub_retried_n') && r.notifySub === null, r);
       check('one Stripe will not cancel does not hold the purchase up: the plan is the App Store\'s, the subscription stays on the row, and the log says CANCEL BY HAND',
-        r.refused === 200 && r.refusedRow.source === 'apple' && r.refusedRow.status === 'active' && r.refusedSub === 'sub_refused' && r.refusedCalls[0] === 'DELETE sub_refused'
-        && said.some(l => /^apple: CANCEL BY HAND sub_refused /.test(l)), { r, said });
-      check('and its own next event, a retry gone through, cancels it and asks for that charge to be checked by hand; while Stripe refuses, the event goes back unmarked; one already ending is left alone',
-        r.stuck === 500 && r.seenStuck === 0 && r.backstop === 200 && r.seenBackstop === 1 && r.backstopCalls.includes('DELETE sub_refused') && r.backstopSub === null
-        && r.backstopRow.source === 'apple' && r.backstopRow.status === 'active' && said.some(l => /^billing: CHECK BY HAND the last charge of sub_refused /.test(l))
-        && r.ending === 200 && !r.endingCalls.some(c => c.startsWith('DELETE')), { r, said });
+        r.refused === 200 && r.refusedRow.source === 'apple' && r.refusedRow.status === 'active' && r.refusedSub === 'sub_refused'
+        && was(r.refusedCalls, 'GET sub_refused', 'DELETE sub_refused', 'GET sub_refused') && logged(/^apple: CANCEL BY HAND sub_refused /), { r, said });
+      check('and the next word from Apple tries again, and takes it off the row once Stripe has cancelled it',
+        r.retried === 200 && was(r.retriedCalls, 'GET sub_refused', 'DELETE sub_refused') && r.retriedSub === null, r);
+      check('one whose retry went through, which the row never heard of, is cancelled and its charge left to be checked by hand; one long ended is asked about once and let go',
+        r.through === 200 && was(r.throughCalls, 'GET sub_went_through', 'DELETE sub_went_through') && r.throughSub === null && logged(/^billing: CHECK BY HAND the last charge of sub_went_through /)
+        && r.longEnded === 200 && was(r.longEndedCalls, 'GET sub_long_ended') && r.longEndedSub === null && !logged(/CHECK BY HAND the last charge of sub_long_ended/), { r, said });
+      check('nothing is cancelled for a purchase turned away over a plan the website bills, when Apple says a plan has ended, or for a sandbox purchase',
+        r.paying.status === 409 && r.paying.body.paying === true && r.payingCalls.length === 0 && r.payingSub === 'sub_live_web'
+        && r.expired === 200 && r.expiredRow.plan === 'free' && r.expiredCalls.length === 0 && r.expiredSub === 'sub_kept'
+        && r.sandbox === 200 && r.sandboxRow.source === 'apple' && r.sandboxCalls.length === 0 && r.sandboxSub === 'sub_sandbox_left', r);
+      check('a parent who has just paid waits on Stripe three seconds at most: the plan is on, the log says CANCEL BY HAND, and the cancel still goes through behind the answer',
+        r.hung === 200 && r.hungMs < 5000 && r.hungRow.source === 'apple' && r.hungRow.status === 'active' && logged(/^apple: CANCEL BY HAND sub_hung /)
+        && r.hungLater === null && was(r.hungCalls, 'GET sub_hung', 'DELETE sub_hung'), { r, said });
       check('a household holding the plan through the App Store that opens the beta link has a subscription still on its row cancelled too, and is told what it was told before',
-        r.foreverClaim.status === 200 && r.foreverClaim.already && JSON.stringify(r.foreverCalls) === JSON.stringify(['DELETE sub_beside_forever']) && r.foreverSub === null
-        && r.yearlyClaim.status === 409 && r.yearlyClaim.apple && JSON.stringify(r.yearlyCalls) === JSON.stringify(['DELETE sub_beside_yearly']) && r.yearlySub === null, r);
+        r.foreverClaim.status === 200 && r.foreverClaim.already && was(r.foreverCalls, 'GET sub_beside_forever', 'DELETE sub_beside_forever') && r.foreverSub === null
+        && r.yearlyClaim.status === 409 && r.yearlyClaim.apple && was(r.yearlyCalls, 'GET sub_beside_yearly', 'DELETE sub_beside_yearly') && r.yearlySub === null
+        && r.stuckClaim.status === 200 && r.stuckClaim.already && r.stuckSub === 'sub_beside_stuck' && logged(/^billing: CANCEL BY HAND sub_beside_stuck /), { r, said });
     }
     delete globalThis.__LS_APPLE_ROOT;
     await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', current_period_end = NULL, cancel_at_period_end = false, apple_original_transaction_id = NULL, apple_product_id = NULL, apple_event_at = NULL WHERE household_id = ${hid}`);
