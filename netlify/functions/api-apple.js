@@ -2,6 +2,7 @@ import { sql, json, fail, throttled } from '../lib/db.js';
 import { currentUser } from '../lib/auth.js';
 import { verifyJws, stateOf, envOk, appleLive, BUNDLE_ID, PRODUCTS } from '../lib/apple.js';
 import { writeApple, cancelAndForget } from '../lib/entitlement.js';
+import { withinTime } from '../lib/stripe.js';
 
 /* The iPhone app's way of paying. The phone buys through StoreKit and tells us straight away;
    Apple's servers tell us everything after, renewals and refunds included. Either way what
@@ -70,14 +71,15 @@ async function apply(hid, at, txn, renewal, context) {
      purchase paid for real that holds the row live, never a sandbox one (App Review, TestFlight), which cost
      nothing and soon lapses. A parent who has just paid is waiting on this answer, so Stripe gets three
      seconds, and a cancel not finished by then goes on behind the answer while Netlify holds the function
-     for it (waitUntil), five seconds more at most, so its log line lands inside the function's ten. One
-     Stripe will not cancel, or has not answered about by then, is left for the next word from Apple, or the
-     beta link, to try again. The purchase stands either way */
+     for it (waitUntil), inside the request's eight seconds for Stripe (handler, below), so its log line
+     lands inside the function's ten. One Stripe will not cancel, or has not answered about by then, is left
+     for the next word from Apple, the beta link, or the subscription's own next event (api-billing.js) to
+     try again. The purchase stands either way */
   if (row && row.stripe_subscription_id && txn.environment === 'Production' && appleLive(row)) {
     const sub = row.stripe_subscription_id, work = cancelAndForget(hid, sub);
     const told = (done) => { if (!done) console.error('apple: CANCEL BY HAND', sub, done === null ? 'billed beside an App Store purchase (no answer from Stripe in time)' : 'billed beside an App Store purchase'); };
     const done = await inTime(3000, work);
-    if (done === null && context && typeof context.waitUntil === 'function') context.waitUntil(inTime(5000, work).then(told, e => console.error('apple: CANCEL BY HAND', sub, e.message)));
+    if (done === null && context && typeof context.waitUntil === 'function') context.waitUntil(work.then(told, e => console.error('apple: CANCEL BY HAND', sub, e.message)));
     else told(done);
   }
   return row ? 'applied' : 'stale';
@@ -103,9 +105,10 @@ async function body(req) {
 /* the last catch every other function has: anything thrown on the way (the database unreachable,
    say) is logged here, and the phone or Apple is told only that something went wrong. As when a
    throw got away, the phone leaves the purchase unfinished (it finishes one only on 200, 400 or
-   409), and Apple sends the notification again (it resends on anything but a success) */
+   409), and Apple sends the notification again (it resends on anything but a success). Every Stripe
+   call a request makes shares one eight-second budget, inside Netlify's ten (lib/stripe.js) */
 export default async function handler(req, context) {
-  try { return await route(req, context); }
+  try { return await withinTime(8000, () => route(req, context)); }
   catch (e) {
     console.error('api-apple', e);
     return fail('Something went wrong on our side', 500);

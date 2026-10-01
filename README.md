@@ -1307,7 +1307,8 @@ the idea bank stays free so a free list is never stuck with what it has.
   or the write would have been refused, but a first charge that failed when the three weeks ended
   reads that way while Stripe goes on retrying the card, and a retry that went through would bill
   the household beside Apple, which nothing in the iPhone app could stop. A sandbox purchase cost
-  nothing and soon lapses, so it leaves the subscription alone. Stripe is asked first: one that has
+  nothing and soon lapses, so it leaves the subscription alone (the subscription's own next event
+  may still cancel it, as the webhook does beside any plan the App Store holds). Stripe is asked first: one that has
   ended needs nothing more, and one Stripe calls active had a retry go through that the row never
   heard of, so the log says CHECK BY HAND before it is cancelled, as it does for one Stripe would not
   say anything about. The row is read again once Stripe has answered, and one that no longer
@@ -1315,9 +1316,11 @@ the idea bank stays free so a free list is never stuck with what it has.
   leaves the row once Stripe says it can no longer charge. Cancelling stops Stripe collecting the
   invoice the failed charge left open, but does not void it. The parent who has just paid waits on
   Stripe three seconds at most; a cancel not finished by then goes on behind the answer, Netlify
-  holding the function for it (`waitUntil`) five seconds more at most. One Stripe will not cancel,
-  or has not answered about by then, is left on the row, the log saying CANCEL BY HAND, and the
-  purchase goes through all the same; the next word from Apple tries again, as does the beta link.
+  holding the function for it (`waitUntil`) inside the request's eight seconds for Stripe, the
+  budget the webhook's calls share too. One Stripe will not cancel, or has not answered about by
+  then, is left on the row, the log saying CANCEL BY HAND, and the purchase goes through all the
+  same; the next word from Apple tries again, as do the beta link and the subscription's own next
+  event (the webhook, above).
   A purchase is bound to one household at a time;
   one carrying another household's token is refused, one whose household has been deleted may be
   restored elsewhere, and one carrying none (Family Sharing, an offer code) is not taken. Forever
