@@ -21,7 +21,10 @@ What the shell adds, and where:
   transaction is finished only once the server has it. App Review tests this iPhone
   app on an iPad too, and rejected 1.0 (6) there because StoreKit, not told where to
   show its payment sheet, refused the purchase: the plugin now passes its own view
-  controller (iOS 18.2 and later) or window scene (iOS 17 and later). The products are
+  controller (iOS 18.2 and later) or window scene (iOS 17 and later). Apple rejected
+  1.0 (7) under 5.1.1(v) because buying asked for a sign-in first; the page now sells the
+  plan signed out (a token the phone makes for itself, the purchase kept on the phone and
+  passed to the household at the first sign-in), with no change to the shell. The products are
   `app.lunchsorted.household.annual` and `.month`. There is no forever product on sale.
 - **Stripe, never.** The iPhone app does not open Stripe, to buy or to manage: a
   household paying on the website is told to change it at lunchsorted.app, and the

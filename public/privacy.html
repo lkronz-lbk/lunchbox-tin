@@ -29,7 +29,7 @@ strong{color:var(--ink)}
 </head>
 <body>
 <div class="wrap">
-<p class="eyebrow">Last updated 30 September 2026</p>
+<p class="eyebrow">Last updated 9 October 2026</p>
 <h1>Privacy</h1>
 <p>Short version: signed out, the planner keeps everything on your device; the one thing that ever leaves is a
 report when the app's own code breaks, and it carries nothing you typed. Signed in, your household's lunches are
@@ -39,7 +39,8 @@ logs (the address your connection comes from, your browser type) for a short tim
 
 <h2>The planner</h2>
 <p>Everything you enter — lunchbox names, food lists, recipes you keep, school rules, plans, shopping checkmarks — is stored in your
-own browser's local storage on the device you used. <strong>Until you sign in, it is never sent anywhere.</strong> That is also why reading a recipe off a
+own browser's local storage on the device you used. <strong>Until you sign in, it is never sent anywhere.</strong> (A plan bought in the iPhone app before you sign in
+stays on the phone too; Apple tells us only that a purchase happened, as under Paying, below.) That is also why reading a recipe off a
 web page asks you to sign in first: that one feature sends the address you paste to our server, which reads the page
 and sends you back the recipe. We keep neither the address nor the page. Pasting a recipe in as text is read on your
 phone and sends nothing, signed in or not.
@@ -80,10 +81,13 @@ reference, the plan you bought and whether it is paid. Stripe's own
 <p>If you buy it in the iPhone app, payment is taken by Apple through the App Store, under
 <a href="https://www.apple.com/legal/privacy/">Apple's privacy policy</a>. Apple tells us which plan was bought,
 when it renews or ends, and a transaction number; never your name, your Apple Account or your card. So that a
-purchase can be matched to your household, the app gives Apple a random code that belongs to the household and
-means nothing outside it.</p>
+purchase can be matched to your household, the app gives Apple a random code that means nothing outside Lunch
+Sorted: your household's if you are signed in, or one your phone made for itself if you are not. Bought before you
+sign in, the plan is kept on that phone; Apple's note of it reaches us but matches no one, and we keep only that a
+message came, for thirty days. When you sign in, the phone passes the purchase on and it joins your household.</p>
 <p>Either way we never see or store your card. The plan is recorded against your household, not against a
-person, so everyone you invite has it too. While a checkout is open on the website we note which of you opened
+person, so everyone you invite has it too; one bought in the iPhone app before you sign in stays on that phone
+until you do. While a checkout is open on the website we note which of you opened
 it, for up to a day, so two of you cannot buy the same plan at once.</p>
 
 <h2>The forms</h2>

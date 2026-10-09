@@ -1018,9 +1018,11 @@ one on the sign-in screen once 1.0 (7) is answered, since that is where the revi
 
 ## Accounts and sync
 
-Signed out, the app is the phone-only app it always was, but for one thing: since v25 an error
+Signed out, the app is the phone-only app it always was, but for two things: since v25 an error
 report leaves the phone when the planner's own code breaks, and it carries nothing of the
-household (**Broken screens**, below). Signed in, the household
+household (**Broken screens**, below); and a plan bought in the iPhone app is the App Store's
+business, so Apple tells our server a purchase happened, matched to no one (Billing, the App
+Store). Signed in, the household
 document also lives on the server, versioned, and every phone in the household reads and
 writes the same one.
 
@@ -1299,8 +1301,9 @@ the idea bank stays free so a free list is never stuck with what it has.
   available after a plan ends, for the invoices.
 - **The App Store** is the iPhone app's way of paying, and its only one: StoreKit 2 through
   a local plugin (`ios/App/App/StoreKitPlugin.swift`), with `app.lunchsorted.household.annual`,
-  and `.month`, at Apple's prices (`.forever` is understood, not on sale). Every purchase carries the household's
-  `apple_account_token`, which Apple returns in every transaction and notification.
+  and `.month`, at Apple's prices (`.forever` is understood, not on sale). Every purchase made signed in carries the household's
+  `apple_account_token`, which Apple returns in every transaction and notification (one made
+  signed out carries the phone's own, below).
   **Link** (`POST /api/apple/link {signedTransaction}`, signed in, owner or adult) takes the
   transaction the phone has just bought or restored; **notify** (`POST /api/apple/notify`,
   App Store Server Notifications v2) takes renewals, lapses, grace periods and refunds after.
@@ -1342,11 +1345,23 @@ the idea bank stays free so a free list is never stuck with what it has.
   until three days past its end, as the server would. Nothing goes to the server. Renewals
   StoreKit hands over later are kept the same way; Restore purchases signed out keeps what the
   App Store returns. Signing in is offered beside the prices and on the Subscription page,
-  never asked for. At each sign-in, a kept purchase still running is passed to **link** once per
-  household, which checks it as any other and, the phone's token being nobody's, writes it to
-  the household's row; a refusal (the household pays on the website, the purchase is another
-  household's) is said once and not tried again. Sign-out and Delete leave the kept purchase on
-  the phone: it is the Apple Account's. The web is unchanged: Stripe needs a household, so it
+  never asked for. At each sign-in to a household the parent owns, a kept purchase still running is passed to
+  **link** once per household, which checks it as any other and, the phone's token being
+  nobody's, writes it to the household's row. Until the answer comes the phone's plan stands in
+  for the household's, so a parent who has paid is not shown a price sheet on the way in; an
+  answer that never came is asked again at a sync ten minutes on. A household that already has
+  the plan is asked too: one with another App Store purchase (`outcome: 'other purchase'`) or a
+  website plan (409) is told the phone's is not needed, once. Joining someone else's household
+  never takes it along (security review, 2026-10-09: an invite would otherwise bind a parent's
+  purchase to the inviter's household); Restore purchases does, when asked. Sign-out leaves the
+  kept purchase on the phone, being the Apple Account's; Delete and Erase everything remove it
+  and the phone's token, so a purchase freed by a deleted household cannot pass to whoever signs
+  in next on that phone, and Restore brings it back. A renewal StoreKit hands over while signed
+  in refreshes the kept copy of the same purchase. A parent who cancels auto-renew before ever
+  signing in is not heard by the server (Apple's notice matches no household), so the
+  household's Subscription page says Renews until the next notice. Apple's notices about a
+  purchase made signed out reach `/api/apple/notify` and are kept as any other (`apple_events`,
+  id and type, thirty days; `apple_revoked` for a refund) with no household. The web is unchanged: Stripe needs a household, so it
   needs a sign-in.
   A purchase is bound to one household at a time;
   one carrying another household's token is refused, one whose household has been deleted may be
@@ -1357,11 +1372,13 @@ the idea bank stays free so a free list is never stuck with what it has.
   Every transaction Apple refunds is kept in `apple_revoked`, apart from any household, and can
   never be linked again. An App Store plan more than three days past its end is over on the
   server and in the app whether or not Apple's notification came, so a missed one neither leaves
-  it on nor stops the website selling the plan. The phone finishes a transaction only once the
+  it on nor stops the website selling the plan. Signed in, the phone finishes a transaction only once the
   server has decided on it (200, 400 or 409); one that arrives before the account has loaded
-  waits until it has. Offline, Restore says so and does not ask the App Store. Unless the plan
-  came on, a Restore answered 401, its sign-in lapsed, stops being signed in, its lunches kept on
-  the phone, and is asked to sign in again; otherwise one with any purchase the server did not
+  waits until it has (signed out, below, it is finished once kept). Offline, Restore says so and
+  does not ask the App Store. Unless the plan came on, a Restore answered 401, its sign-in
+  lapsed, stops being signed in, its lunches kept on the phone, keeps its purchases on the phone
+  as signed out (the plan on, the sheet closed), and is asked to sign in again only if none is
+  running; a purchase whose link is answered 401 is kept on the phone the same way; otherwise one with any purchase the server did not
   decide on (anything else but 200, 400 or 409: no answer, a failure, too many tries) says the
   purchases could not be checked and to try again, never that the plans have ended or that a
   purchase cannot be used. A Restore's answer that lands after the parent has left the plan sheet
@@ -1394,7 +1411,8 @@ the idea bank stays free so a free list is never stuck with what it has.
   sheet with its prices (on the web read from Stripe, cached an hour, or a minute while one of
   them will not read; in the iPhone app read
   from the App Store, beside Restore purchases; never typed into the app);
-  signed out it offers sign-in first, and remembers what you were doing so the sheet, or
+  signed out on the web it offers sign-in first (in the iPhone app it sells the plan and offers
+  the sign-in beside it), and remembers what you were doing so the sheet, or
   the lunchbox, comes back after the sign-in or the payment. The server refuses an invite
   from a free household (402) whatever the app shows, honouring the same 21 days from the
   document's `createdAt`; the lunchbox, kid's-pick, review and pantry gates are the app's
