@@ -1161,7 +1161,11 @@ The plan is a row on the household (`entitlements`) that only a payment source w
 Stripe for a plan bought on the web, or a beta tester's code, and the App Store for one bought
 in the iPhone app, through Apple's server notifications or a purchase the phone passes on,
 signed by Apple (App Store, below). Each platform sells it one way only, and a plan
-paid on either side works on every phone and browser in the household.
+paid on either side works on every phone and browser in the household. The one exception to
+the row: in the iPhone app the plan is bought signed out too (App Review, guideline 5.1.1(v),
+1.0 (7), October 2026: a purchase that is not an account's may not wait on a sign-in). Bought
+that way it is kept on that phone alone, and joins the household's row at the first sign-in
+(App Store, below).
 Prices are Stripe's on the web and Apple's in the iPhone app, kept the same by hand. The site
 (`public/price.js`), the plan sheet and the trial emails all read Stripe's through
 `GET /api/billing`; no price is typed into them, only a fallback in the site's HTML. Each price
@@ -1331,6 +1335,19 @@ the idea bank stays free so a free list is never stuck with what it has.
   then, is left on the row, the log saying CANCEL BY HAND, and the purchase goes through all the
   same; the next word from Apple tries again, as do the beta link and the subscription's own next
   event (the webhook, above).
+  **Signed out** the iPhone app sells the plan all the same. The purchase carries a token the
+  phone made for itself (`lunchsorted-iap-phone`), which no household holds; the phone keeps
+  Apple's signed transaction (`lunchsorted-iap-kept`, the one running latest: a renewal
+  replaces what it renews, a refund removes it), finishes it at once, and treats the plan as on
+  until three days past its end, as the server would. Nothing goes to the server. Renewals
+  StoreKit hands over later are kept the same way; Restore purchases signed out keeps what the
+  App Store returns. Signing in is offered beside the prices and on the Subscription page,
+  never asked for. At each sign-in, a kept purchase still running is passed to **link** once per
+  household, which checks it as any other and, the phone's token being nobody's, writes it to
+  the household's row; a refusal (the household pays on the website, the purchase is another
+  household's) is said once and not tried again. Sign-out and Delete leave the kept purchase on
+  the phone: it is the Apple Account's. The web is unchanged: Stripe needs a household, so it
+  needs a sign-in.
   A purchase is bound to one household at a time;
   one carrying another household's token is refused, one whose household has been deleted may be
   restored elsewhere, and one carrying none (Family Sharing, an offer code) is not taken. Forever

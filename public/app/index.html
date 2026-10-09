@@ -1702,7 +1702,7 @@ var AFTER_KEY = 'lunchsorted-after';
 function rememberAfter(why){ try{ if(why) localStorage.setItem(AFTER_KEY, why); else localStorage.removeItem(AFTER_KEY); }catch(e){} }
 function resumeAfter(){
   var why = ''; try{ why = localStorage.getItem(AFTER_KEY) || ''; localStorage.removeItem(AFTER_KEY); }catch(e){}
-  if(!why || !signedIn()) return;
+  if(!why || (!signedIn() && !paid())) return;     /* signed out, only a plan bought on this phone comes back to what it was for */
   if(gated() || (why === 'keep' && !paid())){                    /* the page they came from first, the plan sheet over it */
     var to = {lunchbox:['setup','box'], share:['setup','household'], week:['week',''], write:['week',''], food:['foods',''], recipe:['recipes',''], pantry:['shop',''], review:['pack',''], kidpick:['pack',''], keep:['setup','plan']}[why];
     if(to){ UI.tab = to[0]; UI.pane = to[1]; }
@@ -1748,11 +1748,73 @@ function iapRefused(r){
     : r.paying ? 'This household already pays on the website, so this purchase was not used. To ask Apple for your money back, see Help'
     : 'That purchase could not be used here. Write to hello@lunchsorted.app and we will sort it';
 }
+/* ---- signed out, the plan is bought all the same (App Review, guideline 5.1.1(v): a purchase that
+   is not an account's may not wait on a sign-in). It is the Apple Account's on this phone: kept here,
+   with Apple's signed transaction, and it switches on everything this phone can do alone. Signing in
+   is the parent's choice, any time; it hands the kept purchase to /api/apple/link, which checks it
+   and puts it on the household's row, and from then the plan is the household's, on every phone.
+   Apple wants a token with each purchase: signed out it is one made by this phone, which no household
+   holds, so the server takes it for whichever household signs in first. */
+var IAP_PHONE_KEY = 'lunchsorted-iap-phone', IAP_KEPT_KEY = 'lunchsorted-iap-kept';
+function phoneToken(){
+  var t = ''; try{ t = localStorage.getItem(IAP_PHONE_KEY) || ''; }catch(e){}
+  if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(t)) return t;
+  var b = new Uint8Array(16); crypto.getRandomValues(b); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+  var x = Array.prototype.map.call(b, function(n){ return (n < 16 ? '0' : '') + n.toString(16); }).join('');
+  t = x.slice(0,8)+'-'+x.slice(8,12)+'-'+x.slice(12,16)+'-'+x.slice(16,20)+'-'+x.slice(20);
+  try{ localStorage.setItem(IAP_PHONE_KEY, t); }catch(e){}
+  return t;
+}
+/* what Apple signed, read but not checked: StoreKit checked it on this phone before handing it over,
+   and the server checks it again before it reaches a household */
+function jwsPayload(jws){
+  try{ var p = String(jws).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); while(p.length % 4) p += '='; return JSON.parse(atob(p)); }catch(e){ return null; }
+}
+function iapKept(){ if(!native()) return null; try{ var k = JSON.parse(localStorage.getItem(IAP_KEPT_KEY) || 'null'); return k && k.jws && k.expires ? k : null; }catch(e){ return null; } }
+/* a transaction onto the phone: the one that runs later wins, so a renewal replaces the purchase it
+   renews and an old one handed back again changes nothing; a refund takes it away */
+function iapKeep(t){
+  var p = t && jwsPayload(t.jws);
+  if(!p || p.bundleId !== 'app.lunchsorted' || (p.productId !== IAP_IDS.year && p.productId !== IAP_IDS.month) || !p.originalTransactionId) return;
+  var k = iapKept();
+  try{
+    if(p.revocationDate){ if(k && k.original === String(p.originalTransactionId)) localStorage.removeItem(IAP_KEPT_KEY); return; }
+    if(p.inAppOwnershipType && p.inAppOwnershipType !== 'PURCHASED') return;
+    if(!p.expiresDate || (k && k.expires >= p.expiresDate)) return;
+    localStorage.setItem(IAP_KEPT_KEY, JSON.stringify({jws:t.jws, original:String(p.originalTransactionId), id:String(p.transactionId || ''), expires:p.expiresDate}));
+  }catch(e){}
+}
+/* signed out, the plan this phone holds, worded as the server words a household's */
+function phoneEntitlement(){
+  var k = iapKept();
+  return k ? {plan:'household', source:'apple', status:'active', currentPeriodEnd:new Date(k.expires).toISOString(), onPhone:true} : null;
+}
+function phonePlan(){ if(!signedIn()) Account.entitlement = phoneEntitlement(); }
+/* signed out there is nobody to ask, so the phone keeps it and StoreKit is done with it */
+function iapOnPhone(t){
+  iapKeep(t); phonePlan();
+  var sk = storeKit(); if(sk && t.transactionId) sk.finish({transactionId: t.transactionId}).catch(function(){});
+}
+/* signed in with a purchase kept from before: once to each household, which takes it or says why not */
+function iapHandOver(){
+  var k = iapKept(), hid = Account.household && Account.household.id;
+  if(!k || !hid || paid() || isHelper() || k.expires + 3 * 86400000 < Date.now() || k.triedFor === hid || IAP.handing) return;
+  IAP.handing = true;
+  iapLink({jws:k.jws, transactionId:k.id}).then(function(r){
+    IAP.handing = false;
+    if(!iapDecided(r)) return;
+    try{ k.triedFor = hid; localStorage.setItem(IAP_KEPT_KEY, JSON.stringify(k)); }catch(e){}
+    if(r.status === 200 && paid()){ render(); toast('Your App Store plan is now the household’s'); }
+    else if(r.status === 400 || r.status === 409) toast(iapRefused(r));
+  });
+}
 /* a purchase StoreKit hands over by itself: a renewal, an Ask to Buy approved later, one left
-   unfinished last time. At launch it can arrive before the account has, so it waits in the queue
-   until applyState() knows whose phone this is. */
+   unfinished last time. Signed out it stays on the phone. At launch on a phone that belongs to a
+   household it can arrive before the account has, so it waits in the queue until applyState()
+   knows whose phone this is, or Sync finds the phone signed out. */
 function iapArrived(t){
   if(!t || !t.jws) return;
+  if(!signedIn() && !Store.hadAccount()){ var was = paid(); iapOnPhone(t); render(); if(!was && paid()) toast('Welcome to the Household plan'); return; }
   if(!signedIn()){ IAP.queue.push(t); return; }
   var wasPaid = paid();
   iapLink(t).then(function(r){ if(r.status === 200){ render(); if(!wasPaid && paid()) toast('Welcome to the Household plan'); } });
@@ -1781,7 +1843,7 @@ function upgradeSheet(why){
         : why === 'keep' ? (trialing() ? esc(trialLine())+'. Keep the Household plan and nothing changes.'+(chargeLater() ? ' Nothing is charged until '+esc(fmtDay(chargeLater()))+', and the year or month runs from then.' : ' It starts, and is charged, the day you buy.') : 'Planning, the shopping list, the pack list and the idea bank are free for good. The Household plan is the rest.')
         : 'The Household plan is everything the free planner is not.')+'</p>';
   h += '<ul class="hint muted" style="margin:0;padding-left:18px"><li>Your own foods and your own recipes \u2014 in your own words, pasted in, or read off any page</li><li>Kid’s pick, what came home, and a pantry that remembers</li><li>Every lunchbox, each with its own rules</li><li>The other parent’s phone, seeing the same lunches</li><li>Cancel any time — what you have added stays</li></ul>';
-  if(!signedIn()){
+  if(!signedIn() && !native()){
     h += '<p class="hint" style="margin:0">Sign in first — the Household plan belongs to the household, so it works on every phone.</p>'
       +  '<button class="btn primary wide" data-act="go-signin" data-why="'+esc(why || '')+'" data-close="1">Sign in</button>';
   } else if(native()){
@@ -1813,6 +1875,9 @@ function upgradeSheet(why){
         +  '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm ghost" data-act="iap-restore">Restore purchases</button>'
         +  siteLink('/terms.html', 'Terms of use', false, 'sm ghost') + siteLink('/privacy.html', 'Privacy', false, 'sm ghost') + '</div>';
     }
+    /* signed out it is bought all the same, on this phone; a sign-in is offered, never asked for */
+    if(!signedIn()) h += '<p class="hint muted" style="margin:0">Signing in is up to you, now or later. It puts the plan on the other parent’s phone too.</p>'
+      +  '<button class="btn sm ghost" data-act="go-signin" data-why="'+esc(why || '')+'" data-close="1">Sign in</button>';
   } else {
     var dis = Account.buying ? ' disabled' : '';
     h += (founding() ? FOUNDING_LINE : '') + '<div class="row" style="gap:8px;flex-wrap:wrap">'
@@ -1833,6 +1898,7 @@ function applyState(st){
   Account.entitlement = st.entitlement || null; Account.version = st.version || 0; Account.household = st.household || null; Account.chargeLater = st.chargeLater || null;
   try{ localStorage.setItem('lunchsorted-trial-extra', String((Account.household && Account.household.trialExtraDays) || 0)); }catch(e){}
   if(IAP.queue.length){ var waiting = IAP.queue.splice(0); setTimeout(function(){ waiting.forEach(iapArrived); }, 0); }
+  if(iapOn() && iapKept()) setTimeout(iapHandOver, 0);              /* a plan bought on this phone signed out becomes the household's */
   /* ahead of the sheet, for a household it may open for; while the App Store is not answering, not on every sync */
   if(iapOn() && !paid() && !IAP.products && !isHelper() && Date.now() - (IAP.triedAt || 0) > 600000){ IAP.triedAt = Date.now(); iapProducts(); }
   if(betaWaiting()) setTimeout(claimBeta, 0);                       /* signed in with a beta code waiting: switch it on */
@@ -1887,7 +1953,7 @@ var Sync = {
     Account.busy = true; Account.status = 'syncing'; renderSyncLine();
     return api('GET', '/api/household').then(function(st){
       Account.busy = false;
-      if(st.status === 401){ Account.user = null; Account.me = null; Account.status = 'idle'; renderSyncLine(); return; }
+      if(st.status === 401){ Account.user = null; Account.me = null; Account.status = 'idle'; phonePlan(); IAP.queue.splice(0).forEach(iapOnPhone); renderSyncLine(); return; }   /* signed out after all: what StoreKit handed over meanwhile stays on the phone */
       if(st.status !== 200){ Account.status = 'error'; renderSyncLine(); return; }
       applyState(st);
       if(!st.doc){
@@ -1941,7 +2007,7 @@ var Sync = {
           done(false, r2.status);
         });
       }
-      if(r.status === 401){ Account.user = null; Account.me = null; }
+      if(r.status === 401){ Account.user = null; Account.me = null; phonePlan(); }
       done(false, r.status);
     }).catch(function(){ done(false, 0); });
   },
@@ -4853,7 +4919,7 @@ function panePlan(){
   if(cost) h += '<div class="kv"><span>Cost</span><span>'+esc(cost)+'</span></div>';
   /* free forever was not bought and never renews, so the line above is the whole answer */
   if(!given) h += '<div class="kv"><span>'
-    +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : firstChargeAhead() ? 'First charged' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
+    +  (paid() && e.plan === 'lifetime' ? 'Bought' : paid() && e.cancelAtPeriodEnd ? 'Ends' : paid() && e.onPhone ? 'Paid through' : firstChargeAhead() ? 'First charged' : paid() ? 'Renews' : trialing() ? 'Free until' : 'Plan')
     +  '</span><span>'
     +  esc(paid() ? (e.plan === 'lifetime' ? 'Paid once, never renews' : d || 'Yearly')
         : trialing() ? (trialEnd() ? fmtDay(trialEnd()) : planLabel()) : planEnded() ? 'Ended'+(planEndedOn() ? ' '+planEndedOn() : '') : 'Not on')
@@ -4870,7 +4936,7 @@ function panePlan(){
   if(trialing()){
     h += '<div class="card stack" style="gap:10px"><h3>When the three weeks end</h3>'
       +  '<p class="hint" style="margin:0">No card, and nothing to cancel. From '+esc(trialEnd() ? fmtDay(trialEnd()) : 'then')+', '+freeAgain+'</p></div>';
-  } else if(paid() && e.plan !== 'lifetime' && signedIn()){
+  } else if(paid() && e.plan !== 'lifetime' && (signedIn() || e.onPhone)){
     h += '<div class="card stack" style="gap:10px"><h3>Stopping it</h3>'
       +  '<p class="hint" style="margin:0">'
       +  (e.cancelAtPeriodEnd ? 'You have canceled it. '
@@ -4884,9 +4950,13 @@ function panePlan(){
     h += '<div class="card stack" style="gap:10px"><h3>The plan has ended</h3>'
       +  '<p class="hint" style="margin:0">'+(cardFix ? cardFix+'Either way '+freeAgain : freeAgain.charAt(0).toUpperCase()+freeAgain.slice(1))+'</p></div>';
   }
-  /* the plan belongs to the household, not to the phone, so it needs a sign-in and
-     this is the page that has to say so — with the button, not just the sentence */
-  if(!signedIn()) h += '<div class="card stack" style="gap:10px"><h3>Sign in first</h3>'
+  /* on the web the plan belongs to the household, so it needs a sign-in and this is the page that
+     has to say so, with the button, not just the sentence. In the iPhone app it is bought without
+     one, and the sign-in is what takes it to the other phones */
+  if(!signedIn() && native()) h += '<div class="card stack" style="gap:10px"><h3>Every phone</h3>'
+    +  '<p class="hint" style="margin:0">Sign in, now or any time, and the plan works on the other parent\u2019s phone too.</p>'
+    +  '<button class="btn sm" data-act="go-signin" data-why="keep">Sign in</button></div>';
+  else if(!signedIn()) h += '<div class="card stack" style="gap:10px"><h3>Sign in first</h3>'
     +  '<p class="hint" style="margin:0">The plan belongs to the household, so it works on every phone you sign in on.</p>'
     +  '<button class="btn sm" data-act="go-signin" data-why="keep">Sign in</button></div>';
   return h;
@@ -4986,7 +5056,7 @@ function planLabel(){
   if(e.plan === 'lifetime') return foreverGiven() ? 'Free forever' : 'Forever';
   if(e.status === 'past_due') return 'Payment failed';
   var d = planDate();
-  return d ? (e.cancelAtPeriodEnd ? 'Ends ' : firstChargeAhead() ? 'First charged ' : 'Renews ') + d : 'Yearly';
+  return d ? (e.cancelAtPeriodEnd ? 'Ends ' : e.onPhone ? 'Paid through ' : firstChargeAhead() ? 'First charged ' : 'Renews ') + d : 'Yearly';
 }
 
 /* --------------------------------------------------------------- sheets */
@@ -5802,6 +5872,7 @@ function helpSheet(fromSupport){
   if(billingOn()) qa.push(['Where do I see what I pay, or cancel?', native()
     ? 'Account tab → Subscription: the plan, the date it renews or ends, and Manage in the App Store to change or cancel it; refunds are Apple’s. If the plan came to you free for good, as a beta tester, it reads Household, free forever: there is nothing to pay and nothing renews. Paid but not on? Restore purchases, under the prices. A plan bought on the website is changed there, at lunchsorted.app.'
     : 'Account tab → Subscription: the plan, the price, the date it renews or ends, and Manage billing to change the card or cancel. If the plan came to you free for good, as a beta tester, it reads Household, free forever: there is nothing to pay and nothing renews. A plan bought in the iPhone app is changed in the App Store.']);
+  if(billingOn() && native()) qa.push(['Do I have to sign in to buy the plan?', 'No. Bought signed out, it is on for this phone. Sign in whenever you like and it becomes the household\u2019s, on the other parent\u2019s phone too.']);
   if(billingOn()) qa.push(['It says the last payment did not go through', native()
     ? 'The plan stays on while Apple tries again. Manage in the App Store, on the banner or under Account \u2192 Subscription, is where to update how you pay; if it keeps failing the plan ends on the date shown, and everything you added stays.'
     : 'The plan stays on while the card is tried again. Manage billing, on the banner or under Account \u2192 Subscription, is where to update the card; if it keeps failing the plan ends on the date shown, and everything you added stays.']);
@@ -6857,7 +6928,7 @@ document.addEventListener('click', function(ev){
     var flush = (canWrite() && S.onboardedAt) ? Sync.push() : Promise.resolve();
     flush.then(function(){ return api('POST', '/api/auth/logout'); }).then(function(){
       Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; Account.linkSent = ''; Account.status = 'idle'; Account.first = false; Account.elsewhere = false; Account.entitlement = null; Account.household = null;
-      Store.forget(); S = newAccount(); DEVICE.memberId = S.members[0].id; UI.tab = 'pack'; UI.obEmail = false;
+      Store.forget(); phonePlan(); S = newAccount();   /* phonePlan: a plan this phone's Apple Account bought stays with the phone */ DEVICE.memberId = S.members[0].id; UI.tab = 'pack'; UI.obEmail = false;
       save(); render(); window.scrollTo(0,0); toast('Signed out');
     }).catch(offline);
     return;
@@ -6868,7 +6939,7 @@ document.addEventListener('click', function(ev){
   if((act==='buy' || act==='portal') && native()) return;
   if(act==='iap-retry'){ IAP.failed = false; upgradeSheet(el.getAttribute('data-why') || ''); return; }
   if(act==='iap-buy'){
-    var sk = storeKit(), tok = Account.entitlement && Account.entitlement.appleToken;
+    var sk = storeKit(), out = !signedIn(), tok = out ? phoneToken() : Account.entitlement && Account.entitlement.appleToken;
     if(!sk || Account.buying) return;
     if(!tok){ toast('Still reaching your account. Try again in a moment'); Sync.pull().catch(function(){}); return; }
     Account.buying = true; IAP.inFlight = true;
@@ -6879,6 +6950,12 @@ document.addEventListener('click', function(ev){
     sk.purchase({id: el.getAttribute('data-product'), token: tok}).then(function(r){
       if(!r || r.status === 'cancelled'){ done(); rememberAfter(''); return; }
       if(r.status === 'pending'){ done(); closeSheet(); toast('Waiting for approval. The plan switches on as soon as it comes through'); return; }
+      if(out || !signedIn()){                                  /* signed out: the phone keeps it, nothing to ask */
+        done(); iapOnPhone(r);
+        if(paid()){ IAP.lastError = null; closeSheet(); render(); toast('Welcome to the Household plan'); resumeAfter(); }
+        else toast('That purchase could not be used here. Write to hello@lunchsorted.app and we will sort it');
+        return;
+      }
       el.textContent = 'Switching it on\u2026';
       return iapLink(r).then(function(res){
         done();
@@ -6913,6 +6990,12 @@ document.addEventListener('click', function(ev){
     skr.restore().then(function(r){
       var list = (r && r.transactions) || [];
       if(!list.length){ back(); toast('Nothing to restore on this Apple Account'); return; }
+      if(!signedIn()){
+        back(); list.forEach(iapOnPhone);
+        if(paid()){ if(sheetState && sheetState.plan) closeSheet(); render(); toast('Restored \u2014 the Household plan is on'); }
+        else toast('The plans on this Apple Account have ended');
+        return;
+      }
       el.textContent = 'Checking purchases\u2026';
       return Promise.all(list.map(iapLink)).then(function(rs){
         back();
@@ -7019,7 +7102,7 @@ document.addEventListener('click', function(ev){
     api('POST', '/api/auth/delete', {confirm:'DELETE'}).then(function(r){
       if(r.status !== 200){ el.disabled = false; el.textContent = 'Delete my account and data'; toast(r.error || 'Could not delete'); return; }
       Account.user = null; Account.me = null; Account.members = []; Account.invite = ''; UI.armed = ''; UI.deleteTyped = ''; Account.first = false; Account.household = null;
-      Store.forget(); S = newAccount(); DEVICE.memberId = S.members[0].id; UI.tab = 'pack';
+      Store.forget(); phonePlan(); S = newAccount(); DEVICE.memberId = S.members[0].id; UI.tab = 'pack';
       save(); render(); toast('Deleted');
     }).catch(function(e){ el.disabled = false; el.textContent = 'Delete my account and data'; offline(e); });
     return;
@@ -7233,6 +7316,7 @@ Store.load().then(function(r){
   /* anyone who already has a list has effectively finished onboarding */
   if(!S.onboardedAt && kids().some(function(k){ return foodsOf(k).length; })) S.onboardedAt = now();
   whatsNew();
+  if(!Store.hadAccount()) phonePlan();          /* a phone that has never been signed in: the plan, if any, is the one it bought */
   try{ rolloverAll(); render(); }
   catch(e){
     /* the last line of defence: a document that renders badly must not become
@@ -7299,8 +7383,9 @@ Store.load().then(function(r){
     setTimeout(look, 1200);
   }
   /* the iPhone app: a sign-in link or back.html opening the app lands here, with the url */
-  /* the App Store: renewals, an Ask to Buy approved later, one left unfinished last time. Signed
-     out they are left unfinished, and StoreKit offers them again at the next launch. */
+  /* the App Store: renewals, an Ask to Buy approved later, one left unfinished last time. On a phone
+     never signed in they are kept on it (iapArrived); on one whose sign-in is still being checked
+     they wait for the answer. */
   var skBoot = storeKit();
   if(skBoot && skBoot.addListener){
     skBoot.addListener('transaction', iapArrived);
