@@ -174,9 +174,22 @@ The mode question is skipped. Everyone starts on "One dinner, adjusted where nee
 |---|---|
 | Trial | 21 days of everything, no card |
 | Plan | $19.99 a year or $2.99 a month, the same founding price as Lunch Sorted, kept while subscribed (decided) |
-| Feed the Crew bundle | Both apps. *Price for Liz to set.* A starting point is $29.99 a year or $4.49 a month. |
+| Feed the Crew bundle | Both apps, about 25% off the two prices together: **$29.99 a year or $4.49 a month** at the founding tier (decided 2026-10-07). The ladder is below. |
 | Payment | Through the App Store on iPhone and Stripe on the web, never crossed. A plan bought on one platform works on the other. |
 | Free, for good | *Liz decides.* Proposal below. |
+
+**The price ladder.** Each app rises as Lunch Sorted does, counting its own paying households: $19.99 a year for the first 100, $29.99 for the next 400, then $39.99. The bundle is about 25% off the two together and sits at whichever tier the higher-priced app is on, so it is never cheaper than buying both apart.
+
+| Tier | Each app, yearly | Bundle, yearly | Bundle, monthly |
+|---|---|---|---|
+| Founding (first 100) | $19.99 | $29.99 | $4.49 |
+| Next 400 | $29.99 | $44.99 | $6.99 |
+| After | $39.99 | $59.99 | $8.99 |
+
+Bundle rules:
+- **The founding promise carries.** A household's bundle price stays fixed for as long as it stays subscribed, as with each app's plan.
+- **Adding the second app is an upgrade, never a second subscription.** A household on one app moves to the bundle with the difference prorated: on iPhone, an upgrade inside the app's subscription group; on the web, a Stripe plan change. Nobody ever pays two single plans.
+- **One row, both apps.** The bundle is one entitlement on the household that both apps read.
 
 **Proposed free and paid line:**
 - **Free:** one week planned at a time in **"One dinner for everyone"** mode, the shopping list and the dinner bank.
@@ -216,7 +229,7 @@ The free tier has to be useful but plain. It is the same planner other apps offe
 
 1. ~~Refusal rule~~: decided. A short rest, then offered again (section 5).
 2. Recipe sourcing approach (section 6): discovery and AI's role.
-3. The free line and the bundle price (section 11).
+3. The free line (section 11). ~~The bundle price~~: decided, 25% off, see the ladder.
 4. ~~Dinner time and cutoff~~: decided, 6pm and 9pm, both settable. Kid portions at half (section 7) are still open.
 5. Where this spec lives.
 6. The server question from the plan's Phase 2: one sign-in server or two. This decides how section 8 works.
