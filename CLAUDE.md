@@ -39,6 +39,9 @@ arrives and where every piece of work lands. Any task that is not code reads it 
   web through Stripe only. The entitlement is a row on the household, and only a payment
   source ever writes it: Stripe, a beta code, or the App Store (Apple's notifications, or a
   purchase the phone passes on, signed by Apple). A plan paid on one side works everywhere.
+  The iPhone app never makes a sign-in the price of buying (App Review, 5.1.1(v)): bought signed
+  out, the plan is kept on that phone alone and joins the household's row at the next sign-in to
+  a household the parent set up (joining someone else's never takes it along).
   The free three weeks are not an entitlement: `households.trial_extra_days`, set by hand in the
   database only, may lengthen one household's.
 - Every user-visible string is written for a parent: no jargon, no IDs, descriptors under

@@ -4,14 +4,17 @@ import StoreKit
 
 /// The iPhone app's way of paying: StoreKit 2, reached from the page as `StoreKit`.
 ///
-/// The phone decides nothing about the plan. It hands the page the App Store's signed transaction
-/// (`jws`), the page sends it to /api/apple/link, and the server checks Apple's signature before it
-/// writes the household's row. Only then does the page call `finish`, so a purchase the server never
-/// heard about (no signal, the app killed mid-way) is not finished, and StoreKit hands it back on the
-/// next launch through `Transaction.updates` until it is.
+/// This plugin decides nothing about the plan. It hands the page the App Store's signed transaction
+/// (`jws`). Signed in, the page sends it to /api/apple/link, and the server checks Apple's signature
+/// before it writes the household's row; only then does the page call `finish`, so a purchase the
+/// server never heard about (no signal, the app killed mid-way) is not finished, and StoreKit hands it
+/// back on the next launch through `Transaction.updates` until it is. Signed out (App Review,
+/// 5.1.1(v): buying may not wait on a sign-in) the page keeps it on the phone, finishes it, and
+/// passes it to the server at the first sign-in.
 ///
-/// Every purchase carries the household's token (`appAccountToken`), which Apple returns in every
-/// notification, so the server can place a notification that arrives before the phone does.
+/// Every purchase carries a token (`appAccountToken`), which Apple returns in every notification:
+/// the household's when signed in, so the server can place a notification that arrives before the
+/// phone does, or one the phone made for itself when signed out.
 @objc(StoreKitPlugin)
 public class StoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "StoreKitPlugin"

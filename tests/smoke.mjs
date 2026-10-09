@@ -5577,7 +5577,7 @@ try {
         over.toast === 'The plans on this Apple Account have ended' && JSON.stringify(over.finished) === '["2000000000000910"]' && over.row.plan === 'free', over);
       const UNSIGNED = { status: 401, contentType: 'application/json', body: '{"error":"Not signed in"}' };
       /* the session never ended, only those answers said so: a reload signs the phone back in */
-      const signedInAgain = async () => { await pn.reload(); await pn.waitForLoadState('load'); await openPlanSheet(pn); await until(pn, (sel) => document.querySelectorAll(sel).length === 1, RESTORE); };
+      const signedInAgain = async () => { await pn.evaluate(() => localStorage.removeItem('lunchsorted-iap-kept')); await pn.reload(); await pn.waitForLoadState('load'); await openPlanSheet(pn); await until(pn, (sel) => document.querySelectorAll(sel).length === 1, RESTORE); };
       /* the answer held until the parent has left the plan sheet (closed it, and for one, opened Help): the page's
          own sheet is read, as sheetIsOpen does, since the app's state lives inside its script */
       const leaving = (andThen) => { let release; const gate = new Promise(r => { release = r; });
@@ -5588,12 +5588,13 @@ try {
             release(); return left; } }; };
       const out = leaving(UNSIGNED);
       const away = await restoreSays([live], { route: out.route, meanwhile: () => out.meanwhile(false) });
-      check('a lapsed sign-in found after the parent has closed the plan sheet leaves it closed, draws no Sign in into it, and still says why',
-        away.during === true && away.sheet === null && away.signIn.length === 0 && away.toast === 'Sign in again to restore your purchases' && away.finished.length === 0, away);
+      const ON_PHONE = 'Restored on this phone. Sign in again to share it with the household';
+      check('a lapsed sign-in found after the parent has closed the plan sheet leaves it closed, keeps the purchase on the phone as signed out, and says so',
+        away.during === true && away.sheet === null && away.signIn.length === 0 && away.toast === ON_PHONE && JSON.stringify(away.finished) === '["2000000000000900"]' && away.row.plan === 'free', away);
       await signedInAgain();
       const lapsed = await restoreSays([live], { route: r => r.fulfill(UNSIGNED) });
-      check('one whose sign-in has lapsed signs this phone out and asks for it again in the same sheet, keeping why it was opened, and finishes nothing',
-        lapsed.toast === 'Sign in again to restore your purchases' && lapsed.sheet === 'The Household plan' && JSON.stringify(lapsed.signIn) === '["keep"]' && lapsed.finished.length === 0, lapsed);
+      check('one whose sign-in has lapsed signs this phone out, keeps the purchase on it with the plan on, closes the sheet, and asks for the sign-in only to share it',
+        lapsed.toast === ON_PHONE && lapsed.sheet === null && lapsed.signIn.length === 0 && JSON.stringify(lapsed.finished) === '["2000000000000900"]' && lapsed.row.plan === 'free', lapsed);
       await signedInAgain();
       const on = leaving(null);
       const moved = await restoreSays([live], { route: on.route, meanwhile: () => on.meanwhile(true) });
@@ -5621,6 +5622,60 @@ try {
     const oldSheet = await po.textContent('#sheetBody');
     check('an iPhone app from before the App Store plugin is told to update, and offers no way to pay', /Update Lunch Sorted/.test(oldSheet) && (await po.$$eval('#sheetBody [data-act="buy"], #sheetBody [data-act="iap-buy"]', a => a.length)) === 0, oldSheet.replace(/\s+/g, ' ').slice(0, 200));
     await ctxO.close();
+    {
+      /* App Review, 1.0 (7), guideline 5.1.1(v): the plan is bought without a sign-in. Signed out it is kept on the phone
+         and asks the server nothing; signing in, whenever the parent likes, hands it to the household's row */
+      const c = await browser.newContext({ viewport: { width: 375, height: 812 }, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LunchSortedApp/1' });
+      await pinClock(c); await c.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort());
+      const PHONE = '3b1f8c2e-6a4d-4f0e-9b7a-1c2d3e4f5a6b';
+      await c.addInitScript(t => { if (!localStorage.getItem('lunchsorted-iap-phone')) localStorage.setItem('lunchsorted-iap-phone', t); }, PHONE);
+      await c.addInitScript(stub, true);
+      const ps = await c.newPage(); ps.on('pageerror', e => errors.push(String(e.message)));
+      const linked = []; ps.on('request', r => { if (r.url().includes('/api/apple/link')) linked.push(r.url()); });
+      await ps.goto(BASE + '/app/'); await ps.waitForLoadState('load');
+      await ps.fill('#obName', 'Rosa'); await ps.click('[data-act="ob-go"]'); await ps.waitForTimeout(400);
+      if (await ps.$('[data-act="ob-later"]')) { await ps.click('[data-act="ob-later"]'); await ps.waitForTimeout(200); }
+      /* the three weeks are long over on this phone, so the plan's pieces are locked */
+      await ps.evaluate(() => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.createdAt = '2026-01-01T00:00:00.000Z'; localStorage.setItem('lunchsorted', JSON.stringify(d)); });
+      await ps.reload(); await ps.waitForLoadState('load');
+      await openPane(ps, 'plan');
+      const lockedOut = await until(ps, () => /Get the Household plan/.test(document.querySelector('#view').textContent));
+      await openPlanSheet(ps);
+      await until(ps, () => document.querySelectorAll('#sheetBody [data-act="iap-buy"]').length === 2);
+      const outSheet = await ps.textContent('#sheetBody');
+      check('signed out on the iPhone, the plan sheet sells the plan at once, and offers a sign-in without asking for one',
+        !/Sign in first/.test(outSheet) && /up to you/.test(outSheet) && (await ps.$$eval('#sheetBody [data-act="go-signin"]', a => a.length)) === 1 && (await ps.$$eval('#sheetBody [data-act="iap-restore"]', a => a.length)) === 1, outSheet.replace(/\s+/g, ' ').slice(0, 300));
+      const mine = txn({ originalTransactionId: '2000000000000950', transactionId: '2000000000000950', appAccountToken: PHONE });
+      await ps.evaluate(n => { window.__sk.next = n; }, { status: 'purchased', jws: jws(mine), transactionId: '2000000000000950', productId: mine.productId });
+      await ps.click('#sheetBody [data-act="iap-buy"][data-product="app.lunchsorted.household.annual"]');
+      await until(ps, () => window.__sk.finished.includes('2000000000000950'));
+      const skOut = await ps.evaluate(() => window.__sk);
+      const welcomed = await until(ps, () => /Welcome to the Household plan/.test(document.querySelector('#toast').textContent));
+      await openPane(ps, 'plan');
+      const paidThrough = await until(ps, () => /Paid through/.test(document.querySelector('#view').textContent));
+      const paneOut = await ps.textContent('#view');
+      check('and buying it, the three weeks over, hands Apple this phone\'s own token, switches the plan on here, finishes the purchase, and asks the server nothing',
+        lockedOut && welcomed && paidThrough && skOut.purchases.length === 1 && skOut.purchases[0].token === PHONE && linked.length === 0 && /Manage in the App Store/.test(paneOut) && !/Get the Household plan|Sign in first/.test(paneOut), [lockedOut, welcomed, paidThrough, skOut.purchases, linked, paneOut.replace(/\s+/g, ' ').slice(0, 300)]);
+      await ps.reload(); await ps.waitForLoadState('load');
+      await openPane(ps, 'plan');
+      check('it is still on after the app is closed and opened again', await until(ps, () => /Paid through/.test(document.querySelector('#view').textContent)), (await ps.textContent('#view')).replace(/\s+/g, ' ').slice(0, 200));
+      /* later, the parent signs in from the Subscription page's offer: the purchase becomes the new household's,
+         and the sign-in lands back on Subscription, never on a price sheet for a plan already paid for */
+      await until(ps, () => !!document.querySelector('#view [data-act="go-signin"]'));
+      await ps.click('#view [data-act="go-signin"]');
+      await until(ps, () => !!document.querySelector('#signinEmail'));
+      await ps.fill('#signinEmail', 'rosa-parent@example.com'); await ps.click('[data-act="signin-request"]');
+      await until(ps, () => !!document.querySelector('#signinCode'));
+      const code = mails.filter(m => m.to === 'rosa-parent@example.com' && /sign-in link/.test(m.subject)).pop().text.match(/\b([A-Z2-9]{4}-[A-Z2-9]{4})\b/)[1];
+      await ps.fill('#signinCode', code); await ps.click('[data-act="signin-code"]');
+      const rosaRow = async () => (await db.query(`SELECT e.plan, e.source, e.apple_original_transaction_id AS otx FROM entitlements e JOIN household_members m ON m.household_id = e.household_id JOIN users u ON u.id = m.user_id WHERE u.email = 'rosa-parent@example.com'`)).rows[0];
+      let handed = null;
+      for (let i = 0; i < 60 && !(handed && handed.otx); i++) { await ps.waitForTimeout(250); handed = await rosaRow(); }
+      const saidSo = await until(ps, () => /now the household/.test(document.querySelector('#toast').textContent));
+      const priceSheet = await ps.evaluate(() => document.querySelector('#sheet').classList.contains('open') && /Household plan/.test(document.querySelector('#sheetTitle').textContent));
+      check('signing in afterwards hands the purchase to the household\'s row, says so, and shows no price sheet on the way', !!handed && handed.otx === '2000000000000950' && handed.source === 'apple' && handed.plan === 'household' && linked.length === 1 && saidSo && !priceSheet, [handed, linked.length, saidSo, priceSheet, await ps.textContent('#toast')]);
+      await c.close();
+    }
     {
       /* an iPhone purchase over a web subscription Stripe is still retrying: its first charge failed when the three weeks
          ended, so the row reads ended and the purchase is written over it, but a retry that went through afterwards would

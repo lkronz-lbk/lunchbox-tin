@@ -209,7 +209,7 @@ not target children. The one screen a child touches (kid's pick) asks nothing of
 ## App Review information (bottom of the version page)
 
 - [x] Contact: your name, phone, hello@lunchsorted.app
-- [x] Sign-in required: **Yes**, with the review account below
+- [x] Sign-in required: **Yes**, with the review account below (it shows a planned household; buying needs no sign-in, as the Notes say)
 - [x] Notes pasted
 - [x] Attachment: none needed
 
@@ -244,14 +244,19 @@ Left alone, the reviewer sees the free tier with the plan's pieces locked, which
 >
 > Payments: in the iPhone app the Household plan is sold only through in-app purchase: an auto-renewing subscription, yearly or monthly, in the group "Household". Account tab → Subscription → "Keep the Household plan" (or "Get the Household plan") opens the sheet with both at the App Store's prices, and Restore purchases, Terms of use and Privacy beside them. A parent on a computer or an Android phone can buy the same plan on our website instead, through Stripe; the iPhone app honors a plan bought there, under guideline 3.1.3(b), because the same plan is available in the app as an in-app purchase. The iPhone app never offers a web checkout. The review account is inside its free three weeks, so everything is on, and the purchase sheet is still reachable from Subscription; purchases in review go through the sandbox. This is a US-only listing.
 >
+> No sign-in is needed to buy (guideline 5.1.1(v)). On a fresh install, or after Account → Account → Sign out, type a name, tap "Plan the week", then "Not now — show me the week" when it offers a sign-in. The Account tab then has "Keep the Household plan", which opens the same sheet with both subscriptions; buying there switches the plan on for that iPhone with no account at all. Signing in is optional: the sheet and the Subscription page offer it, and it is what puts the plan on the other parent's phone too. A plan bought signed out moves to the household the first time the parent signs in. Restore purchases works signed out as well.
+>
 > Recipes: two recipes are built in, from the USDA's Recipes for Healthy Kids cookbook (Food and Nutrition Administration, fna.usda.gov). They are US government works in the public domain; each is shown with a source line and a link to the original. Everything else on the Recipes tab is imported by the parent from a page or text they chose, stored on their own household and not published by us. Recipes tab → Import a recipe, if you want to see that path.
 >
 > Offline: the app works without a network once opened once; airplane mode shows the same week.
 >
 > The app loads its interface from https://lunchsorted.app inside a WebView bound to that domain; the native layer provides the app icon, launch screen, in-app purchase (StoreKit 2), and the URL scheme. All processing happens on our own servers (Netlify and Neon, United States).
 
-**Reply to the 2.1(b) rejection of 1.0 (6)** (paste into the Resolution Center, and add as the
-last paragraph of the Notes for 1.0 (7))
+**Reply to the 5.1.1(v) rejection of 1.0 (7)** (paste into the Resolution Center once the fix is live)
+
+> Thank you. The iPhone app no longer asks for a sign-in before a purchase. The fix is live now with no new build, because the app loads its interface from lunchsorted.app. On a fresh install, or after Account → Account → Sign out, type a name, tap "Plan the week", then "Not now — show me the week". On the Account tab, "Keep the Household plan" opens the sheet with both subscriptions, Restore purchases, Terms of use and Privacy; buying there switches the plan on for that iPhone with no account. Signing in is optional and offered beside the prices, never required: it is what puts the plan on the parent's other devices. A plan bought signed out joins the household the first time the parent signs in.
+
+**Reply to the 2.1(b) rejection of 1.0 (6)** (sent; kept for the record)
 
 > The purchase failure you saw on iPad in 1.0 (6) is fixed in build 1.0 (7). This is an iPhone app, and on iPad it runs in a window of its own; the app now tells the App Store which window to show the payment sheet in, so buying the yearly or the monthly plan brings the sheet up as it does on iPhone.
 
