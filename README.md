@@ -1166,8 +1166,8 @@ signed by Apple (App Store, below). Each platform sells it one way only, and a p
 paid on either side works on every phone and browser in the household. The one exception to
 the row: in the iPhone app the plan is bought signed out too (App Review, guideline 5.1.1(v),
 1.0 (7), October 2026: a purchase that is not an account's may not wait on a sign-in). Bought
-that way it is kept on that phone alone, and joins the household's row at the first sign-in
-(App Store, below).
+that way it is kept on that phone alone, and joins the household's row when the parent signs in
+to a household they set up; one they join takes it only through Restore purchases (App Store, below).
 Prices are Stripe's on the web and Apple's in the iPhone app, kept the same by hand. The site
 (`public/price.js`), the plan sheet and the trial emails all read Stripe's through
 `GET /api/billing`; no price is typed into them, only a fallback in the site's HTML. Each price
@@ -1350,11 +1350,20 @@ the idea bank stays free so a free list is never stuck with what it has.
   nobody's, writes it to the household's row. Until the answer comes the phone's plan stands in
   for the household's, so a parent who has paid is not shown a price sheet on the way in; an
   answer that never came is asked again at a sync ten minutes on. A household that already has
-  the plan is asked too: one with another App Store purchase (`outcome: 'other purchase'`) or a
-  website plan (409) is told the phone's is not needed, once. Joining someone else's household
-  never takes it along (security review, 2026-10-09: an invite would otherwise bind a parent's
-  purchase to the inviter's household); Restore purchases does, when asked. Sign-out leaves the
-  kept purchase on the phone, being the Apple Account's; Delete and Erase everything remove it
+  the plan is asked too: one running on another App Store purchase keeps it (`outcome: 'other
+  purchase'`; link never puts a purchase carrying a token that is not the household's over another
+  live one, since nothing Apple says of the phone's would reach the household afterwards, and the
+  plan would end with whichever the parent cancelled as the one not needed), and one on a website
+  plan answers 409; either is told the phone's is not needed, once, and the phone keeps its own.
+  Joining someone else's household never takes it along (security review, 2026-10-09: an invite
+  would otherwise bind a parent's purchase to the inviter's household): nothing is handed over
+  while an invite waits, since the household a sign-in makes for the parent goes when they join;
+  a renewal or an Ask to Buy StoreKit hands over while the phone is signed in to a household the
+  parent does not own, carrying the phone's own token, is kept on the phone and finished, never
+  linked; and the sign-in or the join says, once for each household, that the plan stays with them
+  and Restore purchases adds it (or, the household already paid, that it is not needed). Restore
+  purchases does take it along, when asked. Sign-out leaves the
+  kept purchase on the phone, being the Apple Account's; Delete and Erase everything (whose first tap says so) remove it
   and the phone's token, so a purchase freed by a deleted household cannot pass to whoever signs
   in next on that phone, and Restore brings it back. A renewal StoreKit hands over while signed
   in refreshes the kept copy of the same purchase. A parent who cancels auto-renew before ever
