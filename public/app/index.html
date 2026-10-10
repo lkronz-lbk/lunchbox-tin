@@ -739,7 +739,7 @@ window.LSMerge = (function(){
 (function(){
 "use strict";
 
-var APP_BUILD = 'lunchsorted-v29';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
+var APP_BUILD = 'lunchsorted-v30';     /* the same tag as VERSION in sw.js; npm run csp refuses a mismatch */
 
 /* ---- when the planner's own code breaks, it tells our server and nothing else: what the
    error said, where in this file, which build, and which browser; never a lunch, a food or a
@@ -2161,9 +2161,11 @@ var DEVICE = {memberId:null};          /* device-local, not part of the account 
    It is new, but only to a phone that is signed out in the iPhone app, which is a fresh install
    the note is never shown to, so it says nothing of its own: it carries the same note, and seenAs
    gains v28.
+   v30 keeps a phone's App Store plan with the parent outside a household they set up, and never lets
+   a hand-over replace another live App Store plan: fixes, so it carries the note, and seenAs gains v29.
    Check what production is actually serving before deciding a build has not been seen —
    this comment said v17 long after v20 had shipped, and a reviewer believed it. */
-var WHATS_NEW = {build:'lunchsorted-v29', seenAs:['lunchsorted-v25','lunchsorted-v26','lunchsorted-v27','lunchsorted-v28'], text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
+var WHATS_NEW = {build:'lunchsorted-v30', seenAs:['lunchsorted-v25','lunchsorted-v26','lunchsorted-v27','lunchsorted-v28','lunchsorted-v29'], text:'New: lock the days that worked, write leftovers straight into a box, and take a day off with No lunch today. Changed: the avoid list now matches whole words only, so check yours.',
   steps:[
     ['Check your avoid list', 'Under Anything else in the lunchbox settings, a word now has to be the whole word: \u201cham\u201d keeps ham out and lets graham crackers in. It no longer catches a longer word it sits inside \u2014 \u201cmelon\u201d misses watermelon, \u201cnut\u201d misses walnut \u2014 so write each of those out.'],
     ['Lock what worked', 'Shuffle all is now Plan the week; Shuffle day is the crossed arrows beside each day. Every day on Week has a lock: tap it and Plan the week leaves that day alone. The lock on a compartment\u2019s sheet holds one compartment, and shows on the tin. A food you pick by hand is locked where you put it, and the message says so.'],
