@@ -5794,6 +5794,37 @@ try {
           [joinedH, roleH, toastH, viewH.slice(0, 300)]);
         await ch.close();
       }
+      {
+        /* a purchase bought signed out, under the phone's own token, that Restore purchases already made Rosa's
+           household's plan (the row holds it). Kept on another iPhone of theirs, which then joins: it is the
+           household's plan, so nothing is said, least of all to cancel it */
+        const invite = await ps.evaluate(() => fetch('/api/household/invite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then(r => r.json()));
+        const PHONE = crypto.randomUUID();
+        const own = txn({ originalTransactionId: '2000000000001110', transactionId: '2000000000001110', appAccountToken: PHONE, expiresDate: Date.now() + 300 * DAY });
+        await db.query(`UPDATE entitlements e SET plan = 'household', source = 'apple', status = 'active', current_period_end = now() + interval '300 days', apple_original_transaction_id = '2000000000001110' FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = e.household_id AND u.email = 'rosa-parent@example.com'`);
+        const ch = await browser.newContext({ viewport: { width: 375, height: 812 }, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LunchSortedApp/1' });
+        await pinClock(ch); await ch.route(/^https:\/\/fonts\.g(oogleapis|static)\.com\//, r => r.abort());
+        await ch.addInitScript(o => { if (!localStorage.getItem('lunchsorted-iap-kept')) localStorage.setItem('lunchsorted-iap-kept', JSON.stringify(o)); },
+          { jws: jws(own), original: '2000000000001110', id: '2000000000001110', expires: own.expiresDate });
+        await ch.addInitScript(stub, true);
+        const ph = await ch.newPage(); ph.on('pageerror', e => errors.push(String(e.message)));
+        await ph.goto(invite.url); await ph.waitForLoadState('load');
+        await until(ph, () => !!document.querySelector('#signinEmail'));
+        await ph.fill('#signinEmail', 'rosa-fourth@example.com'); await ph.click('[data-act="signin-request"]');
+        await until(ph, () => !!document.querySelector('#signinCode'));
+        const codeR = mails.filter(m => m.to === 'rosa-fourth@example.com' && /sign-in link/.test(m.subject)).pop().text.match(/\b([A-Z2-9]{4}-[A-Z2-9]{4})\b/)[1];
+        await ph.fill('#signinCode', codeR); await ph.click('[data-act="signin-code"]');
+        await until(ph, () => !!document.querySelector('[data-act="join-accept"]'));
+        await ph.click('[data-act="join-accept"]');
+        const joinedR = await until(ph, () => /^Joined/.test(document.querySelector('#toast').textContent));
+        const toastR = (await ph.textContent('#toast')).trim();
+        const viewR = (await ph.textContent('#view')).replace(/\s+/g, ' ');
+        const roleR = (await db.query(`SELECT m.role FROM household_members m JOIN users u ON u.id = m.user_id WHERE u.email = 'rosa-fourth@example.com'`)).rows[0];
+        check('and so does one Restore purchases already made the household\'s plan, kept under the phone\'s own token',
+          joinedR && !!roleR && roleR.role === 'adult' && toastR === 'Joined \u2014 you share their lunches now' && !/Cancel the one|stays yours|not needed/.test(viewR + toastR),
+          [joinedR, roleR, toastR, viewR.slice(0, 300)]);
+        await ch.close();
+      }
       await c.close();
     }
     {

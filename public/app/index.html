@@ -1828,11 +1828,15 @@ function iapOffer(){
 /* signed in to a household this parent did not set up, with a plan this phone bought still running: it
    stays on the phone (iapOffer, iapArrived), and the parent is told so, once for each household, by
    whatever says they are in: the sign-in or the join. A household that has the plan does not need it.
-   One bought for this very household (signed in, then signed out, restored, or a new iPhone) is not
-   the phone's at all: it is the household's plan, so nothing is said, least of all to cancel it */
+   One bought for this very household (signed in, then signed out, restored, or a new iPhone), or one
+   Restore purchases has already made its plan, is not the phone's at all: it is the household's plan,
+   so nothing is said, least of all to cancel it */
 function iapForHousehold(p){
-  var ours = Account.entitlement && Account.entitlement.appleToken;
-  return !!(p && ours && String(p.appAccountToken || '').toLowerCase() === String(ours).toLowerCase());
+  var e = Account.entitlement || {}, ours = e.appleToken;
+  if(!p) return false;
+  if(ours && String(p.appAccountToken || '').toLowerCase() === String(ours).toLowerCase()) return true;
+  /* or one Restore purchases already made the household's plan: the row holds it, under the phone's token */
+  return !!(e.appleOriginal && String(p.originalTransactionId || '') === String(e.appleOriginal));
 }
 function iapStaysNote(){
   var k = iapOn() ? iapKept() : null, hid = Account.household && Account.household.id;
