@@ -1363,8 +1363,13 @@ the idea bank stays free so a free list is never stuck with what it has.
   parent does not own, carrying any token but that household's (this phone's, another of the
   parent's devices', a deleted household's), is kept on the phone and finished, never linked, and
   link itself refuses such a purchase from anyone but the owner unless Restore purchases asked
-  (`restore: true`; 409 `restoreOnly` otherwise), so a page of an older build cannot do it either; and the sign-in or the join says, once for each household, that the plan stays with them
-  and Restore purchases adds it (or, the household already paid, that it is not needed). Restore
+  (`restore: true`; 409 `restoreOnly` otherwise), so a page of an older build cannot do it either; a `restoreOnly`
+  answer (a Buy the App Store answers with the plan the Apple Account already pays for) keeps the purchase on the phone
+  before it is finished, and says only that Restore purchases adds it. The sign-in or the join says, once for each
+  household, in the notice banner (which stays until OK, so the toast after it cannot bury it), that the plan stays
+  with them and Restore purchases adds it (or, the household already paid, that it is not needed); a kept purchase
+  carrying the household's own token (bought signed in, then signed out, restored or on a new iPhone) is that
+  household's plan, so nothing is said of it. Restore
   purchases does take it along, when asked. Sign-out leaves the
   kept purchase on the phone, being the Apple Account's; Delete and Erase everything (whose first tap says so) remove it
   and the phone's token, so a purchase freed by a deleted household cannot pass to whoever signs
