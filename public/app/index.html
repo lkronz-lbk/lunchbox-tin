@@ -1745,7 +1745,8 @@ function iapProducts(){
 }
 /* what the server said, for a parent: its own words are for the log */
 function iapRefused(r){
-  return r.elsewhere ? 'This Apple Account paid for another Lunch Sorted household. Sign in to that one to use it'
+  return r.restoreOnly ? 'It stays on this iPhone. Restore purchases adds it to this household'
+    : r.elsewhere ? 'This Apple Account paid for another Lunch Sorted household. Sign in to that one to use it'
     : r.paying ? 'This household already pays on the website, so this purchase was not used. To ask Apple for your money back, see Help'
     : 'That purchase could not be used here. Write to hello@lunchsorted.app and we will sort it';
 }
@@ -1826,13 +1827,28 @@ function iapOffer(){
 }
 /* signed in to a household this parent did not set up, with a plan this phone bought still running: it
    stays on the phone (iapOffer, iapArrived), and the parent is told so, once for each household, by
-   whatever says they are in: the sign-in or the join. A household that has the plan does not need it */
+   whatever says they are in: the sign-in or the join. A household that has the plan does not need it.
+   One bought for this very household (signed in, then signed out, restored, or a new iPhone) is not
+   the phone's at all: it is the household's plan, so nothing is said, least of all to cancel it */
+function iapForHousehold(p){
+  var ours = Account.entitlement && Account.entitlement.appleToken;
+  return !!(p && ours && String(p.appAccountToken || '').toLowerCase() === String(ours).toLowerCase());
+}
 function iapStaysNote(){
   var k = iapOn() ? iapKept() : null, hid = Account.household && Account.household.id;
   if(!k || !hid || !Account.me || Account.me.role !== 'adult' || k.toldFor === hid || k.expires + 3 * 86400000 < Date.now()) return '';
-  try{ k.toldFor = hid; localStorage.setItem(IAP_KEPT_KEY, JSON.stringify(k)); }catch(e){}
-  return paid() ? 'This household already has the plan, so the one bought on this iPhone is not needed. Cancel it in iPhone Settings \u2192 your name \u2192 Subscriptions'
-    : 'The plan bought on this iPhone stays with you, not this household. To add it, tap '+(trialing() ? 'Keep' : 'Get')+' the Household plan in Account \u2192 Subscription, then Restore purchases';
+  if(iapForHousehold(jwsPayload(k.jws))) return '';
+  return paid() ? 'This household has the plan already. Cancel the one you bought on this iPhone: Settings \u2192 your name \u2192 Subscriptions'
+    : 'Your App Store plan stays yours. To add it here: Account \u2192 Subscription \u2192 '+(trialing() ? 'Keep' : 'Get')+' the Household plan \u2192 Restore purchases';
+}
+/* the note goes in the banner, which stays until OK, so a toast after it cannot bury it; it is told
+   for this household only once it is up there. Behind a message already showing it waits for the next sign-in */
+function iapTellStays(){
+  var note = iapStaysNote(), k = note && iapKept();
+  if(!k || (UI.notice && UI.notice !== WHATS_NEW.text)) return false;
+  UI.notice = note;
+  try{ k.toldFor = Account.household.id; localStorage.setItem(IAP_KEPT_KEY, JSON.stringify(k)); }catch(e){}
+  return true;
 }
 /* the household takes it or says why not, once; a request that never got an answer is tried again at the next sync */
 function iapHandOver(){
@@ -1857,12 +1873,12 @@ function iapHandOver(){
 function iapArrived(t){
   if(!t || !t.jws) return;
   if(!signedIn() && !Store.hadAccount()){ var was = paid(); iapOnPhone(t); render(); if(!was && paid()) toast('Welcome to the Household plan'); return; }
-  if(!signedIn()){ IAP.queue.push(t); return; }
+  if(!signedIn() || !Account.me){ IAP.queue.push(t); return; }   /* a typed code signs in before the pull says whose phone this is */
   /* not bought for this household (on this phone signed out, on another of the parent's devices, or for a household
      since deleted), and this parent did not set it up: it stays on the phone, as signed out, or a renewal would tie it
      to someone else's household for good. Restore purchases, asked for, takes it there */
-  var p0 = jwsPayload(t.jws), ours = Account.entitlement && Account.entitlement.appleToken;
-  if(p0 && (!Account.me || Account.me.role !== 'owner') && !(ours && String(p0.appAccountToken || '').toLowerCase() === String(ours).toLowerCase())){ iapOnPhone(t); return; }
+  var p0 = jwsPayload(t.jws);
+  if(p0 && Account.me.role !== 'owner' && !iapForHousehold(p0)){ iapOnPhone(t); return; }
   var k = iapKept(), p = k && jwsPayload(t.jws);
   if(p && String(p.originalTransactionId) === k.original) iapKeep(t);   /* a renewal of the one this phone keeps: kept up to date for a later sign-out */
   var wasPaid = paid();
@@ -1876,7 +1892,10 @@ function iapDecided(r){ return r.status === 200 || r.status === 400 || r.status 
 /* restore: the parent asked (Restore purchases), the one way a purchase made for no household of theirs reaches one they joined */
 function iapLink(t, restore){
   return api('POST', '/api/apple/link', restore === true ? {signedTransaction: t.jws, restore: true} : {signedTransaction: t.jws}).then(function(r){
-    if(iapDecided(r)){ var sk = storeKit(); if(sk) sk.finish({transactionId: t.transactionId}).catch(function(){}); }
+    /* a purchase made for no household of theirs, into one they joined, unasked: kept on the phone as signed out,
+       for Restore purchases or a sign-out. One the phone cannot keep is left for StoreKit to hand back */
+    var kept = !(r.status === 409 && r.restoreOnly) || iapKeep(t);
+    if(iapDecided(r) && kept){ var sk = storeKit(); if(sk) sk.finish({transactionId: t.transactionId}).catch(function(){}); }
     if(r.status === 200 && r.entitlement) Account.entitlement = Object.assign({}, Account.entitlement || {}, r.entitlement);
     return r;
   }, function(){ return {status: 0}; });
@@ -6970,7 +6989,7 @@ document.addEventListener('click', function(ev){
       if(r.status !== 200){ toast(r.error || 'That code did not work'); return; }
       Account.user = r.user; Account.linkSent = ''; Account.devLink = ''; Account.devCode = ''; Account.first = true; UI.obEmail = false;
       UI.homeHint = true;
-      return Sync.pull().then(function(){ render(); toast(iapStaysNote() || 'Signed in'); resumeAfter(); });   /* the typed code lands where the link does */
+      return Sync.pull().then(function(){ iapTellStays(); render(); toast('Signed in'); resumeAfter(); });   /* the typed code lands where the link does */
     }).catch(offline);
     return;
   }
@@ -7155,7 +7174,7 @@ document.addEventListener('click', function(ev){
         if(theirs.createdAt) S.createdAt = theirs.createdAt;      /* their household's birthday, not this phone's: joining never shortens their three weeks */
         Store.save(S, DEVICE.memberId);
       }
-      render(); var stays = iapStaysNote(); toast(stays ? 'Joined. '+stays : 'Joined \u2014 you share their lunches now');
+      iapTellStays(); render(); toast('Joined \u2014 you share their lunches now');
       return Sync.push();
     }).catch(offline);
     return;
@@ -7433,7 +7452,7 @@ Store.load().then(function(r){
   };
   if(navigator.onLine && !rejected){
     /* one request answers "who am I" and "what does the household hold" together */
-    Sync.pull().then(function(){ if(signedIn() || joinCode) render(); afterMe(); if(qs.get('signed-in')){ var stays = iapStaysNote(); if(stays) toast(stays); resumeAfter(); } if(wantUpgrade && signedIn() && S.onboardedAt && !paid()) upgradeSheet('keep'); }).catch(function(){});
+    Sync.pull().then(function(){ if(signedIn() || joinCode) render(); afterMe(); if(qs.get('signed-in')){ if(iapTellStays()) render(); resumeAfter(); } if(wantUpgrade && signedIn() && S.onboardedAt && !paid()) upgradeSheet('keep'); }).catch(function(){});
     /* back from Stripe: the webhook usually lands within a second or two of the redirect, so look a few times */
     if(back === '1') settle();
   }
