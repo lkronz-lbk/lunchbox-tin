@@ -61,7 +61,7 @@ async function apply(hid, at, txn, renewal, context, keepOther = false) {
   const other = cur && cur.original && cur.original !== original;
   /* both of these are enforced again in writeApple, race or no race; here they only name the outcome */
   if (other && appleLive(cur) && cur.plan === 'lifetime' && PRODUCTS[txn.productId] !== 'lifetime') return 'lifetime kept';
-  if (other && appleLive(cur) && (keepOther || !LIVE.has(st.status))) return 'other purchase';
+  if (other && appleLive(cur) && ((keepOther && keeps(cur, txn)) || !LIVE.has(st.status))) return 'other purchase';
   let row;
   try { row = await writeApple(hid, at, { ...st, original, product: txn.productId, charged: txn.environment === 'Production', keepOther }); }
   catch (e) {
@@ -89,9 +89,13 @@ async function apply(hid, at, txn, renewal, context, keepOther = false) {
   return row ? 'applied' : 'stale';
 }
 
+/* what keepOther keeps: a plan Apple is collecting (not one whose renewal is failing), and not against a forever,
+   which nobody cancels as the one not needed. writeApple's upsert says the same */
+const keeps = (cur, txn) => cur.status === 'active' && !(PRODUCTS[txn.productId] === 'lifetime' && cur.plan !== 'lifetime');
+
 async function otherLive(hid, txn) {
-  const [cur] = await sql()`SELECT source, status, current_period_end, apple_original_transaction_id AS original FROM entitlements WHERE household_id = ${hid}`;
-  return !!cur && !!cur.original && cur.original !== String(txn.originalTransactionId) && appleLive(cur);
+  const [cur] = await sql()`SELECT plan, source, status, current_period_end, apple_original_transaction_id AS original FROM entitlements WHERE household_id = ${hid}`;
+  return !!cur && !!cur.original && cur.original !== String(txn.originalTransactionId) && appleLive(cur) && keeps(cur, txn);
 }
 
 /* the work's own answer, or null if it has none after ms; the work itself is not stopped */
@@ -206,6 +210,10 @@ async function route(req, context) {
   if (!UUID.test(txn.appAccountToken || '')) return notHere();
   const foreign = txn.appAccountToken.toLowerCase() !== String(h.token || '').toLowerCase();
   if (foreign && await tokenHousehold(txn.appAccountToken)) return elsewhere();
+  /* bought for no household of this parent's (signed out on a phone, or for one since deleted), into a household they
+     did not set up: only when they asked, through Restore purchases. A renewal a phone passes on by itself, from any build,
+     would otherwise tie a parent's purchase to the household they joined for good */
+  if (foreign && h.role !== 'owner' && !(b && b.restore === true)) return fail('Restore purchases adds this purchase to the household', 409, { restoreOnly: true });
   let outcome = await apply(h.id, iso(txn.signedDate), txn, null, context, foreign);
   /* refused in the upsert itself: another App Store purchase reached the row between the read and the write */
   if (outcome === 'stale' && foreign && await otherLive(h.id, txn)) outcome = 'other purchase';

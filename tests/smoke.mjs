@@ -5730,6 +5730,16 @@ try {
           [joined, role, finishedJ, linkedJ.length, rosaNow, keptJ && keptJ.id]);
         check('and joining says the plan stays with them, and that Restore purchases adds it to the household',
           /stays with you, not this household/.test(joinToast) && /Restore purchases/.test(joinToast), joinToast);
+        /* the server holds the same line for a page of any build: a parent who did not set the household up links a
+           purchase made for none of theirs only through Restore purchases, which says so */
+        const linkAs = (body) => pj.evaluate(b => fetch('/api/apple/link', { method: 'POST', headers: { 'content-type': 'application/json' }, body: b }).then(async r => ({ status: r.status, body: await r.json() })), JSON.stringify(body));
+        const unasked = await linkAs({ signedTransaction: jws(renewedJ) });
+        const unaskedRow = await rosaRow();
+        const asked = await linkAs({ signedTransaction: jws(renewedJ), restore: true });
+        const askedRow = await rosaRow();
+        check('and the server links a purchase made for no household of theirs into one they joined only when Restore purchases asks',
+          unasked.status === 409 && unasked.body.restoreOnly === true && unaskedRow.otx !== '2000000000000960' && asked.status === 200 && askedRow.otx === '2000000000000960' && askedRow.source === 'apple',
+          [unasked, unaskedRow, asked, askedRow]);
         await cj.close();
       }
       await c.close();

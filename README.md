@@ -1352,15 +1352,18 @@ the idea bank stays free so a free list is never stuck with what it has.
   answer that never came is asked again at a sync ten minutes on. A household that already has
   the plan is asked too: one running on another App Store purchase keeps it (`outcome: 'other
   purchase'`; link never puts a purchase carrying a token that is not the household's over another
-  live one, since nothing Apple says of the phone's would reach the household afterwards, and the
-  plan would end with whichever the parent cancelled as the one not needed), and one on a website
+  live one Apple is collecting, since nothing Apple says of the phone's would reach the household
+  afterwards, and the plan would end with whichever the parent cancelled as the one not needed; a
+  plan whose renewal is failing, and a forever handed over onto a subscription, are replaced as before), and one on a website
   plan answers 409; either is told the phone's is not needed, once, and the phone keeps its own.
   Joining someone else's household never takes it along (security review, 2026-10-09: an invite
   would otherwise bind a parent's purchase to the inviter's household): nothing is handed over
   while an invite waits, since the household a sign-in makes for the parent goes when they join;
   a renewal or an Ask to Buy StoreKit hands over while the phone is signed in to a household the
-  parent does not own, carrying the phone's own token, is kept on the phone and finished, never
-  linked; and the sign-in or the join says, once for each household, that the plan stays with them
+  parent does not own, carrying any token but that household's (this phone's, another of the
+  parent's devices', a deleted household's), is kept on the phone and finished, never linked, and
+  link itself refuses such a purchase from anyone but the owner unless Restore purchases asked
+  (`restore: true`; 409 `restoreOnly` otherwise), so a page of an older build cannot do it either; and the sign-in or the join says, once for each household, that the plan stays with them
   and Restore purchases adds it (or, the household already paid, that it is not needed). Restore
   purchases does take it along, when asked. Sign-out leaves the
   kept purchase on the phone, being the Apple Account's; Delete and Erase everything (whose first tap says so) remove it

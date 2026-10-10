@@ -59,7 +59,8 @@ export async function write(hid, at, v) {
      renewing beside it (Apple cannot cancel one for us, as Stripe can); its own refund may end it;
    - the row, held live by one App Store purchase, is never ended by a lapse or refund of another,
      and, with v.keepOther (a purchase a parent hands over from a phone, carrying no token of this
-     household's), not replaced by another either.
+     household's), not replaced by another either, while Apple is collecting it (not in a failing
+     renewal), unless the one handed over is forever and the row's is not.
    The last three are also checked in api-apple.js to name the outcome; here they hold even when two
    deliveries race, a Restore linking several purchases at once or a link beside a notification.
    cancelAtPeriodEnd null means the delivery did not say (a transaction from the phone carries no
@@ -84,7 +85,8 @@ export async function writeApple(hid, at, v) {
       AND NOT (entitlements.source = 'apple' AND entitlements.status IN ('active', 'past_due')
                AND (entitlements.current_period_end IS NULL OR entitlements.current_period_end > now() - interval '3 days')
                AND entitlements.apple_original_transaction_id IS DISTINCT FROM EXCLUDED.apple_original_transaction_id
-               AND (${!!v.keepOther} OR NOT ${live} OR (entitlements.plan = 'lifetime' AND EXCLUDED.plan <> 'lifetime')))
+               AND ((${!!v.keepOther} AND entitlements.status = 'active' AND NOT (EXCLUDED.plan = 'lifetime' AND entitlements.plan <> 'lifetime'))
+                    OR NOT ${live} OR (entitlements.plan = 'lifetime' AND EXCLUDED.plan <> 'lifetime')))
     RETURNING household_id, source, status, current_period_end, stripe_subscription_id`;
   const row = rows[0] || null;
   /* a household paying Apple has paid as surely as one paying Stripe; a sandbox purchase (App Review,

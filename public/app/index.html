@@ -1767,8 +1767,6 @@ function phoneToken(){
   try{ localStorage.setItem(IAP_PHONE_KEY, t); }catch(e){}
   return t;
 }
-/* whether a purchase carries this phone's own token, read without making one */
-function phoneTokenIs(tok){ var t = ''; try{ t = localStorage.getItem(IAP_PHONE_KEY) || ''; }catch(e){} return !!t && String(tok || '').toLowerCase() === t; }
 /* what Apple signed, read but not checked: StoreKit checked it on this phone before handing it over,
    and the server checks it again before it reaches a household */
 function jwsPayload(jws){
@@ -1817,7 +1815,8 @@ function iapOffer(){
   var k = iapOn() ? iapKept() : null, hid = Account.household && Account.household.id;
   /* only to a household this parent set up: joining someone else's never takes it with them (Restore purchases does, asked for).
      Not while an invite waits either: the household a sign-in makes for the parent goes when they join */
-  if(!k || !hid || !Account.me || Account.me.role !== 'owner' || Account.join || k.triedFor === hid || k.expires + 3 * 86400000 < Date.now()) return;
+  var waiting = Account.join; try{ waiting = waiting || localStorage.getItem('lunchsorted-join'); }catch(e){}   /* at boot the invite is read back only after this pull */
+  if(!k || !hid || !Account.me || Account.me.role !== 'owner' || waiting || k.triedFor === hid || k.expires + 3 * 86400000 < Date.now()) return;
   IAP.theirs = Account.entitlement; IAP.hadPlan = paid();
   if(!IAP.hadPlan) Account.entitlement = Object.assign({}, Account.entitlement || {}, phoneEntitlement());
   /* an answer that never came is asked again at a sync ten minutes on, not at every one: the server counts these with real purchases */
@@ -1859,10 +1858,11 @@ function iapArrived(t){
   if(!t || !t.jws) return;
   if(!signedIn() && !Store.hadAccount()){ var was = paid(); iapOnPhone(t); render(); if(!was && paid()) toast('Welcome to the Household plan'); return; }
   if(!signedIn()){ IAP.queue.push(t); return; }
-  /* bought on this phone signed out, and this parent did not set up the household: it stays on the phone, as
-     signed out, or a renewal would tie it to someone else's household for good. Restore purchases, asked for, takes it there */
-  var p0 = jwsPayload(t.jws);
-  if(p0 && phoneTokenIs(p0.appAccountToken) && (!Account.me || Account.me.role !== 'owner')){ iapOnPhone(t); return; }
+  /* not bought for this household (on this phone signed out, on another of the parent's devices, or for a household
+     since deleted), and this parent did not set it up: it stays on the phone, as signed out, or a renewal would tie it
+     to someone else's household for good. Restore purchases, asked for, takes it there */
+  var p0 = jwsPayload(t.jws), ours = Account.entitlement && Account.entitlement.appleToken;
+  if(p0 && (!Account.me || Account.me.role !== 'owner') && !(ours && String(p0.appAccountToken || '').toLowerCase() === String(ours).toLowerCase())){ iapOnPhone(t); return; }
   var k = iapKept(), p = k && jwsPayload(t.jws);
   if(p && String(p.originalTransactionId) === k.original) iapKeep(t);   /* a renewal of the one this phone keeps: kept up to date for a later sign-out */
   var wasPaid = paid();
@@ -1873,8 +1873,9 @@ function iapArrived(t){
    One it never decided on, offline, signed out or the server failing, is left for StoreKit to hand
    back at the next launch. */
 function iapDecided(r){ return r.status === 200 || r.status === 400 || r.status === 409; }
-function iapLink(t){
-  return api('POST', '/api/apple/link', {signedTransaction: t.jws}).then(function(r){
+/* restore: the parent asked (Restore purchases), the one way a purchase made for no household of theirs reaches one they joined */
+function iapLink(t, restore){
+  return api('POST', '/api/apple/link', restore === true ? {signedTransaction: t.jws, restore: true} : {signedTransaction: t.jws}).then(function(r){
     if(iapDecided(r)){ var sk = storeKit(); if(sk) sk.finish({transactionId: t.transactionId}).catch(function(){}); }
     if(r.status === 200 && r.entitlement) Account.entitlement = Object.assign({}, Account.entitlement || {}, r.entitlement);
     return r;
@@ -7057,7 +7058,7 @@ document.addEventListener('click', function(ev){
         return;
       }
       el.textContent = 'Checking purchases\u2026';
-      return Promise.all(list.map(iapLink)).then(function(rs){
+      return Promise.all(list.map(function(t){ return iapLink(t, true); })).then(function(rs){
         back();
         /* by now the parent may have closed the plan sheet and opened another, which is left alone */
         var onSheet = !!(sheetState && sheetState.plan);
