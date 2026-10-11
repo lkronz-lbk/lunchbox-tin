@@ -118,11 +118,13 @@ Recipes are **led by foods first, then found, then adapted** (decided 2026-10-06
 1. **Built-in dinners.**
    - Most weeknight dinners need no recipe. "Tacos" is tortillas, beef, cheese, lettuce and salsa.
    - The **dinner bank** ships about 100 dinners as **lists of parts**, written in our own words and not taken from cookbooks. The app works on day one with no recipes at all.
-2. **Found on a curated list of family-food blogs.**
-   - We choose a list of trusted, kid-friendly recipe blogs.
-   - Dinner Picked suggests their recipes as a **title, the site's name and a link**, never copied text or photos.
-   - The parent taps **Save**, and Lunch's existing import reads that one page, with the blog credited and linked. The importer already accepts only a list of named public sites (`api-recipe.js`), so the curated list and that allowlist can be one list.
-   - No scraping and no Pinterest copying. A parent can still paste any link or caption, as in Lunch.
+2. **Found on a curated list of family-food blogs** (the list is `BLOGS.md`, beside this file; decided 2026-10-10).
+   - Dinner Picked suggests their recipes as a **title, the blog's name and a link**, never copied text or photos.
+   - Tapping a suggestion **opens the blog's own page** inside the app, so every suggestion a parent follows is a real visit to the blog, with its ads.
+   - **Save**, on that page, imports it through Lunch's existing importer as the parent's personal copy, credited and linked. The importer reads any public https page (`api-recipe.js` refuses only private and local addresses); the blog list decides what is *suggested*, not what can be saved. A parent can still paste any link or caption, as in Lunch.
+   - Cook mode shows the full steps of a saved recipe, because the parent at the stove is who we serve; a prominent **"On [blog]"** link stays on every imported recipe.
+   - No bulk fetching ever: one page, at one parent's tap. Nothing a parent saves trains a model. Dinner Picked's terms say so.
+   - **No royalties.** Paprika, Mela, Crouton and AnyList import this way and pay nothing; Prepear pays bloggers because it sells their content at about $120 a year. At $19.99 a year, Prepear's rate ($100 per 1,000 recipe uses) would cost more than the plan for a household saving a few recipes a week. What we give bloggers is readers: a courtesy email before launch tells each listed blog what we do and offers removal on request.
 3. **Adapted by AI.**
    - AI reads a saved recipe and works out its parts.
    - It then proposes each eater's adjustment, for example "pull the kids' portion before the chili goes in" or "egg noodles and peas from Noah's yes list".
@@ -131,8 +133,6 @@ Recipes are **led by foods first, then found, then adapted** (decided 2026-10-06
 Cook mode carries over and takes the lead:
 - it scales to the number of eaters
 - timers bring the main and the sides to the table together
-
-*To do:* draw up the blog list, about 15–25 family-food blogs, with each blog's terms checked for linking and import.
 
 ## 7. The shopping list
 
@@ -228,7 +228,7 @@ The free tier has to be useful but plain. It is the same planner other apps offe
 ## 14. Still to decide
 
 1. ~~Refusal rule~~: decided. A short rest, then offered again (section 5).
-2. Recipe sourcing approach (section 6): discovery and AI's role.
+2. ~~Recipe sourcing~~: decided; see section 6 and `BLOGS.md`.
 3. The free line (section 11). ~~The bundle price~~: decided, 25% off, see the ladder.
 4. ~~Dinner time and cutoff~~: decided, 6pm and 9pm, both settable. Kid portions at half (section 7) are still open.
 5. Where this spec lives.
