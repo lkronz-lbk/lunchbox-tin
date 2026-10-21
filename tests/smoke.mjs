@@ -1633,7 +1633,7 @@ try {
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   const askedToday = await page.$$eval('.review', a => a.length);
-  const folds = () => page.$$eval('.card.fold', a => a.map(e => e.textContent.trim()));
+  const folds = () => page.$$eval('.card.fold[data-act="review-now"]', a => a.map(e => e.textContent.trim()));   /* the questions' lines, not Earlier boxes */
   check('from three, it asks about today\'s box, one card open, the other box\'s question one line, and Pack carries the dot',
     askedToday === 1 && /Today/.test(await page.$eval('.review .view-sub', e => e.textContent)) && (await folds()).length === 1 && !!(await page.$('nav.tabs .due')), [askedToday, await folds()]);
   check('the line names the box and asks the question', /^\S.* · Today’s box came home\. How did it go\?/.test((await folds())[0]), await folds());
@@ -1701,7 +1701,7 @@ try {
   await page.selectOption('#homeAt', '15:00'); await page.waitForTimeout(300);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('switched back on, with the box home at three again, both are asked', (await page.$$eval('.review', a => a.length)) === 1 && (await folds()).length === 1);
-  /* yesterday's question is not lost when today's box comes home: it waits behind it */
+  /* yesterday's question is not lost when today's box comes home, nor does it queue behind it: it is an earlier box, a sheet away */
   await page.evaluate(id => { const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids.find(x => x.id === id); const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0,0,0,0);
     const iso = y.getFullYear()+'-'+String(y.getMonth()+1).padStart(2,'0')+'-'+String(y.getDate()).padStart(2,'0');
     const slots = {}; for (const c of ['main','side','fruit','sweet']) { const f = k.foods.find(x => x.c === c && !x.deletedAt); if (f) slots[c] = f.id; }
@@ -1715,12 +1715,28 @@ try {
   const openKid = await page.getAttribute('[data-act="review-later-all"]', 'data-kid');
   await page.click('[data-act="eat-all"]'); await page.waitForTimeout(300);
   const mid = await page.evaluate(() => ({ cards: [...document.querySelectorAll('.review .view-sub')].map(e => e.textContent), folds: [...document.querySelectorAll('.card.fold')].map(e => e.textContent.trim()), view: document.querySelector('#view').textContent }));
-  check('and once it is answered, the other box\'s today comes up first, its own answer stays on screen, and yesterday\'s waits behind, named', mid.cards.length === 1 && /Today/.test(mid.cards[0]) && /Today: all eaten/.test(mid.view) && (openKid !== homeKid || mid.folds.some(t => /Yesterday’s box came home/.test(t))), mid);
+  check('and once it is answered, the other box\'s today comes up first, its own answer stays on screen, and yesterday\'s is not a line queueing behind it', mid.cards.length === 1 && /Today/.test(mid.cards[0]) && /Today: all eaten/.test(mid.view) && !mid.folds.some(t => /Yesterday’s box came home/.test(t)), [mid.cards, mid.folds]);
   await page.click('[data-act="eat-all"]'); await page.waitForTimeout(300);
-  check('with both boxes answered, yesterday\'s question opens, named as yesterday\'s, under the answers', (await page.$$eval('.review .view-sub', a => a.map(e => e.textContent))).some(t => /Yesterday/.test(t)) && /box go yesterday\?/.test(await page.textContent('.review')) && (await page.$$eval('[data-act="eat-change"]', a => a.length)) === 2, (await page.textContent('#view')).slice(0, 240));
-  check('yesterday\'s card is a real one: All eaten, four answers a food, Skip at the foot', await page.evaluate(() => { const c = document.querySelector('.review'); return !!c && !!c.querySelector('[data-act="eat-all"]') && c.querySelectorAll('.seg.four').length > 0 && !!c.querySelector('[data-act="eat-skip"]'); }));
-  await page.click('[data-act="eat-skip"]'); await page.waitForTimeout(300);
-  check('Skip puts it to rest', (await page.$$eval('.review, .card.fold', a => a.length)) === 0);
+  const earlier = () => page.$$eval('[data-act="history-open"]', a => a.map(e => e.textContent.trim()));
+  check('with both boxes answered no third card comes: yesterday\'s box waits behind one line, Earlier boxes, which counts it as not answered, under the two answers', (await page.$$eval('.review', a => a.length)) === 0 && (await earlier()).length === 1 && /^Earlier boxes · 1 not answered$/.test((await earlier())[0]) && (await page.$$eval('[data-act="eat-change"]', a => a.length)) === 2 && !(await page.$('nav.tabs .due')), await earlier());
+  check('the line is a 44px target and comes after the answers', (await page.$eval('[data-act="history-open"]', e => e.getBoundingClientRect().height)) >= 44 && await page.evaluate(() => !!(document.querySelector('[data-act="eat-change"]').compareDocumentPosition(document.querySelector('[data-act="history-open"]')) & Node.DOCUMENT_POSITION_FOLLOWING)));
+  await page.click('[data-act="history-open"]'); await page.waitForTimeout(350);
+  const hist = await page.evaluate(() => ({ title: document.querySelector('#sheetTitle').textContent, lines: [...document.querySelectorAll('#sheetBody [data-act="gone-open"]')].map(e => ({ text: e.textContent.trim(), kid: e.getAttribute('data-kid'), h: e.getBoundingClientRect().height })) }));
+  check('Earlier boxes is a sheet listing yesterday\'s box under its lunchbox: the main, not answered, a 44px line', hist.title === 'Earlier boxes' && hist.lines.length === 1 && hist.lines[0].kid === homeKid && /^Yesterday · .*not answered$/.test(hist.lines[0].text) && hist.lines[0].h >= 44, hist);
+  await page.click('#sheetBody [data-act="gone-open"]'); await page.waitForTimeout(350);
+  check('the box\'s own sheet carries the card\'s answers, All eaten, four a food and Skip, and the way back to the list', await page.evaluate(() => { const b = document.querySelector('#sheetBody'); return !!b.querySelector('[data-act="eat-all"]') && b.querySelectorAll('.seg.four').length > 0 && !!b.querySelector('[data-act="eat-skip"]') && /Earlier boxes/.test(b.querySelector('[data-act="history-open"]').textContent) && /What was packed stays\./.test(b.textContent) && /box go\?/.test(b.textContent) && !!(b.querySelector('[data-act="eat-all"]').compareDocumentPosition([...b.querySelectorAll('p')].find(p => /What was packed stays/.test(p.textContent))) & Node.DOCUMENT_POSITION_FOLLOWING); }));
+  await page.click('#sheetBody .seg button[data-cat="main"][data-r="left"]'); await page.waitForTimeout(250);
+  check('a partial answer keeps the sheet, the answer pressed, the cursor still on it', await page.evaluate(() => { const b = document.querySelector('#sheetBody'), p = b.querySelector('.seg button[data-cat="main"][data-r="left"]'); return document.getElementById('sheet').classList.contains('open') && !!p && p.getAttribute('aria-pressed') === 'true' && document.activeElement === p; }));
+  await page.evaluate(() => { document.getElementById('sheetBody').scrollTop = 120; });
+  await page.click('#sheetBody .seg button[data-cat="main"][data-r="some"]'); await page.waitForTimeout(250);
+  check('and the sheet stays where it was scrolled to, so the next food is still under the thumb', (await page.$eval('#sheetBody', e => e.scrollTop)) === 120 || (await page.$eval('#sheetBody', e => e.scrollTop === e.scrollHeight - e.clientHeight)), await page.$eval('#sheetBody', e => [e.scrollTop, e.scrollHeight, e.clientHeight]));
+  await page.click('#sheetBody [data-act="eat-all"]'); await page.waitForTimeout(300);
+  check('All eaten on the sheet is noted, the sheet stays with every food marked eaten and Skip gone, and the line on Pack stops counting it', /Noted/.test(await page.textContent('#toast')) && await page.evaluate(() => { const segs = [...document.querySelectorAll('#sheetBody .seg')]; return document.getElementById('sheet').classList.contains('open') && segs.length > 0 && segs.every(s => s.querySelector('[data-r="ate"]').getAttribute('aria-pressed') === 'true') && !document.querySelector('#sheetBody [data-act="eat-skip"]'); }) && /^Earlier boxes$/.test((await earlier())[0]), await earlier());
+  check('the answer is stored like one from the card, and its summary stays off Pack: still two lines there', await page.evaluate(id => { const k = JSON.parse(localStorage.getItem('lunchsorted')).kids.find(x => x.id === id), rows = Object.keys(k.eaten || {}).sort(); return rows.length === 2 && Object.values(k.eaten[rows[0]]).every(e => e.foodId && e.r === 'ate' && e.at); }, homeKid) && (await page.$$eval('[data-act="eat-change"]', a => a.length)) === 2);
+  await page.click('#sheetBody [data-act="history-open"]'); await page.waitForTimeout(300);
+  check('‹ Earlier boxes goes back to the list, which now says all eaten', (await page.textContent('#sheetTitle')) === 'Earlier boxes' && /all eaten/.test(await page.textContent('#sheetBody [data-act="gone-open"]')));
+  await backdropTap(page); await page.waitForTimeout(300);
+  check('and the sheet closed, Pack is as it was: two answers, no card, and the line, nothing owed now, has moved under Coming up', (await page.$$eval('.review, .card.fold[data-act="review-now"]', a => a.length)) === 0 && (await earlier()).length === 1 && await page.evaluate(() => { const c = [...document.querySelectorAll('#view h3')].find(e => /^Coming up/.test(e.textContent)); return !!c && !!(c.compareDocumentPosition(document.querySelector('[data-act="history-open"]')) & Node.DOCUMENT_POSITION_FOLLOWING); }));
   /* leave the fixture as it was: nothing answered, no box in the past, and both questions held */
   await page.evaluate(id => { const d = JSON.parse(localStorage.getItem('lunchsorted')); d.kids.forEach(k => { k.eaten = {}; if (k.id === id) { k.past = (k.past || []).slice(0, -1); } }); localStorage.setItem('lunchsorted', JSON.stringify(d)); localStorage.removeItem('lunchsorted-later'); }, homeKid);
   await page.reload(); await page.waitForLoadState('load'); await page.waitForTimeout(300);
@@ -2099,7 +2115,7 @@ try {
   check('and the page does not scroll sideways for it', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   const goneLabel = await page.getAttribute('.daycard.past [data-act="gone-open"] >> nth=0', 'aria-label');
   await page.click('.daycard.past [data-act="gone-open"] >> nth=0'); await page.waitForTimeout(350);
-  check('the line opens the box as it was packed, with nothing on the sheet that could change it', /box, as packed: /.test(goneLabel) && /What was packed stays\./.test(await page.textContent('#sheetBody')) && (await page.$$eval('#sheetBody [data-act]', a => a.length)) === 0 && (await page.$$eval('#sheetBody .item', a => a.length)) >= 1, goneLabel);
+  check('the line opens the box as it was packed, with the card\'s answers on the sheet and nothing that could change the box', /box, as packed: /.test(goneLabel) && /What was packed stays\./.test(await page.textContent('#sheetBody')) && (await page.$$eval('#sheetBody [data-act]', a => a.length > 0 && a.every(e => /^eat-/.test(e.getAttribute('data-act'))))) && (await page.$$eval('#sheetBody .rrow', a => a.length)) >= 1, goneLabel);
   await backdropTap(page); await page.waitForTimeout(300);
   await page.click('[data-act="tab"][data-tab="pack"]'); await page.waitForTimeout(300);
   check('All eaten is the first thing on the card, one tap, and Skip waits at the foot saying what it does', await page.evaluate(() => {

@@ -75,8 +75,10 @@ throwing app script cannot leave it up forever. From there:
   and the two copies of that day never agree.
   A day that has gone (its header says "· home") is one line on Week, the main and a count with
   how the box went beside it in three words (`reviewShort`: all eaten, 2 came home, 3 of 4 eaten,
-  nothing counted, not answered), and opens a read-only sheet showing the box as it was packed — every
-  compartment it had, even one switched off since. The day lock refuses a gone day and a day with
+  nothing counted, not answered), and opens the gone day's sheet showing the box as it was packed — every
+  compartment it had, even one switched off since — with the came-home answers on it for a parent with the
+  plan, for a box Pack could ask about (see Pack, below); for a caretaker, a household without the plan,
+  a lunchbox with the question off or a box never packed it is a read-only list. The day lock refuses a gone day and a day with
   nothing in it, and an unlock leaves a write-in and the kid's pick locked, saying so; Shuffle on a
   locked day says "Monday is locked" rather than blaming the food list.
   The words on screen: **Plan the week** plans the whole week (again), **Shuffle** changes one day
@@ -337,15 +339,26 @@ throwing app script cannot leave it up forever. From there:
   (`dayGone`) — that rule is unchanged; a time from another build that is not one of the half
   hours is read as 3pm. Both settings sit under **What came home** on the lunchbox page. **Ask what came home** on the same page (`settings.review`,
   on by default) turns the question, the dot and the reminder off for that lunchbox. The newest
-  box home that is still unanswered is the one asked about, so yesterday's question waits behind
-  today's rather than being lost, and a box up to a week old is still asked about. With two boxes
+  box home is the only one Pack asks about (`reviewDay`): once today's box is home, yesterday's
+  question steps aside rather than queueing behind it, so a quiet few days never become a run of
+  cards (five across two lunchboxes, once). The boxes behind it from the last week (`earlierDays`)
+  are one line, **Earlier boxes**: under the question with how many still want an answer while one does,
+  else a bare line under Coming up, out of the morning's way; it
+  opens a sheet listing them newest first, by lunchbox (from three lunchboxes, the tab's lunchbox
+  alone), and each opens the gone day's own sheet, which carries the card's answers (`answerRows`:
+  All eaten, the four a food, Skip) and **‹ Earlier boxes** as the way back. The same sheet opens
+  from a gone day's line on Week, so a missed box is answered or changed from either, and only a box
+  Pack could ask about takes an answer there. The line and the answers are the parent's with the
+  plan: a caretaker and a household without the plan see no line and a read-only sheet. The box as
+  packed is never changed. The dot on the Pack tab, the ring on a lunchbox tab and the reminder are
+  the newest box's alone (`reviewOwed`, `kidState`): an earlier box owed is counted on the line, not
+  nagged about. With two boxes
   home one card is open at a time; the other waits as one line ("Leo · Today's box came home. How
   did it go?") that opens on a tap. "Answer later" folds the card to that line ("Waiting for your
-  answer.") and holds it, on this phone (`lunchsorted-later`, one held day per lunchbox — holding
-  today's question lets an older one ask again once today's is answered), until it is answered,
+  answer.") and holds it, on this phone (`lunchsorted-later`, one held day per lunchbox), until it is answered,
   skipped or a week old; tapping the Pack tab again while an answer is owed brings every card back;
-  "Erase everything" and Sign out clear the hold with the rest. Every box answered today keeps its
-  summary line and its Change, whichever day is being asked about; a household without the plan
+  "Erase everything" and Sign out clear the hold with the rest. The box answered today keeps its
+  summary line and its Change; one answered on the sheet shows its answers pressed there; a household without the plan
   gets the card's "Not now" and no line waiting for an answer. The iPhone
   app can remind (Account → Lunchboxes → **Remind us when the box is home**, off until switched
   on): one a day per home time, so two boxes home at different times get one each, a week of
