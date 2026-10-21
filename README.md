@@ -633,6 +633,10 @@ the visual identity.
   suite fails if the two drift apart: edit the page, then `node scripts/faq.mjs` rewrites the block
   from the page (`--check` only reports). `public/llms.txt`
   is the one-page summary for assistants; `public/404.html` is the page for any path not there.
+  `public/ideas/` holds the search-landing pages (an index, `ideas.css`, one page per week), linked from
+  the footers, the home page's school-rules card and `llms.txt`; `netlify.toml` sends the extensionless
+  addresses Pretty URLs once served (`/help`, `/feedback`, `/privacy`, `/terms`, the two ideas pages) to
+  the `.html` pages with a forced 301, because Netlify would otherwise serve `/help` itself without redirecting.
 
 ### Migrations are frozen once applied
 

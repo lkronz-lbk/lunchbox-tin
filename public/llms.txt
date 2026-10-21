@@ -6,7 +6,7 @@ Lunch Sorted is made by a parent in Maryland (Lila Bloom Enterprises). It is a w
 
 ## Who it is for
 
-The parent who packs a school lunch, usually for a child in kindergarten through fifth grade. A child only ever sees one screen, the kid's pick, when a parent hands over the phone, and is never asked for anything.
+The parent who packs a school lunch. A child only ever sees one screen, the kid's pick, when a parent hands over the phone, and is never asked for anything.
 
 ## What it does
 
@@ -31,3 +31,5 @@ Signed out, lunches stay on the phone. The planner loads no analytics and no adv
 ## Answers
 
 - [Help](https://lunchsorted.app/help.html): what it is, how the week is planned, school rules, what is free, sign-in, offline.
+- [A week of school lunches for a kid who eats five things](https://lunchsorted.app/ideas/picky-eater-lunch-week.html): a week from five foods.
+- [Nut-free school lunches: a week to start from](https://lunchsorted.app/ideas/nut-free-school-lunch-week.html): five boxes; where nuts turn up.
