@@ -153,6 +153,44 @@
   to = "/app/"
   status = 301
 
+# the addresses Pretty URLs served until 2026-10-16; Google crawled them, so send them home.
+# force, because Netlify answers /help with help.html on its own and a plain rule would lose to that
+[[redirects]]
+  from = "/help"
+  to = "/help.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/feedback"
+  to = "/feedback.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/privacy"
+  to = "/privacy.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/terms"
+  to = "/terms.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/ideas/picky-eater-lunch-week"
+  to = "/ideas/picky-eater-lunch-week.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/ideas/nut-free-school-lunch-week"
+  to = "/ideas/nut-free-school-lunch-week.html"
+  status = 301
+  force = true
+
 # the numbers page is a function; the short address is the one to remember
 [[redirects]]
   from = "/admin"
