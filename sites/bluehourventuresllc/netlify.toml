@@ -1,0 +1,16 @@
+# Blue Hour Ventures LLC, bluehourventuresllc.com: a separate Netlify project with this folder as
+# its base directory (README.md beside this file). Static files only: no build, no functions.
+[build]
+  publish = "."
+  command = ""
+  # build only when this folder changes; Lunch Sorted's commits leave this site alone
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'none'; style-src 'self'; img-src 'self'; script-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=31536000"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
