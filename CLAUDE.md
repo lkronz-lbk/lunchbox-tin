@@ -2,7 +2,7 @@
 
 ## What this is
 
-**Lunch Sorted** (lunchsorted.app, a Lila Bloom Enterprises product): a school-lunch planner for
+**Lunch Sorted** (lunchsorted.app, made by Blue Hour Ventures LLC): a school-lunch planner for
 parents. Plans a week of packed lunches from foods the kid will eat, pairs them, enforces the
 school's rules, builds the shopping list, tracks what came home, lets the kid pick which of the
 week's boxes is next. Phone-first PWA; accounts, sync, Stripe on the web and a Capacitor iOS shell built;

@@ -73,8 +73,8 @@ export async function send(msg, secrets = []) {
 /* every message ends the same way: who it is from, how to reply, and for the
    reminders, how to stop them */
 function foot(stopUrl) {
-  const text = `\n\n— Lunch Sorted, from Lila Bloom Enterprises. Reply to this email and a person reads it.` + (stopUrl ? `\nStop these reminders: ${stopUrl}` : '');
-  const html = `<p style="color:#3E4D45;font-size:13px;margin-top:28px">— Lunch Sorted, from Lila Bloom Enterprises. Reply to this email and a person reads it.` + (stopUrl ? ` <a href="${esc(stopUrl)}" style="color:#3E4D45">Stop these reminders</a>.` : '') + `</p>`;
+  const text = `\n\n— Lunch Sorted, from Blue Hour Ventures LLC. Reply to this email and a person reads it.` + (stopUrl ? `\nStop these reminders: ${stopUrl}` : '');
+  const html = `<p style="color:#3E4D45;font-size:13px;margin-top:28px">— Lunch Sorted, from Blue Hour Ventures LLC. Reply to this email and a person reads it.` + (stopUrl ? ` <a href="${esc(stopUrl)}" style="color:#3E4D45">Stop these reminders</a>.` : '') + `</p>`;
   return { text, html };
 }
 const btn = (href, label) => `<p style="margin:22px 0"><a href="${esc(href)}" style="display:inline-block;background:#2A5141;color:#FBFCF9;text-decoration:none;font-weight:600;padding:12px 18px;border-radius:12px">${esc(label)}</a></p>`;

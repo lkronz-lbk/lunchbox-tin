@@ -21,7 +21,7 @@
     --line: #6c7891;
     --link: #a9c1ff;
     --sky: #3b5bab;
-    --land: #26345a;
+    --land: #0e1422;
     --sun: #f0b45a;
   }
 }
@@ -33,13 +33,14 @@ body {
   color: var(--ink);
   font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
-main, footer { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+main { max-width: 640px; margin: 0 auto; padding: 0 16px; }
 main { padding-top: 56px; }
 header { margin-bottom: 40px; }
 .mark { display: block; margin-bottom: 20px; }
 .mark-sky { fill: var(--sky); }
 .mark-land { fill: var(--land); }
 .mark-sun { fill: var(--sun); }
+.mark-ring { fill: none; stroke: var(--line); stroke-width: 2.5; }
 h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
 h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); margin: 0 0 12px; }
 h3 { font-size: 20px; margin: 0 0 8px; }
@@ -49,7 +50,12 @@ section { margin-bottom: 36px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
 a { color: var(--link); text-underline-offset: 3px; }
 a:focus-visible { outline: 3px solid var(--link); outline-offset: 2px; border-radius: 4px; }
-.links, footer p:last-child { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 12px 0 0; }
-.links a, footer a, section > p a { display: inline-flex; align-items: center; min-height: 44px; }
-footer { border-top: 1px solid var(--line); padding-top: 20px; padding-bottom: 40px; color: var(--ink-soft); font-size: 15px; }
+.links { display: flex; flex-wrap: wrap; gap: 0 20px; margin: 12px 0 0; }
+.links a, .contact a, .back { display: inline-flex; align-items: center; min-height: 44px; }
+.links span { display: inline-flex; align-items: center; min-height: 44px; }
+.contact { margin: 0 0 8px; }
+.contact span { display: block; color: var(--ink-soft); font-size: 15px; }
+.contact a { overflow-wrap: anywhere; }
+footer { max-width: 608px; width: calc(100% - 32px); margin: 0 auto; border-top: 1px solid var(--line); padding: 20px 0 40px; color: var(--ink-soft); font-size: 15px; }
 footer p { margin: 0; }
+footer .links { margin-top: 4px; }

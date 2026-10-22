@@ -1,10 +1,12 @@
 # Blue Hour Ventures LLC, bluehourventuresllc.com: a separate Netlify project with this folder as
 # its base directory (README.md beside this file). Static files only: no build, no functions.
+# Only public/ is published, so this file and the README are never served.
 [build]
-  publish = "."
+  publish = "public"
   command = ""
-  # build only when this folder changes; Lunch Sorted's commits leave this site alone
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ."
+  # skip the build when nothing in this folder changed; a build with no cache (the first one, or
+  # "Clear cache and deploy") has equal refs and always deploys
+  ignore = '[ "$CACHED_COMMIT_REF" != "$COMMIT_REF" ] && git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- .'
 
 [[headers]]
   for = "/*"
