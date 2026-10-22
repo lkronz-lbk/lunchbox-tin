@@ -934,7 +934,8 @@ out by deleting it in the commit that does it.
 
 **Blue Hour Ventures LLC** (Maryland, single-member; approved and EIN issued October 2026).
 Lunch Sorted is made by the LLC under its own name: no trade name (Liz, 2026-10-22), and
-"Lila Bloom Enterprises" is retired. Its site is `sites/bluehourventuresllc/`.
+"Lila Bloom Enterprises" is retired. The LLC's own site, bluehourventuresllc.com, lives in its
+own private repository, `lkronz-lbk/bluehourventuresllc`.
 - **Done in code:** the terms' operator line, the footer of the site and the ideas pages, the
   home page's JSON-LD, `public/llms.txt`, the email sign-off, the copyright line in
   `store/listing.md` (pasted into App Store Connect at the next version).

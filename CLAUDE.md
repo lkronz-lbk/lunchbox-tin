@@ -109,9 +109,6 @@ Never again:
   points it at the live app; `ios-www/` is the placeholder web directory Capacitor insists on;
   `public/back.html` hands a parent back from Stripe in Safari. `ios/README.md` has the build,
   TestFlight and universal-link steps. `.github/workflows/ios.yml` compiles it on a macOS runner; `testflight.yml` archives, signs and uploads it.
-- `sites/bluehourventuresllc/`: the one-page site of Blue Hour Ventures LLC, the company behind
-  Lunch Sorted, at bluehourventuresllc.com: a second Netlify project with that folder as its base
-  directory. Static, no scripts; its `README.md` has the Netlify, DNS and email setup.
 - `store/`: the App Store listing (`listing.md`: every field, the privacy answers, the review
   notes) and its screenshots, made by `scripts/store-shots.mjs` + `scripts/store-compose.py`
   with the two brand fonts checked in beside them (both SIL Open Font License).
