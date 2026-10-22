@@ -7,7 +7,7 @@
   function gtag(){ dataLayer.push(arguments); }
   window.gtag = gtag;
   gtag('js', new Date());
-  gtag('config', GA_ID, {anonymize_ip:true});
+  gtag('config', GA_ID, {anonymize_ip:true, allow_google_signals:false, allow_ad_personalization_signals:false});   /* counting visits only: no advertising features (privacy.html) */
   var s = document.createElement('script'); s.async = true;
   s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(GA_ID);
   document.head.appendChild(s);
