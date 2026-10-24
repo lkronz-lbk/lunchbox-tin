@@ -33,3 +33,5 @@ Signed out, lunches stay on the phone. The planner loads no analytics and no adv
 - [Help](https://lunchsorted.app/help.html): what it is, how the week is planned, school rules, what is free, sign-in, offline.
 - [A week of school lunches for a kid who eats five things](https://lunchsorted.app/ideas/picky-eater-lunch-week.html): a week from five foods.
 - [Nut-free school lunches: a week to start from](https://lunchsorted.app/ideas/nut-free-school-lunch-week.html): five boxes; where nuts turn up.
+- [When lunch keeps coming home uneaten](https://lunchsorted.app/ideas/lunch-coming-home-uneaten.html): time, the container or one food.
+- [A week of school lunches without a sandwich](https://lunchsorted.app/ideas/no-sandwich-school-lunch-week.html): five cold mains, no bread.
