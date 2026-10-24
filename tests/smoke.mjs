@@ -6948,7 +6948,7 @@ try {
     check('and it carries a description and a canonical address', !!(await site.$('meta[name="description"]')) && (await site.$eval('link[rel="canonical"]', l => l.href)) === 'https://lunchsorted.app/help.html');
   }
   check('the help page answers the questions and points at the planner and the address', /plan the week/.test(await site.textContent('body')) && !!(await site.$('a[href="/app/"]')) && !!(await site.$('a[href^="mailto:hello@lunchsorted.app"]')));
-  check('the help page carries the two anchors the ideas pages link to', !!(await site.$('h2#pick')) && !!(await site.$('h2#rules')) && !!(await site.$('a[href="/ideas/"]')));
+  check('the help page carries the four anchors the ideas pages link to', !!(await site.$('h2#pick')) && !!(await site.$('h2#rules')) && !!(await site.$('h2#schoolrules')) && !!(await site.$('h2#camehome')) && !!(await site.$('a[href="/ideas/"]')));
   {
     /* the ideas pages load /ga.js like the front page, so they are served under the front page's
        policy; the tag itself is stubbed, which still proves the policy lets it run */
@@ -6959,7 +6959,7 @@ try {
     await ideas.route('https://www.googletagmanager.com/**', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
     await ideas.route('https://fonts.googleapis.com/**', r => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
     check('the ideas pages share the front page\'s policy, analytics and all', POLICIES['/ideas/*'] === POLICIES['/index.html']);
-    for (const u of ['/ideas/', '/ideas/picky-eater-lunch-week.html', '/ideas/nut-free-school-lunch-week.html']) {
+    for (const u of ['/ideas/', '/ideas/picky-eater-lunch-week.html', '/ideas/nut-free-school-lunch-week.html', '/ideas/lunch-coming-home-uneaten.html', '/ideas/no-sandwich-school-lunch-week.html']) {
       const resp = await ideas.goto(BASE+u); await ideas.waitForTimeout(250);
       const got = await ideas.evaluate(() => ({
         h1: document.querySelectorAll('h1').length,
@@ -6981,7 +6981,7 @@ try {
     const sitemap = fs.readFileSync(path.join(ROOT, 'sitemap.xml'), 'utf8');
     const locs = [...sitemap.matchAll(/<loc>https:\/\/lunchsorted\.app(\/[^<]*)<\/loc>\s*<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/g)].map(m => m[1]);
     check('the sitemap lists the public pages with a date each, and none of the private ones, and every one exists',
-      locs.length === (sitemap.match(/<url>/g) || []).length && ['/', '/help.html', '/ideas/', '/ideas/picky-eater-lunch-week.html', '/ideas/nut-free-school-lunch-week.html'].every(l => locs.includes(l))
+      locs.length === (sitemap.match(/<url>/g) || []).length && ['/', '/help.html', '/ideas/', '/ideas/picky-eater-lunch-week.html', '/ideas/nut-free-school-lunch-week.html', '/ideas/lunch-coming-home-uneaten.html', '/ideas/no-sandwich-school-lunch-week.html'].every(l => locs.includes(l))
       && !locs.some(l => /^\/(app|api|admin|beta|back|thanks|on-the-list)/.test(l))
       && locs.every(l => fs.existsSync(path.join(ROOT, l.endsWith('/') ? l + 'index.html' : l))), locs);
     check('robots.txt points at the sitemap', /\nSitemap: https:\/\/lunchsorted\.app\/sitemap\.xml\n/.test(fs.readFileSync(path.join(ROOT, 'robots.txt'), 'utf8')));

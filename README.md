@@ -932,18 +932,20 @@ out by deleting it in the commit that does it.
   billing retry that Apple succeeds after its grace period; a second parent tapping Manage in
   the App Store on an Apple Account that did not pay.
 
-**Blue Hour Ventures LLC** (filed with Maryland; about eight weeks)
-- **Liz, once it is approved:** EIN (IRS.gov, free), business bank account, D-U-N-S number
-  through Apple's free lookup, then ask Apple Developer Support to convert the individual
-  membership to an organization, and update the bank and tax form in App Store Connect
-  (W-9 with the EIN). Stripe: business type Company, the LLC's name, the EIN and the bank.
-  Register Lila Bloom Enterprises as the LLC's trade name. Assign the app, code, domain and
-  brand to the LLC in writing. Move service accounts (domain, Netlify, Neon, email) as they
-  renew. Ask whoever helps with the LLC whether Stripe's business details, already named for
-  the LLC, should be in Liz's name until approval.
-- **Code, then:** the operator line in `public/terms.html` ("Lila Bloom Enterprises, a trade
-  name of Blue Hour Ventures LLC"), the copyright line in `store/listing.md`, the Organization
-  in the home page's JSON-LD and the maker line in `public/llms.txt`.
+**Blue Hour Ventures LLC** (Maryland, single-member; approved and EIN issued October 2026).
+Lunch Sorted is made by the LLC under its own name: no trade name (Liz, 2026-10-22), and
+"Lila Bloom Enterprises" is retired. The LLC's own site, bluehourventuresllc.com, lives in its
+own private repository, `lkronz-lbk/bluehourventuresllc`.
+- **Done in code:** the terms' operator line, the footer of the site and the ideas pages, the
+  home page's JSON-LD, `public/llms.txt`, the email sign-off, the copyright line in
+  `store/listing.md` (pasted into App Store Connect at the next version).
+- **Liz:** a business bank account in the LLC's name; the D-U-N-S number through Apple's free
+  lookup, then ask Apple Developer Support to convert the individual membership to an
+  organization (no update in review meanwhile), accept the agreements again and update the bank
+  and tax forms (a single-member LLC is disregarded for tax by default: W-9 in her name with the
+  LLC's on line 2). Stripe: business type Company, the LLC's name and EIN, the new bank. Assign
+  the app, code, domain and brand to the LLC in writing. Move service accounts (domain, Netlify,
+  Neon, email) as they renew.
 
 **Other storefronts, when wanted:** Canada, Australia and New Zealand first (English; check the
 privacy page against their laws). The EU and UK after the LLC exists: the EU trader
