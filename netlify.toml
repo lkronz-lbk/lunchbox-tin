@@ -191,6 +191,18 @@
   status = 301
   force = true
 
+[[redirects]]
+  from = "/ideas/no-sandwich-school-lunch-week"
+  to = "/ideas/no-sandwich-school-lunch-week.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/ideas/lunch-coming-home-uneaten"
+  to = "/ideas/lunch-coming-home-uneaten.html"
+  status = 301
+  force = true
+
 # the numbers page is a function; the short address is the one to remember
 [[redirects]]
   from = "/admin"
