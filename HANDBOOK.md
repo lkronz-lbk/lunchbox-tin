@@ -113,8 +113,11 @@ version that can be edited. New copy never brings any of them back, and a post n
 - Every claim is one the app makes good on. Nothing is "healthy", and "balanced" only ever
   means the pairing (a crunchy side against a soft main, protein when the main is light), never
   nutrition: the app does not count calories and it is not medical.
-- The beta welcome in `mail.js` ends on three exclamation marks in a row; it is the one departure,
-  and Liz's to keep or cut.
+- Every email shares one shell (`shell()` in `mail.js`): the app's ground and card colors, the icon
+  and the name at the top, Familjen Grotesk for the one heading and Karla for the body where the
+  client loads them, the closing line under a rule. New email copy goes through it; nothing is
+  styled by hand in a message. The 2026-10-24 rewrite took the exclamation marks out of the beta
+  welcome.
 
 ## The brand
 

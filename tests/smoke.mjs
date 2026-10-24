@@ -2863,7 +2863,7 @@ try {
   await until(page, () => /liz@example\.com/.test(document.querySelector('#view').textContent));
   check('one tap signs in and lands back on the Account tab, whose rows name the household', page.url().endsWith('/app/') &&
     await page.evaluate(() => { const v = document.querySelector('#view'); return /liz@example\.com/.test(v.textContent) && v.querySelectorAll('[data-act="pane"]').length >= 3; }), page.url());
-  const welcomes = (to) => mails.filter(m => m.to === to && /Everything is on for three weeks/.test(m.subject));
+  const welcomes = (to) => mails.filter(m => m.to === to && /^Welcome to Lunch Sorted$/.test(m.subject));
   check('a first sign-in gets one welcome email, with a way to stop reminders', welcomes('liz@example.com').length === 1 && /\/api\/auth\/mail-stop\?t=[a-f0-9]{32}/.test(welcomes('liz@example.com')[0].text) && /\/app\//.test(welcomes('liz@example.com')[0].text));
   {
     /* the planner reports its own breakages: a synthetic error event is enough to reach the table, and the numbers page lists it */
@@ -4043,7 +4043,7 @@ try {
     check('and Resend\'s own words about a refusal still come through',
       !!words && words.message === 'Resend 403: {"statusCode":403,"message":"API key is invalid","name":"validation_error"}', words && words.message);
     check('cut short, with the key, the sign-in link\'s token and its code blanked wherever they sit, should an answer ever quote a sign-in email back, a key with a space or a tab inside included',
-      [echoed, echoedSpaced, echoedTab].every(e => !!e && /^Resend 422: \{"message":"invalid: "Bearer /.test(e.message) && /type this code instead/.test(e.message) && e.message.length <= 'Resend 422: '.length + 300 && hidden(shown(e)) && !e.message.includes('ABCD-EF23')),
+      [echoed, echoedSpaced, echoedTab].every(e => !!e && /^Resend 422: \{"message":"invalid: "Bearer /.test(e.message) && /Type this code into the app/.test(e.message) && e.message.length <= 'Resend 422: '.length + 300 && hidden(shown(e)) && !e.message.includes('ABCD-EF23')),
       [echoed, echoedSpaced, echoedTab].map(e => e && e.message));
     /* and through the sign-in function: a link that cannot be sent is answered as busy, logged in a line of
        its own, and a welcome that cannot be sent never fails the sign-in.
