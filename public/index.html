@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#0E1815" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-itunes-app" content="app-id=6810858256">
 <meta property="og:title" content="Lunch Sorted: a school-lunch planner, a week in about a minute">
 <meta property="og:description" content="A week of packed school lunches in about a minute — matched boxes, school rules respected, shopping list built for you.">
 <meta property="og:type" content="website">
@@ -129,12 +130,6 @@ h2{font-family:var(--f-display);font-size:clamp(25px,4.2vw,32px);font-weight:700
 .install li{margin-bottom:7px}
 .install b{color:var(--ink)}
 
-form.signup{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;max-width:520px}
-form.signup input[type=email]{flex:1 1 220px;min-height:48px;padding:0 15px;border-radius:13px;
-  border:1.6px solid var(--line-field);background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
-form.signup input[type=email]:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent);outline:none}
-.hp{position:absolute;left:-9999px}
-
 /* two plans, side by side; the paid one is lifted, the free one is not lesser */
 .plans{display:grid;gap:16px}
 @media (min-width:700px){ .plans{grid-template-columns:1fr 1fr;gap:20px} }
@@ -152,7 +147,6 @@ form.signup input[type=email]:focus{border-color:var(--accent);box-shadow:0 0 0 
 footer{border-top:1px solid var(--line);padding:30px 0 56px;color:var(--ink-3);font-size:14px}
 footer .row{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center}
 footer a{color:var(--ink-2);white-space:nowrap}
-::placeholder{color:var(--ink-2);opacity:1;font-style:italic}
 </style>
 <script src="/ga.js" defer></script>
 <script src="/price.js" defer></script>
@@ -168,6 +162,7 @@ footer a{color:var(--ink-2);white-space:nowrap}
    "url": "https://lunchsorted.app/",
    "logo": "https://lunchsorted.app/icons/icon-512.png",
    "email": "hello@lunchsorted.app",
+   "sameAs": ["https://apps.apple.com/us/app/lunch-sorted/id6810858256"],
    "parentOrganization": {
     "@type": "Organization",
     "name": "Blue Hour Ventures LLC",
@@ -181,7 +176,8 @@ footer a{color:var(--ink-2);white-space:nowrap}
    "url": "https://lunchsorted.app/app/",
    "description": "A school-lunch planner for parents. Answer three questions and it plans a week of packed lunches from foods your kid will eat, matched so each box goes together, keeps your school's rules, and builds the shopping list.",
    "applicationCategory": "LifestyleApplication",
-   "operatingSystem": "Any; works in a phone's browser and installs to the home screen",
+   "operatingSystem": "iOS, Web",
+   "installUrl": "https://apps.apple.com/us/app/lunch-sorted/id6810858256",
    "browserRequirements": "A current browser",
    "publisher": {
     "@id": "https://lunchsorted.app/#org"
@@ -324,13 +320,13 @@ footer a{color:var(--ink-2);white-space:nowrap}
   <section class="section">
     <div class="intro">
       <p class="eyebrow">Install it</p>
-      <h2>It can live on your home screen.</h2>
-      <p>There is no app to download. Add it to your home screen and it opens full-screen with its own icon,
-        works with no signal, and keeps your plans on the device.</p>
+      <h2>On the App Store, or on your home screen.</h2>
+      <p>On an iPhone, Lunch Sorted is on the App Store. On any phone, the planner also adds to your home screen:
+        it opens full-screen with its own icon, works with no signal, and keeps your plans on the device.</p>
     </div>
     <div class="install">
       <ol>
-        <li><b>iPhone:</b> open the planner in Safari, tap Share, then <b>Add to Home Screen</b>.</li>
+        <li><b>iPhone:</b> <a href="https://apps.apple.com/us/app/lunch-sorted/id6810858256">download Lunch Sorted on the App Store</a>, or open the planner in Safari, tap Share, then <b>Add to Home Screen</b>.</li>
         <li><b>Android:</b> open it in Chrome, tap the menu, then <b>Install app</b>.</li>
         <li>Open it from the icon after that — installed, it holds onto your plans far more reliably than a browser tab.</li>
       </ol>
@@ -377,20 +373,13 @@ footer a{color:var(--ink-2);white-space:nowrap}
 
   <section class="section">
     <div class="intro">
-      <p class="eyebrow">What's coming</p>
-      <h2>The iPhone app, and a reminder the night before.</h2>
-      <p>Two parents' phones already share one plan. Next is an app on the App Store with a Home Screen widget
-        and an evening nudge to pack. Leave an email if you want to hear when it lands; that's the only thing this
-        page collects, and it's used for nothing else.</p>
+      <p class="eyebrow">On the App Store</p>
+      <h2>The iPhone app is out.</h2>
+      <p>The same planner and the same household. On an iPhone it can also remind you once the box is home.
+        The Household plan is bought through the App Store there, and, signed in, a plan bought on either side
+        works on both.</p>
     </div>
-    <form class="signup" name="waitlist" method="POST" data-netlify="true" netlify-honeypot="bot-field">
-      <input type="hidden" name="form-name" value="waitlist">
-      <input type="hidden" name="source" value="home">
-      <label class="hp" for="email">Email address</label>
-      <input id="email" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
-      <button class="btn primary" type="submit">Keep me posted</button>
-      <p class="hp" aria-hidden="true"><label>Leave this empty: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
-    </form>
+    <div class="cta"><a class="btn primary" href="https://apps.apple.com/us/app/lunch-sorted/id6810858256">Download on the App Store</a></div>
   </section>
 </div>
 
