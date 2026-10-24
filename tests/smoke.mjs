@@ -5782,6 +5782,17 @@ try {
         check('and the server links a purchase made for no household of theirs into one they joined only when Restore purchases asks',
           unasked.status === 409 && unasked.body.restoreOnly === true && unaskedRow.otx !== '2000000000000960' && asked.status === 200 && askedRow.otx === '2000000000000960' && askedRow.source === 'apple',
           [unasked, unaskedRow, asked, askedRow]);
+        /* Restore made it the household's plan, so its renewals are that plan's own: the next one the phone passes on
+           by itself, no Restore asked for, lands on the row and moves its date, instead of being refused as a purchase
+           of no household of theirs */
+        const cpeOf = async () => (await db.query(`SELECT e.current_period_end AS cpe FROM entitlements e JOIN household_members m ON m.household_id = e.household_id JOIN users u ON u.id = m.user_id WHERE u.email = 'rosa-parent@example.com'`)).rows[0].cpe;
+        const cpeBefore = await cpeOf();
+        const renewedAgain = txn({ originalTransactionId: '2000000000000960', transactionId: '2000000000000963', appAccountToken: THEIRS, expiresDate: Date.now() + 900 * DAY });
+        const renewal = await linkAs({ signedTransaction: jws(renewedAgain) });
+        const renewalRow = await rosaRow(), cpeAfter = await cpeOf();
+        check('and a renewal of the purchase Restore has already made the household\'s plan lands without Restore being asked again, moving the row\'s date',
+          renewal.status === 200 && renewal.body.outcome === 'applied' && renewalRow.otx === '2000000000000960' && renewalRow.source === 'apple' && new Date(cpeAfter).getTime() > new Date(cpeBefore).getTime(),
+          [renewal, renewalRow, cpeBefore, cpeAfter]);
         await cj.close();
       }
       {
@@ -6051,7 +6062,7 @@ try {
   await ph.click('[data-act="pane-done"]'); await ph.waitForTimeout(250);
   await ph.click('[data-act="pane"][data-pane="household"]'); await ph.waitForTimeout(300);
   check('and sees who else is in it, named a caretaker, with no invite of their own',
-    /Caretaker \u2014 sees the week and checks the box off/.test(await ph.textContent('#view')) && (await ph.$$eval('[data-act="invite"], [data-act="invite-helper"]', a => a.length)) === 0,
+    /Caretaker \u2014 sees the week and the lists, checks the box off/.test(await ph.textContent('#view')) && (await ph.$$eval('[data-act="invite"], [data-act="invite-helper"]', a => a.length)) === 0,
     (await ph.textContent('#view')).replace(/\s+/g, ' ').slice(0, 200));
   await ph.click('[data-act="pane-done"]'); await ph.waitForTimeout(250);
   await db.query(`UPDATE entitlements SET plan='free', status='none' WHERE household_id=${patState.household.id}`);
