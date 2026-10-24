@@ -12,8 +12,8 @@ A school-lunch planner for parents, at lunchsorted.app, made by Liz Kronzek (Lil
 Enterprises; the Stripe account is Blue Hour Ventures LLC). Three questions and the app plans a
 week of packed lunches from foods the kid will eat, pairs them so a box makes sense, keeps the
 school's rules, writes the shopping list, asks what came home, and lets the kid pick which of
-the week's boxes is next. Phone-first web app that installs to the home screen; an iPhone shell
-is in App Review. The iPhone app sells the plan through the App Store only, the web through
+the week's boxes is next. Phone-first web app that installs to the home screen; the iPhone app
+is on the App Store (1.0, October 21, 2026). The iPhone app sells the plan through the App Store only, the web through
 Stripe only; a plan bought on either side works on both.
 
 - **Free**: one lunchbox on one phone, planned and shopped for, with everything on for the first
@@ -255,13 +255,16 @@ AI Org Chart" in Liz's Claude docs.
 
 ## This month
 
-As of 2026-09-22. Change this section first when the priority moves.
+As of 2026-10-23. Change this section first when the priority moves.
 
-- **Ship the iPhone app.** v23 is on `main` and with App Review; `main` is frozen until the
-  review lands, and everything new goes to `dev`. TestFlight is the next build.
-- **Grow the waitlist.** The social and Pinterest push starts now and every post lands on the
-  home page's waitlist form, because the beta is capped at 25 households and cannot take a
-  spike. The App Store link replaces the waitlist when the listing is live.
+- **The iPhone app is out.** Lunch Sorted 1.0 went live on the App Store on October 21, 2026
+  (https://apps.apple.com/us/app/lunch-sorted/id6810858256). The next build carries the help-sheet headings
+  and the caretaker wording (intake Q-028); `main` is what the store serves, so it moves only
+  when the release owner says.
+- **Grow the account.** The social and Pinterest push starts with the launch. Every post's call
+  to action is the App Store link above, with the home page for everyone else; nothing links to
+  /app/ directly. The home page's email form stays only for the Home Screen widget, which is
+  the one thing still promised there.
 - **Measure week two.** The one number the README asks for: do strangers come back in their
   second week. The milestones table (migration 0009_milestones_errors) makes it a query.
 - **Listen before building.** The backlog in `README.md` (home-cooked or store-bought, the
@@ -277,6 +280,7 @@ As of 2026-09-22. Change this section first when the priority moves.
 | The numbers | /admin, for the addresses in `ADMIN_EMAILS` |
 | Beta link, tester short link | /beta, /tester |
 | Short link for Instagram | /ig |
+| App Store | https://apps.apple.com/us/app/lunch-sorted/id6810858256 (1.0, October 21, 2026, free; the bundle is app.lunchsorted) |
 | Email addresses | hello@lunchsorted.app (reply-to on everything), forms@lunchsorted.app (form notifications), hello@mail.lunchsorted.app (the sender) |
 | Stack | Netlify (site, functions, forms), Neon (Postgres), Resend (email), Stripe (payments on the web), the App Store (payments in the iPhone app), GitHub Actions (tests, the iOS build), Capacitor (the iPhone shell) |
 | Repo | github.com/lkronz-lbk/lunchbox-tin, still named for the app's first name; `dev` is the working branch, `main` deploys |
