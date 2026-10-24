@@ -349,7 +349,7 @@ The one worth a look:
       are. The checklist is in README.md, "When the day-one work moves to main"
 - [x] Build attached to the version. Export compliance asks nothing: the build carries
       `ITSAppUsesNonExemptEncryption = NO`
-- [x] Version **1.0** in App Store Connect, matching `MARKETING_VERSION` in the Xcode
+- [x] Version **1.1** in App Store Connect (1.0 before 2026-10-23), matching `MARKETING_VERSION` in the Xcode
       project. Both build routes read it from there. The build number is the workflow run
       number, or `CURRENT_PROJECT_VERSION` when you archive in Xcode; it only has to be
       unique within a version.
