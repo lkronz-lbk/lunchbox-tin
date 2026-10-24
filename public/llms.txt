@@ -2,7 +2,7 @@
 
 > A school-lunch planner for parents. Answer three questions and it plans a week of packed school lunches from foods your kid will eat, matches them so each box goes together, keeps your school's rules, and writes the shopping list.
 
-Lunch Sorted is made by a parent in Maryland (Blue Hour Ventures LLC). It is a web app at https://lunchsorted.app/app/ that installs to a phone's home screen and works offline. An iPhone app is on its way to the App Store.
+Lunch Sorted is made by a parent in Maryland (Blue Hour Ventures LLC). It is a web app at https://lunchsorted.app/app/ that installs to a phone's home screen and works offline. The iPhone app is on the App Store: https://apps.apple.com/us/app/lunch-sorted/id6810858256
 
 ## Who it is for
 
@@ -33,3 +33,5 @@ Signed out, lunches stay on the phone. The planner loads no analytics and no adv
 - [Help](https://lunchsorted.app/help.html): what it is, how the week is planned, school rules, what is free, sign-in, offline.
 - [A week of school lunches for a kid who eats five things](https://lunchsorted.app/ideas/picky-eater-lunch-week.html): a week from five foods.
 - [Nut-free school lunches: a week to start from](https://lunchsorted.app/ideas/nut-free-school-lunch-week.html): five boxes; where nuts turn up.
+- [When lunch keeps coming home uneaten](https://lunchsorted.app/ideas/lunch-coming-home-uneaten.html): time, the container or one food.
+- [A week of school lunches without a sandwich](https://lunchsorted.app/ideas/no-sandwich-school-lunch-week.html): five cold mains, no bread.
