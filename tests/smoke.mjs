@@ -2366,13 +2366,13 @@ try {
   check('"short eating time" flags fiddly foods', foodsText.includes('fiddly for a short lunch'));
   const excluded = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
-    return ['t_choc','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
+    return ['t_choc','t_sweets','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
   });
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300); await goShuffle(page);
   const excludedAfter = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
-    return ['t_choc','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
+    return ['t_choc','t_sweets','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
   });
   check('a re-draw keeps every rule-breaking food out of the box', !excludedAfter, excludedAfter);
   await page.evaluate(() => {
