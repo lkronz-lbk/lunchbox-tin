@@ -2320,6 +2320,8 @@ try {
     const d = JSON.parse(localStorage.getItem('lunchsorted')), k = d.kids[0], ts = new Date().toISOString();
     const mk = (id, n, c, tags) => ({id, kidId:k.id, n, c, t:tags, a:'other', al:[], createdAt:ts, updatedAt:ts, deletedAt:null});
     k.foods.push(mk('t_choc', 'Chocolate buttons', 'sweet', ['sweet']));
+    k.foods.push(mk('t_sweets', 'Fruit sweets', 'sweet', ['sweet']));
+    k.foods.push(mk('t_swpot', 'Sweet potato wedges', 'side', ['soft']));   /* a parent's own words: sweet, not sweets */
     k.foods.push(mk('t_ice',  'Test cold main', 'main', ['protein','soft','ice']));
     k.foods.push(mk('t_messy','Test messy side', 'side', ['messy']));
     localStorage.setItem('lunchsorted', JSON.stringify(d));
@@ -2357,17 +2359,20 @@ try {
   await page.click('[data-act="tab"][data-tab="foods"]'); await page.waitForTimeout(250);
   const foodsText = await page.textContent('#view');
   check('"no chocolate or candy" flags chocolate', foodsText.includes('chocolate or candy'));
+  const sweetRows = await page.evaluate(() => ['t_sweets','t_swpot'].map(id => { const m = document.querySelector('[data-act="food-open"][data-id="'+id+'"] .meta'); return m ? m.textContent : null; }));
+  check('"no chocolate or candy" flags fruit sweets', !!sweetRows[0] && sweetRows[0].includes('chocolate or candy'), sweetRows);
+  check('"no chocolate or candy" lets sweet potato wedges through', !!sweetRows[1] && !sweetRows[1].includes('skipped'), sweetRows);
   check('"no ice pack" flags foods that must stay cold', foodsText.includes('needs an ice pack'));
   check('"short eating time" flags fiddly foods', foodsText.includes('fiddly for a short lunch'));
   const excluded = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
-    return ['t_choc','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
+    return ['t_choc','t_sweets','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
   });
   await page.click('[data-act="tab"][data-tab="week"]'); await page.waitForTimeout(150);
   await page.click('[data-act="plan-kid"]'); await page.waitForTimeout(300); await goShuffle(page);
   const excludedAfter = await page.evaluate(() => {
     const k = JSON.parse(localStorage.getItem('lunchsorted')).kids[0];
-    return ['t_choc','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
+    return ['t_choc','t_sweets','t_ice','t_messy'].some(id => k.week.days.some(dy => Object.values(dy.slots).includes(id)));
   });
   check('a re-draw keeps every rule-breaking food out of the box', !excludedAfter, excludedAfter);
   await page.evaluate(() => {
