@@ -2,7 +2,7 @@
 
 > A school-lunch planner for parents. Answer three questions and it plans a week of packed school lunches from foods your kid will eat, matches them so each box goes together, keeps your school's rules, and writes the shopping list.
 
-Lunch Sorted is made by a parent in Maryland (Lila Bloom Enterprises). It is a web app at https://lunchsorted.app/app/ that installs to a phone's home screen and works offline. An iPhone app is on its way to the App Store.
+Lunch Sorted is made by a parent in Maryland (Lila Bloom Enterprises). It is a web app at https://lunchsorted.app/app/ that installs to a phone's home screen and works offline. The iPhone app is on the App Store: https://apps.apple.com/us/app/lunch-sorted/id6810858256
 
 ## Who it is for
 

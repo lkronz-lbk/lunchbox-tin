@@ -3,7 +3,7 @@
 The business handbook for Lunch Sorted. `CLAUDE.md` is the engineering one and `README.md` the
 product spec; this is what every other job reads first: the voice, the audience, the rules, where
 feedback arrives, where work lands, and what the company is doing this month. Written for a
-person or an AI employee sitting down cold. Facts here are as of 2026-09-22; when one changes,
+person or an AI employee sitting down cold. Facts here are as of 2026-10-23; when one changes,
 change it here first.
 
 ## What Lunch Sorted is
@@ -13,7 +13,7 @@ Enterprises; the Stripe account is Blue Hour Ventures LLC). Three questions and 
 week of packed lunches from foods the kid will eat, pairs them so a box makes sense, keeps the
 school's rules, writes the shopping list, asks what came home, and lets the kid pick which of
 the week's boxes is next. Phone-first web app that installs to the home screen; the iPhone app
-is on the App Store (1.0, October 21, 2026). The iPhone app sells the plan through the App Store only, the web through
+is on the App Store (1.0, 2026-10-21). The iPhone app sells the plan through the App Store only, the web through
 Stripe only; a plan bought on either side works on both.
 
 - **Free**: one lunchbox on one phone, planned and shopped for, with everything on for the first
@@ -56,7 +56,7 @@ writing a word, and then read the "sounds like a machine" list below and cut any
   no-nuts letter, the kid who ate the same thing for eleven days. Say what went wrong in this
   house before saying what the app does about it. Short lines, the way a text to a friend reads.
   A post can end without a call to action; when there is one, it is one line, and it is the
-  waitlist until the handbook says otherwise. No pitch, no "we", no feature lists. One
+  App Store link, with the home page for everyone else. No pitch, no "we", no feature lists. One
   exclamation mark at most. Emoji sparingly, as punctuation, never as decoration. If a caption
   could be pasted onto any other app's account, it is not done.
 - **Pinterest and email: a step more formal.** Still Liz, still plain, but complete sentences and a
@@ -209,7 +209,7 @@ Four inlets, two inboxes, one queue.
 | Replies to any email the app sends | **hello@lunchsorted.app** | Welcome, tester days 1, 3 and 6, trial reminders, sign-in links |
 | The private beta Facebook group | The group (the link is `BETA_GROUP` in `netlify/lib/mail.js`) | No API; read as a member, quote with the date, never a name |
 
-Later: App Store reviews, once there is a build. Everything from every inlet becomes one row in
+App Store reviews, now that 1.0 is live (read in App Store Connect; there is no API). Everything from every inlet becomes one row in
 the intake queue, with where it came from, who said it, the build and phone if known, what kind
 it is, and who owns it next.
 
@@ -250,21 +250,22 @@ AI Org Chart" in Liz's Claude docs.
 | Pinterest and Short Video | The pin batch, the board plan, clip briefs | Weekly |
 | Lifecycle Email | Results and one change to the emails in code, the waitlist note | Monthly |
 | Partnerships | Ten researched targets and a draft note for each | Monthly |
-| App Store Optimization | The listing revision, review replies | Monthly, from TestFlight |
+| App Store Optimization | The listing revision, review replies | Monthly, from 1.0 |
 | Design and UI Research | At most three proposals a month, each with its source | Monthly, after launch |
 
 ## This month
 
 As of 2026-10-23. Change this section first when the priority moves.
 
-- **The iPhone app is out.** Lunch Sorted 1.0 went live on the App Store on October 21, 2026
-  (https://apps.apple.com/us/app/lunch-sorted/id6810858256). The next build carries the help-sheet headings
-  and the caretaker wording (intake Q-028); `main` is what the store serves, so it moves only
-  when the release owner says.
-- **Grow the account.** The social and Pinterest push starts with the launch. Every post's call
-  to action is the App Store link above, with the home page for everyone else; nothing links to
-  /app/ directly. The home page's email form stays only for the Home Screen widget, which is
-  the one thing still promised there.
+- **The iPhone app is out.** Lunch Sorted 1.0 went live on the App Store on 2026-10-21
+  (https://apps.apple.com/us/app/lunch-sorted/id6810858256). 1.1, on `dev`, brings the night-before
+  reminder, the share sheet and a Home Screen widget; the next build is also owed the help-sheet
+  headings and the caretaker wording (intake Q-028). `main` is what the store serves, so it moves
+  only when the release owner says.
+- **Grow the social accounts.** The social and Pinterest push starts with the launch. Every post's
+  call to action is the App Store link above, with the home page for everyone else; no post links
+  to /app/ directly. The home page's email form stays only for what 1.1 brings, which is all the
+  page still promises.
 - **Measure week two.** The one number the README asks for: do strangers come back in their
   second week. The milestones table (migration 0009_milestones_errors) makes it a query.
 - **Listen before building.** The backlog in `README.md` (home-cooked or store-bought, the
@@ -280,7 +281,7 @@ As of 2026-10-23. Change this section first when the priority moves.
 | The numbers | /admin, for the addresses in `ADMIN_EMAILS` |
 | Beta link, tester short link | /beta, /tester |
 | Short link for Instagram | /ig |
-| App Store | https://apps.apple.com/us/app/lunch-sorted/id6810858256 (1.0, October 21, 2026, free; the bundle is app.lunchsorted) |
+| App Store | https://apps.apple.com/us/app/lunch-sorted/id6810858256 (1.0, 2026-10-21, free; the bundle is app.lunchsorted) |
 | Email addresses | hello@lunchsorted.app (reply-to on everything), forms@lunchsorted.app (form notifications), hello@mail.lunchsorted.app (the sender) |
 | Stack | Netlify (site, functions, forms), Neon (Postgres), Resend (email), Stripe (payments on the web), the App Store (payments in the iPhone app), GitHub Actions (tests, the iOS build), Capacitor (the iPhone shell) |
 | Repo | github.com/lkronz-lbk/lunchbox-tin, still named for the app's first name; `dev` is the working branch, `main` deploys |
