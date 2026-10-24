@@ -510,9 +510,9 @@ forward).
       `cache-control: public, max-age=…` line; if Netlify's `/api/*` header rule reaches
       function responses instead, every app open becomes a function call (remove that rule).
       It shows the function's own, on staging and in production (2026-09-30).
-- [ ] Check the Netlify **Forms** tab receives a test submission from the waitlist form. The
-      feedback form's notifications reach forms@lunchsorted.app (seen 2026-09-19 to 21); the
-      waitlist form posts through the same Netlify Forms but has not been sent a test of its own.
+- [x] The waitlist form is gone (2026-10-23, with the launch): the home page and the full beta
+      page send a parent to the App Store instead. The feedback form's notifications reach
+      forms@lunchsorted.app (seen 2026-09-19 to 21).
 - [x] The four marketing screenshots and the new Recipes one are reshot against v20:
       six tabs in the Pack/Week/Foods/Shop/Recipes/Account order, the "Making it?" row,
       and `public/img/screen-recipes.png|webp` as a fifth figure on the site (`.shots` is
@@ -616,8 +616,8 @@ the visual identity.
 4. **Built** — the Capacitor iOS shell (`ios/`, `ios/README.md`) for the US storefront: it
    loads the web app and sells the plan through the App Store (in-app purchase; Stripe is the web's alone),
    builds on CI without a Mac, with the night-before kid's-pick reminder (6pm by default), and
-   `testflight.yml` archives, signs and uploads it from an App Store Connect key. Next for it: the first TestFlight build, then the share
-   sheet and a Home Screen widget.
+   `testflight.yml` archives, signs and uploads it from an App Store Connect key. Live on the App Store since
+   2026-10-21 (1.0, build 8; 1.1 is on `dev`). Still on the list: the share sheet and a Home Screen widget.
 
 - **Help** — the ? at the top of every tab opens a sheet: the short answers, "Ask a
   question" (the feedback email with the build and phone filled in — and, in the iPhone app, the
@@ -751,7 +751,7 @@ to `main` as v25 in one deploy with Phase A of the UX plan, the trial extension 
 #36 (the iPad payment sheet), after App Review rejected 1.0 (6). It changed what the app collects,
 so App Store Connect has to follow in the same sitting:
 
-- [ ] **App Privacy in App Store Connect** (Liz). Diagnostics → Crash Data: Yes, not linked, not
+- [x] **App Privacy in App Store Connect** (Liz; entered, and the label reads as below, checked 2026-10-23). Diagnostics → Crash Data: Yes, not linked, not
       tracking, App Functionality. Usage Data → Product Interaction: Yes, linked, not tracking,
       Analytics. The answers and the notes behind them are in `store/listing.md` under App
       Privacy; the label then reads "Data Linked to You: Contact Info, User Content,
@@ -862,8 +862,9 @@ out by deleting it in the commit that does it.
   with the new value has gone through (`migrate:` lines in its build log, where a refusal says
   `deploy refused:`); if a new key is refused too, the pattern in `resendKey()` is what to fix.
   Production's key belongs to Production alone: a deploy preview runs any branch's code.
-- **After App Review answers:** `public/llms.txt` says "An iPhone app is on its way to the App
-  Store"; change it the same day (to the store link once it is live).
+- **After App Review answers:** done 2026-10-23. The app went live on 2026-10-21
+  (https://apps.apple.com/us/app/lunch-sorted/id6810858256); `public/llms.txt`, the home page, the
+  help page and the ideas pages carry the store link instead of the waitlist.
 - **Liz, after App Review approves:** clear `REVIEW_EMAIL` and `REVIEW_CODE`
   (`store/listing.md`, After approval).
 - **Every price rise, both stores together:** a new Stripe price with no `founding` metadata,
@@ -932,18 +933,20 @@ out by deleting it in the commit that does it.
   billing retry that Apple succeeds after its grace period; a second parent tapping Manage in
   the App Store on an Apple Account that did not pay.
 
-**Blue Hour Ventures LLC** (filed with Maryland; about eight weeks)
-- **Liz, once it is approved:** EIN (IRS.gov, free), business bank account, D-U-N-S number
-  through Apple's free lookup, then ask Apple Developer Support to convert the individual
-  membership to an organization, and update the bank and tax form in App Store Connect
-  (W-9 with the EIN). Stripe: business type Company, the LLC's name, the EIN and the bank.
-  Register Lila Bloom Enterprises as the LLC's trade name. Assign the app, code, domain and
-  brand to the LLC in writing. Move service accounts (domain, Netlify, Neon, email) as they
-  renew. Ask whoever helps with the LLC whether Stripe's business details, already named for
-  the LLC, should be in Liz's name until approval.
-- **Code, then:** the operator line in `public/terms.html` ("Lila Bloom Enterprises, a trade
-  name of Blue Hour Ventures LLC"), the copyright line in `store/listing.md`, the Organization
-  in the home page's JSON-LD and the maker line in `public/llms.txt`.
+**Blue Hour Ventures LLC** (Maryland, single-member; approved and EIN issued October 2026).
+Lunch Sorted is made by the LLC under its own name: no trade name (Liz, 2026-10-22), and
+"Lila Bloom Enterprises" is retired. The LLC's own site, bluehourventuresllc.com, lives in its
+own private repository, `lkronz-lbk/bluehourventuresllc`.
+- **Done in code:** the terms' operator line, the footer of the site and the ideas pages, the
+  home page's JSON-LD, `public/llms.txt`, the email sign-off, the copyright line in
+  `store/listing.md` (pasted into App Store Connect at the next version).
+- **Liz:** a business bank account in the LLC's name; the D-U-N-S number through Apple's free
+  lookup, then ask Apple Developer Support to convert the individual membership to an
+  organization (no update in review meanwhile), accept the agreements again and update the bank
+  and tax forms (a single-member LLC is disregarded for tax by default: W-9 in her name with the
+  LLC's on line 2). Stripe: business type Company, the LLC's name and EIN, the new bank. Assign
+  the app, code, domain and brand to the LLC in writing. Move service accounts (domain, Netlify,
+  Neon, email) as they renew.
 
 **Other storefronts, when wanted:** Canada, Australia and New Zealand first (English; check the
 privacy page against their laws). The EU and UK after the LLC exists: the EU trader

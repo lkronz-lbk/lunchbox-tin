@@ -4575,7 +4575,7 @@ try {
     await db.query(`UPDATE entitlements SET plan = 'lifetime', source = 'code', status = 'active', stripe_subscription_id = NULL WHERE household_id = ${patState.household.id}`);
     process.env.BETA_CAP = '1';
     const fullPage = await (await fetch(NODE_BASE + '/beta')).text();
-    check('at the cap the page says the beta is full and takes an email for the list', /beta is full/.test(fullPage) && /name="waitlist"/.test(fullPage) && /value="beta-full"/.test(fullPage) && /action="\/on-the-list\.html"/.test(fullPage) && !/Join the beta/.test(fullPage));
+    check('at the cap the page says the beta is full and sends a parent to the free planner and the App Store, with no email form', /beta is full/.test(fullPage) && /apps\.apple\.com\/us\/app\/lunch-sorted\/id6810858256/.test(fullPage) && /href="\/"/.test(fullPage) && !/name="waitlist"/.test(fullPage) && !/<form/.test(fullPage) && !/Join the beta/.test(fullPage));
     await db.query(`UPDATE entitlements SET plan = 'free', source = 'none', status = 'canceled', stripe_subscription_id = 'sub_full' WHERE household_id = ${patState.household.id}`);
     process.env.BETA_CAP = '0';                                   /* closed: nobody else gets in, whatever the count */
     const fullCalls = stripeCalls.length;
@@ -6887,8 +6887,13 @@ try {
   check('screenshots ship as WebP with a PNG fallback and load lazily',
     await site.$$eval('picture source[type="image/webp"]', a => a.length) === 6 &&
     await site.$$eval('.shots img[loading="lazy"]', a => a.length) === 5);
-  check('the honeypot is hidden from assistive tech and the tab order',
-    await site.$eval('input[name="bot-field"]', i => i.closest('[aria-hidden="true"]') !== null && i.getAttribute('tabindex') === '-1'));
+  check('the landing page has no form left on it now that the waitlist is gone', (await site.$$('form')).length === 0);
+  {
+    const fb = await ctx.newPage(); await fb.goto(BASE + '/feedback.html');
+    check('the feedback form\'s honeypot is hidden from assistive tech and the tab order',
+      await fb.$eval('input[name="bot-field"]', i => i.closest('[aria-hidden="true"]') !== null && i.getAttribute('tabindex') === '-1'));
+    await fb.close();
+  }
   warn('og:image is an absolute URL (set once the domain exists)',
     /^https?:\/\//.test(await site.$eval('meta[property="og:image"]', m => m.content)));
   check('the landing page says what is free, what the plan costs, and where the terms are',
@@ -6904,9 +6909,14 @@ try {
       !!app && offer('yearly') === printed('year') && offer('monthly') === printed('month') && !app.offers.some(o => /forever/i.test(o.name)) && typed.length === 2,
       [app && app.offers, printed('year'), printed('month')]);
   }
-  check('the waitlist form is wired to Netlify',
-    await site.$eval('form.signup', f => f.getAttribute('data-netlify') === 'true' &&
-      !!f.querySelector('input[name="form-name"]')));
+  check('the home page sends an iPhone parent to the App Store and carries no waitlist form',
+    await site.evaluate(() => {
+      const store = 'https://apps.apple.com/us/app/lunch-sorted/id6810858256';
+      const btn = document.querySelector('.section .cta a.btn.primary[href="' + store + '"]');
+      const banner = document.querySelector('meta[name="apple-itunes-app"]');
+      return !!btn && /App Store/.test(btn.textContent) && !!banner && banner.getAttribute('content') === 'app-id=6810858256'
+        && !document.querySelector('form[name="waitlist"], form.signup') && !/waitlist/i.test(document.body.textContent);
+    }));
   {
     /* the front page's prices follow Stripe: a later, higher price with no founding mark replaces
        what the HTML says, and the founding line goes with it */
@@ -6933,7 +6943,7 @@ try {
       && down.includes('Household plan, yearly 19.99') && down.includes('Household plan, monthly 2.99'), [noMonth, down]);
   }
   await site.goto(BASE+'/feedback.html'); await site.waitForTimeout(250);
-  check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && !!f.querySelector('textarea[name="ideas"]') && f.querySelectorAll('input[name="want"]').length === 5 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));
+  check('the feedback page is a Netlify form with an email, the story, and a keep-using-it answer, sent to a thank-you page', await site.$eval('form[name="feedback"]', f => f.getAttribute('data-netlify') === 'true' && !!f.querySelector('input[name="form-name"][value="feedback"]') && !!f.querySelector('input[name="email"][required]') && !!f.querySelector('textarea[name="what"][required]') && f.querySelectorAll('input[name="keep"]').length === 3 && !!f.querySelector('textarea[name="ideas"]') && f.querySelectorAll('input[name="want"]').length === 4 && f.getAttribute('action') === '/thanks.html' && !!f.querySelector('input[name="bot-field"]')));
   await site.goto(BASE+'/help.html'); await site.waitForTimeout(250);
   {
     /* the answers told to search engines are the answers on the page, word for word, and name no price */

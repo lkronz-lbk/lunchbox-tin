@@ -8,12 +8,12 @@ change it here first.
 
 ## What Lunch Sorted is
 
-A school-lunch planner for parents, at lunchsorted.app, made by Liz Kronzek (Lila Bloom
-Enterprises; the Stripe account is Blue Hour Ventures LLC). Three questions and the app plans a
+A school-lunch planner for parents, at lunchsorted.app, made by Liz Kronzek through her
+company, Blue Hour Ventures LLC (bluehourventuresllc.com). Three questions and the app plans a
 week of packed lunches from foods the kid will eat, pairs them so a box makes sense, keeps the
 school's rules, writes the shopping list, asks what came home, and lets the kid pick which of
-the week's boxes is next. Phone-first web app that installs to the home screen; an iPhone shell
-is in App Review. The iPhone app sells the plan through the App Store only, the web through
+the week's boxes is next. Phone-first web app that installs to the home screen; the iPhone app
+has been on the App Store since 2026-10-21. The iPhone app sells the plan through the App Store only, the web through
 Stripe only; a plan bought on either side works on both.
 
 - **Free**: one lunchbox on one phone, planned and shopped for, with everything on for the first
@@ -55,16 +55,17 @@ writing a word, and then read the "sounds like a machine" list below and cut any
   a parent recognizes: the untouched sandwich, the 6:50am freezer stare, the school's new
   no-nuts letter, the kid who ate the same thing for eleven days. Say what went wrong in this
   house before saying what the app does about it. Short lines, the way a text to a friend reads.
-  A post can end without a call to action; when there is one, it is one line, and it is the
-  waitlist until the handbook says otherwise. No pitch, no "we", no feature lists. One
+  A post can end without a call to action; when there is one, it is one line, and since
+  2026-10-23 it is the App Store link (https://apps.apple.com/us/app/lunch-sorted/id6810858256),
+  or the free planner at lunchsorted.app for a parent on Android; never the waitlist, which is gone. No pitch, no "we", no feature lists. One
   exclamation mark at most. Emoji sparingly, as punctuation, never as decoration. If a caption
   could be pasted onto any other app's account, it is not done.
 - **Pinterest and email: a step more formal.** Still Liz, still plain, but complete sentences and a
   clear shape: the pin title leads with what a parent searched for, the description says what
   they will find; an email says one thing, in "we" for the product and "I" where Liz herself is
   writing (the tester emails, the beta welcome, replies), never both in one message, and is
-  signed "Liz" where "I" was used. Every email ends "— Lunch Sorted, from Lila Bloom
-  Enterprises. Reply to this email and a person reads it." (the reminders add the stop link).
+  signed "Liz" where "I" was used. Every email ends "— Lunch Sorted, from Blue Hour
+  Ventures LLC. Reply to this email and a person reads it." (the reminders add the stop link).
 - **The product, the site, the store: quiet and exact.** "We" throughout. Specific over adjectival:
   "a main, a side, a fruit and a sweet for every school day", never "delicious, nutritious
   lunches". No exclamation marks, no emoji, no paragraph of explanation on a screen. The help
@@ -200,7 +201,7 @@ The product rules in `CLAUDE.md` bind every spec, fix and proposal. On top of th
 
 ## Where feedback arrives
 
-Four inlets, two inboxes, one queue.
+Five inlets, two inboxes, one queue.
 
 | Inlet | Where it lands | Notes |
 | --- | --- | --- |
@@ -209,7 +210,9 @@ Four inlets, two inboxes, one queue.
 | Replies to any email the app sends | **hello@lunchsorted.app** | Welcome, tester days 1, 3 and 6, trial reminders, sign-in links |
 | The private beta Facebook group | The group (the link is `BETA_GROUP` in `netlify/lib/mail.js`) | No API; read as a member, quote with the date, never a name |
 
-Later: App Store reviews, once there is a build. Everything from every inlet becomes one row in
+App Store reviews, since the app went live on 2026-10-21: no connector reaches them, so they
+are read by hand in App Store Connect, quoted with the date and the star count, never a name;
+a reply is a draft for Liz. Everything from every inlet becomes one row in
 the intake queue, with where it came from, who said it, the build and phone if known, what kind
 it is, and who owns it next.
 
@@ -248,25 +251,29 @@ AI Org Chart" in Liz's Claude docs.
 | SEO, AEO and GEO | The query report, the audit, two drafted pages | Weekly, monthly |
 | Social Content | Next week's drafts and assets, the monthly calendar | Thursdays |
 | Pinterest and Short Video | The pin batch, the board plan, clip briefs | Weekly |
-| Lifecycle Email | Results and one change to the emails in code, the waitlist note | Monthly |
+| Lifecycle Email | Results and one change to the emails in code, the launch note | Monthly |
 | Partnerships | Ten researched targets and a draft note for each | Monthly |
-| App Store Optimization | The listing revision, review replies | Monthly, from TestFlight |
+| App Store Optimization | The listing revision, review replies | Monthly, since launch (2026-10-21) |
 | Design and UI Research | At most three proposals a month, each with its source | Monthly, after launch |
 
 ## This month
 
-As of 2026-09-22. Change this section first when the priority moves.
+As of 2026-10-23. Change this section first when the priority moves.
 
-- **Ship the iPhone app.** v23 is on `main` and with App Review; `main` is frozen until the
-  review lands, and everything new goes to `dev`. TestFlight is the next build.
-- **Grow the waitlist.** The social and Pinterest push starts now and every post lands on the
-  home page's waitlist form, because the beta is capped at 25 households and cannot take a
-  spike. The App Store link replaces the waitlist when the listing is live.
-- **Measure week two.** The one number the README asks for: do strangers come back in their
-  second week. The milestones table (migration 0009_milestones_errors) makes it a query.
-- **Listen before building.** The backlog in `README.md` (home-cooked or store-bought, the
-  shopping hand-off, rated products, a quality score, macros) is ideas, not a plan; evidence from
-  the intake queue decides what gets a spec.
+- **The iPhone app is live.** On the App Store since 2026-10-21
+  (https://apps.apple.com/us/app/lunch-sorted/id6810858256, version 1.0; 1.1 is on `dev`). `main`
+  is no longer frozen for a review; moving `dev` to `main` is still the release owner's call, made
+  on Liz's word. Owed: Liz clears `REVIEW_EMAIL` and `REVIEW_CODE` in Netlify; App Store reviews
+  are a new inlet (Where feedback arrives).
+- **Send parents to the app.** Every post, pin and page points at the App Store link, or at the
+  free planner on the home page for a parent on Android. The waitlist form is gone from the home
+  page. The beta link still gives the next 5 households the plan free forever until Liz closes it.
+- **Measure week two.** Live since 2026-09-30 (migration 0009_milestones_errors), but only 2
+  households signed up after it arrived, so the reading starts now, with the first strangers from
+  the App Store. It is still the one number the README asks for.
+- **Listen before building.** Unchanged: 1 parent-sourced ask in 28 intake rows. The backlog in
+  `README.md` is ideas, not a plan; the first parents who arrive from the App Store decide what
+  gets a spec.
 
 ## Facts
 
@@ -275,6 +282,7 @@ As of 2026-09-22. Change this section first when the priority moves.
 | Site, planner, help, feedback | lunchsorted.app, /app/, /help.html, /feedback.html |
 | Privacy, terms | /privacy.html, /terms.html |
 | The numbers | /admin, for the addresses in `ADMIN_EMAILS` |
+| The iPhone app | https://apps.apple.com/us/app/lunch-sorted/id6810858256, live since 2026-10-21 (bundle `app.lunchsorted`) |
 | Beta link, tester short link | /beta, /tester |
 | Short link for Instagram | /ig |
 | Email addresses | hello@lunchsorted.app (reply-to on everything), forms@lunchsorted.app (form notifications), hello@mail.lunchsorted.app (the sender) |
