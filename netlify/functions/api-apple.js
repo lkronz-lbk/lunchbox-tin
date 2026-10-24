@@ -19,7 +19,7 @@ const MAX_BODY = 65536;
 
 async function membership(userId) {
   const rows = await sql()`
-    SELECT h.id, m.role, e.apple_account_token AS token
+    SELECT h.id, m.role, e.apple_account_token AS token, e.apple_original_transaction_id AS original
     FROM household_members m JOIN households h ON h.id = m.household_id
     LEFT JOIN entitlements e ON e.household_id = h.id WHERE m.user_id = ${userId}`;
   return rows[0] || null;
@@ -212,8 +212,10 @@ async function route(req, context) {
   if (foreign && await tokenHousehold(txn.appAccountToken)) return elsewhere();
   /* bought for no household of this parent's (signed out on a phone, or for one since deleted), into a household they
      did not set up: only when they asked, through Restore purchases. A renewal a phone passes on by itself, from any build,
-     would otherwise tie a parent's purchase to the household they joined for good */
-  if (foreign && h.role !== 'owner' && !(b && b.restore === true)) return fail('Restore purchases adds this purchase to the household', 409, { restoreOnly: true });
+     would otherwise tie a parent's purchase to the household they joined for good. Once Restore has made it the
+     household's plan the row holds it, and the renewals the phone passes on from then are that plan's own: they land */
+  const held = !!h.original && h.original === String(txn.originalTransactionId);
+  if (foreign && !held && h.role !== 'owner' && !(b && b.restore === true)) return fail('Restore purchases adds this purchase to the household', 409, { restoreOnly: true });
   let outcome = await apply(h.id, iso(txn.signedDate), txn, null, context, foreign);
   /* refused in the upsert itself: another App Store purchase reached the row between the read and the write */
   if (outcome === 'stale' && foreign && await otherLive(h.id, txn)) outcome = 'other purchase';
