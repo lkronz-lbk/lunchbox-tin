@@ -1105,7 +1105,8 @@ writes the same one.
   a caretaker does not revive them); opening it lands at the top of the Account tab with the sign-in
   card and the inviter's name. A phone that already has lunches brings them into the
   household when it joins, and keeps the member it already was. A helper receives only the
-  plan, the foods in it and the checks (no rules, allergens, history or addresses), cannot
+  plan, the foods in it with their shopping lines, the recipes those foods use (what to do, never
+  where it was found) and the checks (no rules, allergens, history or addresses), cannot
   push (the server refuses, and the app says "Only a parent can change the plan"), and
   their checks stay on their phone. Nothing is drawn for a caretaker only to refuse: every
   control on their screens is one in `HELPER_OK`, and the smoke suite walks their six tabs, the
@@ -1380,7 +1381,9 @@ the idea bank stays free so a free list is never stuck with what it has.
   parent does not own, carrying any token but that household's (this phone's, another of the
   parent's devices', a deleted household's), is kept on the phone and finished, never linked, and
   link itself refuses such a purchase from anyone but the owner unless Restore purchases asked
-  (`restore: true`; 409 `restoreOnly` otherwise), so a page of an older build cannot do it either; a `restoreOnly`
+  (`restore: true`; 409 `restoreOnly` otherwise), so a page of an older build cannot do it either — except a
+  purchase whose original transaction the row already holds, which Restore made the household's plan: its renewals
+  land from any parent's phone, asked or not; a `restoreOnly`
   answer (a Buy the App Store answers with the plan the Apple Account already pays for) keeps the purchase on the phone
   before it is finished, and says only that Restore purchases adds it. The sign-in or the join says, once for each
   household, in the notice banner (which stays until OK, so the toast after it cannot bury it), that the plan stays
