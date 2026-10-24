@@ -123,7 +123,7 @@ the enrollment, so settle it before launch.
 - [x] Support URL: `https://lunchsorted.app/help.html`. A reviewer following it should land
       on answers, not the sales page.
 - [x] Marketing URL: `https://lunchsorted.app/`
-- [x] Copyright: `2026 Lila Bloom Enterprises`. This one sits lower down the version page
+- [x] Copyright: `2026 Blue Hour Ventures LLC` (was `2026 Lila Bloom Enterprises` for 1.0; change it at the next version). This one sits lower down the version page
       under General Information, beside the version number, not with the URLs.
 
 ### Screenshots (6.9-inch, in this order)
@@ -309,9 +309,9 @@ The one worth a look:
 - [ ] **Paid Applications** agreement showing **Active** under Business, with bank and tax
       forms done. Until it is, StoreKit returns no products and the plan sheet says the App
       Store is not answering. Join the App Store Small Business Program before the first sale.
-- [x] Seller name: **Elizabeth Kronzek**, the legal entity on the account. A sole
-      proprietorship is not a separate legal person, so Lila Bloom Enterprises cannot be
-      the seller; it appears in the Copyright line instead. Apple reissues the agreements from
+- [x] Seller name: **Elizabeth Kronzek**, the legal entity on the account, until Apple
+      converts the membership to an organization; then **Blue Hour Ventures LLC** (D-U-N-S
+      number first). Lila Bloom Enterprises, the old sole-proprietorship name, is retired. Apple reissues the agreements from
       time to time and an unaccepted one takes your apps off sale, so check Business whenever
       Apple emails about updated terms. What renews annually is the Developer Program
       membership, on its enrollment anniversary.

@@ -8,8 +8,8 @@ change it here first.
 
 ## What Lunch Sorted is
 
-A school-lunch planner for parents, at lunchsorted.app, made by Liz Kronzek (Lila Bloom
-Enterprises; the Stripe account is Blue Hour Ventures LLC). Three questions and the app plans a
+A school-lunch planner for parents, at lunchsorted.app, made by Liz Kronzek through her
+company, Blue Hour Ventures LLC (bluehourventuresllc.com). Three questions and the app plans a
 week of packed lunches from foods the kid will eat, pairs them so a box makes sense, keeps the
 school's rules, writes the shopping list, asks what came home, and lets the kid pick which of
 the week's boxes is next. Phone-first web app that installs to the home screen; an iPhone shell
@@ -63,8 +63,8 @@ writing a word, and then read the "sounds like a machine" list below and cut any
   clear shape: the pin title leads with what a parent searched for, the description says what
   they will find; an email says one thing, in "we" for the product and "I" where Liz herself is
   writing (the tester emails, the beta welcome, replies), never both in one message, and is
-  signed "Liz" where "I" was used. Every email ends "— Lunch Sorted, from Lila Bloom
-  Enterprises. Reply to this email and a person reads it." (the reminders add the stop link).
+  signed "Liz" where "I" was used. Every email ends "— Lunch Sorted, from Blue Hour
+  Ventures LLC. Reply to this email and a person reads it." (the reminders add the stop link).
 - **The product, the site, the store: quiet and exact.** "We" throughout. Specific over adjectival:
   "a main, a side, a fruit and a sweet for every school day", never "delicious, nutritious
   lunches". No exclamation marks, no emoji, no paragraph of explanation on a screen. The help
