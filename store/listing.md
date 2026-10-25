@@ -71,44 +71,42 @@ the enrollment, so settle it before launch.
 
 ### Description (4000)
 
-- [x] Pasted
+- [ ] Pasted. Trimmed 2026-10-25 to 3046 characters for 1.1; the live 1.0 text is the older, longer one, and the previous draft here had grown past the limit.
 
-> Our daughter started kindergarten and the lunch packing nearly broke me. I wanted it balanced. I wanted it healthy. I also wanted her to eat it, in the twenty minutes she gets to sit down. Most nights I was standing at the counter with the fridge open, out of ideas.
+> Our daughter started kindergarten and the lunch packing nearly broke me. I wanted it balanced, and I wanted her to eat it in the twenty minutes she gets. Most nights I was at the counter with the fridge open, out of ideas. So I built this.
 >
-> So I built this.
->
-> A WEEK OF LUNCHES PLANNED IN A MINUTE
-> Answer three questions and you get five planned lunchboxes: a main, a side, a fruit and a sweet for every school day. Not a random shuffle. Something crunchy against a soft main, protein when the main is light, something sharp to cut the salt. Plan the whole week again, shuffle one day, or just switch out one item.
+> A WEEK OF LUNCHES IN A MINUTE
+> Answer three questions and get five lunchboxes: a main, a side, a fruit and a sweet for every school day. Not a random shuffle: something crunchy against a soft main, protein when the main is light. Plan the week again, shuffle one day, or switch out one item.
 >
 > NOTHING TO SET UP FIRST
-> There is no food library to build before you get anything back. It starts with foods most kids eat and you adapt from there. Take out the options they refuse, and add more from a long list of ideas. On the Household plan you can write in that pickle roll-up only your kid will eat, or paste in the address of a recipe you found and let the app read the ingredients off it.
+> No food library to build. It starts with foods most kids eat; take out the ones they refuse, add more from a long list of ideas. On the Household plan, write in the pickle roll-up only your kid will eat, or paste the address of a recipe and let the app read the ingredients.
 >
-> YOUR SCHOOL'S RULES BUILT IN
-> Nut free, seed free, dairy free, no microwave, no ice pack, a short eating window, no chocolate, or set your own. Set them per kid, per school. A food that breaks a rule gets flagged in your list, so you always know why something stopped showing up.
+> YOUR SCHOOL'S RULES
+> Nut free, dairy free, no microwave, no ice pack, a short eating window, or your own. Set per kid, per school. A food that breaks a rule is flagged, never silently dropped.
 >
 > THE SHOPPING LIST WRITES ITSELF
-> Everything you planned across all kids, in one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
+> Everything you planned, every kid, one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
 >
-> TWO RECIPES IN, THE REST YOU BRING
-> A Recipes tab of its own, for the whole household rather than one lunchbox. Two kid-tested recipes come with it, free, and once you have kept a few of your own you can search them by name or by what is already in the cupboard. One step at a time on the screen while you are at the counter, with a box to check off for each ingredient, in US measures or metric, scaled to how much you are making. Found something on a blog or a reel? Paste the address, or the words under the video, and it is yours to keep — and to put on a lunchbox's list whenever you want it packed.
-
-> BUILT FOR MULTIPLE KIDS
-> Simplify shopping by matching all kids' lunchboxes, while honoring each school's rules with alternative options. Kids with wildly different preferences can have totally different lunchbox plans. You choose your setup, and one shopping list still covers them all.
+> RECIPES
+> Two kid-tested recipes come free. Keep your own, search them by what is in the pantry, and cook one step at a time with a box to check off for each ingredient, in US measures or metric. Found one on a blog or a reel? Paste the address and it is yours.
+>
+> MORE THAN ONE KID
+> Match the lunchboxes to keep shopping simple, with each school's rules honored by swaps, or give kids with different tastes different plans. One shopping list either way.
 >
 > LET THEM PICK
-> Kids who help plan their lunches eat more of them. We have all seen it. Hand your kid the phone the night before and let them choose between two options within the week's plan. Everything they are choosing from is already on the shopping list, so there is nothing new to buy and nothing to renegotiate at seven in the morning.
+> Kids who help plan their lunches eat more of them. Hand over the phone the night before and let them choose between two boxes from the week's plan. Both are already on the shopping list, so nothing new to buy and nothing to renegotiate at seven in the morning.
 >
 > WHAT CAME HOME
-> Tell it what got eaten and what came back. Next week leans toward the things that actually get eaten and puts on hold the ones that keep coming home untouched.
+> Tell it what got eaten and what came back. Next week leans toward what gets eaten and rests what keeps coming home untouched.
 >
 > EVERYONE WHO PACKS
-> Sign in with your email. No password to remember. Add your partner, a grandparent, a nanny, or anyone else who gets lunches out the door on a busy morning.
+> Sign in with your email, no password. Add your partner, a grandparent, a nanny, anyone who gets lunches out the door.
 >
-> It works online and off, and your lunches never leave your phone until you choose to sign in.
+> Works online and off. Your lunches never leave your phone until you choose to sign in.
 >
-> FREE: Planning the week, the shopping list and the pack list are free for good, for one lunchbox. Build the food list from a long list of ideas, with two kid-tested recipes to cook from, take out the ones they refuse, and set your school's rules.
+> FREE: planning the week, the shopping list and the pack list, for one lunchbox, for good.
 >
-> THE PAID HOUSEHOLD PLAN: Add your own foods or bring in a recipe from anywhere, let them pick, track what came home, a shopping list that remembers what you already have at home, more lunchboxes and sharing with another parent. Every new household gets all of it free for three weeks, no card. Anything you added in those three weeks stays yours. In this app the plan is an in-app purchase, yearly or monthly, at the price the App Store shows; the launch price is a founding price, kept for as long as you stay subscribed. Both plans renew automatically until you cancel them in your Apple Account's subscriptions. Terms of use: https://lunchsorted.app/terms.html · Privacy: https://lunchsorted.app/privacy.html
+> THE HOUSEHOLD PLAN: your own foods and recipes, the kid's pick, what came home, a shopping list that knows what is already at home, more lunchboxes, and sharing with another parent. Free for your first three weeks, no card; what you added stays yours. Then yearly or monthly as an in-app purchase at the price the App Store shows. The launch price is a founding price, kept for as long as you stay subscribed. It renews automatically until you cancel in your Apple Account's subscriptions. Terms of use: https://lunchsorted.app/terms.html · Privacy: https://lunchsorted.app/privacy.html
 >
 > Made by a mom who no longer dreads packing lunches. hello@lunchsorted.app
 
