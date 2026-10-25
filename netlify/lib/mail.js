@@ -4,10 +4,11 @@
    an error, never a silent no-op. The test suite captures every message
    through the global hook instead. */
 import { siteEnv } from './db.js';
+import { esc, p, h1, small, sig, btn, codeBox, steps, bullets, link, pic, shell, footText } from './mail-parts.js';
+export * from './mail-parts.js';
 
 const FROM = () => process.env.MAIL_FROM || 'Lunch Sorted <hello@mail.lunchsorted.app>';
 const REPLY_TO = 'hello@lunchsorted.app';
-const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* the key alone, as Resend gives it: re_, then letters, digits and underscores. The build
    (scripts/migrate.mjs) refuses the deploy over anything more, a line break pasted with it above all,
@@ -69,96 +70,6 @@ export async function send(msg, secrets = []) {
   if (!res.ok) throw new Error(`Resend ${res.status}: ${scrub(text, [key, ...secrets.filter(Boolean).map(String)])}`);
   return {};
 }
-
-/* ---------------------------------------------------------------- the look
-
-   One shell for every email, built from the app's own design tokens (HANDBOOK.md, The brand):
-   the page ground, one card, the icon and the name at the top, the body, then the same closing
-   line on every message. Tables, not flex, because that is what mail clients lay out; every
-   color is written inline and again as a class, so the inline copy carries clients that drop
-   the stylesheet and the class carries the dark set to Apple Mail, which honors
-   prefers-color-scheme. Gmail loads no web font, so each stack ends in the system sans. */
-const C = {
-  light: { ground: '#E9EEE6', surface: '#FBFCF9', ink: '#16241E', ink2: '#3E4D45', line: '#CFDACB', accent: '#2A5141', soft: '#DCE8DF', onAccent: '#FBFCF9' },
-  dark:  { ground: '#0E1815', surface: '#17251F', ink: '#E6EEE7', ink2: '#AFC1B6', line: '#2B3E36', accent: '#81CBA8', soft: '#1F332A', onAccent: '#0E1815' }
-};
-const L = C.light, D = C.dark;
-const F = {
-  head: "'Familjen Grotesk','Helvetica Neue',Helvetica,Arial,sans-serif",
-  body: "Karla,'Helvetica Neue',Helvetica,Arial,sans-serif",
-  mono: "'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace"
-};
-const FONTS_URL = 'https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@700&family=Karla:wght@400;700&family=IBM+Plex+Mono:wght@600&display=swap';
-export const CLOSING = '— Lunch Sorted, from Lila Bloom Enterprises. Reply to this email and a person reads it.';
-
-/* the pieces a body is made of; each writes its colors inline and names the class the dark set hangs on */
-const p = (html, extra = '') => `<p class="ink" style="margin:0 0 16px;font:400 17px/1.5 ${F.body};color:${L.ink}${extra}">${html}</p>`;
-const h1 = (text) => `<h1 class="ink" style="margin:0 0 16px;font:700 26px/1.2 ${F.head};color:${L.ink};letter-spacing:-.01em">${esc(text)}</h1>`;
-const small = (html) => `<p class="ink2" style="margin:0 0 16px;font:400 15px/1.5 ${F.body};color:${L.ink2}">${html}</p>`;
-const sig = () => `<p class="ink" style="margin:24px 0 0;font:400 17px/1.5 ${F.body};color:${L.ink}">Liz</p>`;
-const btn = (href, label) => `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 24px"><tr><td class="btn" style="background:${L.accent};border-radius:12px"><a href="${esc(href)}" class="btn" style="display:inline-block;padding:14px 24px;font:700 17px/1.2 ${F.body};color:${L.onAccent};text-decoration:none;border-radius:12px;background:${L.accent}">${esc(label)}</a></td></tr></table>`;
-const codeBox = (c) => `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 24px"><tr><td class="code" style="background:${L.soft};border-radius:12px;padding:14px 22px;font:600 26px/1.2 ${F.mono};color:${L.ink};letter-spacing:.12em">${esc(c)}</td></tr></table>`;
-const steps = (arr) => `<ol style="margin:0 0 20px;padding-left:24px">${arr.map(x => `<li class="ink" style="margin:0 0 10px;font:400 17px/1.5 ${F.body};color:${L.ink}">${x}</li>`).join('')}</ol>`;
-const bullets = (arr) => `<ul style="margin:0 0 16px;padding-left:24px">${arr.map(x => `<li class="ink" style="margin:0 0 6px;font:400 17px/1.5 ${F.body};color:${L.ink}">${x}</li>`).join('')}</ul>`;
-const link = (href, label) => `<a href="${esc(href)}" class="link" style="color:${L.accent};font-weight:700">${esc(label)}</a>`;
-const pic = (src, alt) => `<img src="${esc(src)}" width="300" alt="${esc(alt)}" class="shot" style="display:block;width:300px;max-width:100%;height:auto;border:1px solid ${L.line};border-radius:12px;margin:4px 0 24px">`;
-
-/* the shell: a preheader the inbox shows beside the subject, the card, the closing line, and for
-   the reminders the stop link. `site` is where the icon is served from */
-function shell({ site, subject, preheader = '', body, stopUrl }) {
-  const foot = esc(CLOSING) + (stopUrl ? ` ${link(stopUrl, 'Stop these reminders')}.` : '');
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<meta name="supported-color-schemes" content="light dark">
-<title>${esc(subject)}</title>
-<link href="${FONTS_URL}" rel="stylesheet">
-<style>
-  body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; }
-  @media (max-width: 600px) {
-    .card { border-radius: 0 !important; }
-    .pad { padding-left: 20px !important; padding-right: 20px !important; }
-    .gutter { padding: 0 !important; }
-  }
-  @media (prefers-color-scheme: dark) {
-    body, .ground { background: ${D.ground} !important; }
-    .card { background: ${D.surface} !important; }
-    .ink { color: ${D.ink} !important; }
-    .ink2 { color: ${D.ink2} !important; }
-    .rule, .shot { border-color: ${D.line} !important; }
-    .btn { background: ${D.accent} !important; color: ${D.onAccent} !important; }
-    .code { background: ${D.soft} !important; color: ${D.ink} !important; }
-    .link { color: ${D.accent} !important; }
-  }
-</style>
-</head>
-<body class="ground" style="margin:0;padding:0;background:${L.ground}">
-${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${esc(preheader)}${'&nbsp;&zwnj;'.repeat(40)}</div>` : ''}
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="ground" style="background:${L.ground}">
-<tr><td align="center" class="gutter" style="padding:28px 12px">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="card" style="max-width:560px;background:${L.surface};border-radius:20px">
-    <tr><td class="pad" style="padding:28px 32px 4px">
-      <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
-        <td style="padding-right:12px;vertical-align:middle"><img src="${esc(site)}/icons/icon-192.png" width="40" height="40" alt="" style="display:block;width:40px;height:40px;border-radius:10px"></td>
-        <td class="ink" style="vertical-align:middle;font:700 20px/1 ${F.head};color:${L.ink}">Lunch Sorted</td>
-      </tr></table>
-    </td></tr>
-    <tr><td class="pad" style="padding:24px 32px 12px">
-${body}
-    </td></tr>
-    <tr><td class="pad rule" style="padding:20px 32px 28px;border-top:1px solid ${L.line}">
-      <p class="ink2" style="margin:0;font:400 14px/1.5 ${F.body};color:${L.ink2}">${foot}</p>
-    </td></tr>
-  </table>
-</td></tr>
-</table>
-</body>
-</html>`;
-}
-const footText = (stopUrl) => `\n\n${CLOSING}` + (stopUrl ? `\nStop these reminders: ${stopUrl}` : '');
 
 /* ---------------------------------------------------------------- the emails
 
@@ -324,3 +235,4 @@ export function sendTester(to, site, day, stopUrl) {
       + sig() });
   return send({ to, subject: notes.subject, text, html });
 }
+

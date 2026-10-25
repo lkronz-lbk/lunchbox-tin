@@ -19,17 +19,16 @@ Purpose: get the parent signed in, in one tap or one typed code, with nothing el
 Today's email is close to right and about twice as long as the admired ones. Across 168 captured login-code emails from 123 brands, 64% are plain text, 60% have a single button, the median subject is about 25 characters, and the stated pattern is "large, spaced digits near the top of the email, and ideally in the subject line"; Notion's whole code email is about 42 words, and Instacart's is 102 only because of a phishing paragraph ([Sequenzy](https://www.sequenzy.com/email-examples/saas-magic-link); [Sequenzy, Notion](https://www.sequenzy.com/email-examples/brands/notion/emails/your-temporary-notion-login-code); [Sequenzy, Instacart](https://www.sequenzy.com/email-examples/brands/instacart/emails/005650-is-your-instacart-verification-code)). The code goes into the subject for two practical reasons: a parent who opened the home-screen app and switched to Mail reads it from the notification without opening anything, and a unique subject stops Gmail collapsing every sign-in email into one thread. Notion's "You can sign up by entering the code ... or simply by clicking the magic link" is the model for explaining the choice in one sentence ([Sequenzy, Notion](https://www.sequenzy.com/email-examples/brands/notion/emails/your-notion-signup-code)).
 
 ```
-Subject (27):  Your sign-in code is 482913
+Subject (30):  Your sign-in code is KQ7M-3XPB
 Preheader:     Tap the button, or type the code in the app. Each works once, for 15 minutes.
 Headline:      Sign in to Lunch Sorted.
 Visual:        none
-Lines:         Tap the button below.
-               Opened Lunch Sorted from your home screen? Type this code in the app instead:
-               [482913, in the code box]
-               If you didn't ask for this, ignore it. Nothing changes.
-Button:        Sign in  →  https://lunchsorted.app/api/auth/verify?t=…  (a universal link today)
-Voice:         product ("we" is not needed; no sign-off)
-Headers:       none (transactional; no stop link, no List-Unsubscribe)
+Lines:         Opened Lunch Sorted from your home screen? Type this code in the app instead:
+Code:          KQ7M-3XPB, in the code box
+Small print:   If you didn't ask for this, ignore it. Nothing changes.
+Button:        Sign in  →  https://lunchsorted.app/api/auth/verify?t=TOKEN
+Voice:         product
+Headers:       none (transactional)
 Text part:     the same four lines, the URL in full, the code on its own line
 ```
 
@@ -40,11 +39,10 @@ Purpose: bring the other parent into the household when the share sheet did not 
 The consumer precedents cut both ways. Google's family invite is one sentence naming the inviter, one "Accept invitation" button, a line on what the joiner will see, and a two-week expiry; 1Password's subject is "Join [Account] on 1Password"; but AnyList sends an existing account only a push notification and OurGroceries sends nothing, letting both people type the same address ([Google Families](https://support.google.com/families/answer/6317858); [UW-Madison KB](https://kb.wisc.edu/security/147715); [AnyList](https://help.anylist.com/articles/share-list/); [OurGroceries](https://ourgroceries.com/user-guide)). Lunch Sorted's share link already travels by iMessage, which is where the other parent is. The spec is ready so the decision is cheap; the recommendation is to build it only if the invites table shows links going unconsumed (Part 4).
 
 ```
-Subject (31):  Sam invited you to Lunch Sorted        (the inviter's first name; falls back to
-                                                      "You're invited to Lunch Sorted", 30)
+Subject (31):  Sam invited you to Lunch Sorted
 Preheader:     Same week, same list, on your phone too.
 Headline:      Sam asked you to pack from the same plan.
-Visual:        public/img/screen-week.png cropped to the week strip (new crop via scripts/mail-shots.mjs)
+Visual:        The Week tab (week, a new crop via scripts/mail-shots.mjs)
 Lines:         You'll see the week, the list and the pack list Sam sees.
                You'll be asked to sign in with your email.
                This link works once and expires in 7 days.
@@ -66,10 +64,9 @@ Preheader:     Everything on our side is gone. One thing to check if you paid th
 Headline:      Your account is deleted.
 Visual:        none
 Lines:         Your sign-in, your household's copy on our side, and any invites are gone.
-               A Household plan paid on the web is cancelled; nothing more is charged.
-               Paid through the App Store? Apple keeps that one until you cancel it:
-               Settings › your name › Subscriptions.
-Button:        none (there is nothing to open; a text link to the Apple steps is enough)
+               A Household plan paid on the web is canceled; nothing more is charged.
+               Paid through the App Store? Apple keeps that one until you cancel it: **Settings › your name › Subscriptions**.
+Button:        none
 Voice:         product
 Headers:       none (transactional)
 Text part:     the same lines
@@ -89,16 +86,16 @@ Today's welcome does four jobs (trial explanation, invite, home screen, what sta
 
 ```
 Subject (34):  Welcome. Plan the week in a minute
-Preheader:     Everything is on until [Friday, November 13]. No card, nothing to cancel.
+Preheader:     Everything is on until Friday, November 13. No card, nothing to cancel.
 Headline:      You're signed in.
-Visual:        public/img/mail-day1.png (the Week tab's first day card; already exists)
+Visual:        The Week tab, Monday's box planned (day1, exists)
 Lines:         Open Week and tap Plan the week. The boxes are paired for you.
-               Everything is on until [weekday, month day], including the Household plan's parts.
-               There is no card on file and nothing to cancel.
+               Everything is on until **Friday, November 13**, including the Household plan's parts.
+               There's no card on file and nothing to cancel.
                Reply to this email with anything. I read every one.
 Button:        Plan the week  →  https://lunchsorted.app/app/?go=week
 Voice:         Liz, signed "Liz"
-Headers:       stop link + List-Unsubscribe (it leads a series)
+Headers:       stop link + List-Unsubscribe
 Joiner variant: lines 2 and 3 dropped; "Sam's week is on your phone now" as line 2
 ```
 
@@ -110,13 +107,13 @@ Same trigger and measure. The beta tester's version keeps its two facts (the who
 Subject (32):  Welcome to the beta. Yours, free
 Preheader:     The whole planner, for good. No card, ever. Four short emails this week, from me.
 Headline:      Thank you for testing Lunch Sorted.
-Visual:        public/img/mail-day1.png
+Visual:        The Week tab, Monday's box planned (day1, exists)
 Lines:         Your household has the whole planner, free, for good. Not just for the beta.
                Open Week and tap Plan the week.
                Over the next ten days I'll send four short emails, one part of the app each.
-               The other testers and I are in a private Facebook group for the quick stuff. [link]
+               The other testers and I are in a [private Facebook group](https://fb.me/g/7QlD2hwuL/xxqnw6dQ) for the quick stuff.
 Button:        Plan the week  →  https://lunchsorted.app/app/?go=week
-Voice:         Liz
+Voice:         Liz, signed "Liz"
 Headers:       stop link + List-Unsubscribe
 ```
 
@@ -127,27 +124,28 @@ Purpose: the first win. Trigger: day 1 after first sign-in, 7:30am local. Outcom
 This is Notion's trick applied cheaply: behavior decides the email, but the behavior is read from the document the server already syncs, not from tracking ([Sequenzy blog](https://www.sequenzy.com/blog/successful-saas-email-marketing-examples)). A household whose document already carries a planned week gets the Shop version; one that does not gets Plan the week. Today's day-1 email carried four steps and three screens; each version below carries one.
 
 ```
-Version A (no week yet)
+Version A (the week, planned in a minute)
 Subject (29):  The week, planned in a minute
 Preheader:     Open Week, tap Plan the week. Swap any compartment, lock any day.
 Headline:      The week, planned in a minute.
-Visual:        public/img/mail-day1.png
+Visual:        The Week tab: Monday's box, with its lock and shuffle (day1, exists)
 Lines:         Open Week and tap Plan the week.
                Not sure about something? Tap that compartment and pick another.
                Like a day as it is? Tap the lock and the next plan leaves it alone.
 Button:        Plan the week  →  https://lunchsorted.app/app/?go=week
+Voice:         Liz, signed "Liz"
+Headers:       stop link + List-Unsubscribe
 
-Version B (week already planned)
+Version B (your list, by aisle)
 Subject (19):  Your list, by aisle
 Preheader:     Shop has the week's groceries sorted by aisle. Check off what's home.
 Headline:      Your list is already written.
-Visual:        new crop of public/img/screen-shop.png, the aisle list only (scripts/mail-shots.mjs)
+Visual:        The Shop tab, the aisle list (shop, a new crop via scripts/mail-shots.mjs)
 Lines:         Open Shop. Everything the week needs, by aisle.
                Check off what's already home.
                Copy it, or Send it to Notes or a text.
 Button:        Open the list  →  https://lunchsorted.app/app/?go=shop
-
-Voice:         Liz (one line of "in my house" is allowed; no paragraph)
+Voice:         Liz, signed "Liz"
 Headers:       stop link + List-Unsubscribe
 Beta variant:  the button reads "Tell me how it went" → https://lunchsorted.app/feedback.html,
                with one question above it ("Did the boxes make sense for your kid?")
@@ -163,12 +161,12 @@ The captured apps send a nudge on day 1 and their first content email on day 2 t
 Subject (26):  Tonight, let your kid pick
 Preheader:     In my house, a lunch they chose comes home emptier.
 Headline:      Let them pick.
-Visual:        public/img/mail-day3.png (two pictures to choose between; already exists)
-Lines:         Beside your kid's name, switch on They pick their box each day.
-               Tonight, open Pack, tap the Let … pick button, and hand over the phone.
-               Each part lets them build it; Whole box picks between finished boxes.
+Visual:        The kid's pick: two pictures to choose between (day3, exists)
+Lines:         Beside your kid's name, switch on **They pick their box each day**.
+               Tonight, open Pack, tap the **Let … pick** button, and hand over the phone.
+               **Each part** lets them build it; **Whole box** picks between finished boxes.
 Button:        Open Pack  →  https://lunchsorted.app/app/?go=pack
-Voice:         Liz
+Voice:         Liz, signed "Liz"
 Headers:       stop link + List-Unsubscribe
 Beta variant:  button "Which did your kid take to?" → /feedback.html
 Never:         the child's name (the app's button carries it; the email never does)
@@ -184,12 +182,12 @@ Today's day-6 email carries four steps, the planned-features list and three ques
 Subject (28):  After school: what came home
 Preheader:     One tap when the box is home, and next week leans toward what got eaten.
 Headline:      What came home.
-Visual:        public/img/mail-day6.png (All eaten, or the four answers under each food; exists)
+Visual:        What came home: All eaten, or an answer under each food (day6, exists)
 Lines:         When the box is home, Pack asks how it went.
-               Tap All eaten, or answer under each food.
+               Tap **All eaten**, or answer under each food.
                A food that comes home twice in a row sits out for three weeks.
 Button:        Open Pack  →  https://lunchsorted.app/app/?go=pack
-Voice:         Liz
+Voice:         Liz, signed "Liz"
 Headers:       stop link + List-Unsubscribe
 Beta variant:  button "Would you keep using it? Tell me why" → /feedback.html,
                and the planned-features list as five short lines above it (testers only)
@@ -205,14 +203,12 @@ This is the fourth and last education email; the memory note from the onboarding
 Subject (18):  Add your own foods
 Preheader:     What to buy for it goes on the list. The planner pairs it like the rest.
 Headline:      Your family's real food.
-Visual:        new crop of store/screenshots/08-foods's source screen without its baked headline
-               (re-shoot the Foods tab through scripts/mail-shots.mjs; never ship the composed
-               store image, see Part 2)
-Lines:         On Foods, tap Add your own.
+Visual:        The Foods tab (foods, a new crop via scripts/mail-shots.mjs)
+Lines:         On Foods, tap **Add your own**.
                Give it a name and what to buy for it.
                It joins the pairing and the list from the next Plan the week.
 Button:        Open Foods  →  https://lunchsorted.app/app/?go=foods
-Voice:         Liz
+Voice:         Liz, signed "Liz"
 Headers:       stop link + List-Unsubscribe
 ```
 
@@ -229,18 +225,16 @@ Purpose: say what pauses and what stays, with the one tap that keeps everything 
 The subject keeps the weekday and drops the date (35 characters at its longest, "Wednesday"); the headline carries the full date. The price line comes out of the email and stays on the plan pane, for three reasons: the captured norm, the pending Supreme Court case on Apple's anti-steering rules (the live guideline permits out-of-app communication about other purchase methods, but the US carve-out is what certiorari puts at risk), and the fact that an iPhone household may buy at the App Store's price rather than Stripe's ([Sequenzy](https://www.sequenzy.com/email-examples/trial-ending); [App Store Review Guidelines](https://developer.apple.com/app-store/review/guidelines/); [IPWatchdog](https://ipwatchdog.com/2026/06/30/high-court-grants-cert-in-apples-challenge-to-ninth-circuit-contempt-ruling-in-app-store-dispute/)). The owner may overrule (Part 4); if so, the existing `priceWords` line stays and is always read from Stripe.
 
 ```
-Subject (32–35):  Your free three weeks end Friday
+Subject (32):  Your free three weeks end Friday
 Preheader:     Nothing disappears. Here is what pauses, and the tap that keeps it on.
 Headline:      Everything is on until Friday, November 13.
-Visual:        none (a screenshot here reads as a sales page; the captured reminders carry none)
-Lines:         Stays free, for good: the week's plan, the shopping list, the pack list, the idea bank.
-               Pauses: your own foods, the kid's pick, the after-school review, the pantry,
-               a second lunchbox, a second phone.
+Visual:        none
+Lines:         **Stays free, for good:** the week's plan, the shopping list, the pack list, the idea bank.
+               **Pauses:** your own foods, the kid's pick, the after-school review, the pantry, a second lunchbox, a second phone.
                The Household plan keeps all of it on. Do nothing, and the free planner carries on.
 Button:        Keep everything on  →  https://lunchsorted.app/app/?upgrade=1
 Voice:         product
-Headers:       stop link + List-Unsubscribe (CAN-SPAM reads it as a change-of-standing notice while
-               the subject stays a notice; the headers cost nothing)
+Headers:       stop link + List-Unsubscribe
 ```
 
 **11. Three weeks up. Change.**
@@ -254,8 +248,8 @@ Subject (23):  Your three weeks are up
 Preheader:     The free planner carries on. Everything you made is still there.
 Headline:      Everything you made is still there.
 Visual:        none
-Lines:         Still free: the week's plan, the shopping list, the pack list, the idea bank.
-               Paused, exactly as you left it: your own foods, the kid's pick, the review, the pantry.
+Lines:         **Still free:** the week's plan, the shopping list, the pack list, the idea bank.
+               **Paused, exactly as you left it:** your own foods, the kid's pick, the review, the pantry.
                The Household plan switches it back on. This is the last email about it.
 Button:        Switch it back on  →  https://lunchsorted.app/app/?upgrade=1
 Voice:         product
@@ -275,15 +269,12 @@ Subject (24):  The Household plan is on
 Preheader:     On every phone that signs in to your household. Paid once, works everywhere.
 Headline:      Thank you. The Household plan is on.
 Visual:        none
-Lines:         Everything is on again: your own foods, the kid's pick, the review, the pantry,
-               another lunchbox, another phone.
+Lines:         Everything is on again: your own foods, the kid's pick, the review, the pantry, another lunchbox, another phone.
                It works on every phone that signs in to this household, web or iPhone.
-               Paid on iPhone: manage it in Settings › your name › Subscriptions.
-               Paid on the web: Manage billing on Account.
-Button:        one member →  Add the other parent  →  https://lunchsorted.app/app/?go=account
-               two or more →  Open the planner    →  https://lunchsorted.app/app/
-Voice:         Liz ("Thank you" is hers)
-Headers:       none (transactional: confirms a transaction)
+               Paid on iPhone: manage it in **Settings › your name › Subscriptions**. Paid on the web: **Manage billing** on Account.
+Button:        Add the other parent  →  https://lunchsorted.app/app/?go=account
+Voice:         Liz, signed "Liz"
+Headers:       none (transactional)
 ```
 
 ### Ongoing
@@ -298,12 +289,12 @@ Behavior-triggered beats calendar-triggered in the captured sequences (Notion's 
 Subject (32):  The planner is where you left it
 Preheader:     Next week's boxes take a minute. Nothing has moved.
 Headline:      Still here, where you left it.
-Visual:        public/img/mail-day1.png
+Visual:        The Week tab (day1, exists)
 Lines:         Everything you made is still in the planner.
                Open Week, tap Plan the week, and next week is done.
                If lunches have changed, tell me what happened. I read every reply.
 Button:        Plan the week  →  https://lunchsorted.app/app/?go=week
-Voice:         Liz
+Voice:         Liz, signed "Liz"
 Headers:       stop link + List-Unsubscribe
 ```
 
@@ -317,14 +308,13 @@ None of the sources address seasonal products; the calendar moments are inferenc
 Subject (34):  School starts. Plan the first week
 Preheader:     Open Week, tap Plan the week. The list writes itself.
 Headline:      The first week back, planned in a minute.
-Visual:        public/img/mail-day1.png (or a fresh seasonal crop of the Week tab)
+Visual:        The Week tab (day1, exists)
 Lines:         Open Week and tap Plan the week.
                Shop has the groceries by aisle.
                Tomorrow morning, Pack has the box.
 Button:        Plan the week  →  https://lunchsorted.app/app/?go=week
-Voice:         Liz
-Headers:       stop link + List-Unsubscribe; CAN-SPAM treats this as commercial, so the footer
-               needs the postal address (Part 2)
+Voice:         Liz, signed "Liz"
+Headers:       stop link + List-Unsubscribe
 ```
 
 **15. The weekly plan-your-week nudge. Do not send; spec held.**
