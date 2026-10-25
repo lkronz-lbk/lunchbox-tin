@@ -126,7 +126,7 @@ the enrollment, so settle it before launch.
 
 ### Screenshots (6.9-inch, in this order)
 
-- [x] Regenerated 2026-09-30 (`node scripts/store-shots.mjs`, `node scripts/iap-shot.mjs`),
+- [x] Regenerated 2026-10-25 from main at v31 (`node scripts/store-shots.mjs`, `node scripts/iap-shot.mjs`; the composer needs the Python that has Pillow, `/usr/bin/python3` on this Mac, so run with `PATH=/usr/bin:$PATH`),
       pinned to Monday September 14: Phase A's screens, and 01-week taken with the kid's say
       on, so it shows Let Emma pick the week.
 - [ ] Uploaded, with `store/iap-review.png` on both subscriptions. A version In Review cannot
