@@ -156,7 +156,7 @@ video for version 1.
 
 ## App Privacy (the questionnaire)
 
-- [ ] Crash Data and Usage Data below are owed now: `main` carries the day-one work since
+- [x] Entered 2026-10-25 (the store label reads as the table below says). Crash Data and Usage Data were owed from v25: `main` carries the day-one work since
       2026-09-30 (v25), so enter both before 1.0 (7) is submitted, or at once if it already has
       been (README.md, "When the day-one work moves to main"). Everything else was answered and
       published earlier.
