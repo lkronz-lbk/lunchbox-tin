@@ -95,8 +95,10 @@ if missing: raise SystemExit('missing raw captures: ' + ', '.join(missing))
 
 N = len(SHOTS)
 strip = Image.new('RGB', (W * N, H), GROUND)
-wave(strip, MINT, H * 0.64, 280, W * 2.9, 1.1)      # the lighter wave, higher
-wave(strip, MAIN, H * 0.76, 300, W * 2.3, 0.0)      # the green band
+# One wavelength is two frames, so the crest and the trough alternate frame by frame; the two
+# waves share it, half a cycle apart, so the lighter one shows where the green dips.
+wave(strip, MINT, H * 0.66, 240, W * 2, math.pi)
+wave(strip, MAIN, H * 0.76, 240, W * 2, 0.0)
 for i, (raw, name, head, sub) in enumerate(SHOTS):
     caption(strip, i * W, head, sub)
     layer = phone(raw)
