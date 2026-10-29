@@ -28,7 +28,7 @@ the enrollment, so settle it before launch.
 ## App Information
 
 - [x] Name (30): **Lunch Sorted: Lunchbox Planner** (entered on the 1.1 draft 2026-10-25; 1.0 is live as **Lunch Sorted**; why: `store/aso-2026-10-23.md`)
-- [x] Subtitle (30): **School lunch ideas for kids** (entered with 1.1; 1.0 is live as **School lunches, planned**. The spec check of 2026-10-28 notes "for kids" can read as who the app is for, which the product rules keep clear of; the alternative is **Kids' school lunch ideas**, 24. Liz's call before 1.1 is submitted.)
+- [x] Subtitle (30): **Kids' school lunch ideas** (Liz, 2026-10-28, for 1.1; "School lunch ideas for kids" read as who the app is for. 1.0 is live as **School lunches, planned**.)
 - [x] Bundle ID: `app.lunchsorted`
 - [x] SKU: `lunchsorted`
 - [x] Primary language: English (U.S.)
@@ -128,21 +128,26 @@ the enrollment, so settle it before launch.
 
 ### Screenshots (6.9-inch, in this order)
 
-- [x] Regenerated 2026-10-28 on this branch, which is main at v31 plus the "in a minute" headline (`node scripts/store-shots.mjs`, `node scripts/iap-shot.mjs`; the composer needs the Python that has Pillow, `/usr/bin/python3` on this Mac, so run with `PATH=/usr/bin:$PATH`),
+- [x] Regenerated and recomposed 2026-10-28 on this branch, which is main at v31 plus the "in a minute" headline (`node scripts/store-shots.mjs`, `node scripts/iap-shot.mjs`; the composer needs the Python that has Pillow, `/usr/bin/python3` on this Mac, so run with `PATH=/usr/bin:$PATH`),
       pinned to Monday September 14: Phase A's screens, and 01-week taken with the kid's say
       on, so it shows Let Emma pick the week.
 - [ ] Uploaded, with `store/iap-review.png` on both subscriptions. A version In Review cannot
       have its screenshots swapped without pulling the submission back: upload at the next
       editable moment.
 
-1. `01-week.png`: A week of lunches in a minute.
-2. `02-pack.png`: Mornings: one box, one check.
-3. `03-kidpick.png`: Hand them the phone. They pick.
-4. `04-shop.png`: The shopping list writes itself.
-5. `05-recipes.png`: Recipes that make six lunches.
-6. `06-cook.png`: Cook it one step at a time.
-7. `07-rules.png`: Your school's rules, respected.
-8. `08-foods.png`: Foods they'll actually eat.
+1. `01-week.png`: A week of lunches in a minute. / Five boxes, matched so they go together.
+2. `02-pack.png`: Mornings: one box, one check. / Today's box, and the week coming up.
+3. `03-kidpick.png`: Hand them the phone. / They pick. It's already on the shopping list.
+4. `04-shop.png`: The list writes itself. / Grouped by aisle. Send it to Notes or as a text.
+5. `05-recipes.png`: Recipes that make six lunches. / Two come free. Paste in your own.
+6. `06-cook.png`: Cook it one step at a time. / Check off each ingredient as it goes in.
+7. `07-rules.png`: Your school's rules, respected. / Nut free, no microwave, a short lunch. Flagged, never dropped.
+8. `08-foods.png`: Foods they'll actually eat. / Start from what parents pack.
+
+Redesigned 2026-10-28 at Liz's ask (the September set read as a document, not an ad): each
+screen in a phone with a heavy bezel, tilted five degrees, alternating, on one of the brand's
+six compartment colors, under a two-line headline and one short line. The first three are what
+search results show side by side, so the headlines are sized to read at a third of this width.
 
 They live in `screenshots/`, 1320×2868, the 6.9-inch slot, and App Store Connect scales
 them for the smaller phones. Regenerate with `CHROMIUM_PATH=… node scripts/store-shots.mjs`.
