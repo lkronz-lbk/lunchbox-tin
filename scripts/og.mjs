@@ -29,7 +29,7 @@ h1 span{color:${C.side}}
 p{font-family:Karla;font-weight:500;font-size:30px;line-height:1.36;margin:0;color:${C.ink2};max-width:470px}
 </style></head><body><div class="wrap">
 <div class="tin"><i style="background:${C.main}"></i><i style="background:${C.side}"></i><i style="background:${C.fruit}"></i><i style="background:${C.sweet}"></i></div>
-<div><h1>Lunch <span>Sorted</span></h1><p>A week of school lunches, planned in about a minute. Matched boxes, school rules respected, shopping list done.</p></div>
+<div><h1>Lunch <span>Sorted</span></h1><p>A week of school lunches, planned in a minute. Matched boxes, school rules respected, shopping list done.</p></div>
 </div></body></html>`;
 
 let chromium; try { ({ chromium } = await import('playwright')); } catch { ({ chromium } = await import('playwright-core')); }
