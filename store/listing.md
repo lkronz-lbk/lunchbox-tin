@@ -144,13 +144,13 @@ the enrollment, so settle it before launch.
 7. `07-rules.png`: Your school's rules, respected. / Nut free, no microwave, a short lunch. Flagged, never dropped.
 8. `08-foods.png`: Foods they'll actually eat. / Start from what parents pack.
 
-Redesigned 2026-10-28 at Liz's ask, against SchoolCafé's set (the September set read as a
-document, not an ad): the page stays the ground color; each screen sits in a phone with a heavy
-bezel at ten to thirteen degrees, large enough that the screen reads, running off the bottom,
-over a slab of one of the icon's four compartment colors behind the lower half; the headline's
-first line takes the frame's color. The first three are one scene three frames wide, cut in
-three, because search results show them side by side: the phones cross the cuts and overlap,
-the later one on top, under one green slab. Headlines are sized to read at a third of this width.
+Redesigned 2026-10-28 at Liz's ask (the September set read as a document, not an ad; a tilted
+collage after SchoolCafé's set was tried and rejected): calm. The page is the ground color, the
+headline centered with its first line in the green, one upright phone with a heavy bezel
+centered under it. Behind the phones two organic waves, the soft accent and the green, run
+across the whole set: drawn once on a canvas eight frames wide and cut per frame, so each frame
+carries a different slice of the same shape and the set reads as one (after Lunchbox Recipes'
+listing, in our shapes). Headlines are sized to read at a third of this width.
 
 They live in `screenshots/`, 1320×2868, the 6.9-inch slot, and App Store Connect scales
 them for the smaller phones. Regenerate with `CHROMIUM_PATH=… node scripts/store-shots.mjs`.
