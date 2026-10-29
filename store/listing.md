@@ -149,8 +149,9 @@ page stays the ground color with the headline in ink, and each screen sits in a 
 heavy bezel, tilted five degrees, alternating, over a slab of one of the icon's four compartment
 colors that runs off the sides and the bottom (a full-color page read as aggressive; the color
 is behind the phone, not all over). Two-line headline, one short line. The first three are what
-search results show side by side, so they share one green band drawn across all three and the
-headlines are sized to read at a third of this width.
+search results show side by side, so they are one scene cut in three: one green band across all
+three, the phones the same size as the rest of the set, the first leaning into the second frame
+and the middle one on top. Headlines are sized to read at a third of this width.
 
 They live in `screenshots/`, 1320×2868, the 6.9-inch slot, and App Store Connect scales
 them for the smaller phones. Regenerate with `CHROMIUM_PATH=… node scripts/store-shots.mjs`.
