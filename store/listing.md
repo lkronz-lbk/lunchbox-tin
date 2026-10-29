@@ -27,8 +27,8 @@ the enrollment, so settle it before launch.
 
 ## App Information
 
-- [x] Name (30): **Lunch Sorted**
-- [x] Subtitle (30): **School lunches, planned**
+- [x] Name (30): **Lunch Sorted: Lunchbox Planner** (entered on the 1.1 draft 2026-10-25; 1.0 is live as **Lunch Sorted**; why: `store/aso-2026-10-23.md`)
+- [x] Subtitle (30): **School lunch ideas for kids** (entered with 1.1; 1.0 is live as **School lunches, planned**. The spec check of 2026-10-28 notes "for kids" can read as who the app is for, which the product rules keep clear of; the alternative is **Kids' school lunch ideas**, 24. Liz's call before 1.1 is submitted.)
 - [x] Bundle ID: `app.lunchsorted`
 - [x] SKU: `lunchsorted`
 - [x] Primary language: English (U.S.)
@@ -67,13 +67,13 @@ the enrollment, so settle it before launch.
 
 - [x] Pasted
 
-> A week of packed school lunches in about a minute, with no food list to build first. Always free to plan; everything else switched on for your first three weeks.
+> A week of packed school lunches in a minute, with no food list to build first. Always free to plan; everything else switched on for your first three weeks.
 
 ### Description (4000)
 
-- [ ] Pasted. Trimmed 2026-10-25 to 3046 characters for 1.1; the live 1.0 text is the older, longer one, and the previous draft here had grown past the limit.
+- [ ] Pasted. Trimmed 2026-10-25 and corrected after the 2026-10-28 spec check, 3118 characters, for 1.1; the live 1.0 text is the older, longer one, and the previous draft here had grown past the limit.
 
-> Our daughter started kindergarten and the lunch packing nearly broke me. I wanted it balanced, and I wanted her to eat it in the twenty minutes she gets. Most nights I was at the counter with the fridge open, out of ideas. So I built this.
+> Our daughter started kindergarten and the lunch packing nearly broke me. I wanted a box that went together, and I wanted her to eat it in the twenty minutes she gets. Most nights I was at the counter with the fridge open, out of ideas. So I built this.
 >
 > A WEEK OF LUNCHES IN A MINUTE
 > Answer three questions and get five lunchboxes: a main, a side, a fruit and a sweet for every school day. Not a random shuffle: something crunchy against a soft main, protein when the main is light. Plan the week again, shuffle one day, or switch out one item.
@@ -88,7 +88,7 @@ the enrollment, so settle it before launch.
 > Everything you planned, every kid, one list, grouped by aisle. Send it to Notes, to Reminders, or as a text to whoever is nearer the store.
 >
 > RECIPES
-> Two kid-tested recipes come free. Keep your own, search them by what is in the pantry, and cook one step at a time with a box to check off for each ingredient, in US measures or metric. Found one on a blog or a reel? Paste the address and it is yours.
+> Two kid-tested recipes come free. Keep your own, and once you have a few, search them by what is in the pantry. Cook one step at a time with a box to check off for each ingredient, in US measures or metric. Found one on a blog or a reel? Paste the address, or the words under the video, and it is yours.
 >
 > MORE THAN ONE KID
 > Match the lunchboxes to keep shopping simple, with each school's rules honored by swaps, or give kids with different tastes different plans. One shopping list either way.
@@ -97,7 +97,7 @@ the enrollment, so settle it before launch.
 > Kids who help plan their lunches eat more of them. Hand over the phone the night before and let them choose between two boxes from the week's plan. Both are already on the shopping list, so nothing new to buy and nothing to renegotiate at seven in the morning.
 >
 > WHAT CAME HOME
-> Tell it what got eaten and what came back. Next week leans toward what gets eaten and rests what keeps coming home untouched.
+> Tell it what got eaten and what came back. Next week leans toward what gets eaten and puts on hold what keeps coming home untouched.
 >
 > EVERYONE WHO PACKS
 > Sign in with your email, no password. Add your partner, a grandparent, a nanny, anyone who gets lunches out the door.
@@ -114,7 +114,9 @@ the enrollment, so settle it before launch.
 
 - [x] Pasted
 
-> lunchbox,bento,packed,meal,planner,kids,picky,eater,snack,grocery,shopping,list,allergy,recipe
+> box,bento,packed,meal,week,menu,picky,eater,snack,grocery,list,allergy,nut,free,recipe,kindergarten
+
+(Entered on the 1.1 draft 2026-10-25. 1.0 is live with `lunchbox,bento,packed,meal,planner,kids,picky,eater,snack,grocery,shopping,list,allergy,recipe`; the words that moved into the title and subtitle left the field, as Apple asks.)
 
 ### URLs and copyright
 
@@ -126,14 +128,14 @@ the enrollment, so settle it before launch.
 
 ### Screenshots (6.9-inch, in this order)
 
-- [x] Regenerated 2026-10-25 from main at v31 (`node scripts/store-shots.mjs`, `node scripts/iap-shot.mjs`; the composer needs the Python that has Pillow, `/usr/bin/python3` on this Mac, so run with `PATH=/usr/bin:$PATH`),
+- [x] Regenerated 2026-10-28 on this branch, which is main at v31 plus the "in a minute" headline (`node scripts/store-shots.mjs`, `node scripts/iap-shot.mjs`; the composer needs the Python that has Pillow, `/usr/bin/python3` on this Mac, so run with `PATH=/usr/bin:$PATH`),
       pinned to Monday September 14: Phase A's screens, and 01-week taken with the kid's say
       on, so it shows Let Emma pick the week.
 - [ ] Uploaded, with `store/iap-review.png` on both subscriptions. A version In Review cannot
       have its screenshots swapped without pulling the submission back: upload at the next
       editable moment.
 
-1. `01-week.png`: A week of lunches in about a minute.
+1. `01-week.png`: A week of lunches in a minute.
 2. `02-pack.png`: Mornings: one box, one check.
 3. `03-kidpick.png`: Hand them the phone. They pick.
 4. `04-shop.png`: The shopping list writes itself.
@@ -147,12 +149,10 @@ them for the smaller phones. Regenerate with `CHROMIUM_PATH=… node scripts/sto
 No iPad screenshots: the app is iPhone-only (`TARGETED_DEVICE_FAMILY = 1`). No app preview
 video for version 1.
 
-### What's New (there is no field for it on a first release)
+### What's New (from 1.1 on)
 
-- [x] Nothing to do. App Store Connect only shows "What's New in This Version" from 1.1
-      onward; on a first release the description does that job. Keep the line below for 1.1.
-
-> The first release. A week of school lunches in about a minute, your school's rules respected, the shopping list built for you, and the kid's pick.
+- [ ] 1.1 is the first version with the field. The note is the release owner's, written for what
+      1.1 ships; the first-release line that used to sit here does not fit a second release.
 
 ## App Privacy (the questionnaire)
 
