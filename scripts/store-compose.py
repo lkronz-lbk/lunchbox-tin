@@ -105,7 +105,7 @@ if missing: raise SystemExit('missing raw captures: ' + ', '.join(missing))
 # frame and running off the bottom, the later one on top of the earlier; one green slab under all
 # three. Each frame keeps its own headline at the top, where nothing crosses.
 wide = Image.new('RGB', (W * BAND, H), GROUND)
-slab(wide, BACKS[0], 7, int(H * 0.92), int(W * BAND * 1.3), int(H * 0.8))
+slab(wide, BACKS[0], 7, int(H * 1.02), int(W * BAND * 1.3), int(H * 0.5))
 for i in range(BAND): caption(wide, i * W, SHOTS[i][2], SHOTS[i][3], BACKS[0])
 scene = [  # (frame, screen width, angle, center x, top y)
     (0, 1180, -13, int(W * 0.56), 760),
