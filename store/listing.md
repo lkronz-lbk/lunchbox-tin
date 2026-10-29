@@ -144,14 +144,13 @@ the enrollment, so settle it before launch.
 7. `07-rules.png`: Your school's rules, respected. / Nut free, no microwave, a short lunch. Flagged, never dropped.
 8. `08-foods.png`: Foods they'll actually eat. / Start from what parents pack.
 
-Redesigned 2026-10-28 at Liz's ask (the September set read as a document, not an ad): the
-page stays the ground color with the headline in ink, and each screen sits in a phone with a
-heavy bezel, tilted five degrees, alternating, over a slab of one of the icon's four compartment
-colors that runs off the sides and the bottom (a full-color page read as aggressive; the color
-is behind the phone, not all over). Two-line headline, one short line. The first three are what
-search results show side by side, so they are one scene cut in three: one green band across all
-three, the phones the same size as the rest of the set, the first leaning into the second frame
-and the middle one on top. Headlines are sized to read at a third of this width.
+Redesigned 2026-10-28 at Liz's ask, against SchoolCafé's set (the September set read as a
+document, not an ad): the page stays the ground color; each screen sits in a phone with a heavy
+bezel at ten to thirteen degrees, large enough that the screen reads, running off the bottom,
+over a slab of one of the icon's four compartment colors behind the lower half; the headline's
+first line takes the frame's color. The first three are one scene three frames wide, cut in
+three, because search results show them side by side: the phones cross the cuts and overlap,
+the later one on top, under one green slab. Headlines are sized to read at a third of this width.
 
 They live in `screenshots/`, 1320×2868, the 6.9-inch slot, and App Store Connect scales
 them for the smaller phones. Regenerate with `CHROMIUM_PATH=… node scripts/store-shots.mjs`.
