@@ -12,8 +12,9 @@ W, H = 1320, 2868
 GROUND = (0xE9, 0xEE, 0xE6)          # the page color, the canvas
 INK = (0x16, 0x24, 0x1E)             # the headline and the bezel
 INK2 = (0x3E, 0x4D, 0x45)            # the line under the headline
-# The compartment colors (HANDBOOK.md, The brand): main, side, fruit, sweet, snack, drink.
-BACKS = [(0x2A, 0x51, 0x41), (0x6A, 0x40, 0x07), (0x84, 0x27, 0x3E), (0x50, 0x3E, 0x7E), (0x44, 0x4E, 0x14), (0x20, 0x4E, 0x62)]
+# The icon's four compartment colors (HANDBOOK.md, The brand): main, side, fruit, sweet.
+BACKS = [(0x2A, 0x51, 0x41), (0x6A, 0x40, 0x07), (0x84, 0x27, 0x3E), (0x50, 0x3E, 0x7E)]
+BAND = 3            # the first three run as one scene: search results show them side by side
 HEAD_FONT = 'store/FamiljenGrotesk-Bold.ttf'
 SUB = ImageFont.truetype('store/Karla-Medium.ttf', 54)
 
@@ -24,7 +25,7 @@ SHOTS = [
     ('pack',    '02-pack',    'Mornings:\none box, one check.',     'Today’s box, and the week coming up.'),
     ('kidpick', '03-kidpick', 'Hand them\nthe phone.',              'They pick. It’s already on the shopping list.'),
     ('shop',    '04-shop',    'The list\nwrites itself.',           'Grouped by aisle. Send it to Notes or as a text.'),
-    ('recipes', '05-recipes', 'Recipes that make\nsix lunches.',     'Two come free. Paste in your own.'),
+    ('recipes', '05-recipes', 'Keep every recipe\nyou find.',        'Paste a link, or the words under a reel.'),
     ('cook',    '06-cook',    'Cook it one step\nat a time.',       'Check off each ingredient as it goes in.'),
     ('setup',   '07-rules',   'Your school’s rules,\nrespected.',   'Nut free, no microwave, a short lunch. Flagged, never dropped.'),
     ('foods',   '08-foods',   'Foods they’ll\nactually eat.',       'Start from what parents pack.'),
@@ -76,9 +77,20 @@ def phone(shot):
     layer.alpha_composite(screen, (pad + BEZEL, pad + BEZEL))
     return layer
 
-def slab(canvas, color, sign):
-    """A compartment-colored slab behind the lower part of the phone, tilted the phone's way
-    and running off the sides and the bottom: color behind the phone, not all over the page."""
+def slab(canvas, color, sign, i):
+    """A compartment-colored slab behind the lower part of the phone, running off the sides and
+    the bottom: color behind the phone, not all over the page. The first BAND frames share one
+    slab, drawn across a canvas BAND frames wide and cropped per frame, so the row in search
+    results reads as one scene."""
+    if i < BAND:
+        wide = Image.new('RGBA', (W * BAND, H), (0, 0, 0, 0))
+        layer = Image.new('RGBA', (int(W * BAND * 1.3), int(H * 0.7)), (0, 0, 0, 0))
+        ImageDraw.Draw(layer).rounded_rectangle([0, 0, layer.width - 1, layer.height - 1], 140, fill=color + (255,))
+        layer = layer.rotate(6, resample=Image.BICUBIC, expand=True)
+        wide.paste(layer, ((wide.width - layer.width) // 2, int(H * 0.78) - layer.height // 2), layer)
+        part = wide.crop((i * W, 0, (i + 1) * W, H))
+        canvas.paste(part, (0, 0), part)
+        return
     layer = Image.new('RGBA', (int(W * 1.6), int(H * 0.8)), (0, 0, 0, 0))
     ImageDraw.Draw(layer).rounded_rectangle([0, 0, layer.width - 1, layer.height - 1], 140, fill=color + (255,))
     layer = layer.rotate(sign * 9, resample=Image.BICUBIC, expand=True)
@@ -99,7 +111,7 @@ for i, (raw, name, head, sub) in enumerate(SHOTS):
     for line in wrap(d, sub, SUB, W - 2 * MARGIN):
         d.text((MARGIN, y), line, font=SUB, fill=INK2); y += 68
     sign = 1 if i % 2 == 0 else -1
-    slab(canvas, BACKS[i % len(BACKS)], sign)
+    slab(canvas, BACKS[0] if i < BAND else BACKS[(i - BAND + 1) % len(BACKS)], sign, i)
     layer = phone(shot).rotate(sign * TILT, resample=Image.BICUBIC, expand=True)
     top = max(y + 60, 700)
     canvas.paste(layer, ((W - layer.width) // 2, top - 160), layer)

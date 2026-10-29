@@ -139,17 +139,18 @@ the enrollment, so settle it before launch.
 2. `02-pack.png`: Mornings: one box, one check. / Today's box, and the week coming up.
 3. `03-kidpick.png`: Hand them the phone. / They pick. It's already on the shopping list.
 4. `04-shop.png`: The list writes itself. / Grouped by aisle. Send it to Notes or as a text.
-5. `05-recipes.png`: Recipes that make six lunches. / Two come free. Paste in your own.
+5. `05-recipes.png`: Keep every recipe you find. / Paste a link, or the words under a reel.
 6. `06-cook.png`: Cook it one step at a time. / Check off each ingredient as it goes in.
 7. `07-rules.png`: Your school's rules, respected. / Nut free, no microwave, a short lunch. Flagged, never dropped.
 8. `08-foods.png`: Foods they'll actually eat. / Start from what parents pack.
 
 Redesigned 2026-10-28 at Liz's ask (the September set read as a document, not an ad): the
 page stays the ground color with the headline in ink, and each screen sits in a phone with a
-heavy bezel, tilted five degrees, alternating, over a slab of one of the brand's six compartment
+heavy bezel, tilted five degrees, alternating, over a slab of one of the icon's four compartment
 colors that runs off the sides and the bottom (a full-color page read as aggressive; the color
 is behind the phone, not all over). Two-line headline, one short line. The first three are what
-search results show side by side, so the headlines are sized to read at a third of this width.
+search results show side by side, so they share one green band drawn across all three and the
+headlines are sized to read at a third of this width.
 
 They live in `screenshots/`, 1320×2868, the 6.9-inch slot, and App Store Connect scales
 them for the smaller phones. Regenerate with `CHROMIUM_PATH=… node scripts/store-shots.mjs`.
