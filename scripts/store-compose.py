@@ -14,7 +14,8 @@ GROUND = (0xE9, 0xEE, 0xE6)          # the page color, the canvas
 INK = (0x16, 0x24, 0x1E)             # the headline's second line and the bezel
 INK2 = (0x3E, 0x4D, 0x45)            # the line under the headline
 MAIN = (0x2A, 0x51, 0x41)            # the band, and the headline's first line
-SOFT = (0xDC, 0xE8, 0xDF)            # accent, soft: a second, paler wave behind the band
+MINT = (0x81, 0xCB, 0xA8)            # the dark theme's accent green: a second, lighter wave behind the band
+                                     # (accent-soft was tried and vanished into the ground)
 HEAD_FONT = 'store/FamiljenGrotesk-Bold.ttf'
 SUB = ImageFont.truetype('store/Karla-Medium.ttf', 54)
 
@@ -94,8 +95,8 @@ if missing: raise SystemExit('missing raw captures: ' + ', '.join(missing))
 
 N = len(SHOTS)
 strip = Image.new('RGB', (W * N, H), GROUND)
-wave(strip, SOFT, H * 0.50, 300, W * 2.9, 1.1)      # the paler wave, higher
-wave(strip, MAIN, H * 0.62, 330, W * 2.3, 0.0)      # the green band
+wave(strip, MINT, H * 0.64, 280, W * 2.9, 1.1)      # the lighter wave, higher
+wave(strip, MAIN, H * 0.76, 300, W * 2.3, 0.0)      # the green band
 for i, (raw, name, head, sub) in enumerate(SHOTS):
     caption(strip, i * W, head, sub)
     layer = phone(raw)

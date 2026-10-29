@@ -147,7 +147,7 @@ the enrollment, so settle it before launch.
 Redesigned 2026-10-28 at Liz's ask (the September set read as a document, not an ad; a tilted
 collage after SchoolCafé's set was tried and rejected): calm. The page is the ground color, the
 headline centered with its first line in the green, one upright phone with a heavy bezel
-centered under it. Behind the phones two organic waves, the soft accent and the green, run
+centered under it. Behind the lower third of the phones two organic waves, the dark theme's lighter green and the main green, run
 across the whole set: drawn once on a canvas eight frames wide and cut per frame, so each frame
 carries a different slice of the same shape and the set reads as one (after Lunchbox Recipes'
 listing, in our shapes). Headlines are sized to read at a third of this width.
