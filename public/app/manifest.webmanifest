@@ -1,7 +1,7 @@
 {
   "name": "Lunch Sorted",
   "short_name": "Lunch Sorted",
-  "description": "Plan a week of packed school lunches in about a minute.",
+  "description": "Plan a week of packed school lunches in a minute.",
   "start_url": "/app/",
   "scope": "/app/",
   "display": "standalone",
