@@ -9,8 +9,9 @@ import os
 
 OUT = 'store/screenshots'
 W, H = 1320, 2868
-GROUND = (0xE9, 0xEE, 0xE6)          # the page color, here the text
-INK = (0x16, 0x24, 0x1E)             # the bezel
+GROUND = (0xE9, 0xEE, 0xE6)          # the page color, the canvas
+INK = (0x16, 0x24, 0x1E)             # the headline and the bezel
+INK2 = (0x3E, 0x4D, 0x45)            # the line under the headline
 # The compartment colors (HANDBOOK.md, The brand): main, side, fruit, sweet, snack, drink.
 BACKS = [(0x2A, 0x51, 0x41), (0x6A, 0x40, 0x07), (0x84, 0x27, 0x3E), (0x50, 0x3E, 0x7E), (0x44, 0x4E, 0x14), (0x20, 0x4E, 0x62)]
 HEAD_FONT = 'store/FamiljenGrotesk-Bold.ttf'
@@ -75,21 +76,31 @@ def phone(shot):
     layer.alpha_composite(screen, (pad + BEZEL, pad + BEZEL))
     return layer
 
+def slab(canvas, color, sign):
+    """A compartment-colored slab behind the lower part of the phone, tilted the phone's way
+    and running off the sides and the bottom: color behind the phone, not all over the page."""
+    layer = Image.new('RGBA', (int(W * 1.6), int(H * 0.8)), (0, 0, 0, 0))
+    ImageDraw.Draw(layer).rounded_rectangle([0, 0, layer.width - 1, layer.height - 1], 140, fill=color + (255,))
+    layer = layer.rotate(sign * 9, resample=Image.BICUBIC, expand=True)
+    canvas.paste(layer, ((W - layer.width) // 2, int(H * 0.46)), layer)
+
 for i, (raw, name, head, sub) in enumerate(SHOTS):
     src = os.path.join(OUT, 'raw-' + raw + '.png')
     if not os.path.exists(src): print('missing', src); continue
     shot = Image.open(src).convert('RGB')
     if raw in CROP_TOP: shot = shot.crop((0, CROP_TOP[raw], shot.width, shot.height))
     if raw in CROP_BOT: shot = shot.crop((0, 0, shot.width, shot.height - CROP_BOT[raw]))
-    canvas = Image.new('RGB', (W, H), BACKS[i % len(BACKS)]); d = ImageDraw.Draw(canvas)
+    canvas = Image.new('RGB', (W, H), GROUND); d = ImageDraw.Draw(canvas)
     font, lines, size = headline(d, head, W - 2 * MARGIN)
     y = 140
     for line in lines:
-        d.text((MARGIN, y), line, font=font, fill=GROUND); y += int(size * 1.08)
+        d.text((MARGIN, y), line, font=font, fill=INK); y += int(size * 1.08)
     y += 30
     for line in wrap(d, sub, SUB, W - 2 * MARGIN):
-        d.text((MARGIN, y), line, font=SUB, fill=GROUND); y += 68
-    layer = phone(shot).rotate(TILT if i % 2 == 0 else -TILT, resample=Image.BICUBIC, expand=True)
+        d.text((MARGIN, y), line, font=SUB, fill=INK2); y += 68
+    sign = 1 if i % 2 == 0 else -1
+    slab(canvas, BACKS[i % len(BACKS)], sign)
+    layer = phone(shot).rotate(sign * TILT, resample=Image.BICUBIC, expand=True)
     top = max(y + 60, 700)
     canvas.paste(layer, ((W - layer.width) // 2, top - 160), layer)
     canvas.save(os.path.join(OUT, name + '.png'), optimize=True)
